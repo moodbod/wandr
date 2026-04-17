@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#7b4f5e",
+                        "inverse-surface": "#2f312f",
+                        "tertiary-fixed": "#ffd9e3",
+                        "surface-variant": "#e2e3e0",
+                        "outline-variant": "#c1cab5",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#41493a",
+                        "surface-bright": "#f9f9f6",
+                        "surface-tint": "#2f6c00",
+                        "surface-container-high": "#e8e8e5",
+                        "on-tertiary-fixed-variant": "#643a49",
+                        "outline": "#717a68",
+                        "on-secondary-fixed-variant": "#304f18",
+                        "tertiary-container": "#ffc5d7",
+                        "surface-container-low": "#f4f4f1",
+                        "tertiary": "#7e5161",
+                        "on-background": "#1a1c1b",
+                        "primary-fixed": "#acf67c",
+                        "on-primary-container": "#2e6900",
+                        "on-secondary": "#ffffff",
+                        "surface-container": "#eeeeeb",
+                        "secondary": "#47672d",
+                        "background": "#f9f9f6",
+                        "tertiary-fixed-dim": "#f0b7c9",
+                        "primary": "#2f6c00",
+                        "secondary-fixed": "#c8eea5",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#dadad7",
+                        "secondary-fixed-dim": "#acd28c",
+                        "on-secondary-fixed": "#0c2000",
+                        "inverse-on-surface": "#f1f1ee",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#1a1c1b",
+                        "surface-container-highest": "#e2e3e0",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#9fe870",
+                        "surface": "#f9f9f6",
+                        "secondary-container": "#c5eba3",
+                        "on-primary-fixed": "#092100",
+                        "primary-fixed-dim": "#91d963",
+                        "on-secondary-container": "#4b6c31",
+                        "on-primary-fixed-variant": "#225100",
+                        "on-tertiary-fixed": "#31101e",
+                        "inverse-primary": "#91d963",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .display-tight { letter-spacing: -0.04em; line-height: 0.85; }
+        .ghost-border { box-shadow: 0 0 0 1px rgba(14, 15, 12, 0.12); }
+        .kinetic-pill:active { transform: scale(0.95); }
+        .kinetic-pill:hover { transform: scale(1.05); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-[#f9f9f6]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 tonal-layering bg-surface-container-low flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="Profile" data-alt="close-up portrait of a young man with a friendly expression in natural daylight, outdoor setting with soft bokeh background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAA2kC7R6n_HZnBGqKz1pauk2S8c1KogIblCcmG92mJf3M5LloFusk5XdDf17yaPY-5X0t83Ma3fhPlGfdi4OWblar7tCDb-ZvtcMN03daUdvgsXt31Sj9nLW7FCJTOk0SpKr2RM8Slqlz0jWkpADAXjcy3jSV-XtDVm2vkmifo1jfV_cfnY6_7uI3_rqh3jnynWeOOUo6fjgUqRXQI79aisG1sbwqYtiGkE-UdnGDiC580RU6v8gAtns1PctwbLZHLT4BaeDsu0Nw"/>
+</div>
+<span class="font-black text-[#0e0f0c] tracking-tighter italic text-xl">Wandr</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#0e0f0c]/60 hover:scale-105 transition-transform duration-300">notifications</button>
+</div>
+</header>
+<main class="px-6 pt-8 max-w-2xl mx-auto">
+<!-- Hero Header -->
+<section class="mb-10">
+<h1 class="text-[3.5rem] font-black display-tight mb-6 text-on-background uppercase">Swakopmund Day</h1>
+<!-- Progress Bar -->
+<div class="bg-surface-container-low rounded-full h-8 w-full p-1.5 mb-2 relative overflow-hidden">
+<div class="bg-primary-container h-full rounded-full w-[65%]" style="transition: width 1s ease-out;"></div>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold uppercase tracking-widest text-on-background/60">Daily Progress</span>
+<span class="text-sm font-black text-on-primary-container">65% COMPLETED</span>
+</div>
+</section>
+<!-- Quick Actions -->
+<section class="flex gap-4 mb-12">
+<button class="kinetic-pill flex-1 bg-primary-container text-on-primary-container py-4 px-6 rounded-full font-bold flex items-center justify-center gap-2 transition-all duration-300 shadow-sm">
+<span class="material-symbols-outlined">navigation</span>
+                Navigate
+            </button>
+<button class="kinetic-pill flex-1 bg-surface-container-high text-on-background py-4 px-6 rounded-full font-bold flex items-center justify-center gap-2 transition-all duration-300">
+<span class="material-symbols-outlined">share</span>
+                Share
+            </button>
+</section>
+<!-- Timeline -->
+<section class="space-y-6 relative">
+<!-- Timeline Line Decoration -->
+<div class="absolute left-[23px] top-4 bottom-4 w-1 bg-surface-container-high rounded-full -z-10"></div>
+<!-- Activity 1: Completed -->
+<div class="flex gap-6 group">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center border-4 border-background">
+<span class="material-symbols-outlined text-on-background/40">check_circle</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-[30px] flex-1 opacity-60">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-black uppercase tracking-widest text-on-background/40">08:00 AM</span>
+</div>
+<h3 class="text-xl font-extrabold text-on-background mb-1">Tandem Skydive</h3>
+<p class="text-on-background/60 font-semibold">Ground Zero Dropzone</p>
+</div>
+</div>
+<!-- Activity 2: Completed -->
+<div class="flex gap-6 group">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center border-4 border-background">
+<span class="material-symbols-outlined text-on-background/40">check_circle</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-[30px] flex-1 opacity-60">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-black uppercase tracking-widest text-on-background/40">11:30 AM</span>
+</div>
+<h3 class="text-xl font-extrabold text-on-background mb-1">Quad Biking</h3>
+<p class="text-on-background/60 font-semibold">Namib Desert Dunes</p>
+</div>
+</div>
+<!-- Activity 3: Active Now -->
+<div class="flex gap-6 group">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center border-4 border-background shadow-lg">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">sailing</span>
+</div>
+</div>
+<div class="bg-primary-container/20 p-8 rounded-[40px] flex-1 ghost-border relative overflow-hidden">
+<!-- Glassmorphism Highlight -->
+<div class="absolute top-0 right-0 p-4">
+<span class="bg-primary-container text-on-primary-container text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Active Now</span>
+</div>
+<div class="flex justify-between items-start mb-3">
+<span class="text-xs font-black uppercase tracking-widest text-on-primary-container/60">02:30 PM</span>
+</div>
+<h3 class="text-2xl font-black text-on-primary-container mb-2">Catamaran Dolphin Cruise</h3>
+<p class="text-on-primary-container/70 font-bold mb-6">Walvis Bay Waterfront</p>
+<div class="rounded-[24px] overflow-hidden h-40 w-full mb-4">
+<img alt="Dolphin Cruise" class="w-full h-full object-cover" data-alt="wide shot of a luxury catamaran boat on calm blue ocean water with dolphins jumping in the foreground and a soft blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzBEkfMBl40m13-7h7zDJa3YkMyTO1RX5splloTs3ygvfsifG9_sWeRPacOAQCPtYv1D8lljIKvaPeGfL9htat-6kKfjmk1HE5rMskdzOuQY4cGWPsLzU27B62cgbfqADcbVnoneIZr1XUhuMPKZjsf7DiOWtFNnUOED7oN3GAsXhClFPp8_Yzi6RJQyAJkpEEG8IEvztM9FcyPBZw9AGEPwYL6Iy_HAVTCDVKsEvCVKOdd7RznJl09qY2g61mj9exVp-7npBGnUc"/>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex -space-x-3">
+<img alt="Squad" class="w-8 h-8 rounded-full border-2 border-primary-container/20" data-alt="portrait of a smiling man in a outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkMbMXfO_FYjRjM_RpzSThoezGt1Xqk6pYSJTFV5GVQz4CpZhz0FC9SmrGCabq0mjk6Tcv77_34QIgj3wgUL_OHlvNdonFbHjO_Mfs0s4_3llYGKLSHyEQnvgMWJ7B8Thp9NMeTetNNYAKpldwg8rjXThwIJyoiMnDFpvYJb7LJmhzxzMzpI5QEqfBrEsNt3qaN5jkAhaLIejefLZl4L8DqIbTQSmjHQP4WMa7nG36zypMFWSNKOw0sU77io5PycElC8OrharRlqw"/>
+<img alt="Squad" class="w-8 h-8 rounded-full border-2 border-primary-container/20" data-alt="portrait of a smiling woman with long brown hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyvwEATMedVUFo9plcrETQDaG2duvwaXKUFzz1HkeXn8Rf95Rzymy0XNf5s1woPluh4xStKeLhxgr2yvEEJqFf15OXBfhm7BLPls2dsBGfqZzFVeacGFax78OAreAIn_UqkBZxtdyEwl1T1pjHOTHAsOPdZTZ15cDd8EjA96Q6zGWsZPyKjHiEMPLGVF2ZL16_AjC6YLoLgeWvcpM3E0aIUvX7gKMnq-B1JSI4_DRaAxU1jzh9oRYUOdJSNv3ffIkis2IK16qfUPY"/>
+<div class="w-8 h-8 rounded-full bg-primary-container text-[10px] font-bold flex items-center justify-center border-2 border-background">+2</div>
+</div>
+<span class="text-xs font-bold text-on-primary-container/60">Squad is here</span>
+</div>
+</div>
+</div>
+<!-- Activity 4: Upcoming -->
+<div class="flex gap-6 group">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center border-4 border-background">
+<span class="material-symbols-outlined text-on-background/20">schedule</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-[30px] flex-1 ghost-border">
+<div class="flex justify-between items-start mb-2">
+<span class="text-xs font-black uppercase tracking-widest text-on-background/40">07:00 PM</span>
+</div>
+<h3 class="text-xl font-extrabold text-on-background mb-1">Dinner at The Tug</h3>
+<p class="text-on-background/60 font-semibold">Swakopmund Jetty</p>
+</div>
+</div>
+</section>
+<!-- Extra Map Card (Bento Style) -->
+<section class="mt-12 mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="bg-surface-container-low p-6 rounded-[40px] flex flex-col justify-between h-64 overflow-hidden relative">
+<div>
+<h4 class="text-lg font-black uppercase tracking-tighter italic">Live Location</h4>
+<p class="text-on-background/60 font-bold">Walvis Bay Coast</p>
+</div>
+<div class="absolute inset-0 -z-10 mt-16 px-4 pb-4">
+<div class="w-full h-full rounded-[30px] overflow-hidden grayscale contrast-125 opacity-40">
+<img alt="Map" class="w-full h-full object-cover" data-alt="abstract aerial map view of coastal terrain and ocean with subtle lines and high contrast textures" data-location="Walvis Bay" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMDGac9EsN2n9MRMJk1Gy39mSHG-cK3uZ0WI5ECg143cMbB9D0T1YBB1IgD7lvnQdmXvOQ0XsEJvMVW9XA6qLDQ6FW_UKXEzJ8ImH7voyiNp-xy7wB0RFqkwHVRfK8PuMzqoHQyOHwmW3SiTtKYTKqjpq3XjSm-Zjv3FquWwTH8XUbzmttJKSp_B2HelhHJm5_okObVzf95MEk5htWzKbNFrXMyEJ3xeINUkpG_E33ONLhM-fZYGyk_4tcUaVQpLryZl22408_HT8"/>
+</div>
+</div>
+</div>
+<div class="bg-[#163300] p-8 rounded-[40px] flex flex-col justify-center items-center text-center">
+<span class="material-symbols-outlined text-primary-container text-5xl mb-4" style="font-variation-settings: 'FILL' 1;">wb_sunny</span>
+<h4 class="text-white text-3xl font-black italic tracking-tighter">24°C</h4>
+<p class="text-primary-container/80 font-bold uppercase tracking-widest text-xs mt-2">Perfect Conditions</p>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-4 bg-[#f9f9f6]/90 backdrop-blur-md z-50 rounded-t-[40px] shadow-[0_-20px_40px_rgba(14,15,12,0.04)]">
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Squad</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#9fe870] text-[#163300] rounded-full px-6 py-2 scale-110 active:scale-90 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">luggage</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">My Trip</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Profile</span>
+</a>
+</nav>
+</body></html>

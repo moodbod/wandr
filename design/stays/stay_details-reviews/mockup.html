@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#f9f9f6",
+                    "surface-bright": "#f9f9f6",
+                    "primary-container": "#9fe870",
+                    "on-secondary-fixed": "#0c2000",
+                    "outline-variant": "#c1cab5",
+                    "primary": "#2f6c00",
+                    "on-surface": "#1a1c1b",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#f1f1ee",
+                    "secondary": "#47672d",
+                    "on-background": "#1a1c1b",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#7b4f5e",
+                    "on-tertiary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "surface-container": "#eeeeeb",
+                    "surface": "#f9f9f6",
+                    "on-secondary-container": "#4b6c31",
+                    "primary-fixed-dim": "#91d963",
+                    "inverse-primary": "#91d963",
+                    "on-tertiary-fixed-variant": "#643a49",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#7e5161",
+                    "inverse-surface": "#2f312f",
+                    "on-primary-fixed-variant": "#225100",
+                    "secondary-fixed": "#c8eea5",
+                    "surface-container-low": "#f4f4f1",
+                    "on-primary-container": "#2e6900",
+                    "on-tertiary-fixed": "#31101e",
+                    "on-secondary-fixed-variant": "#304f18",
+                    "surface-variant": "#e2e3e0",
+                    "tertiary-fixed": "#ffd9e3",
+                    "surface-dim": "#dadad7",
+                    "on-error": "#ffffff",
+                    "surface-tint": "#2f6c00",
+                    "on-secondary": "#ffffff",
+                    "secondary-container": "#c5eba3",
+                    "on-surface-variant": "#41493a",
+                    "on-primary-fixed": "#092100",
+                    "tertiary-fixed-dim": "#f0b7c9",
+                    "surface-container-high": "#e8e8e5",
+                    "tertiary-container": "#ffc5d7",
+                    "outline": "#717a68",
+                    "surface-container-highest": "#e2e3e0",
+                    "secondary-fixed-dim": "#acd28c",
+                    "primary-fixed": "#acf67c"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter", "sans-serif"],
+                    "body": ["Inter", "sans-serif"],
+                    "label": ["Inter", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .font-black-900 { font-weight: 900; line-height: 0.85; letter-spacing: -0.04em; font-feature-settings: "calt" 1, "kern" 1; }
+        .calt-enabled { font-feature-settings: "calt" 1, "kern" 1; }
+        .ghost-border { box-shadow: 0 0 0 1px rgba(14,15,12,0.12); }
+        .ambient-shadow { box-shadow: 0 20px 40px rgba(14, 15, 12, 0.04); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-[#f9f9f6]/80 backdrop-blur-xl flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden ghost-border">
+<img alt="User" class="w-full h-full object-cover" data-alt="close-up portrait of a smiling woman with glasses in soft outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKo77pzSIWFMmrbAC2hXfZI8naS_NgyZj5T9DcjB9nvj8Kam7CWotesNd2RKOtEvnk06rGvEwibgGPDtrGsGQPuwxow3UBWE_on1Qp6IJmFxiujx7NgPW1MhKrRkcY2e9SJfZwt00QHSh00GPPzLzzyNt7ufP1J5gaQ5YeqEkKHUC7I5B5vkYpTfWXTn_AVBjD00uHQTnttr6Dcn3KkFS2-BjIYB55NAA1jt4dDET-mkTeUiLEm4Zrxy6gCDEPoRzIuwd7AzM-9k0"/>
+</div>
+<span class="text-2xl font-[900] tracking-[-0.04em] text-[#0e0f0c]">Wandr</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-background p-2 hover:scale-105 transition-transform active:scale-95">share</button>
+<button class="material-symbols-outlined text-on-background p-2 hover:scale-105 transition-transform active:scale-95">favorite</button>
+</div>
+</nav>
+<main class="pt-20 pb-32">
+<!-- Hero Section -->
+<section class="px-4 mb-8">
+<div class="relative w-full aspect-[4/5] md:aspect-[16/9] rounded-xl overflow-hidden ambient-shadow">
+<img alt="Hero" class="w-full h-full object-cover" data-alt="architectural masterpiece cabin with floor-to-ceiling windows nestled in a misty pine forest at sunrise" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIgRTC0YEq2u30Xj5yarczjLpMTqhu3-_IBktzIAvq1hcwdGtF_kluCKj6Ogb_yVjO4vw20R0YQBM4ngBZENCtea03G-0gofqxWfIbEjI9xmr9Z7CasYlsGAHF_kPhx9PuiITSMKh0zgXBKAFtMI4m5KeTH31RQvRdcteeBOsgxIyzL_i7zvQxR8MKSq9s2jG4XiGjo7xS8SnD9FObcKhFxcG3EQfxN8EN_Cq454PGPmklpQB9msmZj9POseaeKU5zwZI2TmE6KSs"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+<div class="absolute bottom-8 left-8 right-8">
+<span class="inline-block px-3 py-1 bg-primary-container text-on-primary-container font-bold text-xs rounded-full mb-3">EDITOR'S CHOICE</span>
+<h1 class="text-5xl md:text-7xl font-black-900 text-white uppercase">The Glass<br/>Observatory</h1>
+</div>
+</div>
+</section>
+<!-- Social Proof Section -->
+<section class="px-6 mb-12">
+<div class="bg-surface-container-low rounded-lg p-6 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="flex -space-x-3">
+<div class="w-10 h-10 rounded-full border-2 border-surface-container-low overflow-hidden">
+<img alt="Traveler" class="w-full h-full object-cover" data-alt="headshot of a man with a beard smiling warmly" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuJ736LElI2jXY4xYV2-DGIJhKj_dauo7UiAzGhgHIhbbVadivey7XXR3aO05_MvNZz_IQXAKinSvCxjUGDqIDCKTkwAAYHvmtWqnbqGVm9uwe_i7IXjzAd4mL5ToWUFEmIr89eZE0SWpJ09AIkrMVDD_ZMkIhgQriMscjTF4NpdvFLOXqqHmQeKjMi1H_9fvWfBkcRuZhI8gCIS7Q6Dm0GuZezTmwbhOMRWt7tA0GqOxD9nOjFoaooW6rGBWNBaYYIbL1gtL9BGc"/>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-surface-container-low overflow-hidden">
+<img alt="Traveler" class="w-full h-full object-cover" data-alt="close up of a young woman with curly hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCiDCmzCs06bj_fZPBGROQPtxw9959EnkHy9drhwwA2Lx_8xUSWMjfkH05wifz7bTm4MCYO5A4Zk69F56xNCF42P_OGWaxboj8gINMubdwAZSBf5Hxk1Uz5f2ek6F_ASolbE2Fx1PmE1trvsMP0dPalNkgT6gNfMfAi2C6PVawysE2NPUehoDCUYeWYn-7JvDRUMATYM_x2ewm48kXw0NX0cUtVtkjvevFtTL1NOd70hsgtlemMNCsuOQll9DDTHaJqCLOPRsJBTK0"/>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-surface-container-low overflow-hidden bg-primary-container flex items-center justify-center text-[10px] font-bold text-on-primary-container">
+                            +39
+                        </div>
+</div>
+<p class="font-bold text-sm leading-tight max-w-[180px]">
+                        42 travelers from Germany visited recently
+                    </p>
+</div>
+<div class="w-8 h-6 rounded-sm overflow-hidden ghost-border">
+<img alt="Germany Flag" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwajqVMb28um1hZMxAdwz7e-RUerchY8Fy5HoF6YlIP25unoUX1cGWiJjELL9YGVYhdl7KIuocFo1wzClekns80uz1vZdKi4097zl3LhIVyPQT2oLD5w7Smc9-k4Tjg2Ih6F-XB6vmtibb2fA5pzEfUa_WRVyYUI-AqAkj_XGVq3RWUDgy_d18H2KZPzy87qymdDmeQ_hdF6ZKW3WbNL12D4XFiXRyDMqzehxb1iKOi2QhpxpC1YSiDJxGO-0JsHNXtErfwkfjGd8"/>
+</div>
+</div>
+</section>
+<!-- Description & Amenities Grid -->
+<section class="px-6 mb-12 grid grid-cols-1 md:grid-cols-2 gap-12">
+<div>
+<h2 class="text-2xl font-black-900 mb-6">THE SPACE</h2>
+<p class="text-on-background/80 font-bold leading-relaxed mb-6 calt-enabled">
+                    Suspended above the valley floor, this architectural marvel offers 360-degree views of the surrounding wilderness. Designed with Brutalist integrity and organic warmth, it features heated basalt floors and a private thermal spring.
+                </p>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">wifi</span>
+<span class="text-xs font-bold">Fast WiFi</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">hot_tub</span>
+<span class="text-xs font-bold">Thermal Bath</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="text-xs font-bold">Fireplace</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">restaurant</span>
+<span class="text-xs font-bold">Private Chef</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-8 ambient-shadow">
+<div class="flex items-baseline justify-between mb-8">
+<div>
+<span class="text-4xl font-black-900">4.92</span>
+<span class="text-on-background/50 font-bold ml-1">/ 5</span>
+</div>
+<div class="flex text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star_half</span>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<span class="font-bold text-sm">Cleanliness</span>
+<div class="w-32 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-background w-[98%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-bold text-sm">Accuracy</span>
+<div class="w-32 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-background w-[95%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-bold text-sm">Communication</span>
+<div class="w-32 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-background w-[100%]"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Reviews Section -->
+<section class="px-6 mb-12">
+<h2 class="text-2xl font-black-900 mb-8">GUEST JOURNALS</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Review 1 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg ghost-border">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-full overflow-hidden">
+<img alt="Reviewer" class="w-full h-full object-cover" data-alt="portrait of an older man with silver hair and a kind expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0_6eCVi-lQwuSkLJnenvOWBDTNm4Wpsiz7StmRNsu0BWVJdxHGFSXOCdJrNIk72J6eNJXaXouLssGUgnbzfNnMz0IHUdT6jb9FqOEssUCAM3o5GbIR_rU6Gp3bwBdE6W4jczy3YWqJAgogo7iUsl6DXozuTu2THOKJfRipsTax3q91juiULD7f2kh533vznJbqnadnHu1MBliU2JDI_iVBeU6OyjiXdp5fnpdiHsFXZcPn_95CtlBsONwd9ZLMVD1WR8cPdv12vs"/>
+</div>
+<div>
+<p class="font-bold">Marcus Thorne</p>
+<p class="text-xs text-on-background/50 font-bold uppercase tracking-wider">Visited Oct 2023</p>
+</div>
+</div>
+<p class="font-bold text-sm leading-relaxed calt-enabled italic">
+                        "An absolute architectural triumph. Waking up to the fog rolling through the valley seen through those massive windows is something I'll never forget. The thermal spring is divine."
+                    </p>
+</div>
+<!-- Review 2 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg ghost-border">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-full overflow-hidden">
+<img alt="Reviewer" class="w-full h-full object-cover" data-alt="stylish young person looking directly at the camera with a neutral expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAQRN-wnN7PlqjtTRwJMUfzEw2DDlEdq-ScpJDHC1hV3xUcDxulX6GmxUHEy__4kaFPpnVNIGFhAiX5cha-UItu0_7FBn_KHjQCpDdcLNm8XF3pvQpt_FrprFYhXcMEw8dLdk0A1datI90xk36aXfYT2qYVg3KTeACibeXNhQNJmPyMRoPm3TkMP03B8yWOEeIU_7Dom6pTqMZX9vqPbcEgYIEVivka0zrirvxTMkSBQ2W16YyiqMxj9KTMPftNAAdz0t_H6qVwdE"/>
+</div>
+<div>
+<p class="font-bold">Lena Headey</p>
+<p class="text-xs text-on-background/50 font-bold uppercase tracking-wider">Visited Sep 2023</p>
+</div>
+</div>
+<p class="font-bold text-sm leading-relaxed calt-enabled italic">
+                        "Minimalist, yet incredibly comfortable. The kinetic design of the shutters and the way light plays across the basalt floors throughout the day is pure art. Highly recommend."
+                    </p>
+</div>
+</div>
+</section>
+<!-- Location Hint -->
+<section class="px-6 mb-12">
+<h2 class="text-2xl font-black-900 mb-6">THE NEIGHBORHOOD</h2>
+<div class="w-full h-64 rounded-xl overflow-hidden ghost-border relative">
+<img class="w-full h-full object-cover" data-alt="stylized map showing mountainous terrain with organic green and cream tones" data-location="Bavarian Alps, Germany" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjnWIOfyIOe3dgyOu2dT-0hDVxHVzNS8uxp_5QLVUd3gkS65EatouWECsZuYheeViDjfOnbNaQR0fAjZwhAGc0zIGFxEN0juD8DuwCO6w8PE923DKJZ-_IiUt0uz0AN5hMSZdT09Zmi0q7XXfZ9cnxiJg0FWp0q9ZdkhLWkhQ62ZOn5JUAViWnNNQw6XKe5EDIgs45PMnVXTzwWXjXqLkIUC2c55Lh21HXP66FSEgapd92Izj9Mq89WWoHBP9fmM_cVlSLhtWG_hU"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center shadow-lg animate-pulse">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">location_on</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Fixed Bottom Action Bar -->
+<div class="fixed bottom-0 w-full bg-background/90 backdrop-blur-xl px-6 pt-4 pb-10 flex items-center justify-between z-50">
+<div>
+<p class="text-[10px] font-bold text-on-background/50 uppercase tracking-widest">STARTING FROM</p>
+<p class="text-2xl font-black-900">$450<span class="text-sm text-on-background/50 ml-1">/ night</span></p>
+</div>
+<button class="bg-primary-container text-on-primary-container px-10 py-4 rounded-full font-black-900 uppercase tracking-tighter text-lg hover:scale-105 active:scale-95 transition-transform ambient-shadow">
+            Book Nearby
+        </button>
+</div>
+</body></html>

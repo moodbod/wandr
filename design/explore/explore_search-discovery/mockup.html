@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-surface-variant": "#41493a",
+                      "primary-fixed-dim": "#91d963",
+                      "on-primary-fixed-variant": "#225100",
+                      "surface-container": "#eeeeeb",
+                      "outline-variant": "rgba(14,15,12,0.12)",
+                      "on-error": "#ffffff",
+                      "secondary-fixed": "#c8eea5",
+                      "on-background": "#0e0f0c",
+                      "tertiary-container": "#ffc5d7",
+                      "surface-variant": "#e2e3e0",
+                      "primary-fixed": "#acf67c",
+                      "on-surface": "#0e0f0c",
+                      "secondary": "#47672d",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#643a49",
+                      "on-secondary-fixed": "#0c2000",
+                      "on-error-container": "#93000a",
+                      "inverse-primary": "#91d963",
+                      "inverse-on-surface": "#f1f1ee",
+                      "tertiary-fixed": "#ffd9e3",
+                      "tertiary-fixed-dim": "#f0b7c9",
+                      "secondary-container": "#c5eba3",
+                      "outline": "#717a68",
+                      "surface-container-lowest": "#ffffff",
+                      "primary": "#2f6c00",
+                      "tertiary": "#7e5161",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-container": "#7b4f5e",
+                      "on-primary-container": "#163300",
+                      "primary-container": "#9fe870",
+                      "surface": "#f9f9f6",
+                      "on-tertiary-fixed": "#31101e",
+                      "on-primary-fixed": "#092100",
+                      "on-secondary-container": "#4b6c31",
+                      "on-secondary": "#ffffff",
+                      "surface-container-low": "#f4f4f1",
+                      "error-container": "#ffdad6",
+                      "secondary-fixed-dim": "#acd28c",
+                      "surface-bright": "#f9f9f6",
+                      "background": "#f9f9f6",
+                      "inverse-surface": "#2f312f",
+                      "surface-container-high": "#e8e8e5",
+                      "surface-dim": "#dadad7",
+                      "surface-container-highest": "#e2e3e0",
+                      "surface-tint": "#2f6c00",
+                      "on-secondary-fixed-variant": "#304f18",
+                      "error": "#ba1a1a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "2.5rem",
+                      "xxl": "3rem"
+              },
+              "fontFamily": {
+                      "headline": ["Inter", "sans-serif"],
+                      "body": ["Inter", "sans-serif"],
+                      "label": ["Inter", "sans-serif"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .display-huge { font-weight: 900; line-height: 0.85; letter-spacing: -0.04em; font-feature-settings: "calt" 1, "kern" 1; }
+        .ghost-border { box-shadow: inset 0 0 0 1px rgba(14,15,12,0.12); }
+        .ambient-shadow { box-shadow: 0 20px 40px rgba(14, 15, 12, 0.04); }
+      </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-background min-h-screen pb-32 selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f9f9f6]/80 backdrop-blur-xl flex justify-between items-center px-6 h-16">
+<div class="flex items-center gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-90 transform text-on-surface">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<span class="text-2xl font-[900] tracking-[-0.04em] text-[#0e0f0c] uppercase">WANDR</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a stylish young traveler with sunset lighting reflecting in sunglasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2ssn90onhjFIXdXru-kK0VtelFAbd85pW425gnD3IOIa0FdfYqd8gonM0m_jglBG5_FTFnzDOIycqj4Jf81AtAv_3x5E4QGaBZUK8Eidzw4Bzzr4Uxn8C_1BTzSWF1xOs6De1s5PiH7BaL2N1942rpposCbQtg_Lef0X7ZAspyWXVQKQpqlMrgNVkLmfltVuW0IdtGfsOkP94DqOeclnZs-wXzRn1zibpxalIJEJNgw_zoEq7UTzB7yRZIyO8y5vJ7dJYoc0D8dg"/>
+</div>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-7xl mx-auto">
+<!-- Hero Header -->
+<section class="mb-12">
+<h1 class="display-huge text-[clamp(4rem,15vw,9rem)] text-on-background uppercase">EXPLORE</h1>
+<div class="mt-4 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<p class="text-xl font-semibold max-w-md text-on-surface-variant leading-tight">
+                    Uncover the raw beauty of Swakopmund through curated kinetic experiences.
+                </p>
+<div class="flex gap-2">
+<span class="px-6 py-3 rounded-full bg-surface-container-low font-bold text-sm tracking-tight ghost-border">Namibia</span>
+<span class="px-6 py-3 rounded-full bg-primary-container text-on-primary-container font-bold text-sm tracking-tight">Active Search</span>
+</div>
+</div>
+</section>
+<!-- Search Bar -->
+<section class="mb-16">
+<div class="relative group">
+<div class="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface/40" data-icon="search">search</span>
+</div>
+<input class="w-full bg-surface-container-low border-none rounded-xxl py-8 pl-16 pr-8 text-xl font-semibold focus:ring-2 focus:ring-primary-container placeholder:text-on-surface/30 transition-all duration-300" placeholder="Search experiences, tastes, or hidden spots..." type="text"/>
+</div>
+</section>
+<!-- Bento Grid: Featured Experiences -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-24">
+<!-- Hero Billboard: Desert Adrenaline -->
+<div class="md:col-span-8 group cursor-pointer">
+<div class="relative h-[500px] rounded-xxl overflow-hidden transform hover:scale-[1.02] transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
+<img class="w-full h-full object-cover" data-alt="action shot of a quad bike kicking up sand on a massive golden dune in the Namib desert under a clear blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDP0wm5QppAYT1Y59Xf-t7Q8NjKOdQ3-1zbNaAKkUBFT7qlGx5lF3-HOvxHyYk56VsuncX4xuRuF7jkAdUWMXQ2tSg3ZYJjrueufiAq_zJIwBh0ZiynWwX2lAXETq5bYVMe-Pbg1JfD6SM67ZQdjxcMnfSpgfCnqFxlwtb5s8RIr9antErPacM3N0xtwD6CasUVxbKq012XAcU08p4qXob6ZsskdGdCzkdK_1w7_pq_vMLqPo4p9YBNX-EQQFwibYwFffcdWyU70EQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+<div class="absolute bottom-10 left-10 right-10">
+<div class="flex gap-2 mb-4">
+<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest">Adrenaline</span>
+</div>
+<h2 class="text-white text-5xl font-black mb-2 uppercase tracking-tighter">Desert Adrenaline</h2>
+<p class="text-white/80 font-bold text-lg max-w-sm">Conquer the dunes of the Namib via 4x4 or high-speed sandboarding.</p>
+</div>
+</div>
+</div>
+<!-- Detail Card: Taste of Swakop -->
+<div class="md:col-span-4 group cursor-pointer">
+<div class="relative h-[500px] bg-surface-container-low rounded-xxl overflow-hidden transform hover:scale-[1.02] transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] flex flex-col">
+<div class="h-1/2 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="overhead view of gourmet seafood platter including oysters and lemon on a rustic wooden table by the ocean" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJddW1UqyZ1RaFB7sRKZ94sGChYpjH1dDAXWD1tJTszBNUSM63gTe_-VY_leNsGeY4DglaeBwdXV_QcQJ8-ImEIp3sZWUiTQTCWjQ91cjbnvS8jFBRYWI11ZkyZFJFLLc1tsYXWDSGcQ6QZz1OKyTlyWwZ7J5BxoGEqrX4B5L4Pip6vpjhe6w1x3QPIbfj01fPy_bVMusTNgM7lvGZlDumVx0CUXk-2PYcuW00nj7tyao1NB8Z9KgqYJWub5RPI1zkHLdfK647xtc"/>
+</div>
+<div class="p-8 flex-grow">
+<span class="text-primary font-black text-xs uppercase tracking-widest mb-2 block">Gastronomy</span>
+<h3 class="text-3xl font-black text-on-background mb-4 uppercase tracking-tight">Taste of Swakop</h3>
+<p class="text-on-surface-variant font-bold leading-snug">The freshest Atlantic oysters paired with local craft brews at the Jetty.</p>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-2xl font-black">$45<span class="text-sm font-bold text-on-surface/40">/pp</span></span>
+<span class="material-symbols-outlined text-primary" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Hidden Gems: Interactive Row -->
+<div class="md:col-span-12">
+<div class="flex items-center justify-between mb-8">
+<h3 class="text-4xl font-black uppercase tracking-tighter">Hidden Gems</h3>
+<button class="text-primary font-black uppercase tracking-widest flex items-center gap-2">
+                        View All <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Gem 1 -->
+<div class="bg-surface-container-low p-2 rounded-xxl transform hover:scale-[1.05] transition-transform duration-300">
+<div class="h-64 rounded-xl overflow-hidden mb-6">
+<img class="w-full h-full object-cover" data-alt="architectural shot of a colonial-style lighthouse in Swakopmund with deep red and white stripes against a twilight sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBFjeeT3dJYW6Jp2cHVCA7XVcup2uuU0vPoniYX1qDhn9DQcWTr0rUzojiNGWk5P2JdxqBEexWXWnBs5iZHZScgi9GugsIIgbJW8PRnoE4TTtaBxG1EqyezRcZitnLjBSF8o0Fu8EyF684C2pLITOOOD832cGT3pzyd3xXHGq9WNq1OFXre-sanXlu_Iq2Tz2vMxsr4GGY2hq72wbVr9Sh-vea_6HXnC9MIvxxqneRuKVPA3aA2ZMtyV4buJ27bGFXRElQZ7TBKy8"/>
+</div>
+<div class="px-4 pb-6">
+<h4 class="text-xl font-black uppercase tracking-tight mb-2">The Red Lighthouse</h4>
+<p class="text-on-surface-variant font-bold text-sm">A nocturnal tour of the historic 1902 beacon and its hidden chambers.</p>
+</div>
+</div>
+<!-- Gem 2 -->
+<div class="bg-surface-container-low p-2 rounded-xxl transform hover:scale-[1.05] transition-transform duration-300">
+<div class="h-64 rounded-xl overflow-hidden mb-6">
+<img class="w-full h-full object-cover" data-alt="misty landscape of a salt pan at sunrise with delicate pink flamingos wading in shallow mirror-like water" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7DswLY8zqOIb9iDcjyR1gG8VJjEKdRFZrONWpG8BXd6nBiuL_h2BzdWJUxH4rP35v-vFX_1oUm9ntWI9HvsR8B0b20HkXBNDHS4rV6PH0YMrN9jZQvbzOK5VxPNo3lW9XpLq4s2HFRIwUw8PdwFbxyXjFbwQKe_pF1cn1_DdgUX6DKzmZk11PW8GDqy8YcaisPHABd_pK8G-bfdJxENgrdCdtGjjxiPByEpCIOMKU3FyMwTIj4MDwk8CNPrAEjR82Uj6yP6lmcv0"/>
+</div>
+<div class="px-4 pb-6">
+<h4 class="text-xl font-black uppercase tracking-tight mb-2">Pink Salt Pans</h4>
+<p class="text-on-surface-variant font-bold text-sm">Discover where the desert meets the sea in a surreal landscape of pink water.</p>
+</div>
+</div>
+<!-- Gem 3 -->
+<div class="bg-surface-container-low p-2 rounded-xxl transform hover:scale-[1.05] transition-transform duration-300">
+<div class="h-64 rounded-xl overflow-hidden mb-6">
+<img class="w-full h-full object-cover" data-alt="vibrant street art mural depicting an oryx on a weathered concrete wall in an urban alleyway" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCo-PHRiyIgPnNeHOoWN9VibSom9bcCeDOK9Ey3acqY_lwZJ7DBJrvlZHVTSrVR6wxsBsgK21e0Vr9X9XeS5N1e83aaRPbgrm26dPC0o5hihzm3fDCjQKy_bnjsM-YYraH-1fCpq6ydObN7VseNYW2YjqvPLoXoaV6zDd-mdCTm6m6L5rksLF6L4aZ2ZjxfWinelc2nnQpNKbUIr5KlmyGmGEJw8yu471FXs29EiQlGHNg56NvfVGvz71YYuuHqwIyNUwekC6rCdTc"/>
+</div>
+<div class="px-4 pb-6">
+<h4 class="text-xl font-black uppercase tracking-tight mb-2">Art Alleyway</h4>
+<p class="text-on-surface-variant font-bold text-sm">Guided walk through the evolving street art scene in the downtown district.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Integrated Map Section -->
+<section class="mb-24">
+<div class="relative rounded-xxl overflow-hidden h-[400px] ambient-shadow">
+<div class="absolute inset-0 bg-surface-container-highest flex items-center justify-center">
+<!-- Map Mockup -->
+<img class="w-full h-full object-cover opacity-60 grayscale" data-alt="top-down artistic map of a coastal town with geometric streets and stylized ocean textures" data-location="Swakopmund" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQOlxRZfxfudf_bl6lgrvW1ns9_tuxqAgZnUwmKrPWFaruUnQZlnnsB6FhmODqMTkSSrgBHTYSPAHiM3cgqSSsZKEKyaldoXGyUw5lr2Vcci_UR9GZa7XFqXhkUwYim4o6dVhluiFAy7XV8s-aOYS8U04N71BzdMcWmeG-NHzTtk3szng5JVFDOvkLehkm0kDFWlcPLLELHZQs0WF-UgU3OgeiWcbWpVifOme4zS4NXe3uPP3xFXWRXeXE0L2w8JOwNCkG3pxOxFk"/>
+<div class="absolute inset-0 bg-primary/10 pointer-events-none"></div>
+</div>
+<!-- Interactive Overlay -->
+<div class="absolute top-8 left-8 bg-surface/90 backdrop-blur-md p-6 rounded-xl max-w-xs ghost-border">
+<h4 class="text-lg font-black uppercase tracking-tight mb-1">Live Map</h4>
+<p class="text-sm font-bold text-on-surface-variant">42 Active experiences available nearby.</p>
+<button class="mt-4 w-full bg-on-background text-white py-3 rounded-full font-bold text-sm tracking-widest hover:scale-[1.02] transition-transform active:scale-95">EXPAND VIEW</button>
+</div>
+<!-- Custom Markers -->
+<div class="absolute top-1/2 left-1/3 w-8 h-8 bg-primary-container border-4 border-white rounded-full flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-[16px]" data-icon="restaurant" style="font-variation-settings: 'FILL' 1;">restaurant</span>
+</div>
+<div class="absolute bottom-1/3 right-1/4 w-8 h-8 bg-on-background border-4 border-white rounded-full flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-white text-[16px]" data-icon="explore" style="font-variation-settings: 'FILL' 1;">explore</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-between items-center mx-auto w-[90%] max-w-md bg-[#f4f4f1]/90 backdrop-blur-lg rounded-full px-2 py-2 ambient-shadow">
+<!-- Explore Active -->
+<a class="flex flex-col items-center justify-center bg-[#9fe870] text-[#163300] rounded-full px-6 py-2 scale-105 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="explore" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="text-[12px] font-bold tracking-tight font-inter">Explore</span>
+</a>
+<!-- Trips -->
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 px-4 py-2 hover:scale-105 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="luggage">luggage</span>
+<span class="text-[12px] font-bold tracking-tight font-inter">Trips</span>
+</a>
+<!-- Wallet -->
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 px-4 py-2 hover:scale-105 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="text-[12px] font-bold tracking-tight font-inter">Wallet</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 px-4 py-2 hover:scale-105 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-[12px] font-bold tracking-tight font-inter">Profile</span>
+</a>
+</nav>
+<!-- Contextual FAB -->
+<button class="fixed bottom-24 right-6 w-16 h-16 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 z-40">
+<span class="material-symbols-outlined text-3xl" data-icon="add" style="font-variation-settings: 'FILL' 0, 'wght' 700;">add</span>
+</button>
+</body></html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#47672d",
+                    "surface-container": "#eeeeeb",
+                    "on-primary-fixed-variant": "#225100",
+                    "secondary-container": "#c5eba3",
+                    "on-secondary-fixed": "#0c2000",
+                    "on-secondary-fixed-variant": "#304f18",
+                    "inverse-primary": "#91d963",
+                    "on-secondary-container": "#4b6c31",
+                    "inverse-surface": "#2f312f",
+                    "tertiary-container": "#ffc5d7",
+                    "outline-variant": "#c1cab5",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#acd28c",
+                    "on-tertiary-fixed-variant": "#643a49",
+                    "tertiary": "#7e5161",
+                    "surface-variant": "#e2e3e0",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f4f4f1",
+                    "inverse-on-surface": "#f1f1ee",
+                    "primary-container": "#9fe870",
+                    "surface-dim": "#dadad7",
+                    "primary-fixed": "#acf67c",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed-dim": "#91d963",
+                    "on-primary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#2f6c00",
+                    "tertiary-fixed-dim": "#f0b7c9",
+                    "outline": "#717a68",
+                    "on-background": "#1a1c1b",
+                    "on-tertiary-container": "#7b4f5e",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffd9e3",
+                    "surface-bright": "#f9f9f6",
+                    "surface": "#f9f9f6",
+                    "on-error-container": "#93000a",
+                    "surface-tint": "#2f6c00",
+                    "secondary-fixed": "#c8eea5",
+                    "on-primary-container": "#2e6900",
+                    "on-tertiary-fixed": "#31101e",
+                    "surface-container-highest": "#e2e3e0",
+                    "on-surface-variant": "#41493a",
+                    "on-primary-fixed": "#092100",
+                    "on-surface": "#1a1c1b",
+                    "error-container": "#ffdad6",
+                    "background": "#f9f9f6",
+                    "surface-container-high": "#e8e8e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter", "sans-serif"],
+                    "body": ["Inter", "sans-serif"],
+                    "label": ["Inter", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .font-black { font-weight: 900; }
+        .tracking-tighter { letter-spacing: -0.04em; }
+        .tight-lh { line-height: 0.85; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-background selection:bg-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f9f9f6]/80 dark:bg-[#0e0f0c]/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(14,15,12,0.04)]">
+<div class="flex items-center justify-between px-6 h-20 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary-container hover:scale-105 transition-transform duration-300 cursor-pointer">
+<img alt="User" data-alt="Close up portrait of a smiling young explorer with a neutral background, soft natural sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqXl3hLZwpJ7JSojBtUubSHHcx2j6vMryPgcBH2RUjEAUnbnh-X8WfqS2uIH1NCDrx-BhxwrL4OEawoIBHTdzB3p-HoAXHmAQsdOu35kjwD5HPt_0ebnoV7tkmV1NZhaqooKCAgYkjAlA5d8aKAeJM-cmM4_3JpFUZZgYjAfCz-4KWOZWqv2NBn6mMwL9_Ic4LlKNJKM2xeyz-_FJMzcNC6BNOuWMvAuovAGlRoKU1xq5yhIOhj0kWPINk-Fz2ndPYbTTT11qKP2o"/>
+</div>
+<span class="font-black text-[#0e0f0c] dark:text-[#f9f9f6] text-2xl tracking-tighter uppercase">WiseTravel</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-[#0e0f0c] dark:text-[#f9f9f6] font-bold text-sm tracking-tight uppercase hover:scale-105 transition-transform duration-300" href="#">Explore</a>
+<a class="text-[#0e0f0c]/50 dark:text-[#f9f9f6]/50 font-bold text-sm tracking-tight uppercase hover:scale-105 transition-transform duration-300" href="#">My Trip</a>
+<a class="text-[#0e0f0c]/50 dark:text-[#f9f9f6]/50 font-bold text-sm tracking-tight uppercase hover:scale-105 transition-transform duration-300" href="#">Saved</a>
+<a class="text-[#0e0f0c]/50 dark:text-[#f9f9f6]/50 font-bold text-sm tracking-tight uppercase hover:scale-105 transition-transform duration-300" href="#">Inbox</a>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-low text-on-surface hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="map">map</span>
+</button>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-7xl mx-auto">
+<!-- Billboard Hero Section -->
+<section class="mt-8 mb-16">
+<h1 class="font-black tracking-tighter text-[4rem] md:text-[7rem] tight-lh uppercase mb-8">
+                Find your <br/> <span class="text-primary-container drop-shadow-sm">wildest</span> path
+            </h1>
+<!-- Map Integration Cluster -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+<!-- Mini-Map Preview -->
+<div class="lg:col-span-8 relative rounded-xl overflow-hidden h-[400px] bg-surface-container-low group">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="Stylized minimalist topographical map of the Swiss Alps with muted tones and lime green hiking path highlights" data-location="Swiss Alps" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQVTqTjoRHgEYZZoR9I882ocuuhuBvTt38UpGFQuV8LGLQDZDHsS7uriS5sM_sqWOQ7dF1mSxYv5zjlt2D4EEGuEVj9ZSpy5tUBH1TKpYvBNorcGMOfgCUvWhbukNhlnbzDBcWpEhClj0eBRC_4kXn45HavC8Qhnk5YWSuHaYh66f3FEIeMve-v0T8d9IuLKfgUyiimduvrQn0WTje7a9ex8CWsvha_tI89e14gQBftmpGejmwzc6eIroiJP3FxhgI3JexcKp-flE"/>
+<!-- Glass Overlay for Map -->
+<div class="absolute inset-0 bg-gradient-to-t from-on-background/40 to-transparent flex flex-col justify-end p-8">
+<div class="flex items-center justify-between">
+<div>
+<p class="text-surface font-bold text-lg mb-1">Alpine Ridge Trail</p>
+<p class="text-surface/80 font-bold text-xs uppercase tracking-widest">Currently trending near you</p>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-4 rounded-full font-black uppercase text-sm tracking-tighter hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                                View Full Map
+                                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_right_alt</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Secondary Experience Card -->
+<div class="lg:col-span-4 rounded-xl bg-surface-container-low p-8 flex flex-col justify-between">
+<div class="space-y-4">
+<span class="inline-block bg-on-background text-primary-container px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Member Exclusive</span>
+<h3 class="text-3xl font-black leading-none uppercase tracking-tighter">Hidden <br/> Waterfalls</h3>
+</div>
+<div class="mt-8">
+<div class="w-full h-40 rounded-lg overflow-hidden mb-4 ring-1 ring-outline-variant">
+<img class="w-full h-full object-cover" data-alt="Dramatic lush green jungle waterfall with crystalline blue water and cinematic lighting, misty atmosphere" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3y9QAq1KxtaQbakrQQbg2JxwY7V0mxncDMVaOy3jfIEMFE2lAuqvf8BuB9ekM1Dq6QsKPbomyJvM1oPkn3hdo70GzSnLQYrT20P13t2K6nAOJ_moPo-3JuNbDr1C1PH785g5lahpz6cv7z-R0iqiO3h1nMZRTlrt3oFiCLlFPonUeuZWxWqwQBWodEncMmap4R_wYpilzTo_1b-tPBmN3uvcjd-lbqmRvEk5EwUP1Tyx5J0GInlo_PWzDKl4bvn5gTtq2n3M_VTg"/>
+</div>
+<p class="text-on-background/70 font-bold text-sm leading-relaxed">Unlock 12 coordinates of untouched basins in the northern corridor.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Experience Grid -->
+<section class="mb-20">
+<div class="flex items-end justify-between mb-12">
+<h2 class="font-black text-4xl uppercase tracking-tighter leading-none">Curated <br/> Stories</h2>
+<div class="flex gap-2">
+<button class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Experience Card 1 -->
+<div class="space-y-6 group cursor-pointer">
+<div class="aspect-[4/5] rounded-xl overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Extreme mountain biker catching air against a clear blue sky at sunset with warm orange glow" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKgyt1PBZzuPg4J5y7wqGummWj3q3PDOMSmga-Qn75wc2MAjatXV3QVhPLKl5vz3yyTBr4C_o3JgAUb2WqCRUFEJYF-4ze3bL7GTYpPJHv5Pg3N_m1acd-pa2gxNOU6YS6oLOgyKWX9RR0cInquY5kqKb7DaNed7yEnH1p1V_r6ndPbQby3AXVtR6Syz9ddIp6u_5-uaGiNICtDGFu-0lfyCeSYCuoKjxNfla2ymByYkUI-mOYOwd-9q0xkTwgOItaNACyOHyJLYg"/>
+</div>
+<div>
+<p class="text-primary font-black text-xs uppercase tracking-widest mb-2">Adventure</p>
+<h4 class="text-2xl font-black uppercase tracking-tighter leading-tight group-hover:text-primary transition-colors">The Ridge Runners of Chamonix</h4>
+</div>
+</div>
+<!-- Experience Card 2 -->
+<div class="space-y-6 group cursor-pointer translate-y-0 md:translate-y-12">
+<div class="aspect-[4/5] rounded-xl overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Aerial shot of a solitary kayak on a perfectly still turquoise glacial lake surrounded by pines" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5JhGEx_MITQcqWv92u5oeN8bobtRsSsqS2zeuE-yGxImBhHLISM3FnolRAFNGvRNZqDSZaL4FUwNcN_nYhUKUKWhWmR9vs-MM7a-C_0iRCFF6RNEBMuOB9W8NqDS41GNEi2iX6W81JIkJZ1PQF-WvFqvtxrbN98OWjsxnvuSgC4Hm4rhgmfJBNhUEMGz7DrkQ3iLwLEF7gavfIlrYDOyrY3pvV71pwi5R6UBwQHqPkhy0ayAayMdqBehV4qzmPbjsKh2puRTkVQY"/>
+</div>
+<div>
+<p class="text-primary font-black text-xs uppercase tracking-widest mb-2">Serenity</p>
+<h4 class="text-2xl font-black uppercase tracking-tighter leading-tight group-hover:text-primary transition-colors">Mirror Lakes &amp; Silent Paddles</h4>
+</div>
+</div>
+<!-- Experience Card 3 -->
+<div class="space-y-6 group cursor-pointer">
+<div class="aspect-[4/5] rounded-xl overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Cozy modern architectural cabin in a dark snowy forest with glowing interior lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAm5TnKLSMv5aAyGzTG8EIvmoieDEm-UB6VIaZ0XFy7a1eOjSoup2mZ-4W-4T7YZ5zR0vUtU45Jc9chH2g_il7Te6wvbDyXz1PYb8YmJt28mQBm7ZQL-JXJGZ1_57hup83HdueOrsGvmKpTD9Qp3nqGw7Gg2Wii4PYmnUk-3mn1se0BorJWaY9woazEbHoooT14tLUlgFnnuQYEmW2RLA4oNWsazhe2ax34gFkv4rogQ0nuqh7M1jj92ibsfaUe2WrQVVhlb6NK1nk"/>
+</div>
+<div>
+<p class="text-primary font-black text-xs uppercase tracking-widest mb-2">Living</p>
+<h4 class="text-2xl font-black uppercase tracking-tighter leading-tight group-hover:text-primary transition-colors">Modern Brutalism in the Wild</h4>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Floating Surface -->
+<section class="mt-32">
+<div class="bg-primary-container rounded-xl p-12 md:p-24 flex flex-col items-center text-center overflow-hidden relative">
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 20% 30%, #163300 1px, transparent 1px); background-size: 40px 40px;"></div>
+</div>
+<h2 class="text-on-primary-container font-black text-[3.5rem] md:text-[6rem] tight-lh uppercase mb-8 relative z-10">Start your journey</h2>
+<button class="bg-on-primary-container text-primary-container px-12 py-6 rounded-full font-black uppercase text-xl tracking-tighter hover:scale-105 active:scale-95 transition-all relative z-10">
+                    Go Beyond
+                </button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-6 bg-surface rounded-t-[40px] z-50 ring-1 ring-[#0e0f0c]/10 shadow-[0_-10px_30px_rgba(14,15,12,0.05)]">
+<!-- Active: Explore -->
+<a class="flex flex-col items-center justify-center bg-[#9fe870] text-[#163300] rounded-full px-6 py-2 scale-110 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="font-bold text-[10px] tracking-tight uppercase mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">travel_explore</span>
+<span class="font-bold text-[10px] tracking-tight uppercase mt-1">My Trip</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">bookmark</span>
+<span class="font-bold text-[10px] tracking-tight uppercase mt-1">Saved</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">mail</span>
+<span class="font-bold text-[10px] tracking-tight uppercase mt-1">Inbox</span>
+</a>
+</nav>
+</body></html>

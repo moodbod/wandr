@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            font-feature-settings: "calt" 1, "kern" 1;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed-dim": "#91d963",
+                    "inverse-primary": "#91d963",
+                    "on-secondary-container": "#4b6c31",
+                    "surface-container": "#eeeeeb",
+                    "surface": "#f9f9f6",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-container": "#7b4f5e",
+                    "error": "#ba1a1a",
+                    "secondary": "#47672d",
+                    "primary": "#2f6c00",
+                    "on-surface": "#1a1c1b",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#f1f1ee",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-background": "#1a1c1b",
+                    "background": "#f9f9f6",
+                    "outline-variant": "#c1cab5",
+                    "surface-bright": "#f9f9f6",
+                    "primary-container": "#9fe870",
+                    "on-secondary-fixed": "#0c2000",
+                    "surface-container-highest": "#e2e3e0",
+                    "primary-fixed": "#acf67c",
+                    "secondary-fixed-dim": "#acd28c",
+                    "tertiary-container": "#ffc5d7",
+                    "surface-container-high": "#e8e8e5",
+                    "outline": "#717a68",
+                    "secondary-container": "#c5eba3",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#f0b7c9",
+                    "on-surface-variant": "#41493a",
+                    "on-primary-fixed": "#092100",
+                    "surface-dim": "#dadad7",
+                    "tertiary-fixed": "#ffd9e3",
+                    "surface-tint": "#2f6c00",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed-variant": "#304f18",
+                    "surface-variant": "#e2e3e0",
+                    "surface-container-low": "#f4f4f1",
+                    "on-tertiary-fixed": "#31101e",
+                    "on-primary-container": "#2e6900",
+                    "on-primary-fixed-variant": "#225100",
+                    "secondary-fixed": "#c8eea5",
+                    "on-tertiary-fixed-variant": "#643a49",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#7e5161",
+                    "inverse-surface": "#2f312f"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+          }
+        }
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 w-full bg-[#f9f9f6]/80 dark:bg-[#0e0f0c]/80 backdrop-blur-xl no-border tonal-shift bg-[#f4f4f1] dark:bg-[#1a1b17] flat-no-shadows">
+<div class="flex items-center justify-between px-6 py-8 w-full max-w-5xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="hover:scale-105 transition-transform scale-95 duration-200">
+<span class="material-symbols-outlined text-on-background text-3xl">arrow_back</span>
+</button>
+<div class="flex flex-col">
+<h1 class="font-black tracking-tighter uppercase text-4xl leading-[0.85] text-[#0e0f0c] dark:text-[#f9f9f6]">The Safari Squad</h1>
+<span class="text-xs font-bold text-primary tracking-widest mt-1">4 ACTIVE MEMBERS</span>
+</div>
+</div>
+<button class="hover:scale-105 transition-transform scale-95 duration-200">
+<span class="material-symbols-outlined text-on-background text-3xl">settings</span>
+</button>
+</div>
+</header>
+<main class="max-w-5xl mx-auto px-6 pb-32 pt-8">
+<!-- Billboard Title -->
+<section class="mb-12">
+<h2 class="font-black text-[12vw] md:text-[8rem] leading-[0.85] tracking-tighter uppercase text-on-background">SQUAD<br/>NAMIBIA</h2>
+</section>
+<!-- Chat Container -->
+<div class="space-y-10">
+<!-- Message: Other -->
+<div class="flex flex-col gap-2 max-w-[85%]">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="Member Avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a young man with a rugged adventurer look, warm lighting, natural skin textures" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGAuFyuM0kaihSSQhAM-XEet8VY6M0RNxnzM1ONlTlM1hYXvm-Y_ygmbqJ7VKJQxKtBM-G17Vn61PW33YVo4WLrTkYueNT3LY5G-_a7FBAI063ckR86EDOdvLMLef2X-1-fs5ENCCl50QUvZVgddtnrqB24gBaS5ytFP2hOibTwSgF6RUS0CRxhfjIX2Fwz1NmkkucvUENDbddG1E0GTJAyLh7jsW0DBIFEb1bkyty6ok3R-1TkmOxR01-V28TN1aclt_vRmiP6x8"/>
+</div>
+<span class="text-sm font-bold text-on-surface/60 uppercase tracking-widest">Kaelen</span>
+</div>
+<div class="bg-on-background text-surface-container-lowest px-8 py-6 rounded-[30px] rounded-tl-[4px]">
+<p class="text-lg font-semibold leading-relaxed">Just checked the coordinates for the Sossusvlei dunes. We need to leave by 4 AM to catch the sunrise light. Thoughts?</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface/40 ml-4">14:02</span>
+</div>
+<!-- Route Update Card -->
+<div class="flex flex-col items-center py-4">
+<div class="bg-surface-container-low w-full rounded-xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 ring-1 ring-[#0e0f0c]/10">
+<div class="flex items-center gap-6">
+<div class="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">map</span>
+</div>
+<div>
+<h3 class="text-xl font-extrabold uppercase tracking-tight">New Route Shared</h3>
+<p class="text-on-surface/60 font-semibold">Swakopmund to Deadvlei • 364km</p>
+</div>
+</div>
+<button class="bg-on-background text-background px-8 py-4 rounded-full font-bold hover:scale-105 transition-transform active:scale-95 duration-200">
+                        VIEW EXPEDITION
+                    </button>
+</div>
+</div>
+<!-- Message: User (Wise Green) -->
+<div class="flex flex-col items-end gap-2 ml-auto max-w-[85%]">
+<div class="bg-primary-container text-on-primary-container px-8 py-6 rounded-[40px] rounded-tr-[4px]">
+<p class="text-lg font-semibold leading-relaxed">4 AM is perfect. The shadows on Big Daddy dune are insane at that hour. I'm packing the telephoto lens now.</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface/40 mr-4 uppercase">Read 14:15</span>
+</div>
+<!-- High Impact Photo Share -->
+<div class="w-full rounded-xl overflow-hidden bg-surface-container-low ring-1 ring-[#0e0f0c]/05">
+<div class="relative group">
+<img alt="Namib Desert" class="w-full aspect-[16/10] object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Cinematic wide shot of towering red sand dunes in the Namib desert under a clear turquoise sky, dramatic shadows and sharp textures" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-LXcbtwmJ0LWmnFwZq7PcTeojqCHj491_253KHF3nhHCSQvZ-bNcap9FQDn-gYnb0kHXdNdl41286R6ee5GKh18_yAtaFLqa_05Njp8aYRxXVGqz8LfG1lTqlbnm66AJtCDv4UWdbY3Cxz6ByM-5P2jsLxBari5hDz5xnQY_eGoZSYmG8LfmkqkHDTVlVi4Np4MzIjcdgFCWDwZFzWm5pKuU2laVkkrirA619P3wZvFWPRj9Qgf3V1-wve_ZLaElH0v8xLIVTnIs"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60"></div>
+<div class="absolute bottom-8 left-8">
+<span class="text-white/70 text-xs font-bold tracking-[0.2em] uppercase mb-2 block">Reference Location</span>
+<h4 class="text-white text-3xl font-black uppercase tracking-tighter">Deadvlei Basin</h4>
+</div>
+</div>
+</div>
+<!-- Message: Other -->
+<div class="flex flex-col gap-2 max-w-[85%]">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="Member Avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a woman with braided hair and outdoor gear, natural lighting, desert glow" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmyZMHcS23Ef_XhgVUFF8qGJdqa8sVcU_Cdw0e-8i5t0y_i8-Ac_DPUha1MuhUaMmPwLJZdZO2kG9Z9XL5kmBgkvp53exSlrCUPiVHTE9WjQY8_dUy1u0ojWo8R8mGLAK-9czLQm-asphFJkBOj2dnuiLc8Y43Fc_s2EfhNlu8BjpC20L1JrY-I8rklNbFeT6PhfwIk5FrB1sr56cGjBqb2t16rKeu9OHvSTKYFOyWgyW3nMo-QMu-W8LJkF_40AFnKHqC4wmeGTo"/>
+</div>
+<span class="text-sm font-bold text-on-surface/60 uppercase tracking-widest">Sarah</span>
+</div>
+<div class="bg-on-background text-surface-container-lowest px-8 py-6 rounded-[30px] rounded-tl-[4px]">
+<p class="text-lg font-semibold leading-relaxed">That looks absolutely ethereal. I've updated the fuel stops in the map. We're all set for the morning.</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface/40 ml-4">14:45</span>
+</div>
+</div>
+</main>
+<!-- Bottom Input Area (Pill-shaped) -->
+<div class="fixed bottom-0 left-0 w-full px-6 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent z-40">
+<div class="max-w-4xl mx-auto flex items-center gap-3">
+<div class="flex-1 bg-surface-container-low rounded-full px-8 py-5 flex items-center gap-4 ring-1 ring-on-background/10 focus-within:ring-primary-container transition-all">
+<button class="text-on-surface/40 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">add_circle</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-on-background font-semibold placeholder:text-on-background/30 placeholder:font-semibold" placeholder="Message the squad..." type="text"/>
+<button class="text-on-surface/40 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">mood</span>
+</button>
+</div>
+<button class="bg-primary-container text-on-primary-container w-16 h-16 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-[0_10px_20px_rgba(159,232,112,0.3)]">
+<span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- BottomNavBar (Suppressed for focused task) -->
+<!-- As per "The Destination Rule" and "Automatic Suppression", this sub-page omits the global navigation shell to focus on the chat journey. -->
+<!-- Material Symbols Injection -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+</body></html>

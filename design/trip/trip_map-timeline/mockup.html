@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .text-display-lg { font-size: 3.5rem; line-height: 0.85; font-weight: 900; letter-spacing: -0.04em; }
+        .text-headline-lg { font-size: 2.0rem; line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#47672d",
+                    "surface-container": "#eeeeeb",
+                    "on-primary-fixed-variant": "#225100",
+                    "secondary-container": "#c5eba3",
+                    "on-secondary-fixed": "#0c2000",
+                    "on-secondary-fixed-variant": "#304f18",
+                    "inverse-primary": "#91d963",
+                    "on-secondary-container": "#4b6c31",
+                    "inverse-surface": "#2f312f",
+                    "tertiary-container": "#ffc5d7",
+                    "outline-variant": "#c1cab5",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#acd28c",
+                    "on-tertiary-fixed-variant": "#643a49",
+                    "tertiary": "#7e5161",
+                    "surface-variant": "#e2e3e0",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f4f4f1",
+                    "inverse-on-surface": "#f1f1ee",
+                    "primary-container": "#9fe870",
+                    "surface-dim": "#dadad7",
+                    "primary-fixed": "#acf67c",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed-dim": "#91d963",
+                    "on-primary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary": "#2f6c00",
+                    "tertiary-fixed-dim": "#f0b7c9",
+                    "outline": "#717a68",
+                    "on-background": "#1a1c1b",
+                    "on-tertiary-container": "#7b4f5e",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffd9e3",
+                    "surface-bright": "#f9f9f6",
+                    "surface": "#f9f9f6",
+                    "on-error-container": "#93000a",
+                    "surface-tint": "#2f6c00",
+                    "secondary-fixed": "#c8eea5",
+                    "on-primary-container": "#2e6900",
+                    "on-tertiary-fixed": "#31101e",
+                    "surface-container-highest": "#e2e3e0",
+                    "on-surface-variant": "#41493a",
+                    "on-primary-fixed": "#092100",
+                    "on-surface": "#1a1c1b",
+                    "error-container": "#ffdad6",
+                    "background": "#f9f9f6",
+                    "surface-container-high": "#e8e8e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f9f9f6]/80 dark:bg-[#0e0f0c]/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(14,15,12,0.04)]">
+<div class="flex items-center justify-between px-6 h-20 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary-container">
+<img class="w-full h-full object-cover" data-alt="close-up portrait of a traveler with a warm smile in natural outdoor lighting, high quality editorial style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB06w5iUS1yO_1JuVZqP5W2MSY8FO9nktsRZqkRmmK_e0ka9VrZhbTqqvTk3cvKLOR5emTTyITVqnAWdjHi99U-iTpdFHmpXpAPN8HvVL9-ZeSbyHW_UERkiCwKwVrfIR7hGMIWtdyWRueQxx_s1lkTZIpoxyV9CmCgn5bCZVZRXgZWWYTnIENdD-NJefmvZOPbjzFzMgpdW55Cf1DFUfbqjYjoSfwAqKI4BsXZLtcaQ4nmvLW9Ulsxvf6lJdjzqSXoIQBSHKI-6I0"/>
+</div>
+<span class="font-black text-[#0e0f0c] dark:text-[#f9f9f6] text-2xl tracking-tighter uppercase">WiseTravel</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-background text-2xl hover:scale-105 transition-transform duration-300 active:scale-95">map</button>
+</div>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-5xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-10">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<span class="text-primary font-bold tracking-widest uppercase text-xs mb-2 block">Current Adventure</span>
+<h1 class="text-display-lg uppercase">Swiss Alps<br/>Expedition</h1>
+</div>
+<div class="flex items-center gap-2 bg-primary-container text-on-primary-container px-6 py-3 rounded-full font-bold hover:scale-105 transition-transform cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span>Live Tracking Active</span>
+</div>
+</div>
+</section>
+<!-- Live Map Preview -->
+<section class="mb-12 relative h-64 rounded-xl overflow-hidden shadow-[0_20px_40px_rgba(14,15,12,0.08)] group cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="stylized top-down map view of a mountainous hiking trail with a winding path through lush green pine forests" data-location="Interlaken, Switzerland" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8rZahZrtv5q46KiMewjVJfOF_cTQWXTmbcuhsk6e8tnvl7kc-Nw7SDebpNwR2J57BycDHv0ky4JfAE6eW8YdLdPDXuaHE0eV9OMkmCq3w06YKxd8oAecZpX20ATeC0yDrs8cJG279znMZMCcSaYd4HWylTJO2BK-Gtzmu6-YwYEJnIUFO1GfDuqGekKvvuSY2PY6ORMS5DPetA4rd1OFRXtAReg3PZ9pCFrtwXuMXjppwTu36pgCzWVG30Gkn1z1_Lg96NvYZXOk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-on-background/60 to-transparent"></div>
+<div class="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+<div>
+<h2 class="text-surface font-extrabold text-2xl">Lauterbrunnen Valley</h2>
+<p class="text-surface/80 font-semibold">2.4km until next waypoint</p>
+</div>
+<button class="bg-surface text-on-background px-6 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined">fullscreen</span>
+                    Expand Map
+                </button>
+</div>
+</section>
+<!-- Itinerary Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<!-- Left Column: Progress & Timeline -->
+<div class="md:col-span-8 flex flex-col gap-6">
+<h3 class="text-headline-lg uppercase mb-2">Day 4 Timeline</h3>
+<!-- Completed Stop -->
+<div class="relative pl-10 border-l-4 border-primary-container/30">
+<div class="absolute -left-[14px] top-0 w-6 h-6 bg-primary-container rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px] text-on-primary-container" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<div class="bg-surface-container-low p-8 rounded-lg">
+<div class="flex justify-between items-start mb-4">
+<div>
+<span class="text-primary font-bold text-sm">08:00 AM • COMPLETED</span>
+<h4 class="text-2xl font-black uppercase mt-1">Sunrise Cable Car</h4>
+</div>
+<span class="material-symbols-outlined text-primary">mountain_flag</span>
+</div>
+<p class="text-on-background/70 font-semibold leading-relaxed">Early departure to Schilthorn summit. Captured the Eiger, Mönch and Jungfrau massif in perfect golden light.</p>
+</div>
+</div>
+<!-- Current Stop -->
+<div class="relative pl-10 border-l-4 border-primary-container">
+<div class="absolute -left-[14px] top-0 w-6 h-6 bg-primary text-surface rounded-full flex items-center justify-center ring-4 ring-primary-container">
+<div class="w-2 h-2 bg-surface rounded-full animate-pulse"></div>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[0_20px_40px_rgba(14,15,12,0.04)] ring-1 ring-outline-variant">
+<div class="flex justify-between items-start mb-4">
+<div>
+<span class="text-primary font-black text-sm">11:30 AM • CURRENTLY HERE</span>
+<h4 class="text-2xl font-black uppercase mt-1">Staubbach Falls Hike</h4>
+</div>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">waterfall_chart</span>
+</div>
+<p class="text-on-background font-semibold leading-relaxed mb-6">Enjoying the mist from the 300m high falls. Recommended spot for lunch at the trailhead cafe.</p>
+<div class="flex gap-3">
+<button class="bg-primary-container text-on-primary-container px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined">directions_walk</span>
+                                Start Navigation
+                            </button>
+<button class="bg-surface-container-high text-on-surface px-6 py-3 rounded-full font-bold hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined">share</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Upcoming Stop -->
+<div class="relative pl-10 border-l-4 border-surface-container-high">
+<div class="absolute -left-[14px] top-0 w-6 h-6 bg-surface-container-high rounded-full"></div>
+<div class="bg-surface-container-low p-8 rounded-lg opacity-80">
+<div class="flex justify-between items-start mb-4">
+<div>
+<span class="text-on-surface-variant font-bold text-sm">03:00 PM • UPCOMING</span>
+<h4 class="text-2xl font-black uppercase mt-1">Murren Village Tour</h4>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">location_city</span>
+</div>
+<p class="text-on-background/70 font-semibold">Stroll through the car-free mountain village and shop for local artisanal cheese and wood crafts.</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Quick Stats / Bento Info -->
+<div class="md:col-span-4 flex flex-col gap-6">
+<!-- Weather Card -->
+<div class="bg-primary text-surface p-8 rounded-lg flex flex-col justify-between h-48">
+<div class="flex justify-between items-start">
+<span class="font-bold uppercase tracking-widest text-xs">Weather Alert</span>
+<span class="material-symbols-outlined text-4xl">wb_sunny</span>
+</div>
+<div>
+<div class="text-4xl font-black">18°C</div>
+<div class="font-semibold text-surface/80">Clear skies, light breeze</div>
+</div>
+</div>
+<!-- Progress Bento -->
+<div class="bg-secondary-container text-on-secondary-container p-8 rounded-lg">
+<span class="font-bold uppercase tracking-widest text-xs mb-4 block">Day Progress</span>
+<div class="flex items-center gap-4 mb-2">
+<div class="flex-1 h-3 bg-on-secondary-container/10 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[65%] rounded-full"></div>
+</div>
+<span class="font-black">65%</span>
+</div>
+<p class="text-sm font-bold">2 of 3 locations visited</p>
+</div>
+<!-- Gear Checklist -->
+<div class="bg-surface-container-low p-8 rounded-lg">
+<h5 class="font-black uppercase mb-4">Essentials</h5>
+<ul class="flex flex-col gap-3">
+<li class="flex items-center gap-3 font-semibold">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Mountain Pass
+                        </li>
+<li class="flex items-center gap-3 font-semibold">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Water Bottle
+                        </li>
+<li class="flex items-center gap-3 font-semibold">
+<span class="material-symbols-outlined text-on-surface-variant">circle</span>
+                            Rain Shell
+                        </li>
+</ul>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-6 bg-surface z-50 rounded-t-[40px] shadow-[0_-10px_30px_rgba(14,15,12,0.05)] ring-1 ring-[#0e0f0c]/10">
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] dark:hover:text-[#f9f9f6] transition-all duration-200" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#9fe870] text-[#163300] rounded-full px-6 py-2 scale-110 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">travel_explore</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">My Trip</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] dark:hover:text-[#f9f9f6] transition-all duration-200" href="#">
+<span class="material-symbols-outlined">bookmark</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Saved</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c]/60 dark:text-[#f9f9f6]/60 px-4 py-2 hover:text-[#0e0f0c] dark:hover:text-[#f9f9f6] transition-all duration-200" href="#">
+<span class="material-symbols-outlined">mail</span>
+<span class="font-bold text-[12px] tracking-tight uppercase">Inbox</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#7b4f5e",
+                        "inverse-surface": "#2f312f",
+                        "tertiary-fixed": "#ffd9e3",
+                        "surface-variant": "#e2e3e0",
+                        "outline-variant": "#c1cab5",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#41493a",
+                        "surface-bright": "#f9f9f6",
+                        "surface-tint": "#2f6c00",
+                        "surface-container-high": "#e8e8e5",
+                        "on-tertiary-fixed-variant": "#643a49",
+                        "outline": "#717a68",
+                        "on-secondary-fixed-variant": "#304f18",
+                        "tertiary-container": "#ffc5d7",
+                        "surface-container-low": "#f4f4f1",
+                        "tertiary": "#7e5161",
+                        "on-background": "#1a1c1b",
+                        "primary-fixed": "#acf67c",
+                        "on-primary-container": "#2e6900",
+                        "on-secondary": "#ffffff",
+                        "surface-container": "#eeeeeb",
+                        "secondary": "#47672d",
+                        "background": "#f9f9f6",
+                        "tertiary-fixed-dim": "#f0b7c9",
+                        "primary": "#2f6c00",
+                        "secondary-fixed": "#c8eea5",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#dadad7",
+                        "secondary-fixed-dim": "#acd28c",
+                        "on-secondary-fixed": "#0c2000",
+                        "inverse-on-surface": "#f1f1ee",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#1a1c1b",
+                        "surface-container-highest": "#e2e3e0",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#9fe870",
+                        "surface": "#f9f9f6",
+                        "secondary-container": "#c5eba3",
+                        "on-primary-fixed": "#092100",
+                        "primary-fixed-dim": "#91d963",
+                        "on-secondary-container": "#4b6c31",
+                        "on-primary-fixed-variant": "#225100",
+                        "on-tertiary-fixed": "#31101e",
+                        "inverse-primary": "#91d963",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; font-feature-settings: "calt" 1, "kern" 1; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .font-black { font-weight: 900; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar Shell -->
+<header class="bg-[#f9f9f6]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up portrait of a young traveler man with a backpack in a sunlit urban setting, looking confident" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNnm9Fk9aGZy7zim4BiB9PVoqjRXPdz93Qh6Yjqy-NB4fwAMA_zHrdeHPzIW04iV7qMhFwq4nvWfKt4CXJlN4melrd25p9dfuU-pLXczjGXV3_rMPbYudlezDAqx30DJGklBqZswpg2DV9kbVeMQIJYefG5bO_L0CGnhe5kBjtMkWX2TlwL-9pGCcdf4xqMkyA49jBoalbq1HkL-f1r9a5x-JW_j-v7HQYD93w0EpbE_BDpWhDpRRds0SMk9Oh6klbQPC59vXU84I"/>
+</div>
+<span class="font-black text-[#0e0f0c] tracking-tighter italic text-[1.5rem] leading-[0.85] uppercase">Wandr</span>
+</div>
+<button class="material-symbols-outlined text-[#163300] hover:scale-105 transition-transform duration-300">notifications</button>
+</header>
+<main class="px-6 mt-8 max-w-2xl mx-auto">
+<!-- Editorial Headline -->
+<h1 class="text-[3.5rem] font-black tracking-tighter leading-[0.85] uppercase mb-8">
+            Travel<br/>Squad
+        </h1>
+<!-- Filter Chips (Tactile Pills) -->
+<div class="flex gap-2 overflow-x-auto pb-6 no-scrollbar">
+<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold text-[12px] tracking-tight uppercase whitespace-nowrap hover:scale-105 transition-transform duration-300">All Matches</button>
+<button class="bg-surface-container-low text-on-surface/60 px-6 py-2 rounded-full font-bold text-[12px] tracking-tight uppercase whitespace-nowrap hover:scale-105 transition-transform duration-300">Adventure</button>
+<button class="bg-surface-container-low text-on-surface/60 px-6 py-2 rounded-full font-bold text-[12px] tracking-tight uppercase whitespace-nowrap hover:scale-105 transition-transform duration-300">Relaxation</button>
+<button class="bg-surface-container-low text-on-surface/60 px-6 py-2 rounded-full font-bold text-[12px] tracking-tight uppercase whitespace-nowrap hover:scale-105 transition-transform duration-300">Culture</button>
+</div>
+<!-- Match Banner (Kinetic Architect Style) -->
+<div class="bg-secondary-container p-8 rounded-xl mb-12 flex items-center justify-between shadow-[0_20px_40px_rgba(14,15,12,0.04)]">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-bold text-[12px] uppercase tracking-widest text-on-secondary-container">Algorithm Match</span>
+</div>
+<h2 class="text-2xl font-extrabold text-on-secondary-container leading-tight">We found 3 new travelers that match your vibe in Bali.</h2>
+</div>
+</div>
+<!-- Squad List -->
+<section class="space-y-6">
+<!-- Traveler Card: Lukas H. -->
+<div class="bg-surface-container-lowest rounded-[40px] p-6 shadow-[0_20px_40px_rgba(14,15,12,0.04)] ring-1 ring-black/5">
+<div class="flex items-center gap-4">
+<div class="w-20 h-20 rounded-[30px] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Portrait of a young man smiling against a blurred mountain background, warm sunset lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZC96OJy0k5QP-KemKlMdaFH8pF6BGGU9ePU3DM5hIBNZOYr8wsvPwTtckcJb2UGph_ARaR3NO9sT-d81vO7MefBw7t2-bCtjb1ytNBIFQgI-e-a7Y2B2jELPBUzHzC9CY3LCXIFixYGPFCC0s47rO5bauhVsTYXlQcE6ObQ5T0KZjMpDdWCbj9lgfuymNb0ByGaxEyNk_7MNlnx6fbF6sPo9HD-cGpRHgvuw-lMQtkHIyFcZgmUWZxKwAs-OYFNZjKmA_5eBys6E"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="text-xl font-bold tracking-tight">Lukas H.</h3>
+<p class="text-on-surface/60 font-semibold text-sm">Berlin, Germany</p>
+</div>
+<div class="bg-primary-container/20 text-on-primary-container px-3 py-1 rounded-full text-xs font-black italic">
+                                98% MATCH
+                            </div>
+</div>
+<div class="mt-4 flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Hiking</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Surf</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-full font-bold text-sm tracking-tight uppercase hover:scale-105 active:scale-95 transition-all duration-300">Invite</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Traveler Card: Sophie K. -->
+<div class="bg-surface-container-lowest rounded-[40px] p-6 shadow-[0_20px_40px_rgba(14,15,12,0.04)] ring-1 ring-black/5">
+<div class="flex items-center gap-4">
+<div class="w-20 h-20 rounded-[30px] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Cheerful young woman with braids laughing in a tropical outdoor setting, soft natural daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmx6-JYbWBqeFAEIuEU3EWYfRtAeMl3KDhE5V7GBJMpFL9OCBjT1H5piji4Mctfy4Vs8HS5Y8ZF0AxS72Uf21MqF-d0u4iCgOgwaGgAZndHzCpp2f5n62FsgFMT7OG3tUbHmd0uA1ffrtg4JdlkmuGLTpOB_mjvC7nhiqyIQ9rdWeFMSa7FrtdfoK1O9DQGkDWRD7pTJFpKiEst4RJnFRXbnFFRXIEhjnQ0lb7188NFFR15_bBPwA1u0WhgOq0zhHL3-PCndfzrNw"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="text-xl font-bold tracking-tight">Sophie K.</h3>
+<p class="text-on-surface/60 font-semibold text-sm">London, UK</p>
+</div>
+<div class="bg-primary-container/20 text-on-primary-container px-3 py-1 rounded-full text-xs font-black italic">
+                                94% MATCH
+                            </div>
+</div>
+<div class="mt-4 flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Yoga</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Cafes</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-full font-bold text-sm tracking-tight uppercase hover:scale-105 active:scale-95 transition-all duration-300">Invite</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Traveler Card: Max B. -->
+<div class="bg-surface-container-lowest rounded-[40px] p-6 shadow-[0_20px_40px_rgba(14,15,12,0.04)] ring-1 ring-black/5">
+<div class="flex items-center gap-4">
+<div class="w-20 h-20 rounded-[30px] overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Young man with glasses looking at a camera, professional outdoor portrait with soft background blur" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDjsldAZDLc1staGMpmUjiwtWB1vrlXdnhg4HLp108YQR1k0L-BM-QkGFekiOgSYNOaGGYhDBFkS80n1JKMqL3Im9u1NXIui0kPxANB8UJRsM1MwFKPnShA6oOpKsE5JhY1kkFhuMSt9--0jlsk1UvJPLuGLMR-1g7b2BHU_sVWc1euhpvDJU0-zUZMwkXTfCeMBGSHP08QSjsCsdIisek9Jc26rwr4RnDxUXpzcbim5c7HC9x4WlCVFM7glfBULz6Z6ckpZBAg_s"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="text-xl font-bold tracking-tight">Max B.</h3>
+<p class="text-on-surface/60 font-semibold text-sm">Amsterdam, NL</p>
+</div>
+<div class="bg-primary-container/20 text-on-primary-container px-3 py-1 rounded-full text-xs font-black italic">
+                                89% MATCH
+                            </div>
+</div>
+<div class="mt-4 flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Photo</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold">Road</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-full font-bold text-sm tracking-tight uppercase hover:scale-105 active:scale-95 transition-all duration-300">Invite</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar Shell -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-8 pt-4 bg-[#f9f9f6]/90 backdrop-blur-md rounded-t-[40px] z-50 shadow-2xl">
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span class="font-bold text-[12px] tracking-tight uppercase mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#9fe870] text-[#163300] rounded-full px-6 py-2 scale-110 shadow-lg" href="#">
+<span class="material-symbols-outlined" data-icon="group" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-bold text-[12px] tracking-tight uppercase mt-1">Squad</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="luggage">luggage</span>
+<span class="font-bold text-[12px] tracking-tight uppercase mt-1">My Trip</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#0e0f0c] dark:text-[#f9f9f6] opacity-70 px-4 py-2 hover:opacity-100 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-bold text-[12px] tracking-tight uppercase mt-1">Profile</span>
+</a>
+</nav>
+</body></html>
