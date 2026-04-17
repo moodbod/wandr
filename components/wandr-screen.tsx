@@ -1,80 +1,51 @@
-import { Link, type Href } from 'expo-router';
+import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-
-type ActionLink = {
-  href: Href;
-  label: string;
-  description: string;
-};
-
-type ContentSection = {
-  title: string;
-  items: string[];
-};
+import { WandrActionCard } from '@/components/wandr/action-card';
+import { WandrBulletRow } from '@/components/wandr/bullet-row';
+import { WandrContentPanel } from '@/components/wandr/content-panel';
+import { WandrHeader } from '@/components/wandr/header';
+import { WandrScreenHero } from '@/components/wandr/screen-hero';
+import { WandrSection } from '@/components/wandr/section';
+import { appContent, type WandrScreenContent, type WandrScreenKey } from '@/constants/app-content';
+import { designSystem } from '@/constants/design-system';
 
 type WandrScreenProps = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  actions?: ActionLink[];
-  sections?: ContentSection[];
+  screen: WandrScreenKey;
 };
 
-export function WandrScreen({
-  eyebrow,
-  title,
-  description,
-  actions = [],
-  sections = [],
-}: WandrScreenProps) {
+export function WandrScreen({ screen }: WandrScreenProps) {
+  const content = appContent[screen] as WandrScreenContent;
+  const { header, eyebrow, title, description, actions = [], actionsTitle = 'Child screens', sections = [] } =
+    content;
+
   return (
     <ThemedView style={styles.root}>
+      <WandrHeader config={header} />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.eyebrow}>{eyebrow}</ThemedText>
-          <ThemedText type="title" style={styles.title}>
-            {title}
-          </ThemedText>
-          <ThemedText style={styles.description}>{description}</ThemedText>
-        </View>
+        <WandrScreenHero eyebrow={eyebrow} title={title} description={description} />
 
         {actions.length > 0 ? (
-          <View style={styles.block}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Child screens
-            </ThemedText>
+          <WandrSection title={actionsTitle}>
             <View style={styles.cardList}>
               {actions.map((action) => (
                 <Link href={action.href} key={action.label} asChild>
-                  <ThemedView style={styles.card}>
-                    <ThemedText type="defaultSemiBold" style={styles.cardTitle}>
-                      {action.label}
-                    </ThemedText>
-                    <ThemedText style={styles.cardDescription}>{action.description}</ThemedText>
-                  </ThemedView>
+                  <WandrActionCard title={action.label} description={action.description} />
                 </Link>
               ))}
             </View>
-          </View>
+          </WandrSection>
         ) : null}
 
         {sections.map((section) => (
-          <View style={styles.block} key={section.title}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              {section.title}
-            </ThemedText>
-            <ThemedView style={styles.panel}>
+          <WandrSection title={section.title} key={section.title}>
+            <WandrContentPanel>
               {section.items.map((item) => (
-                <View key={item} style={styles.row}>
-                  <View style={styles.dot} />
-                  <ThemedText style={styles.rowText}>{item}</ThemedText>
-                </View>
+                <WandrBulletRow key={item}>{item}</WandrBulletRow>
               ))}
-            </ThemedView>
-          </View>
+            </WandrContentPanel>
+          </WandrSection>
         ))}
       </ScrollView>
     </ThemedView>
@@ -86,75 +57,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 24,
-  },
-  hero: {
-    gap: 10,
-    padding: 24,
-    borderRadius: 28,
-    backgroundColor: '#eef7e7',
-  },
-  eyebrow: {
-    textTransform: 'uppercase',
-    letterSpacing: 1.1,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: '#47672d',
-  },
-  title: {
-    fontSize: 34,
-    lineHeight: 38,
-  },
-  description: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  block: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 22,
+    padding: designSystem.spacing.lg,
+    paddingBottom: designSystem.spacing.xxxl,
+    gap: designSystem.spacing.xl,
   },
   cardList: {
-    gap: 12,
-  },
-  card: {
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: '#f4f4f1',
-  },
-  cardTitle: {
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  panel: {
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: '#f4f4f1',
-    gap: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#9fe870',
-    marginTop: 8,
-  },
-  rowText: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
+    gap: designSystem.spacing.sm,
   },
 });

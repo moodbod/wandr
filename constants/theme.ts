@@ -4,30 +4,31 @@
  */
 
 import { Platform } from 'react-native';
+import { designSystem } from '@/constants/design-system';
 
-const tintColorLight = '#2f6c00';
-const tintColorDark = '#9fe870';
+const tintColorLight = '#5aa024ff';
+const tintColorDark = designSystem.colors.lime;
 
 export const Colors = {
   light: {
-    text: '#0e0f0c',
-    background: '#f9f9f6',
+    text: designSystem.colors.ink,
+    background: designSystem.colors.background,
     tint: tintColorLight,
     icon: '#6f7668',
     tabIconDefault: '#6f7668',
     tabIconSelected: tintColorLight,
-    card: '#f9f9f6',
+    card: designSystem.colors.surface,
     border: '#dde3d4',
   },
   dark: {
-    text: '#f9f9f6',
-    background: '#11130f',
+    text: designSystem.colors.darkText,
+    background: designSystem.colors.darkBackground,
     tint: tintColorDark,
-    icon: '#98a18f',
-    tabIconDefault: '#98a18f',
+    icon: designSystem.colors.darkMutedText,
+    tabIconDefault: designSystem.colors.darkMutedText,
     tabIconSelected: tintColorDark,
-    card: '#161914',
-    border: '#283020',
+    card: designSystem.colors.darkSurface,
+    border: designSystem.colors.darkBorder,
   },
 };
 
