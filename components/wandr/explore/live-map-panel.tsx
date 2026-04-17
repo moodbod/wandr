@@ -1,8 +1,10 @@
+import { BlurView } from 'expo-blur';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { MapPreview } from '@/components/wandr/mapbox/map-preview';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreLiveMapPanelProps = {
   title: string;
@@ -24,15 +26,30 @@ export function ExploreLiveMapPanel({
   centerCoordinate,
   markers,
 }: ExploreLiveMapPanelProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   return (
     <View style={styles.shell}>
       <MapPreview centerCoordinate={centerCoordinate} markers={markers} zoomLevel={11} />
-      <View style={styles.overlayCard}>
-        <ThemedText style={styles.title}>{title}</ThemedText>
-        <ThemedText style={styles.description}>{description}</ThemedText>
-        <Pressable style={styles.cta}>
-          <ThemedText style={styles.ctaLabel}>{ctaLabel}</ThemedText>
-        </Pressable>
+      <View style={styles.overlayCardContainer}>
+        <BlurView 
+          intensity={80} 
+          tint={isDark ? 'dark' : 'light'} 
+          style={[styles.overlayCard, { backgroundColor: isDark ? 'rgba(84, 84, 84, 0.5)' : 'rgba(255,255,255,0.7)' }]}
+        >
+          <ThemedText style={styles.title}>{title}</ThemedText>
+          <ThemedText 
+            style={styles.description}
+            lightColor={designSystem.colors.warmDark}
+            darkColor={designSystem.colors.darkMutedText}
+          >
+            {description}
+          </ThemedText>
+          <Pressable style={styles.cta}>
+            <ThemedText style={styles.ctaLabel}>{ctaLabel}</ThemedText>
+          </Pressable>
+        </BlurView>
       </View>
     </View>
   );
@@ -44,18 +61,21 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: 'hidden',
     backgroundColor: '#e2e3e0',
+    position: 'relative',
   },
-  overlayCard: {
+  overlayCardContainer: {
     position: 'absolute',
-    top: 24,
-    left: 24,
-    width: 240,
+    bottom: 16,
+    left: 16,
+    right: 16,
     borderRadius: 24,
-    padding: 20,
-    backgroundColor: 'rgba(249,249,246,0.92)',
-    gap: 8,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: designSystem.colors.border,
+  },
+  overlayCard: {
+    padding: 16,
+    gap: 8,
   },
   title: {
     fontSize: 18,
@@ -68,22 +88,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
-    color: designSystem.colors.warmDark,
   },
   cta: {
     marginTop: 10,
     borderRadius: designSystem.radii.pill,
-    backgroundColor: designSystem.colors.ink,
+    backgroundColor: designSystem.colors.lime,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 15,
     alignItems: 'center',
   },
   ctaLabel: {
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 14,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: '#ffffff',
+    color: designSystem.colors.darkGreen,
   },
 });

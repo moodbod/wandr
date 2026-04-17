@@ -84,11 +84,11 @@ export const appContent = {
   exploreSearch: {
     header: {
       leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-      title: 'Search discovery',
+      title: 'Discovery',
       trailingActions: [],
     },
     eyebrow: 'Explore',
-    title: 'Search discovery',
+    title: 'Discovery',
     description:
       'Search-led explore screen for experiences, tastes, and hidden spots. This maps to the kinetic discovery mockup.',
     sections: [

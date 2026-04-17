@@ -1,31 +1,41 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { BlurView } from 'expo-blur';
-import { FunnelSimple } from 'phosphor-react-native';
-import { useMemo, useRef } from 'react';
+import { Link } from 'expo-router';
+import React, { useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { appContent } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
 import { exploreHomeContent } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { MagnifyingGlass } from 'phosphor-react-native';
 
 export default function ExploreScreen() {
   const screen = appContent.exploreHome;
   const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
-  const snapPoints = useMemo(() => ['34%', '64%', '90%', '100%'], []);
+  const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const mapTopInset = insets.top;
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const animatedIndex = useSharedValue(0);
 
   const handleMapInteract = () => {
     sheetRef.current?.snapToIndex(0);
   };
+
+  const headerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      paddingTop: interpolate(animatedIndex.value, [1, 2], [0, insets.top], 'clamp'),
+    };
+  });
 
   return (
     <ThemedView style={styles.root}>
@@ -40,47 +50,43 @@ export default function ExploreScreen() {
           />
         </View>
 
-        <BottomSheet
-          backgroundComponent={(props) => (
-            <BlurView
-              {...props}
-              tint={isDark ? 'dark' : 'light'}
-              intensity={80}
-              style={[
-                props.style,
-                styles.sheetBackground,
-                { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)' }
-              ]}
-            />
-          )}
-          enableContentPanningGesture
-          enableHandlePanningGesture
-          handleIndicatorStyle={styles.handleIndicator}
+        <GlassBottomSheet
           index={0}
           ref={sheetRef}
-          snapPoints={snapPoints}>
+          snapPoints={snapPoints}
+          animatedIndex={animatedIndex}>
           <BottomSheetScrollView
             contentContainerStyle={styles.sheetContent}
             showsVerticalScrollIndicator={false}>
-            <View style={styles.sectionHeader}>
+            <Animated.View style={[styles.sectionHeader, headerAnimatedStyle]}>
               <View style={styles.sectionCopy}>
-                <ThemedText style={styles.eyebrow}>{exploreHomeContent.section.eyebrow}</ThemedText>
+                <ThemedText 
+                  style={styles.locationEyebrow}
+                  lightColor={designSystem.colors.darkGreen}
+                  darkColor={designSystem.colors.lime}
+                >
+                  {exploreHomeContent.hero.locationLabel}
+                </ThemedText>
                 <ThemedText style={styles.sectionTitle}>{exploreHomeContent.section.title}</ThemedText>
               </View>
-              <Pressable style={({ pressed }) => [styles.filterButton, pressed && { opacity: 0.8 }]}>
-                <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.filterButtonInner}>
-                  <FunnelSimple color={isDark ? '#fff' : designSystem.colors.warmDark} size={18} weight="bold" />
-                </BlurView>
-              </Pressable>
-            </View>
+              <Link href="/explore/search" asChild>
+                <GlassButton width={46} height={46}>
+                  <MagnifyingGlass color={isDark ? '#fff' : designSystem.colors.warmDark} size={18} weight="bold" />
+                </GlassButton>
+              </Link>
+            </Animated.View>
 
             <View style={styles.cardList}>
               {exploreHomeContent.activities.map((activity) => (
-                <ExploreActivityCard card={activity} key={activity.title} />
+                <Link href="/explore/stories" asChild key={activity.title}>
+                  <Pressable>
+                    <ExploreActivityCard card={activity} />
+                  </Pressable>
+                </Link>
               ))}
             </View>
           </BottomSheetScrollView>
-        </BottomSheet>
+        </GlassBottomSheet>
       </View>
     </ThemedView>
   );
@@ -106,12 +112,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: designSystem.radii.sheet,
     overflow: 'hidden',
   },
-  handleIndicator: {
-    width: 42,
-    height: 4,
-    backgroundColor: 'rgba(14,15,12,0.16)',
-  },
   sheetContent: {
+    paddingTop: designSystem.spacing.lg,
     paddingHorizontal: designSystem.spacing.lg,
     paddingBottom: 132,
     gap: 20,
@@ -126,31 +128,15 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  eyebrow: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.darkGreen,
+  locationEyebrow: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '800',
     letterSpacing: -0.7,
-  },
-  filterButton: {
-    width: 46,
-    height: 46,
-    borderRadius: designSystem.radii.pill,
-    overflow: 'hidden',
-  },
-  filterButtonInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(244, 244, 241, 0.4)',
   },
   cardList: {
     gap: 16,

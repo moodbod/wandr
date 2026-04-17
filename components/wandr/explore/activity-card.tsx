@@ -5,14 +5,24 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreActivityCard as ExploreActivityCardContent } from '@/constants/explore-content';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
 };
 
 export function ExploreActivityCard({ card }: ExploreActivityCardProps) {
+  const isDark = useColorScheme() === 'dark';
+
   return (
-    <ThemedView lightColor="#ffffff" darkColor={designSystem.colors.darkSurface} style={styles.shell}>
+    <ThemedView 
+      lightColor="#ffffff" 
+      darkColor={designSystem.colors.darkSurface} 
+      style={[
+        styles.shell,
+        { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border }
+      ]}
+    >
       <View style={styles.imageWrap}>
         <Image source={card.imageUri} contentFit="cover" style={styles.image} />
         <View style={[styles.badge, card.badgeTone === 'soft' ? styles.badgeSoft : styles.badgeAccent]}>
@@ -26,11 +36,11 @@ export function ExploreActivityCard({ card }: ExploreActivityCardProps) {
         <View style={styles.summaryRow}>
           <View style={styles.copy}>
             <ThemedText style={styles.title}>{card.title}</ThemedText>
-            <ThemedText style={styles.subtitle}>{card.subtitle}</ThemedText>
+            <ThemedText style={styles.subtitle} lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText}>{card.subtitle}</ThemedText>
           </View>
           <View style={styles.priceWrap}>
-            <ThemedText style={styles.price}>{card.price}</ThemedText>
-            <ThemedText style={styles.priceSuffix}>{card.priceSuffix}</ThemedText>
+            <ThemedText style={styles.price} lightColor={designSystem.colors.darkGreen} darkColor={designSystem.colors.lime}>{card.price}</ThemedText>
+            <ThemedText style={styles.priceSuffix} lightColor={designSystem.colors.gray} darkColor={designSystem.colors.gray}>{card.priceSuffix}</ThemedText>
           </View>
         </View>
 
@@ -44,17 +54,13 @@ export function ExploreActivityCard({ card }: ExploreActivityCardProps) {
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: designSystem.radii.section,
+    borderRadius: 32,
+    borderWidth: 1,
     padding: 16,
-    gap: 16,
-    shadowColor: '#0e0f0c',
-    shadowOpacity: 0.04,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
   },
   imageWrap: {
     height: 256,
-    borderRadius: designSystem.radii.feature,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   image: {
@@ -87,8 +93,10 @@ const styles = StyleSheet.create({
     color: '#4b6c31',
   },
   body: {
-    gap: 16,
-    paddingHorizontal: 8,
+    gap: 20,
+    paddingTop: 20,
+    paddingHorizontal: 4,
+    paddingBottom: 4,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -98,48 +106,47 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
   title: {
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: '800',
-    letterSpacing: -0.4,
+    fontSize: 26,
+    lineHeight: 28,
+    fontWeight: '900',
+    letterSpacing: -0.8,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '600',
-    color: designSystem.colors.warmDark,
   },
   priceWrap: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 4,
   },
   price: {
-    fontSize: 28,
-    lineHeight: 28,
+    fontSize: 34,
+    lineHeight: 34,
     fontWeight: '900',
-    color: designSystem.colors.darkGreen,
+    letterSpacing: -1.2,
   },
   priceSuffix: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    color: designSystem.colors.gray,
   },
   cta: {
     borderRadius: designSystem.radii.pill,
-    paddingVertical: 15,
+    paddingVertical: 16,
     alignItems: 'center',
     backgroundColor: designSystem.colors.lime,
   },
   ctaLabel: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 14,
     fontWeight: '900',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
   },

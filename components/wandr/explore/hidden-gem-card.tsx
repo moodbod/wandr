@@ -5,14 +5,24 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreHiddenGemCardProps = {
   card: ExploreHiddenGem;
 };
 
 export function ExploreHiddenGemCard({ card }: ExploreHiddenGemCardProps) {
+  const isDark = useColorScheme() === 'dark';
+
   return (
-    <ThemedView lightColor="#f4f4f1" darkColor={designSystem.colors.darkSurface} style={styles.shell}>
+    <ThemedView 
+      lightColor="#ffffff" 
+      darkColor={designSystem.colors.darkSurface} 
+      style={[
+        styles.shell,
+        { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border }
+      ]}
+    >
       <Image source={card.imageUri} contentFit="cover" style={styles.image} />
       <View style={styles.copy}>
         <ThemedText style={styles.title}>{card.title}</ThemedText>
@@ -25,17 +35,18 @@ export function ExploreHiddenGemCard({ card }: ExploreHiddenGemCardProps) {
 const styles = StyleSheet.create({
   shell: {
     borderRadius: 32,
-    padding: 8,
+    padding: 16,
+    borderWidth: 1,
   },
   image: {
     width: '100%',
     height: 220,
-    borderRadius: 24,
-    marginBottom: 20,
+    borderRadius: 20,
   },
   copy: {
-    paddingHorizontal: 12,
-    paddingBottom: 18,
+    paddingHorizontal: 4,
+    paddingTop: 20,
+    paddingBottom: 4,
     gap: 8,
   },
   title: {

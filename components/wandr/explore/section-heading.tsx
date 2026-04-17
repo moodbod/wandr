@@ -16,7 +16,7 @@ export function ExploreSectionHeading({ title, actionLabel }: ExploreSectionHead
       {actionLabel ? (
         <Pressable style={styles.action}>
           <ThemedText style={styles.actionLabel}>{actionLabel}</ThemedText>
-          <ArrowUpRight color={designSystem.colors.darkGreen} size={16} weight="bold" />
+          <ArrowUpRight color={designSystem.colors.lime} size={16} weight="bold" />
         </Pressable>
       ) : null}
     </View>
@@ -49,6 +49,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: designSystem.colors.darkGreen,
+    color: designSystem.colors.lime,
   },
 });

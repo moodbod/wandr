@@ -83,7 +83,7 @@ export const exploreSearchContent = {
     title: 'Explore',
     description: 'Uncover the raw beauty of Swakopmund through curated kinetic experiences.',
     tags: ['Namibia', 'Active Search'],
-    searchPlaceholder: 'Search experiences, tastes, or hidden spots...',
+    searchPlaceholder: 'Search experiences, spots...',
   },
   featured: {
     hero: {

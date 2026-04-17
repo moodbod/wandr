@@ -2,8 +2,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import {
   BedIcon,
-  MagnifyingGlassIcon,
-  SuitcaseIcon,
+  CompassIcon,
+  MapTrifoldIcon,
   UserCircleIcon,
   UsersIcon
 } from 'phosphor-react-native';
@@ -33,10 +33,10 @@ export default function TabLayout() {
       <NativeTabs.Trigger name="explore">
         <Label>Explore</Label>
         <Icon 
-          sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }}
+          sf={{ default: 'safari', selected: 'safari.fill' }}
           androidSrc={{
-            default: getAndroidIcon(MagnifyingGlassIcon, false),
-            selected: getAndroidIcon(MagnifyingGlassIcon, true),
+            default: getAndroidIcon(CompassIcon, false),
+            selected: getAndroidIcon(CompassIcon, true),
           }}
         />
       </NativeTabs.Trigger>
@@ -44,10 +44,10 @@ export default function TabLayout() {
       <NativeTabs.Trigger name="trip">
         <Label>Trip</Label>
         <Icon 
-          sf={{ default: 'briefcase', selected: 'briefcase.fill' }}
+          sf={{ default: 'map', selected: 'map.fill' }}
           androidSrc={{
-            default: getAndroidIcon(SuitcaseIcon, false),
-            selected: getAndroidIcon(SuitcaseIcon, true),
+            default: getAndroidIcon(MapTrifoldIcon, false),
+            selected: getAndroidIcon(MapTrifoldIcon, true),
           }}
         />
       </NativeTabs.Trigger>

@@ -6,14 +6,24 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreFeatureDetail } from '@/constants/explore-content';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreFeatureDetailCardProps = {
   card: ExploreFeatureDetail;
 };
 
 export function ExploreFeatureDetailCard({ card }: ExploreFeatureDetailCardProps) {
+  const isDark = useColorScheme() === 'dark';
+
   return (
-    <ThemedView lightColor="#f4f4f1" darkColor={designSystem.colors.darkSurface} style={styles.shell}>
+    <ThemedView 
+      lightColor="#ffffff" 
+      darkColor={designSystem.colors.darkSurface} 
+      style={[
+        styles.shell, 
+        { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border }
+      ]}
+    >
       <Image source={card.imageUri} contentFit="cover" style={styles.image} />
       <View style={styles.content}>
         <ThemedText style={styles.category}>{card.category}</ThemedText>
@@ -24,7 +34,7 @@ export function ExploreFeatureDetailCard({ card }: ExploreFeatureDetailCardProps
             <ThemedText style={styles.price}>{card.price}</ThemedText>
             <ThemedText style={styles.priceSuffix}>{card.priceSuffix}</ThemedText>
           </View>
-          <ArrowRight color={designSystem.colors.darkGreen} size={18} weight="bold" />
+          <ArrowRight color={designSystem.colors.lime} size={18} weight="bold" />
         </View>
       </View>
     </ThemedView>
@@ -35,16 +45,20 @@ const styles = StyleSheet.create({
   shell: {
     minHeight: 420,
     borderRadius: 32,
-    overflow: 'hidden',
+    borderWidth: 1,
+    padding: 16,
   },
   image: {
-    height: 210,
+    height: 240,
     width: '100%',
+    borderRadius: 20,
   },
   content: {
     flex: 1,
-    padding: 24,
-    gap: 10,
+    paddingHorizontal: 4,
+    paddingTop: 20,
+    paddingBottom: 4,
+    gap: 12,
   },
   category: {
     fontSize: 11,
