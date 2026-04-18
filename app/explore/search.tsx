@@ -1,5 +1,7 @@
+import { useQuery } from 'convex/react';
 import { MagnifyingGlass } from 'phosphor-react-native';
 import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
 import { Input } from '@/components/ui/input';
@@ -11,28 +13,50 @@ import { ExploreSectionHeading } from '@/components/wandr/explore/section-headin
 import { WandrHeader } from '@/components/wandr/header';
 import { appContent } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
-import { exploreSearchContent } from '@/constants/explore-content';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
 
 export default function ExploreSearchScreen() {
+  if (!hasConvexUrl) {
+    return null;
+  }
+
+  return <ConnectedExploreSearchScreen />;
+}
+
+function ConnectedExploreSearchScreen() {
   const screen = appContent.exploreSearch;
   const { width } = Dimensions.get('window');
-  const cardWidth = width - designSystem.spacing.lg * 2;
-  
+  const insets = useSafeAreaInsets();
+  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+
+  const cardWidth = width - designSystem.spacing.lg * 2 - 40;
   const iconColor = useThemeColor(
     { light: 'rgba(14,15,12,0.35)', dark: 'rgba(249,249,246,0.35)' },
     'icon'
   );
 
+  const headerHeight = insets.top + 60;
+
+  if (page === undefined) {
+    return null;
+  }
+
+  if (page === null) {
+    return null;
+  }
+
+  const content = page.search;
+
   return (
     <ThemedView style={styles.root}>
       <WandrHeader config={screen.header} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: headerHeight + designSystem.spacing.lg }]}>
         <View style={styles.paddingX}>
           <Input 
-            placeholder={exploreSearchContent.intro.searchPlaceholder}
+            placeholder={content.intro.searchPlaceholder}
             leftIcon={<MagnifyingGlass color={iconColor} size={22} weight="bold" />}
-            autoFocus={true}
+            autoFocus={false}
           />
         </View>
 
@@ -45,20 +69,20 @@ export default function ExploreSearchScreen() {
           contentContainerStyle={styles.featureGrid}
         >
           <View style={{ width: cardWidth }}>
-            <ExploreFeatureHeroCard card={exploreSearchContent.featured.hero} />
+            <ExploreFeatureHeroCard card={content.featured.hero} />
           </View>
           <View style={{ width: cardWidth }}>
-            <ExploreFeatureDetailCard card={exploreSearchContent.featured.detail} />
+            <ExploreFeatureDetailCard card={content.featured.detail} />
           </View>
         </ScrollView>
 
         <View style={[styles.section, styles.paddingX]}>
           <ExploreSectionHeading
-            title={exploreSearchContent.hiddenGems.title}
-            actionLabel={exploreSearchContent.hiddenGems.ctaLabel}
+            title={content.hiddenGems.title}
+            actionLabel={content.hiddenGems.ctaLabel}
           />
           <View style={styles.gemGrid}>
-            {exploreSearchContent.hiddenGems.items.map((item) => (
+            {content.hiddenGems.items.map((item) => (
               <ExploreHiddenGemCard card={item} key={item.title} />
             ))}
           </View>
@@ -66,11 +90,11 @@ export default function ExploreSearchScreen() {
 
         <View style={styles.paddingX}>
           <ExploreLiveMapPanel
-            centerCoordinate={exploreSearchContent.map.centerCoordinate}
-            ctaLabel={exploreSearchContent.map.ctaLabel}
-            description={exploreSearchContent.map.description}
-            markers={exploreSearchContent.map.markers}
-            title={exploreSearchContent.map.title}
+            centerCoordinate={content.map.centerCoordinate}
+            ctaLabel={content.map.ctaLabel}
+            description={content.map.description}
+            markers={content.map.markers}
+            title={content.map.title}
           />
         </View>
       </ScrollView>
@@ -83,7 +107,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: designSystem.spacing.lg,
     paddingBottom: designSystem.spacing.xxxl,
     gap: 40,
   },

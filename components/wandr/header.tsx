@@ -1,21 +1,22 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import {
-  Bell,
-  CaretLeft,
-  GearSix,
-  Heart,
-  List,
-  MapTrifold,
-  ShareNetwork,
-  UserCircle,
+    Bell,
+    CaretLeft,
+    GearSix,
+    Heart,
+    List,
+    MapTrifold,
+    ShareNetwork,
+    UserCircle,
 } from 'phosphor-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { designSystem } from '@/constants/design-system';
 import type { HeaderAction, HeaderActionKind, HeaderConfig } from '@/constants/app-content';
+import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 type WandrHeaderProps = {
@@ -25,26 +26,33 @@ type WandrHeaderProps = {
 export function WandrHeader({ config }: WandrHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
   const textColor = useThemeColor(
     { light: designSystem.colors.ink, dark: designSystem.colors.darkText },
     'text'
   );
-  const headerBackground = useThemeColor(
-    config.overlay
-      ? { light: 'transparent', dark: 'transparent' }
-      : { light: 'rgba(249,249,246,0.88)', dark: 'rgba(17,19,15,0.88)' },
-    'background'
-  );
+  
+  // Define fallback colors for the BlurView tint
+  const blurBackgroundColor = isDark ? 'rgba(17,19,15,0.7)' : 'rgba(249,249,246,0.7)';
+
   const surfaceColor = useThemeColor(
     { light: designSystem.colors.surface, dark: designSystem.colors.darkSurface },
     'card'
   );
 
+  const HeaderContainer = config.overlay ? View : BlurView;
+  const containerProps = config.overlay 
+    ? { style: [styles.shell, styles.overlayShell, { paddingTop: insets.top }] }
+    : { 
+        intensity: 80, 
+        tint: isDark ? 'dark' as const : 'light' as const, 
+        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top, backgroundColor: blurBackgroundColor }] 
+      };
+
   return (
-    <ThemedView
-      lightColor={headerBackground}
-      darkColor={headerBackground}
-      style={[styles.shell, config.overlay ? styles.overlayShell : null, { paddingTop: insets.top }]}>
+    <HeaderContainer {...containerProps}>
       <View style={styles.content}>
         <View style={styles.leading}>
           {config.leadingAction ? (
@@ -80,7 +88,7 @@ export function WandrHeader({ config }: WandrHeaderProps) {
           ))}
         </View>
       </View>
-    </ThemedView>
+    </HeaderContainer>
   );
 }
 

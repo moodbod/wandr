@@ -66,8 +66,8 @@ export const appContent = {
       },
       {
         href: '/explore/stories',
-        label: 'Editorial stories',
-        description: 'Curated inspiration and immersive story-driven destination content.',
+        label: 'Experience booking',
+        description: 'Booking-first experience detail with highlights, pricing, and next-step actions.',
       },
     ],
     sections: [
@@ -105,20 +105,21 @@ export const appContent = {
   exploreStories: {
     header: {
       leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-      title: 'Editorial stories',
-      trailingActions: [{ kind: 'map', tone: 'surface', accessibilityLabel: 'Open map' }],
+      title: 'Experience',
+      subtitle: 'Booking details',
+      trailingActions: [{ kind: 'favorite', tone: 'surface', accessibilityLabel: 'Save experience' }],
     },
     eyebrow: 'Explore',
-    title: 'Editorial stories',
+    title: 'Experience booking',
     description:
-      'Story-first discovery screen for immersive travel inspiration and curated destination narratives.',
+      'Booking-first experience detail screen with immersive media, trip-fit context, and clear actions into reservation or stay pairing.',
     sections: [
       {
         title: 'Planned content',
         items: [
-          'Immersive hero media with a high-impact destination headline.',
-          'Curated story cards such as hidden waterfalls or local maker journeys.',
-          'A strong call to action that sends the traveler into booking or planning.',
+          'Immersive hero media anchored by a primary booking decision.',
+          'Experience highlights, inclusions, and confidence-building social proof.',
+          'Actions that move the traveler into reservation, itinerary, or nearby stays.',
         ],
       },
     ],

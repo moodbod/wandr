@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -9,9 +10,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
+  href?: string;
 };
 
-export function ExploreActivityCard({ card }: ExploreActivityCardProps) {
+export function ExploreActivityCard({ card, href }: ExploreActivityCardProps) {
   const isDark = useColorScheme() === 'dark';
 
   return (
@@ -44,9 +46,17 @@ export function ExploreActivityCard({ card }: ExploreActivityCardProps) {
           </View>
         </View>
 
-        <Pressable style={styles.cta}>
-          <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
-        </Pressable>
+        {href ? (
+          <Link href={href} asChild>
+            <Pressable style={styles.cta}>
+              <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+            </Pressable>
+          </Link>
+        ) : (
+          <View style={styles.cta}>
+            <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+          </View>
+        )}
       </View>
     </ThemedView>
   );

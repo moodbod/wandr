@@ -20,6 +20,34 @@ export type ExploreHiddenGem = {
   imageUri: string;
 };
 
+export type ExploreExperienceBookingContent = {
+  badge: string;
+  title: string;
+  location: string;
+  heroImageUri: string;
+  price: string;
+  priceSuffix: string;
+  summary: string;
+  socialProof: {
+    summary: string;
+    market: string;
+  };
+  highlights: readonly string[];
+  inclusions: readonly string[];
+  bookingSteps: readonly {
+    title: string;
+    description: string;
+  }[];
+  primaryActionLabel: string;
+  secondaryActionLabel: string;
+  nearbyStay: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    imageUri: string;
+  };
+};
+
 export type ExploreMapMarker = {
   id: string;
   coordinate: readonly [number, number];
@@ -138,3 +166,44 @@ export const exploreSearchContent = {
     ],
   },
 } as const;
+
+export const exploreExperienceBookingContent = {
+  badge: 'Bookable now',
+  title: 'Desert Adrenaline',
+  location: 'Swakopmund, Namibia',
+  heroImageUri:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDP0wm5QppAYT1Y59Xf-t7Q8NjKOdQ3-1zbNaAKkUBFT7qlGx5lF3-HOvxHyYk56VsuncX4xuRuF7jkAdUWMXQ2tSg3ZYJjrueufiAq_zJIwBh0ZiynWwX2lAXETq5bYVMe-Pbg1JfD6SM67ZQdjxcMnfSpgfCnqFxlwtb5s8RIr9antErPacM3N0xtwD6CasUVxbKq012XAcU08p4qXob6ZsskdGdCzkdK_1w7_pq_vMLqPo4p9YBNX-EQQFwibYwFffcdWyU70EQ',
+  price: 'N$1,850',
+  priceSuffix: 'per rider',
+  summary:
+    'A dune-racing half day that starts with a guided 4x4 pickup, rolls into sandboarding sessions, and ends with a golden-hour ridge stop above the Atlantic line.',
+  socialProof: {
+    summary: 'Booked by 42 travelers from Germany this month',
+    market: 'Germany',
+  },
+  highlights: ['4x4 dune transfer', 'Sandboard gear included', 'Golden-hour photo stop', 'Small group pace'],
+  inclusions: ['Hotel pickup in Swakopmund', 'Certified desert guide', 'Boards, helmets, and safety brief', 'Cold drinks after the final run'],
+  bookingSteps: [
+    {
+      title: 'Choose your day',
+      description: 'Morning and sunset departures can both slot into your live trip plan.',
+    },
+    {
+      title: 'Lock the experience',
+      description: 'Reserve now and keep the booking attached to your itinerary timeline.',
+    },
+    {
+      title: 'Pair a nearby stay',
+      description: 'Bundle the ride with a stay close to the dunes for an easy early start.',
+    },
+  ],
+  primaryActionLabel: 'Reserve experience',
+  secondaryActionLabel: 'Stay nearby',
+  nearbyStay: {
+    eyebrow: 'Nearby stay',
+    title: 'Jetty Dune House',
+    description: 'A quiet design stay fifteen minutes from the launch point, with early breakfast and transfer support.',
+    imageUri:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDIgRTC0YEq2u30Xj5yarczjLpMTqhu3-_IBktzIAvq1hcwdGtF_kluCKj6Ogb_yVjO4vw20R0YQBM4ngBZENCtea03G-0gofqxWfIbEjI9xmr9Z7CasYlsGAHF_kPhx9PuiITSMKh0zgXBKAFtMI4m5KeTH31RQvRdcteeBOsgxIyzL_i7zvQxR8MKSq9s2jG4XiGjo7xS8SnD9FObcKhFxcG3EQfxN8EN_Cq454PGPmklpQB9msmZj9POseaeKU5zwZI2TmE6KSs',
+  },
+} as const satisfies ExploreExperienceBookingContent;

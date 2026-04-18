@@ -1,7 +1,8 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { useQuery } from 'convex/react';
 import { Link } from 'expo-router';
 import React, { useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,14 +12,20 @@ import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
-import { appContent } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
-import { exploreHomeContent } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
 import { MagnifyingGlass } from 'phosphor-react-native';
 
 export default function ExploreScreen() {
-  const screen = appContent.exploreHome;
+  if (!hasConvexUrl) {
+    return null;
+  }
+
+  return <ConnectedExploreScreen />;
+}
+
+function ConnectedExploreScreen() {
   const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
@@ -26,6 +33,7 @@ export default function ExploreScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const animatedIndex = useSharedValue(0);
+  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
 
   const handleMapInteract = () => {
     sheetRef.current?.snapToIndex(0);
@@ -37,14 +45,24 @@ export default function ExploreScreen() {
     };
   });
 
+  if (page === undefined) {
+    return null;
+  }
+
+  if (page === null) {
+    return null;
+  }
+
+  const content = page.home;
+
   return (
     <ThemedView style={styles.root}>
       <View style={styles.body}>
         <View style={styles.mapLayer}>
           <ExploreMapHero
-            centerCoordinate={exploreHomeContent.hero.centerCoordinate}
-            locationLabel={exploreHomeContent.hero.locationLabel}
-            markers={exploreHomeContent.hero.markers}
+            centerCoordinate={content.hero.centerCoordinate}
+            locationLabel={content.hero.locationLabel}
+            markers={content.hero.markers}
             topInset={mapTopInset}
             onInteract={handleMapInteract}
           />
@@ -65,9 +83,9 @@ export default function ExploreScreen() {
                   lightColor={designSystem.colors.darkGreen}
                   darkColor={designSystem.colors.lime}
                 >
-                  {exploreHomeContent.hero.locationLabel}
+                  {content.hero.locationLabel}
                 </ThemedText>
-                <ThemedText style={styles.sectionTitle}>{exploreHomeContent.section.title}</ThemedText>
+                <ThemedText style={styles.sectionTitle}>{content.section.title}</ThemedText>
               </View>
               <Link href="/explore/search" asChild>
                 <GlassButton width={46} height={46}>
@@ -77,12 +95,8 @@ export default function ExploreScreen() {
             </Animated.View>
 
             <View style={styles.cardList}>
-              {exploreHomeContent.activities.map((activity) => (
-                <Link href="/explore/stories" asChild key={activity.title}>
-                  <Pressable>
-                    <ExploreActivityCard card={activity} />
-                  </Pressable>
-                </Link>
+              {content.activities.map((activity) => (
+                <ExploreActivityCard card={activity} href="/explore/stories" key={activity.title} />
               ))}
             </View>
           </BottomSheetScrollView>
