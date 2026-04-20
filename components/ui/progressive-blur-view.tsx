@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, ViewProps } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { BlurView, BlurViewProps } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';

@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
@@ -8,15 +9,18 @@ import { designSystem } from '@/constants/design-system';
 type MapMarker = {
   id: string;
   coordinate: readonly [number, number];
+  experienceSlug?: string;
+  imageUri?: string;
   label?: string;
   tone?: 'accent' | 'dark';
 };
 
 type MapPreviewProps = {
   centerCoordinate: readonly [number, number];
-  markers?: ReadonlyArray<MapMarker>;
+  markers?: readonly MapMarker[];
   zoomLevel?: number;
   onInteract?: () => void;
+  onMarkerPress?: (marker: MapMarker) => void;
 };
 
 export const MapPreview = memo(function MapPreview({
@@ -24,6 +28,7 @@ export const MapPreview = memo(function MapPreview({
   markers = [],
   zoomLevel = 11,
   onInteract,
+  onMarkerPress,
 }: MapPreviewProps) {
   if (Platform.OS === 'web') {
     return (
@@ -57,16 +62,26 @@ export const MapPreview = memo(function MapPreview({
         <Marker
           key={marker.id}
           coordinate={{ latitude: marker.coordinate[1], longitude: marker.coordinate[0] }}
-          anchor={{ x: 0.5, y: 0.5 }}
+          anchor={{ x: 0.5, y: 0.92 }}
+          onPress={() => onMarkerPress?.(marker)}
         >
-          <View
-            style={[
-              styles.marker,
-              marker.tone === 'dark' ? styles.markerDark : styles.markerAccent,
-            ]}>
-            <ThemedText style={[styles.markerLabel, marker.tone === 'dark' ? styles.markerDarkLabel : undefined]}>
-              {marker.label ?? ''}
-            </ThemedText>
+          <View style={styles.markerShell}>
+            <View style={styles.thumbnailFrame}>
+              {marker.imageUri ? (
+                <Image source={marker.imageUri} contentFit="cover" style={styles.thumbnailImage} />
+              ) : (
+                <View style={[styles.thumbnailFallback, marker.tone === 'dark' ? styles.markerDark : styles.markerAccent]} />
+              )}
+            </View>
+            <View
+              style={[
+                styles.marker,
+                marker.tone === 'dark' ? styles.markerDark : styles.markerAccent,
+              ]}>
+              <ThemedText style={[styles.markerLabel, marker.tone === 'dark' ? styles.markerDarkLabel : undefined]}>
+                {marker.label ?? ''}
+              </ThemedText>
+            </View>
           </View>
         </Marker>
       ))}
@@ -92,11 +107,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: designSystem.colors.warmDark,
   },
+  markerShell: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  thumbnailFrame: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    backgroundColor: '#d8ddd2',
+    shadowColor: '#0e0f0c',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbnailFallback: {
+    flex: 1,
+  },
   marker: {
-    minWidth: 34,
-    minHeight: 34,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    minWidth: 28,
+    minHeight: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: designSystem.radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -114,8 +153,8 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.ink,
   },
   markerLabel: {
-    fontSize: 11,
-    lineHeight: 12,
+    fontSize: 10,
+    lineHeight: 11,
     fontWeight: '900',
     color: designSystem.colors.darkGreen,
   },

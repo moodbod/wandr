@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Link } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,11 +10,12 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
-  href?: string;
+  href?: Href;
 };
 
 export function ExploreActivityCard({ card, href }: ExploreActivityCardProps) {
   const isDark = useColorScheme() === 'dark';
+  const router = useRouter();
 
   return (
     <ThemedView 
@@ -47,11 +48,12 @@ export function ExploreActivityCard({ card, href }: ExploreActivityCardProps) {
         </View>
 
         {href ? (
-          <Link href={href} asChild>
-            <Pressable style={styles.cta}>
-              <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
-            </Pressable>
-          </Link>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(href)}
+            style={styles.cta}>
+            <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+          </Pressable>
         ) : (
           <View style={styles.cta}>
             <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>

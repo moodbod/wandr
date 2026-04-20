@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { type Href, useRouter } from 'expo-router';
+import { StyleSheet, Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
@@ -7,9 +8,12 @@ import type { ExploreFeatureHero } from '@/constants/explore-content';
 
 type ExploreFeatureHeroCardProps = {
   card: ExploreFeatureHero;
+  href?: Href;
 };
 
-export function ExploreFeatureHeroCard({ card }: ExploreFeatureHeroCardProps) {
+export function ExploreFeatureHeroCard({ card, href }: ExploreFeatureHeroCardProps) {
+  const router = useRouter();
+
   return (
     <View style={styles.shell}>
       <Image source={card.imageUri} contentFit="cover" style={styles.image} />
@@ -20,6 +24,14 @@ export function ExploreFeatureHeroCard({ card }: ExploreFeatureHeroCardProps) {
         </View>
         <ThemedText style={styles.title}>{card.title}</ThemedText>
         <ThemedText style={styles.description}>{card.description}</ThemedText>
+        {href ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(href)}
+            style={styles.cta}>
+            <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -43,6 +55,22 @@ const styles = StyleSheet.create({
     padding: 28,
     gap: 10,
     backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  cta: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderRadius: designSystem.radii.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: designSystem.colors.lime,
+  },
+  ctaLabel: {
+    fontSize: 13,
+    lineHeight: 14,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: designSystem.colors.darkGreen,
   },
   badge: {
     alignSelf: 'flex-start',

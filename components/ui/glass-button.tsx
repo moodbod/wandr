@@ -1,6 +1,6 @@
 import { BlurView, type BlurTint } from 'expo-blur';
 import React from 'react';
-import { Pressable, StyleSheet, type ViewStyle, type StyleProp, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, type ViewStyle, type StyleProp, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -15,6 +15,7 @@ type GlassButtonProps = {
   radius?: number;
   width?: number;
   height?: number;
+  accessibilityLabel?: string;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -26,8 +27,9 @@ export function GlassButton({
   intensity = 80,
   tint,
   radius = designSystem.radii.pill,
-  width = 46,
-  height = 46,
+  width = 48,
+  height = 48,
+  accessibilityLabel,
 }: GlassButtonProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -52,6 +54,7 @@ export function GlassButton({
 
   return (
     <AnimatedPressable
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -62,15 +65,30 @@ export function GlassButton({
         animatedStyle
       ]}
     >
-      <BlurView
-        intensity={intensity}
-        tint={resolvedTint}
-        style={[styles.blur, { borderRadius: radius }]}
-      >
-        <View style={[styles.innerHighlight, { borderRadius: radius }]}>
+      {Platform.OS === 'ios' ? (
+        <BlurView
+          intensity={intensity}
+          tint={resolvedTint}
+          style={[styles.blur, { borderRadius: radius }]}
+        >
+          <View style={[styles.innerHighlight, { borderRadius: radius }]}>
+            {children}
+          </View>
+        </BlurView>
+      ) : (
+        <View
+          style={[
+            styles.androidFill,
+            {
+              borderRadius: radius,
+              backgroundColor: isDark ? 'rgba(22,25,20,0.92)' : 'rgba(244,244,241,0.96)',
+              borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border,
+            },
+          ]}
+        >
           {children}
         </View>
-      </BlurView>
+      )}
     </AnimatedPressable>
   );
 }
@@ -92,9 +110,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.4)', // Subtle glass highlight
-    borderTopColor: 'rgba(255, 255, 255, 0.6)', // Extra light on top edge
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)', // Extra light on left edge
-    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Very faint milky fill
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderTopColor: 'rgba(255, 255, 255, 0.6)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  androidFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
 });

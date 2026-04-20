@@ -1,8 +1,10 @@
 import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { MapPreview } from '@/components/wandr/mapbox/map-preview';
+import type { ExploreMapMarker } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -11,12 +13,7 @@ type ExploreLiveMapPanelProps = {
   description: string;
   ctaLabel: string;
   centerCoordinate: readonly [number, number];
-  markers: ReadonlyArray<{
-    id: string;
-    coordinate: readonly [number, number];
-    label?: string;
-    tone?: 'accent' | 'dark';
-  }>;
+  markers: readonly ExploreMapMarker[];
 };
 
 export function ExploreLiveMapPanel({
@@ -26,12 +23,23 @@ export function ExploreLiveMapPanel({
   centerCoordinate,
   markers,
 }: ExploreLiveMapPanelProps) {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const featuredMarker = markers.find((marker) => marker.experienceSlug);
 
   return (
     <View style={styles.shell}>
-      <MapPreview centerCoordinate={centerCoordinate} markers={markers} zoomLevel={11} />
+      <MapPreview
+        centerCoordinate={centerCoordinate}
+        markers={markers}
+        zoomLevel={11}
+        onMarkerPress={(marker) => {
+          if (marker.experienceSlug) {
+            router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
+          }
+        }}
+      />
       <View style={styles.overlayCardContainer}>
         <BlurView 
           intensity={80} 
@@ -46,7 +54,14 @@ export function ExploreLiveMapPanel({
           >
             {description}
           </ThemedText>
-          <Pressable style={styles.cta}>
+          <Pressable
+            style={styles.cta}
+            onPress={() => {
+              if (featuredMarker?.experienceSlug) {
+                router.push({ pathname: '/explore/[slug]', params: { slug: featuredMarker.experienceSlug } });
+              }
+            }}
+          >
             <ThemedText style={styles.ctaLabel}>{ctaLabel}</ThemedText>
           </Pressable>
         </BlurView>

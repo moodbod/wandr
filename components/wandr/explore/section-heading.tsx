@@ -1,3 +1,4 @@
+import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ArrowUpRight } from 'phosphor-react-native';
 
@@ -7,17 +8,20 @@ import { designSystem } from '@/constants/design-system';
 type ExploreSectionHeadingProps = {
   title: string;
   actionLabel?: string;
+  actionHref?: Href;
 };
 
-export function ExploreSectionHeading({ title, actionLabel }: ExploreSectionHeadingProps) {
+export function ExploreSectionHeading({ title, actionLabel, actionHref }: ExploreSectionHeadingProps) {
   return (
     <View style={styles.row}>
       <ThemedText style={styles.title}>{title}</ThemedText>
-      {actionLabel ? (
-        <Pressable style={styles.action}>
-          <ThemedText style={styles.actionLabel}>{actionLabel}</ThemedText>
-          <ArrowUpRight color={designSystem.colors.lime} size={16} weight="bold" />
-        </Pressable>
+      {actionLabel && actionHref ? (
+        <Link href={actionHref} asChild>
+          <Pressable style={styles.action}>
+            <ThemedText style={styles.actionLabel}>{actionLabel}</ThemedText>
+            <ArrowUpRight color={designSystem.colors.lime} size={16} weight="bold" />
+          </Pressable>
+        </Link>
       ) : null}
     </View>
   );

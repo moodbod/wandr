@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
-import { ArrowRight } from 'phosphor-react-native';
-import { StyleSheet, View } from 'react-native';
+import { type Href, useRouter } from 'expo-router';
+import { StyleSheet, Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,10 +10,12 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreFeatureDetailCardProps = {
   card: ExploreFeatureDetail;
+  href?: Href;
 };
 
-export function ExploreFeatureDetailCard({ card }: ExploreFeatureDetailCardProps) {
+export function ExploreFeatureDetailCard({ card, href }: ExploreFeatureDetailCardProps) {
   const isDark = useColorScheme() === 'dark';
+  const router = useRouter();
 
   return (
     <ThemedView 
@@ -34,7 +36,14 @@ export function ExploreFeatureDetailCard({ card }: ExploreFeatureDetailCardProps
             <ThemedText style={styles.price}>{card.price}</ThemedText>
             <ThemedText style={styles.priceSuffix}>{card.priceSuffix}</ThemedText>
           </View>
-          <ArrowRight color={designSystem.colors.lime} size={18} weight="bold" />
+          {href ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(href)}
+              style={styles.cta}>
+              <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </ThemedView>
@@ -84,8 +93,9 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 'auto',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
+    gap: 12,
   },
   priceRow: {
     flexDirection: 'row',
@@ -102,5 +112,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '700',
     color: designSystem.colors.gray,
+  },
+  cta: {
+    borderRadius: designSystem.radii.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: designSystem.colors.lime,
+  },
+  ctaLabel: {
+    fontSize: 12,
+    lineHeight: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: designSystem.colors.darkGreen,
   },
 });

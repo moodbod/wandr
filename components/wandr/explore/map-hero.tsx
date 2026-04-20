@@ -1,16 +1,15 @@
-import { NavigationArrow } from 'phosphor-react-native';
 import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { GlassButton } from '@/components/ui/glass-button';
+import { WandrHeader } from '@/components/wandr/header';
 import { MapPreview } from '@/components/wandr/mapbox/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
   centerCoordinate: readonly [number, number];
-  markers: ReadonlyArray<ExploreMapMarker>;
+  markers: readonly ExploreMapMarker[];
   topInset?: number;
   onInteract?: () => void;
   onLocateMe?: () => void;
@@ -24,18 +23,31 @@ export function ExploreMapHero({
   onInteract,
   onLocateMe,
 }: ExploreMapHeroProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   return (
     <View style={styles.shell}>
-      <MapPreview centerCoordinate={centerCoordinate} markers={markers} zoomLevel={10.6} onInteract={onInteract} />
+      <MapPreview
+        centerCoordinate={centerCoordinate}
+        markers={markers}
+        zoomLevel={10.6}
+        onInteract={onInteract}
+        onMarkerPress={(marker) => {
+          if (marker.experienceSlug) {
+            router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
+          }
+        }}
+      />
+      <WandrHeader
+        config={{
+          overlay: true,
+          trailingActions: onLocateMe
+            ? [{ kind: 'locate' as const, accessibilityLabel: 'Locate me', onPress: onLocateMe }]
+            : undefined,
+        }}
+      />
       <View style={[styles.overlay, { marginTop: topInset, paddingTop: 24 }]} pointerEvents="box-none">
-        <View style={styles.heroHeader} pointerEvents="box-none">
-          <GlassButton onPress={onLocateMe} width={46} height={46}>
-            <NavigationArrow color={isDark ? '#fff' : designSystem.colors.ink} weight="bold" size={20} />
-          </GlassButton>
-        </View>
+        <View style={styles.heroHeader} pointerEvents="none" />
       </View>
     </View>
   );

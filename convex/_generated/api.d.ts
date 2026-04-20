@@ -10,6 +10,7 @@
 
 import type * as explore from "../explore.js";
 import type * as seedData from "../seedData.js";
+import type * as trip from "../trip.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   explore: typeof explore;
   seedData: typeof seedData;
+  trip: typeof trip;
 }>;
 
 /**

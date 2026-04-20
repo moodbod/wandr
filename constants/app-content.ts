@@ -15,7 +15,10 @@ export type HeaderActionKind =
   | 'avatar'
   | 'back'
   | 'favorite'
+  | 'filter'
+  | 'locate'
   | 'map'
+  | 'search'
   | 'menu'
   | 'notifications'
   | 'settings'
@@ -24,12 +27,15 @@ export type HeaderActionKind =
 export type HeaderAction = {
   kind: HeaderActionKind;
   accessibilityLabel?: string;
+  href?: Href;
+  onPress?: () => void;
   tone?: 'plain' | 'surface';
 };
 
 export type HeaderConfig = {
   leadingAction?: HeaderAction;
   overlay?: boolean;
+  searchPlaceholder?: string;
   showLogo?: boolean;
   subtitle?: string;
   title?: string;
@@ -50,8 +56,7 @@ export const appContent = {
   exploreHome: {
     header: {
       overlay: true,
-      showLogo: true,
-      trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications' }],
+      trailingActions: [{ kind: 'search', accessibilityLabel: 'Search experiences', href: '/explore/search' }],
     },
     eyebrow: 'Wandr',
     title: 'Explore',
@@ -65,7 +70,7 @@ export const appContent = {
         description: 'Browse experiences, tastes, and hidden spots from an Explore search flow.',
       },
       {
-        href: '/explore/stories',
+        href: '/explore/desert-adrenaline',
         label: 'Experience booking',
         description: 'Booking-first experience detail with highlights, pricing, and next-step actions.',
       },
@@ -84,7 +89,7 @@ export const appContent = {
   exploreSearch: {
     header: {
       leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-      title: 'Discovery',
+      searchPlaceholder: 'Search experiences, spots...',
       trailingActions: [],
     },
     eyebrow: 'Explore',

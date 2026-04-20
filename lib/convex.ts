@@ -16,3 +16,33 @@ export const getExplorePageContentRef = makeFunctionReference<
   { slug: string },
   ExplorePageContent | null
 >('explore:getPageContent') as FunctionReference<'query', 'public', { slug: string }, ExplorePageContent | null>;
+
+export const ensureExploreCommunitySeedRef = makeFunctionReference<'mutation', Record<string, never>, boolean>(
+  'explore:ensureExploreCommunitySeed'
+) as FunctionReference<'mutation', 'public', Record<string, never>, boolean>;
+
+export const seedDefaultPageContentRef = makeFunctionReference<'mutation', Record<string, never>, string>(
+  'explore:seedDefaultPageContent'
+) as FunctionReference<'mutation', 'public', Record<string, never>, string>;
+
+export const bookExperienceRef = makeFunctionReference<
+  'mutation',
+  { experienceSlug: string; travelerSlug: string },
+  string
+>('explore:bookExperience') as FunctionReference<
+  'mutation',
+  'public',
+  { experienceSlug: string; travelerSlug: string },
+  string
+>;
+
+export const getUserItineraryRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  any[]
+>('trip:getUserItinerary') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  any[]
+>;

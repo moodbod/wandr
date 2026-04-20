@@ -1,5 +1,5 @@
-import { WandrScreen } from '@/components/wandr-screen';
+import { Redirect } from 'expo-router';
 
 export default function TripScreen() {
-  return <WandrScreen screen="tripHome" />;
+  return <Redirect href="/trip/day-plan" />;
 }
