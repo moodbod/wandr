@@ -8,6 +8,10 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreActivityCard as ExploreActivityCardContent } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+const CARD_RADIUS = 32;
+const CARD_PADDING = 12;
+const INNER_RADIUS = CARD_RADIUS - CARD_PADDING;
+
 type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
   href?: Href;
@@ -16,124 +20,162 @@ type ExploreActivityCardProps = {
 export function ExploreActivityCard({ card, href }: ExploreActivityCardProps) {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
+  const shouldShowExploreButton = Boolean(href && card.ctaLabel.trim());
+  const shouldMakeCardClickable = Boolean(href && !shouldShowExploreButton);
 
-  return (
-    <ThemedView 
-      lightColor="#ffffff" 
-      darkColor={designSystem.colors.darkSurface} 
-      style={[
-        styles.shell,
-        { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border }
-      ]}
-    >
+  const handlePress = () => {
+    if (href) {
+      router.push(href);
+    }
+  };
+
+  const content = (
+    <>
       <View style={styles.imageWrap}>
         <Image source={card.imageUri} contentFit="cover" style={styles.image} />
-        <View style={[styles.badge, card.badgeTone === 'soft' ? styles.badgeSoft : styles.badgeAccent]}>
-          <ThemedText style={[styles.badgeText, card.badgeTone === 'soft' ? styles.badgeSoftText : undefined]}>
-            {card.badge}
-          </ThemedText>
-        </View>
       </View>
 
       <View style={styles.body}>
-        <View style={styles.summaryRow}>
-          <View style={styles.copy}>
-            <ThemedText style={styles.title}>{card.title}</ThemedText>
-            <ThemedText style={styles.subtitle} lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText}>{card.subtitle}</ThemedText>
-          </View>
-          <View style={styles.priceWrap}>
-            <ThemedText style={styles.price} lightColor={designSystem.colors.darkGreen} darkColor={designSystem.colors.lime}>{card.price}</ThemedText>
-            <ThemedText style={styles.priceSuffix} lightColor={designSystem.colors.gray} darkColor={designSystem.colors.gray}>{card.priceSuffix}</ThemedText>
+        <View style={styles.metaRow}>
+          <View
+            style={[
+              styles.badge,
+              card.badgeTone === 'soft' ? styles.badgeSoft : styles.badgeAccent,
+              isDark ? styles.badgeDark : null,
+            ]}>
+            <ThemedText
+              style={[
+                styles.badgeText,
+                card.badgeTone === 'soft' ? styles.badgeSoftText : undefined,
+                isDark ? styles.badgeTextDark : null,
+              ]}>
+                {card.badge}
+              </ThemedText>
           </View>
         </View>
 
-        {href ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push(href)}
-            style={styles.cta}>
-            <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
+        <View style={styles.copy}>
+          <ThemedText style={styles.title}>{card.title}</ThemedText>
+          <ThemedText
+            style={styles.subtitle}
+            lightColor={designSystem.colors.warmDark}
+            darkColor={designSystem.colors.darkMutedText}>
+            {card.subtitle}
+          </ThemedText>
+        </View>
+
+        <View style={styles.priceBlock}>
+          <ThemedText style={styles.price} lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText}>
+            {card.price}
+          </ThemedText>
+          <ThemedText
+            style={styles.priceSuffix}
+            lightColor={designSystem.colors.gray}
+            darkColor={designSystem.colors.darkMutedText}>
+            {card.priceSuffix}
+          </ThemedText>
+        </View>
+
+        {shouldShowExploreButton ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={card.ctaLabel} onPress={handlePress} style={styles.ctaButton}>
+            <ThemedText
+              style={styles.ctaLabel}
+              lightColor={designSystem.colors.darkGreen}
+              darkColor={designSystem.colors.darkGreen}>
+              {card.ctaLabel}
+            </ThemedText>
           </Pressable>
-        ) : (
-          <View style={styles.cta}>
-            <ThemedText style={styles.ctaLabel}>{card.ctaLabel}</ThemedText>
-          </View>
-        )}
+        ) : null}
       </View>
+    </>
+  );
+
+  const shellStyle = [
+    styles.shell,
+    { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border },
+  ];
+
+  if (shouldMakeCardClickable) {
+    return (
+      <Pressable accessibilityRole="button" onPress={handlePress}>
+        <ThemedView lightColor="#ffffff" darkColor={designSystem.colors.darkSurface} style={shellStyle}>
+          {content}
+        </ThemedView>
+      </Pressable>
+    );
+  }
+
+  return (
+    <ThemedView lightColor="#ffffff" darkColor={designSystem.colors.darkSurface} style={shellStyle}>
+      {content}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: 32,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    padding: 16,
+    overflow: 'hidden',
+    padding: CARD_PADDING,
+    gap: 14,
   },
   imageWrap: {
-    height: 256,
-    borderRadius: 20,
+    height: 240,
+    borderRadius: INNER_RADIUS,
     overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
   },
+  body: {
+    paddingHorizontal: 6,
+    paddingBottom: 8,
+    gap: 14,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  copy: {
+    gap: 8,
+  },
   badge: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
+    alignSelf: 'flex-start',
     borderRadius: designSystem.radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   badgeAccent: {
-    backgroundColor: designSystem.colors.lime,
+    backgroundColor: designSystem.colors.mint,
   },
   badgeSoft: {
-    backgroundColor: '#c5eba3',
+    backgroundColor: designSystem.colors.surface,
+  },
+  badgeDark: {
+    backgroundColor: 'rgba(159, 232, 112, 0.12)',
   },
   badgeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
   },
   badgeSoftText: {
-    color: '#4b6c31',
+    color: designSystem.colors.warmDark,
   },
-  body: {
-    gap: 20,
-    paddingTop: 20,
-    paddingHorizontal: 4,
-    paddingBottom: 4,
+  badgeTextDark: {
+    color: designSystem.colors.lime,
   },
-  summaryRow: {
+  priceBlock: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  copy: {
-    flex: 1,
+    alignItems: 'baseline',
     gap: 6,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: '900',
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '600',
-  },
-  priceWrap: {
-    alignItems: 'flex-end',
-    gap: 4,
   },
   price: {
     fontSize: 34,
@@ -142,24 +184,37 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
   },
   priceSuffix: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
   },
-  cta: {
-    borderRadius: designSystem.radii.pill,
+  title: {
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: '800',
+    letterSpacing: -0.7,
+  },
+  subtitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  ctaButton: {
+    width: '100%',
+    paddingHorizontal: 24,
     paddingVertical: 16,
-    alignItems: 'center',
+    borderRadius: designSystem.radii.pill,
     backgroundColor: designSystem.colors.lime,
+    borderWidth: 1,
+    borderColor: 'rgba(14,15,12,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaLabel: {
-    fontSize: 14,
-    lineHeight: 14,
+    fontSize: 18,
+    lineHeight: 18,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: -0.1,
     textTransform: 'uppercase',
-    color: designSystem.colors.darkGreen,
   },
 });

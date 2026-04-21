@@ -1,6 +1,7 @@
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +12,8 @@ import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { getHiddenGemSlug, hiddenGemDetails } from '@/constants/hidden-gems-content';
-import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
+import { getExplorePageContentRef, getLocationLikeStateRef, hasConvexUrl, toggleLocationLikeRef } from '@/lib/convex';
+import { currentDemoTravelerSlug } from '@/lib/demo-session';
 
 export default function HiddenGemDetailScreen() {
   if (!hasConvexUrl) {
@@ -26,6 +28,17 @@ function ConnectedHiddenGemDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const likeState = useQuery(getLocationLikeStateRef, {
+    travelerSlug: currentDemoTravelerSlug,
+    locationKind: 'hiddenGem',
+    locationSlug: typeof slug === 'string' ? slug : '',
+  });
+  const toggleLocationLike = useMutation(toggleLocationLikeRef);
+  const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setOptimisticLiked(null);
+  }, [slug]);
 
   if (!slug || page === undefined || page === null) {
     return null;
@@ -37,6 +50,23 @@ function ConnectedHiddenGemDetailScreen() {
   if (!detail || !card) {
     return null;
   }
+  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
+
+  const handleToggleLike = async () => {
+    const nextLiked = !isLiked;
+    setOptimisticLiked(nextLiked);
+
+    try {
+      const result = await toggleLocationLike({
+        travelerSlug: currentDemoTravelerSlug,
+        locationKind: 'hiddenGem',
+        locationSlug: slug,
+      });
+      setOptimisticLiked(result.liked);
+    } catch {
+      setOptimisticLiked(null);
+    }
+  };
 
   return (
     <ThemedView style={styles.root}>
@@ -44,7 +74,16 @@ function ConnectedHiddenGemDetailScreen() {
         config={{
           overlay: true,
           leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save hidden gem' }],
+          trailingActions: [
+            {
+              kind: 'favorite',
+              accessibilityLabel: isLiked ? 'Remove saved hidden gem' : 'Save hidden gem',
+              isActive: isLiked,
+              onPress: () => {
+                void handleToggleLike();
+              },
+            },
+          ],
         }}
       />
       <ScrollView
@@ -109,7 +148,7 @@ function ConnectedHiddenGemDetailScreen() {
           title="Keep this detour"
           primaryLabel={detail.primaryLabel}
           secondaryLabel={detail.secondaryLabel}
-          onPrimaryPress={() => router.push('/trip/day-plan')}
+          onPrimaryPress={() => router.push('/(tabs)/trip')}
           onSecondaryPress={() => router.push('/explore/hidden-gems')}
         />
       </ScrollView>

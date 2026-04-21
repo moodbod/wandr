@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
+import { ExploreActivityCardSkeleton, ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
 import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
@@ -14,6 +15,7 @@ import type { ExploreActivityCard as ExploreActivityCardContent } from '@/consta
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { useCurrentRegionCenter } from '@/hooks/use-current-region-center';
 import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
+import { fallbackExplorePageContent } from '@/lib/explore-fallback-content';
 import {
   buildRegionOptions,
   matchesExperienceFilters,
@@ -31,7 +33,38 @@ const intentOptions: readonly DiscoveryOption[] = [
 
 export default function ExploreSearchScreen() {
   if (!hasConvexUrl) {
-    return null;
+    const previewCards = fallbackExplorePageContent.experiences
+      .slice(0, 2)
+      .map<ExploreActivityCardContent>((experience) => ({
+        badge: experience.badge,
+        badgeTone: experience.badgeTone,
+        ctaLabel: experience.ctaLabel,
+        experienceSlug: experience.slug,
+        imageUri: experience.imageUri,
+        price: experience.price,
+        priceSuffix: experience.priceSuffix,
+        subtitle: experience.locationLabel ?? experience.subtitle,
+        title: experience.title,
+      }));
+
+    return (
+      <ExploreSearchScreenView
+        activeIntent="all"
+        activeIntentOptions={intentOptions}
+        activeRegion="all"
+        filteredHiddenGems={fallbackExplorePageContent.search.hiddenGems.items}
+        insetsTop={0}
+        isLoading={false}
+        notice="Showing local Explore preview content."
+        onIntentChange={() => {}}
+        onRegionChange={() => {}}
+        onSearchQueryChange={() => {}}
+        page={fallbackExplorePageContent}
+        previewCards={previewCards}
+        regionOptions={[{ key: 'all', label: 'All regions' }]}
+        searchQuery=""
+      />
+    );
   }
 
   return <ConnectedExploreSearchScreen />;
@@ -45,22 +78,20 @@ function ConnectedExploreSearchScreen() {
   const [activeIntent, setActiveIntent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  if (page === undefined || page === null) {
-    return null;
-  }
+  const resolvedPage = page ?? fallbackExplorePageContent;
 
-  const searchMatchedExperiences = page.experiences.filter((e) =>
+  const searchMatchedExperiences = resolvedPage.experiences.filter((e) =>
     matchesExperienceFilters(e, 'all', 'all', searchQuery)
   );
 
-  const searchMatchedGems = page.search.hiddenGems.items.filter((item) =>
+  const searchMatchedGems = resolvedPage.search.hiddenGems.items.filter((item) =>
     matchesHiddenGemFilters(item, 'all', searchQuery)
   );
 
   const regionOptions = buildRegionOptions(
     searchMatchedExperiences,
     searchMatchedGems,
-    currentRegionCenter ?? page.home.hero.centerCoordinate
+    currentRegionCenter ?? resolvedPage.home.hero.centerCoordinate
   );
 
   const activeIntentOptions = intentOptions.filter(
@@ -69,10 +100,10 @@ function ConnectedExploreSearchScreen() {
       searchMatchedExperiences.some((e) => matchesIntent(e.category, e.travelerMomentum?.visitorCount, option.key))
   );
 
-  const filteredExperiences = page.experiences.filter((experience) =>
+  const filteredExperiences = resolvedPage.experiences.filter((experience) =>
     matchesExperienceFilters(experience, activeRegion, activeIntent, searchQuery)
   );
-  const filteredHiddenGems = page.search.hiddenGems.items.filter((item) =>
+  const filteredHiddenGems = resolvedPage.search.hiddenGems.items.filter((item) =>
     matchesHiddenGemFilters(item, activeRegion, searchQuery)
   );
   const previewCards = filteredExperiences.slice(0, 2).map<ExploreActivityCardContent>((experience) => ({
@@ -88,6 +119,63 @@ function ConnectedExploreSearchScreen() {
   }));
 
   return (
+    <ExploreSearchScreenView
+      activeIntent={activeIntent}
+      activeIntentOptions={activeIntentOptions}
+      activeRegion={activeRegion}
+      filteredHiddenGems={filteredHiddenGems}
+      insetsTop={insets.top}
+      isLoading={page === undefined}
+      notice={
+        page === undefined
+          ? 'Loading live Explore cards from Convex.'
+          : page === null
+            ? 'Using seeded Explore content while Convex catches up.'
+            : null
+      }
+      onIntentChange={setActiveIntent}
+      onRegionChange={setActiveRegion}
+      onSearchQueryChange={setSearchQuery}
+      page={resolvedPage}
+      previewCards={previewCards}
+      regionOptions={regionOptions}
+      searchQuery={searchQuery}
+    />
+  );
+}
+
+function ExploreSearchScreenView({
+  activeIntent,
+  activeIntentOptions,
+  activeRegion,
+  filteredHiddenGems,
+  insetsTop,
+  isLoading,
+  notice,
+  onIntentChange,
+  onRegionChange,
+  onSearchQueryChange,
+  page,
+  previewCards,
+  regionOptions,
+  searchQuery,
+}: {
+  activeIntent: string;
+  activeIntentOptions: readonly DiscoveryOption[];
+  activeRegion: string;
+  filteredHiddenGems: typeof fallbackExplorePageContent.search.hiddenGems.items;
+  insetsTop: number;
+  isLoading: boolean;
+  notice: string | null;
+  onIntentChange: (value: string) => void;
+  onRegionChange: (value: string) => void;
+  onSearchQueryChange: (value: string) => void;
+  page: typeof fallbackExplorePageContent;
+  previewCards: readonly ExploreActivityCardContent[];
+  regionOptions: readonly DiscoveryOption[];
+  searchQuery: string;
+}) {
+  return (
     <ThemedView style={styles.root}>
       <WandrHeader
         config={{
@@ -98,7 +186,7 @@ function ConnectedExploreSearchScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 88, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
+          { paddingTop: insetsTop + 88, paddingBottom: designSystem.spacing.xxxl * 2 },
         ]}
       >
         <View style={styles.hero}>
@@ -115,9 +203,9 @@ function ConnectedExploreSearchScreen() {
           activeRegion={activeRegion}
           activeIntent={activeIntent}
           searchQuery={searchQuery}
-          onRegionChange={setActiveRegion}
-          onIntentChange={setActiveIntent}
-          onSearchQueryChange={setSearchQuery}
+          onIntentChange={onIntentChange}
+          onRegionChange={onRegionChange}
+          onSearchQueryChange={onSearchQueryChange}
           searchPlaceholder={page.search.intro.searchPlaceholder}
         />
 
@@ -128,13 +216,15 @@ function ConnectedExploreSearchScreen() {
               <ThemedText style={styles.sectionTitle}>Start with these</ThemedText>
             </View>
             <View style={styles.cardStack}>
-              {previewCards.map((card) => (
-                <ExploreActivityCard
-                  key={card.experienceSlug}
-                  card={card}
-                  href={{ pathname: '/explore/[slug]', params: { slug: card.experienceSlug } }}
-                />
-              ))}
+              {isLoading
+                ? Array.from({ length: 2 }).map((_, index) => <ExploreActivityCardSkeleton key={`search-activity-skeleton-${index}`} />)
+                : previewCards.map((card) => (
+                    <ExploreActivityCard
+                      key={card.experienceSlug}
+                      card={card}
+                      href={{ pathname: '/explore/[slug]', params: { slug: card.experienceSlug } }}
+                    />
+                  ))}
             </View>
           </View>
         )}
@@ -146,13 +236,15 @@ function ConnectedExploreSearchScreen() {
               <ThemedText style={styles.sectionTitle}>Local detours worth keeping</ThemedText>
             </View>
             <View style={styles.cardStack}>
-              {filteredHiddenGems.slice(0, 2).map((item) => (
-                <ExploreHiddenGemCard
-                  key={item.title}
-                  card={item}
-                  href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
-                />
-              ))}
+              {isLoading
+                ? Array.from({ length: 2 }).map((_, index) => <ExploreHiddenGemCardSkeleton key={`search-gem-skeleton-${index}`} />)
+                : filteredHiddenGems.slice(0, 2).map((item) => (
+                    <ExploreHiddenGemCard
+                      key={item.title}
+                      card={item}
+                      href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
+                    />
+                  ))}
             </View>
           </View>
         )}
@@ -216,5 +308,18 @@ const styles = StyleSheet.create({
   },
   cardStack: {
     gap: 16,
+  },
+  noticeCard: {
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 232, 112, 0.18)',
+  },
+  noticeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: designSystem.colors.warmDark,
   },
 });

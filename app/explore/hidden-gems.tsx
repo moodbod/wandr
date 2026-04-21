@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { designSystem } from '@/constants/design-system';
 import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
+import { fallbackExplorePageContent } from '@/lib/explore-fallback-content';
 
 const hiddenGemMeta: Record<string, { district: string; moment: string; note: string }> = {
   'The Red Lighthouse': {
@@ -32,7 +34,7 @@ const hiddenGemMeta: Record<string, { district: string; moment: string; note: st
 
 export default function ExploreHiddenGemsScreen() {
   if (!hasConvexUrl) {
-    return null;
+    return <ExploreHiddenGemsScreenView insetsTop={0} isLoading={false} notice="Showing local Explore preview content." page={fallbackExplorePageContent} />;
   }
 
   return <ConnectedExploreHiddenGemsScreen />;
@@ -42,10 +44,33 @@ function ConnectedExploreHiddenGemsScreen() {
   const insets = useSafeAreaInsets();
   const page = useQuery(getExplorePageContentRef, { slug: 'default' });
 
-  if (page === undefined || page === null) {
-    return null;
-  }
+  return (
+    <ExploreHiddenGemsScreenView
+      insetsTop={insets.top}
+      isLoading={page === undefined}
+      notice={
+        page === undefined
+          ? 'Loading live hidden gems from Convex.'
+          : page === null
+            ? 'Using seeded hidden gems while Convex catches up.'
+            : null
+      }
+      page={page ?? fallbackExplorePageContent}
+    />
+  );
+}
 
+function ExploreHiddenGemsScreenView({
+  insetsTop,
+  isLoading,
+  notice,
+  page,
+}: {
+  insetsTop: number;
+  isLoading: boolean;
+  notice: string | null;
+  page: typeof fallbackExplorePageContent;
+}) {
   const items = page.search.hiddenGems.items;
   const leadGem = items[0];
   const groupedGems = buildGemGroups(items);
@@ -61,7 +86,7 @@ function ConnectedExploreHiddenGemsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 88, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
+          { paddingTop: insetsTop + 88, paddingBottom: designSystem.spacing.xxxl * 2 },
         ]}>
         <View style={styles.hero}>
           <ThemedText style={styles.eyebrow}>Local Guide</ThemedText>
@@ -79,15 +104,19 @@ function ConnectedExploreHiddenGemsScreen() {
                 <ThemedText style={styles.leadTitle}>{leadGem.title}</ThemedText>
                 <ThemedText style={styles.leadDescription}>{getGemMeta(leadGem).note}</ThemedText>
               </View>
-              <View style={styles.statGrid}>
-                <GemStat label="Pocket" value={getGemMeta(leadGem).district} />
-                <GemStat label="Best for" value={getGemMeta(leadGem).moment} />
-              </View>
+            <View style={styles.statGrid}>
+              <GemStat label="Pocket" value={getGemMeta(leadGem).district} />
+              <GemStat label="Best for" value={getGemMeta(leadGem).moment} />
             </View>
-            <ExploreHiddenGemCard
-              card={leadGem}
-              href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(leadGem.title) } }}
-            />
+            </View>
+            {isLoading ? (
+              <ExploreHiddenGemCardSkeleton />
+            ) : (
+              <ExploreHiddenGemCard
+                card={leadGem}
+                href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(leadGem.title) } }}
+              />
+            )}
           </ThemedView>
         ) : null}
 
@@ -113,18 +142,24 @@ function ConnectedExploreHiddenGemsScreen() {
               <ThemedText style={styles.sectionDescription}>{group.description}</ThemedText>
             </View>
             <View style={styles.grid}>
-              {group.items.map((item) => (
-                <View key={item.title} style={styles.groupedCard}>
-                  <ExploreHiddenGemCard
-                    card={item}
-                    href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
-                  />
-                  <View style={styles.noteRow}>
-                    <GemTag label={getGemMeta(item).district} />
-                    <GemTag label={getGemMeta(item).moment} />
-                  </View>
-                </View>
-              ))}
+              {isLoading
+                ? Array.from({ length: group.items.length || 1 }).map((_, index) => (
+                    <View key={`${group.key}-skeleton-${index}`} style={styles.groupedCard}>
+                      <ExploreHiddenGemCardSkeleton />
+                    </View>
+                  ))
+                : group.items.map((item) => (
+                    <View key={item.title} style={styles.groupedCard}>
+                      <ExploreHiddenGemCard
+                        card={item}
+                        href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
+                      />
+                      <View style={styles.noteRow}>
+                        <GemTag label={getGemMeta(item).district} />
+                        <GemTag label={getGemMeta(item).moment} />
+                      </View>
+                    </View>
+                  ))}
             </View>
           </View>
         ))}
@@ -230,6 +265,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+    color: designSystem.colors.warmDark,
+  },
+  noticeCard: {
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 232, 112, 0.18)',
+  },
+  noticeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
     color: designSystem.colors.warmDark,
   },
   leadCard: {

@@ -2,13 +2,15 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { WandrHeader } from '@/components/wandr/header';
-import { MapPreview } from '@/components/wandr/mapbox/map-preview';
+import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
   centerCoordinate: readonly [number, number];
+  userCoordinate?: readonly [number, number] | null;
+  userHeading?: number | null;
   markers: readonly ExploreMapMarker[];
   topInset?: number;
   onInteract?: () => void;
@@ -18,6 +20,8 @@ type ExploreMapHeroProps = {
 export function ExploreMapHero({
   locationLabel,
   centerCoordinate,
+  userCoordinate = null,
+  userHeading = null,
   markers,
   topInset = designSystem.spacing.xxxl,
   onInteract,
@@ -29,6 +33,8 @@ export function ExploreMapHero({
     <View style={styles.shell}>
       <MapPreview
         centerCoordinate={centerCoordinate}
+        userCoordinate={userCoordinate}
+        userHeading={userHeading}
         markers={markers}
         zoomLevel={10.6}
         onInteract={onInteract}

@@ -1,17 +1,17 @@
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import {
-    Bell,
-    CaretLeft,
-    FadersHorizontal,
-    GearSix,
-    Heart,
-    List,
-    MagnifyingGlass,
-    NavigationArrow,
-    MapTrifold,
-    ShareNetwork,
-    UserCircle,
+  Bell,
+  CaretLeft,
+  FadersHorizontal,
+  GearSix,
+  Heart,
+  List,
+  MagnifyingGlass,
+  NavigationArrow,
+  MapTrifold,
+  ShareNetwork,
+  UserCircle,
 } from 'phosphor-react-native';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
-import type { HeaderAction, HeaderActionKind, HeaderConfig } from '@/constants/app-content';
+import type { HeaderAction, HeaderConfig } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -185,20 +185,20 @@ function HeaderActionButton({
         width={48}
         height={48}
       >
-        {renderHeaderIcon(action.kind, iconColor)}
+        {renderHeaderIcon(action, iconColor)}
       </GlassButton>
     </View>
   );
 }
 
-function renderHeaderIcon(kind: HeaderActionKind, color: string) {
-  switch (kind) {
+function renderHeaderIcon(action: HeaderAction, color: string) {
+  switch (action.kind) {
     case 'avatar':
       return <UserCircle color={color} size={20} weight="fill" />;
     case 'back':
       return <CaretLeft color={color} size={22} weight="bold" />;
     case 'favorite':
-      return <Heart color={color} size={20} weight="bold" />;
+      return <Heart color={color} size={20} weight={action.isActive ? 'fill' : 'bold'} />;
     case 'filter':
       return <FadersHorizontal color={color} size={20} weight="bold" />;
     case 'locate':
@@ -221,8 +221,8 @@ function renderHeaderIcon(kind: HeaderActionKind, color: string) {
 const styles = StyleSheet.create({
   shell: {
     paddingHorizontal: designSystem.spacing.lg,
-    zIndex: 20,
-    elevation: 20,
+    zIndex: 40,
+    elevation: 40,
   },
   plainSpacer: {
     minHeight: 56,

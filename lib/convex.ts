@@ -3,6 +3,7 @@ import { makeFunctionReference } from 'convex/server';
 import { ConvexReactClient } from 'convex/react';
 
 import type { ExplorePageContent } from '@/types/explore';
+import type { TripDashboard, TripItineraryItem } from '@/types/trip';
 
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const hasConvexUrl = Boolean(convexUrl);
@@ -36,13 +37,46 @@ export const bookExperienceRef = makeFunctionReference<
   string
 >;
 
+export const getLocationLikeStateRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { liked: boolean }
+>('explore:getLocationLikeState') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { liked: boolean }
+>;
+
+export const toggleLocationLikeRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { liked: boolean }
+>('explore:toggleLocationLike') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { liked: boolean }
+>;
+
 export const getUserItineraryRef = makeFunctionReference<
   'query',
   { travelerSlug: string },
-  any[]
+  TripItineraryItem[]
 >('trip:getUserItinerary') as FunctionReference<
   'query',
   'public',
   { travelerSlug: string },
-  any[]
+  TripItineraryItem[]
+>;
+
+export const getTripDashboardRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  TripDashboard
+>('trip:getTripDashboard') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  TripDashboard
 >;

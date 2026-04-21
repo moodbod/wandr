@@ -37,6 +37,7 @@ export type ExploreMapMarker = {
   imageUri?: string;
   label?: string;
   tone?: 'accent' | 'dark';
+  status?: 'completed' | 'active' | 'upcoming';
 };
 
 export type ExploreActivityCard = {

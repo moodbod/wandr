@@ -8,6 +8,10 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+const CARD_RADIUS = 32;
+const CARD_PADDING = 12;
+const INNER_RADIUS = CARD_RADIUS - CARD_PADDING;
+
 type ExploreHiddenGemCardProps = {
   card: ExploreHiddenGem;
   href?: Href;
@@ -49,10 +53,10 @@ export function ExploreHiddenGemCard({ card, href }: ExploreHiddenGemCardProps) 
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: 32,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     overflow: 'hidden',
-    padding: 16,
+    padding: CARD_PADDING,
   },
   pressable: {
     gap: 0,
@@ -60,12 +64,11 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 280,
-    borderRadius: 20,
+    borderRadius: INNER_RADIUS,
   },
   copy: {
-    paddingHorizontal: 4,
-    paddingTop: 20,
-    paddingBottom: 10,
+    paddingTop: 16,
+    paddingBottom: 6,
     gap: 8,
   },
   title: {

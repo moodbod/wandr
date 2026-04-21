@@ -3,7 +3,7 @@ import { v } from 'convex/values';
 import type { QueryCtx } from './_generated/server';
 
 import type { ExploreExperience } from '../constants/explore-content';
-import { defaultExplorePageSeed, demoExploreBookings, demoExploreTravelers } from './seedData';
+import { demoExploreBookings, demoExploreTravelers, seedExperiences, seedHiddenGems, seedRegions } from './seedData';
 
 const markerValidator = v.object({
   id: v.string(),
@@ -111,174 +111,6 @@ const experienceValidator = v.object({
   includes: v.array(v.string()),
 });
 
-const pageContentValidator = v.object({
-  home: v.object({
-    hero: v.object({
-      title: v.string(),
-      locationLabel: v.string(),
-      centerCoordinate: v.array(v.number()),
-      markers: v.array(markerValidator),
-    }),
-    section: v.object({
-      eyebrow: v.string(),
-      title: v.string(),
-    }),
-    activities: v.array(activityValidator),
-  }),
-  search: v.object({
-    intro: v.object({
-      title: v.string(),
-      description: v.string(),
-      tags: v.array(v.string()),
-      searchPlaceholder: v.string(),
-    }),
-    featured: v.object({
-      hero: featureHeroValidator,
-      detail: featureDetailValidator,
-    }),
-    hiddenGems: v.object({
-      title: v.string(),
-      ctaLabel: v.string(),
-      items: v.array(hiddenGemValidator),
-    }),
-    map: v.object({
-      title: v.string(),
-      description: v.string(),
-      ctaLabel: v.string(),
-      centerCoordinate: v.array(v.number()),
-      markers: v.array(markerValidator),
-    }),
-  }),
-  experiences: v.array(experienceValidator),
-});
-
-function deriveFallbackExperiences(page: {
-  home: {
-    hero: {
-      locationLabel: string;
-      markers: Array<{
-        id: string;
-        coordinate: readonly [number, number];
-      }>;
-    };
-    activities: Array<{
-      experienceSlug?: string;
-      badge: string;
-      badgeTone?: 'accent' | 'soft';
-      ctaLabel: string;
-      imageUri: string;
-      price: string;
-      priceSuffix: string;
-      subtitle: string;
-      title: string;
-    }>;
-  };
-  search: {
-    featured: {
-      hero: {
-        experienceSlug?: string;
-        badge: string;
-        title: string;
-        description: string;
-        imageUri: string;
-        ctaLabel?: string;
-      };
-      detail: {
-        experienceSlug?: string;
-        category: string;
-        title: string;
-        description: string;
-        price: string;
-        priceSuffix: string;
-        imageUri: string;
-        ctaLabel?: string;
-      };
-    };
-  };
-  experiences?: ExploreExperience[];
-}): ExploreExperience[] {
-  if (page.experiences && page.experiences.length > 0) {
-    return page.experiences;
-  }
-
-  const seededActivitiesByTitle = new Map<string, string>(
-    defaultExplorePageSeed.content.home.activities.map((activity) => [activity.title, activity.experienceSlug])
-  );
-  const slugifyTitle = (title: string) =>
-    title
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  const resolveActivitySlug = (activity: (typeof page.home.activities)[number]) =>
-    activity.experienceSlug ?? seededActivitiesByTitle.get(activity.title) ?? slugifyTitle(activity.title);
-
-  const mappedFromHome = page.home.activities.map<ExploreExperience>((activity) => ({
-    slug: resolveActivitySlug(activity),
-    badge: activity.badge,
-    badgeTone: activity.badgeTone,
-    ctaLabel: activity.ctaLabel,
-    title: activity.title,
-    subtitle: activity.subtitle,
-    description: activity.subtitle,
-    imageUri: activity.imageUri,
-    price: activity.price,
-    priceSuffix: activity.priceSuffix,
-    coordinate: page.home.hero.markers.find((marker) => marker.id === resolveActivitySlug(activity))?.coordinate,
-    geography: { region: 'Erongo', town: 'Swakopmund' },
-    locationLabel: page.home.hero.locationLabel,
-    tripFit: [],
-    includes: [],
-  }));
-
-  const featuredHero = page.search.featured.hero;
-  const featuredDetail = page.search.featured.detail;
-  const heroSlug = featuredHero.experienceSlug ?? slugifyTitle(featuredHero.title);
-  const detailSlug = featuredDetail.experienceSlug ?? slugifyTitle(featuredDetail.title);
-
-  const seen = new Set(mappedFromHome.map((item) => item.slug));
-  const result = [...mappedFromHome];
-
-  if (!seen.has(heroSlug)) {
-    result.push({
-      slug: heroSlug,
-      badge: featuredHero.badge,
-      ctaLabel: featuredHero.ctaLabel ?? 'Book Experience',
-      title: featuredHero.title,
-      subtitle: featuredHero.description,
-      description: featuredHero.description,
-      imageUri: featuredHero.imageUri,
-      price: '',
-      priceSuffix: '',
-      geography: { region: 'Erongo', town: 'Swakopmund' },
-      locationLabel: page.home.hero.locationLabel,
-      tripFit: [],
-      includes: [],
-    });
-  }
-
-  if (!seen.has(detailSlug)) {
-    result.push({
-      slug: detailSlug,
-      badge: featuredDetail.category,
-      ctaLabel: featuredDetail.ctaLabel ?? 'Book Experience',
-      title: featuredDetail.title,
-      subtitle: featuredDetail.description,
-      description: featuredDetail.description,
-      imageUri: featuredDetail.imageUri,
-      price: featuredDetail.price,
-      priceSuffix: featuredDetail.priceSuffix,
-      category: featuredDetail.category,
-      geography: { region: 'Erongo', town: 'Swakopmund' },
-      locationLabel: page.home.hero.locationLabel,
-      tripFit: [],
-      includes: [],
-    });
-  }
-
-  return result;
-}
-
 async function enrichExperiencesWithCommunity(
   ctx: QueryCtx,
   experiences: ExploreExperience[]
@@ -351,80 +183,147 @@ async function enrichExperiencesWithCommunity(
 export const getPageContent = queryGeneric({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
-    const page = await ctx.db
-      .query('explorePages')
-      .withIndex('by_slug', (q) => q.eq('slug', args.slug))
-      .unique();
+    const activities = await ctx.db.query('experiences').filter(q => q.eq(q.field('isActivityCard'), true)).collect();
+    const hiddenGems = await ctx.db.query('hiddenGems').collect();
+    const allExperiences = await ctx.db.query('experiences').collect();
+    
+    const experiences = await enrichExperiencesWithCommunity(ctx, allExperiences as any);
 
-    if (!page) {
-      return null;
-    }
+    const heroExp = allExperiences.find(exp => exp.isFeaturedHero);
+    const detailExp = allExperiences.find(exp => exp.isFeaturedDetail);
 
-    const experiences = await enrichExperiencesWithCommunity(
-      ctx,
-      deriveFallbackExperiences(page)
-    );
+    const dynamicMarkers = allExperiences.filter(exp => exp.coordinate).map((exp, i) => ({
+      id: exp.slug,
+      coordinate: exp.coordinate,
+      experienceSlug: exp.slug,
+      imageUri: exp.imageUri,
+      label: exp.locationLabel || exp.title,
+      tone: i % 2 === 0 ? 'accent' : 'dark',
+    }));
 
     return {
-      slug: page.slug,
-      home: page.home,
-      search: page.search,
-      experiences,
-      updatedAt: page.updatedAt,
-    };
-  },
-});
-
-export const upsertPageContent = mutationGeneric({
-  args: {
-    slug: v.string(),
-    content: pageContentValidator,
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query('explorePages')
-      .withIndex('by_slug', (q) => q.eq('slug', args.slug))
-      .unique();
-
-    const value = {
       slug: args.slug,
-      home: args.content.home,
-      search: args.content.search,
-      experiences: args.content.experiences,
+      home: {
+        hero: {
+          title: 'Explore Namibia',
+          locationLabel: 'Windhoek, NA',
+          centerCoordinate: [17.0832, -22.5609],
+          markers: dynamicMarkers as any,
+        },
+        section: {
+          eyebrow: 'Nationwide Picks',
+          title: 'Start in Windhoek, then branch out',
+        },
+        activities: activities.map(exp => ({
+          experienceSlug: exp.slug,
+          badge: exp.badge,
+          badgeTone: exp.badgeTone,
+          ctaLabel: exp.ctaLabel,
+          imageUri: exp.imageUri,
+          price: exp.price,
+          priceSuffix: exp.priceSuffix,
+          subtitle: exp.subtitle,
+          title: exp.title,
+        })) as any,
+      },
+      search: {
+        intro: {
+          title: 'Explore Namibia',
+          description: 'From Windhoek to the coast, desert, wildlife reserves, and river country, uncover trips that move across Namibia with real regional coverage.',
+          tags: ['Namibia', 'Nationwide'],
+          searchPlaceholder: 'Search Windhoek, Etosha, Sossusvlei...',
+        },
+        featured: {
+          hero: heroExp ? {
+            experienceSlug: heroExp.slug,
+            badge: heroExp.badge,
+            title: heroExp.title,
+            description: heroExp.description,
+            imageUri: heroExp.imageUri,
+            ctaLabel: heroExp.ctaLabel,
+          } : undefined,
+          detail: detailExp ? {
+            experienceSlug: detailExp.slug,
+            category: detailExp.category || 'Experience',
+            title: detailExp.title,
+            description: detailExp.description,
+            price: detailExp.price,
+            priceSuffix: detailExp.priceSuffix,
+            imageUri: detailExp.imageUri,
+            ctaLabel: detailExp.ctaLabel,
+          } : undefined,
+        },
+        hiddenGems: {
+          title: 'Hidden Gems',
+          ctaLabel: 'View All',
+          items: hiddenGems as any,
+        },
+        map: {
+          title: 'Live Map',
+          description: `${dynamicMarkers.length} active experiences spread across Namibia.`,
+          ctaLabel: 'Expand View',
+          centerCoordinate: [17.0832, -22.5609],
+          markers: dynamicMarkers as any,
+        },
+      },
+      experiences,
       updatedAt: Date.now(),
     };
-
-    if (existing) {
-      await ctx.db.patch(existing._id, value);
-      return existing._id;
-    }
-
-    return await ctx.db.insert('explorePages', value);
   },
 });
 
 export const seedDefaultPageContent = mutationGeneric({
   args: {},
   handler: async (ctx) => {
-    const existing = await ctx.db
-      .query('explorePages')
-      .withIndex('by_slug', (q) => q.eq('slug', defaultExplorePageSeed.slug))
-      .unique();
-
-    const value = {
-      slug: defaultExplorePageSeed.slug,
-      home: defaultExplorePageSeed.content.home,
-      search: defaultExplorePageSeed.content.search,
-      experiences: defaultExplorePageSeed.content.experiences,
-      updatedAt: Date.now(),
-    };
-
-    if (existing) {
-      await ctx.db.patch(existing._id, value);
-      return existing._id;
+    // Seed regions
+    let regionId = undefined;
+    for (const region of seedRegions) {
+      const existing = await ctx.db
+        .query('regions')
+        .withIndex('by_name', (q) => q.eq('name', region.name))
+        .first();
+      
+      if (!existing) {
+        regionId = await ctx.db.insert('regions', region);
+      } else {
+        regionId = existing._id;
+      }
     }
 
-    return await ctx.db.insert('explorePages', value);
+    // Seed experiences
+    for (const exp of seedExperiences) {
+      const existing = await ctx.db
+        .query('experiences')
+        .withIndex('by_slug', (q) => q.eq('slug', exp.slug))
+        .first();
+
+      const isHero = exp.slug === 'etosha-game-drive';
+      const isDetail = exp.slug === 'windhoek-craft-market-walk';
+      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
+
+      if (!existing) {
+        await ctx.db.insert('experiences', {
+          ...exp,
+          isFeaturedHero: isHero,
+          isFeaturedDetail: isDetail,
+          isActivityCard: isActivity,
+        } as any);
+      }
+    }
+
+    // Seed hidden gems
+    for (const gem of seedHiddenGems) {
+      const existing = await ctx.db
+        .query('hiddenGems')
+        .withIndex('by_title', (q) => q.eq('title', gem.title))
+        .first();
+      
+      if (!existing) {
+        await ctx.db.insert('hiddenGems', gem as any);
+      }
+    }
+
+    return true;
   },
 });
 
@@ -450,10 +349,13 @@ export const ensureExploreCommunitySeed = mutationGeneric({
         .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
           q.eq('travelerSlug', booking.travelerSlug)
         )
-        .filter((q) => q.eq(q.field('experienceSlug'), booking.experienceSlug))
-        .unique();
+        .collect();
 
-      if (!existingBooking) {
+      const matchingBooking = existingBooking.find(
+        (candidate) => candidate.experienceSlug === booking.experienceSlug
+      );
+
+      if (!matchingBooking) {
         await ctx.db.insert('experienceBookings', {
           ...booking,
           bookedAt: Date.now(),
@@ -462,6 +364,66 @@ export const ensureExploreCommunitySeed = mutationGeneric({
     }
 
     return true;
+  },
+});
+
+export const getLocationLikeState = queryGeneric({
+  args: {
+    travelerSlug: v.string(),
+    locationKind: v.union(v.literal('experience'), v.literal('hiddenGem')),
+    locationSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const likes = await ctx.db
+      .query('locationLikes')
+      .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
+        q.eq('travelerSlug', args.travelerSlug)
+      )
+      .collect();
+
+    const like = likes.find(
+      (candidate) =>
+        candidate.locationKind === args.locationKind && candidate.locationSlug === args.locationSlug
+    );
+
+    return {
+      liked: Boolean(like),
+    };
+  },
+});
+
+export const toggleLocationLike = mutationGeneric({
+  args: {
+    travelerSlug: v.string(),
+    locationKind: v.union(v.literal('experience'), v.literal('hiddenGem')),
+    locationSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const likes = await ctx.db
+      .query('locationLikes')
+      .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
+        q.eq('travelerSlug', args.travelerSlug)
+      )
+      .collect();
+
+    const existingLike = likes.find(
+      (candidate) =>
+        candidate.locationKind === args.locationKind && candidate.locationSlug === args.locationSlug
+    );
+
+    if (existingLike) {
+      await ctx.db.delete(existingLike._id);
+      return { liked: false };
+    }
+
+    await ctx.db.insert('locationLikes', {
+      travelerSlug: args.travelerSlug,
+      locationKind: args.locationKind,
+      locationSlug: args.locationSlug,
+      likedAt: Date.now(),
+    });
+
+    return { liked: true };
   },
 });
 
@@ -485,11 +447,14 @@ export const bookExperience = mutationGeneric({
       .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
         q.eq('travelerSlug', args.travelerSlug)
       )
-      .filter((q) => q.eq(q.field('experienceSlug'), args.experienceSlug))
-      .unique();
+      .collect();
 
-    if (existingBooking) {
-      return existingBooking._id;
+    const matchingBooking = existingBooking.find(
+      (candidate) => candidate.experienceSlug === args.experienceSlug
+    );
+
+    if (matchingBooking) {
+      return matchingBooking._id;
     }
 
     return await ctx.db.insert('experienceBookings', {

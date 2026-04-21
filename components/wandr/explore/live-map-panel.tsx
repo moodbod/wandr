@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MapPreview } from '@/components/wandr/mapbox/map-preview';
+import { MapPreview } from '@/components/wandr/maps/map-preview';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';

@@ -8,6 +8,10 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreFeatureDetail } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+const CARD_RADIUS = 32;
+const CARD_PADDING = 12;
+const INNER_RADIUS = CARD_RADIUS - CARD_PADDING;
+
 type ExploreFeatureDetailCardProps = {
   card: ExploreFeatureDetail;
   href?: Href;
@@ -53,20 +57,18 @@ export function ExploreFeatureDetailCard({ card, href }: ExploreFeatureDetailCar
 const styles = StyleSheet.create({
   shell: {
     minHeight: 420,
-    borderRadius: 32,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    padding: 16,
+    padding: CARD_PADDING,
   },
   image: {
     height: 240,
     width: '100%',
-    borderRadius: 20,
+    borderRadius: INNER_RADIUS,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 4,
-    paddingTop: 20,
-    paddingBottom: 4,
+    paddingTop: 16,
     gap: 12,
   },
   category: {

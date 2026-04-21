@@ -10,6 +10,7 @@ type JourneyCtaCardProps = {
   primaryLabel: string;
   secondaryLabel: string;
   title?: string;
+  description?: string;
 };
 
 export function JourneyCtaCard({
@@ -19,16 +20,29 @@ export function JourneyCtaCard({
   primaryLabel,
   secondaryLabel,
   title = 'Start your journey',
+  description,
 }: JourneyCtaCardProps) {
   const isPrimaryLoading = loadingAction === 'primary';
   const isSecondaryLoading = loadingAction === 'secondary';
   const isDisabled = loadingAction !== null;
+  const hasDescription = Boolean(description);
 
   return (
     <View style={styles.card}>
-      <ThemedText lightColor={designSystem.colors.darkGreen} darkColor={designSystem.colors.darkGreen} style={styles.title}>
+      <ThemedText
+        lightColor={designSystem.colors.darkGreen}
+        darkColor={designSystem.colors.darkGreen}
+        style={[styles.title, hasDescription ? styles.titleWithDescription : null]}>
         {title}
       </ThemedText>
+      {description ? (
+        <ThemedText
+          lightColor="rgba(22,51,0,0.72)"
+          darkColor="rgba(22,51,0,0.72)"
+          style={styles.description}>
+          {description}
+        </ThemedText>
+      ) : null}
       <View style={styles.actions}>
         <Pressable disabled={isDisabled} onPress={onPrimaryPress} style={styles.primaryAction}>
           <ThemedText lightColor="#f9f9f6" darkColor="#f9f9f6" style={styles.primaryActionLabel}>
@@ -65,6 +79,20 @@ const styles = StyleSheet.create({
     letterSpacing: -2.4,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
+  },
+  titleWithDescription: {
+    fontSize: 42,
+    lineHeight: 42,
+    letterSpacing: -1.8,
+  },
+  description: {
+    marginTop: -10,
+    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: 'rgba(22,51,0,0.72)',
+    maxWidth: 320,
   },
   actions: {
     width: '100%',

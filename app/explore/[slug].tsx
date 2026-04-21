@@ -9,10 +9,52 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ExperienceFeatureCard, type ExperienceFeatureCardItem } from '@/components/wandr/explore/experience-feature-card';
 import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
+import { WandrTravelerGroup } from '@/components/wandr/traveler-group';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
-import { bookExperienceRef, ensureExploreCommunitySeedRef, getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
+import {
+  bookExperienceRef,
+  ensureExploreCommunitySeedRef,
+  getExplorePageContentRef,
+  getLocationLikeStateRef,
+  getTripDashboardRef,
+  getUserItineraryRef,
+  hasConvexUrl,
+  toggleLocationLikeRef,
+} from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceInKm(from: readonly [number, number], to: readonly [number, number]) {
+  const earthRadiusKm = 6371;
+  const [fromLng, fromLat] = from;
+  const [toLng, toLat] = to;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const startLat = toRadians(fromLat);
+  const endLat = toRadians(toLat);
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistanceLabel(distanceKm: number) {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
+  }
+
+  if (distanceKm < 100) {
+    return `${distanceKm.toFixed(1)} km`;
+  }
+
+  return `${Math.round(distanceKm)} km`;
+}
 
 export default function ExploreExperienceScreen() {
   if (!hasConvexUrl) {
@@ -27,15 +69,30 @@ function ConnectedExploreExperienceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
   const ensureCommunitySeed = useMutation(ensureExploreCommunitySeedRef);
   const bookExperience = useMutation(bookExperienceRef);
+  const toggleLocationLike = useMutation(toggleLocationLikeRef);
+  const itinerary = useQuery(getUserItineraryRef, { travelerSlug: currentDemoTravelerSlug });
+  const likeState = useQuery(getLocationLikeStateRef, {
+    travelerSlug: currentDemoTravelerSlug,
+    locationKind: 'experience',
+    locationSlug: typeof slug === 'string' ? slug : '',
+  });
   const [bookingAction, setBookingAction] = useState<'primary' | 'secondary' | null>(null);
+  const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
+  const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
 
   useEffect(() => {
     void ensureCommunitySeed({});
   }, [ensureCommunitySeed]);
 
-  if (page === undefined) {
+  useEffect(() => {
+    setOptimisticBookedSlug(null);
+    setOptimisticLiked(null);
+  }, [slug]);
+
+  if (page === undefined || itinerary === undefined || trip === undefined) {
     return null;
   }
 
@@ -49,12 +106,23 @@ function ConnectedExploreExperienceScreen() {
     return null;
   }
 
+  const isAlreadyBooked =
+    itinerary.some((item) => item.experienceSlug === slug) || optimisticBookedSlug === slug;
+  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
+  const activeTripCoordinate = trip.activeItem?.experience.coordinate ?? trip.centerCoordinate;
+  const bookedDistanceKm =
+    isAlreadyBooked && activeTripCoordinate && experience.coordinate
+      ? getDistanceInKm(activeTripCoordinate, experience.coordinate)
+      : null;
+  const bookedDistanceLabel = bookedDistanceKm !== null ? formatDistanceLabel(bookedDistanceKm) : null;
+  const bookedCardTitle = bookedDistanceLabel ?? 'On your route';
+  const bookedCardDescription =
+    bookedDistanceLabel !== null
+      ? `${bookedDistanceLabel} from your current stop to ${experience.title}.`
+      : 'This experience is already saved in your trip itinerary and ready on your route.';
+
   const locationLabel = experience.locationLabel ?? page.home.hero.locationLabel;
   const galleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
-  const titleWords = experience.title
-    .toUpperCase()
-    .split(/\s+/)
-    .filter(Boolean);
   const travelerCount = experience.travelerMomentum?.visitorCount ?? 0;
   const shouldShowTravelerMomentum = travelerCount > 0;
   const travelerHeadingLabel =
@@ -99,19 +167,49 @@ function ConnectedExploreExperienceScreen() {
             : null,
         ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as ExperienceFeatureCardItem[];
 
-  const handleBookWithoutTrip = async () => {
+  const saveExperienceToTrip = async (action: 'primary' | 'secondary') => {
     if (bookingAction) {
-      return;
+      return false;
     }
 
-    setBookingAction('secondary');
+    setBookingAction(action);
     try {
       await bookExperience({
         experienceSlug: experience.slug,
         travelerSlug: currentDemoTravelerSlug,
       });
+      setOptimisticBookedSlug(experience.slug);
+      return true;
     } finally {
       setBookingAction(null);
+    }
+  };
+
+  const handleAddToTrip = async () => {
+    await saveExperienceToTrip('primary');
+  };
+
+  const handleStartJourney = async () => {
+    const didBook = await saveExperienceToTrip('secondary');
+
+    if (didBook) {
+      router.push('/trip');
+    }
+  };
+
+  const handleToggleLike = async () => {
+    const nextLiked = !isLiked;
+    setOptimisticLiked(nextLiked);
+
+    try {
+      const result = await toggleLocationLike({
+        travelerSlug: currentDemoTravelerSlug,
+        locationKind: 'experience',
+        locationSlug: experience.slug,
+      });
+      setOptimisticLiked(result.liked);
+    } catch {
+      setOptimisticLiked(null);
     }
   };
 
@@ -121,7 +219,16 @@ function ConnectedExploreExperienceScreen() {
         config={{
           overlay: true,
           leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save experience' }],
+          trailingActions: [
+            {
+              kind: 'favorite',
+              accessibilityLabel: isLiked ? 'Remove saved experience' : 'Save experience',
+              isActive: isLiked,
+              onPress: () => {
+                void handleToggleLike();
+              },
+            },
+          ],
         }}
       />
       <ScrollView
@@ -161,15 +268,7 @@ function ConnectedExploreExperienceScreen() {
         {shouldShowTravelerMomentum && experience.travelerMomentum ? (
           <View style={styles.socialProof}>
             <View style={styles.socialProofCopy}>
-              <View style={styles.avatarStack}>
-                {travelerCount > 1 ? <View style={styles.avatar} /> : null}
-                {travelerCount > 1 ? (
-                  <View style={[styles.avatar, styles.avatarOffset, { backgroundColor: '#dfe9d6' }]} />
-                ) : null}
-                <View style={[styles.avatarCount, travelerCount > 1 ? styles.avatarOffset : null]}>
-                  <ThemedText style={styles.avatarCountText}>+{experience.travelerMomentum.visitorCount}</ThemedText>
-                </View>
-              </View>
+              <WandrTravelerGroup count={experience.travelerMomentum.visitorCount} borderColor={designSystem.colors.surface} />
               <ThemedText style={styles.socialProofTitle}>{travelerHeadingLabel}</ThemedText>
             </View>
             <ThemedText style={styles.socialProofText}>{travelerSummary}</ThemedText>
@@ -207,32 +306,33 @@ function ConnectedExploreExperienceScreen() {
           </View>
         ) : null}
 
-        <View style={styles.actions}>
-          <JourneyCtaCard
-            loadingAction={bookingAction}
-            primaryLabel={experience.booking?.addToTripLabel ?? 'Add to trip'}
-            secondaryLabel="Start journey"
-            onPrimaryPress={async () => {
-              if (bookingAction) {
-                return;
-              }
-
-              setBookingAction('primary');
-              try {
-                await bookExperience({
-                  experienceSlug: experience.slug,
-                  travelerSlug: currentDemoTravelerSlug,
-                });
-                router.push('/trip/day-plan');
-              } finally {
-                setBookingAction(null);
-              }
-            }}
-            onSecondaryPress={() => {
-              void handleBookWithoutTrip();
-            }}
-          />
-        </View>
+        {!isAlreadyBooked ? (
+          <View style={styles.actions}>
+            <JourneyCtaCard
+              loadingAction={bookingAction}
+              primaryLabel={experience.booking?.addToTripLabel ?? 'Add to trip'}
+              secondaryLabel="Start journey"
+              onPrimaryPress={() => {
+                void handleAddToTrip();
+              }}
+              onSecondaryPress={() => {
+                void handleStartJourney();
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.actions}>
+            <JourneyCtaCard
+              loadingAction={null}
+              title={bookedCardTitle}
+              description={bookedCardDescription}
+              primaryLabel="View itinerary"
+              secondaryLabel="Open map"
+              onPrimaryPress={() => router.push('/trip')}
+              onSecondaryPress={() => router.push('/trip/map')}
+            />
+          </View>
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -302,39 +402,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 16,
-  },
-  avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 2,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: designSystem.colors.mint,
-    borderWidth: 2,
-    borderColor: designSystem.colors.surface,
-  },
-  avatarOffset: {
-    marginLeft: -12,
-  },
-  avatarCount: {
-    minWidth: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: designSystem.colors.lime,
-    borderWidth: 2,
-    borderColor: designSystem.colors.surface,
-    paddingHorizontal: 6,
-  },
-  avatarCountText: {
-    fontSize: 10,
-    lineHeight: 10,
-    fontWeight: '900',
-    color: designSystem.colors.darkGreen,
   },
   socialProofTitle: {
     flex: 1,

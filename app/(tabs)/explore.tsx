@@ -11,44 +11,78 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
+import { ExploreActivityCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
-import type { ExploreExperience } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getExplorePageContentRef, hasConvexUrl, seedDefaultPageContentRef } from '@/lib/convex';
-import { buildExperienceMapMarkers } from '@/lib/explore-map-markers';
+import { useCurrentLocation } from '@/hooks/use-current-location';
+import { getExplorePageContentRef, getTripDashboardRef, hasConvexUrl, seedDefaultPageContentRef } from '@/lib/convex';
+import { fallbackExplorePageContent } from '@/lib/explore-fallback-content';
+import { currentDemoTravelerSlug } from '@/lib/demo-session';
+import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { MagnifyingGlass } from 'phosphor-react-native';
+import type { ExplorePageContent } from '@/types/explore';
+import type { TripDashboard } from '@/types/trip';
 
 export default function ExploreScreen() {
-  return <ConnectedExploreScreen />;
-}
-
-function ConnectedExploreScreen() {
-  const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
-  const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
-  const mapTopInset = insets.top;
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
+
+  if (!hasConvexUrl) {
+    return (
+      <ExploreScreenView
+        currentHeading={currentHeading}
+        currentLocation={currentLocation}
+        isCardLoading={false}
+        isDark={isDark}
+        mapTopInset={insets.top}
+        notice="Showing local Explore preview content."
+        pageContent={fallbackExplorePageContent}
+        trip={null}
+      />
+    );
+  }
+
+  return (
+    <ConnectedExploreScreen
+      currentHeading={currentHeading}
+      currentLocation={currentLocation}
+      isDark={isDark}
+      mapTopInset={insets.top}
+    />
+  );
+}
+
+function ConnectedExploreScreen({
+  currentHeading,
+  currentLocation,
+  isDark,
+  mapTopInset,
+}: {
+  currentHeading?: number | null;
+  currentLocation?: readonly [number, number] | null;
+  isDark: boolean;
+  mapTopInset: number;
+}) {
+  const sheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
   const seedDefaultPageContent = useMutation(seedDefaultPageContentRef);
-  const [mapResetKey, setMapResetKey] = useState(0);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
   const animatedIndex = useSharedValue(0);
 
-  const handleMapInteract = () => {
-    sheetRef.current?.snapToIndex(0);
-  };
-
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
-      paddingTop: interpolate(animatedIndex.value, [1, 2], [0, insets.top], 'clamp'),
+      paddingTop: interpolate(animatedIndex.value, [1, 2], [0, mapTopInset], 'clamp'),
     };
   });
 
   useEffect(() => {
-    if (!hasConvexUrl || page !== null || isSeeding) {
+    if (page !== null || isSeeding) {
       return;
     }
 
@@ -78,55 +112,71 @@ function ConnectedExploreScreen() {
     };
   }, [isSeeding, page, seedDefaultPageContent]);
 
-  if (!hasConvexUrl) {
-    return (
-      <ThemedView style={styles.emptyRoot}>
-        <ThemedView
-          lightColor="#ffffff"
-          darkColor={designSystem.colors.darkSurface}
-          style={[
-            styles.emptyCard,
-            { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border },
-          ]}>
-          <ThemedText style={styles.emptyTitle}>Explore unavailable</ThemedText>
-          <ThemedText style={styles.emptyText}>
-            Set `EXPO_PUBLIC_CONVEX_URL` so this screen can load Explore content from Convex.
-          </ThemedText>
-        </ThemedView>
-      </ThemedView>
-    );
-  }
+  return (
+    <ExploreScreenView
+      currentHeading={currentHeading}
+      currentLocation={currentLocation}
+      headerAnimatedStyle={headerAnimatedStyle}
+      isCardLoading={page === undefined}
+      isDark={isDark}
+      mapTopInset={mapTopInset}
+      notice={
+        seedError
+          ? seedError
+          : page === undefined
+            ? 'Loading live Explore cards from Convex.'
+            : page === null
+              ? isSeeding
+                ? 'Preparing the default Explore page in Convex.'
+                : 'Using seeded Explore content while Convex catches up.'
+              : null
+      }
+      pageContent={page ?? fallbackExplorePageContent}
+      sheetRef={sheetRef}
+      snapPoints={snapPoints}
+      trip={trip ?? null}
+      animatedIndex={animatedIndex}
+    />
+  );
+}
 
-  if (page === undefined || page === null) {
-    const message = seedError
-      ? seedError
-      : page === undefined
-        ? 'Loading nearby experiences from Convex...'
-        : isSeeding
-          ? 'Preparing the default Explore page in Convex...'
-          : 'Waiting for Explore content from Convex...';
+function ExploreScreenView({
+  animatedIndex,
+  currentHeading,
+  currentLocation,
+  headerAnimatedStyle,
+  isCardLoading,
+  isDark,
+  mapTopInset,
+  notice,
+  pageContent,
+  sheetRef,
+  snapPoints,
+  trip,
+}: {
+  animatedIndex?: ReturnType<typeof useSharedValue<number>>;
+  currentHeading?: number | null;
+  currentLocation?: readonly [number, number] | null;
+  headerAnimatedStyle?: object;
+  isCardLoading: boolean;
+  isDark: boolean;
+  mapTopInset: number;
+  notice: string | null;
+  pageContent: ExplorePageContent;
+  sheetRef?: React.RefObject<BottomSheet | null>;
+  snapPoints?: (string | number)[];
+  trip: TripDashboard | null;
+}) {
+  const [mapResetKey, setMapResetKey] = useState(0);
+  const content = pageContent.home;
+  const tripMarkers = trip ? buildTripMapMarkers(trip.items, 10) : [];
+  const mapMarkers = tripMarkers.length > 0 ? tripMarkers : content.hero.markers;
+  const mapCenterCoordinate = currentLocation ?? trip?.centerCoordinate ?? content.hero.centerCoordinate;
+  const mapLocationLabel = trip?.dayTitle ?? content.hero.locationLabel;
 
-    return (
-      <ThemedView style={styles.emptyRoot}>
-        <ThemedView
-          lightColor="#ffffff"
-          darkColor={designSystem.colors.darkSurface}
-          style={[
-            styles.emptyCard,
-            { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border },
-          ]}>
-          <ThemedText style={styles.emptyTitle}>Loading Explore</ThemedText>
-          <ThemedText style={styles.emptyText}>{message}</ThemedText>
-        </ThemedView>
-      </ThemedView>
-    );
-  }
-
-  const content = page.home;
-  const homeExperiences = content.activities
-    .map((activity) => page.experiences.find((experience) => experience.slug === activity.experienceSlug))
-    .filter((experience): experience is ExploreExperience => Boolean(experience));
-  const homeMarkers = buildExperienceMapMarkers(homeExperiences, 4);
+  const handleMapInteract = () => {
+    sheetRef?.current?.snapToIndex(0);
+  };
 
   return (
     <ThemedView style={styles.root}>
@@ -134,9 +184,11 @@ function ConnectedExploreScreen() {
         <View style={styles.mapLayer}>
           <ExploreMapHero
             key={mapResetKey}
-            centerCoordinate={content.hero.centerCoordinate}
-            locationLabel={content.hero.locationLabel}
-            markers={homeMarkers}
+            centerCoordinate={mapCenterCoordinate}
+            locationLabel={mapLocationLabel}
+            userCoordinate={currentLocation}
+            userHeading={currentHeading}
+            markers={mapMarkers}
             topInset={mapTopInset}
             onInteract={handleMapInteract}
             onLocateMe={() => setMapResetKey((current) => current + 1)}
@@ -146,10 +198,10 @@ function ConnectedExploreScreen() {
         <GlassBottomSheet
           index={0}
           ref={sheetRef}
-          snapPoints={snapPoints}
+          snapPoints={snapPoints ?? ['34%', '64%', '100%']}
           animatedIndex={animatedIndex}>
           <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-            <Animated.View style={[styles.sectionHeader, headerAnimatedStyle]}>
+            <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
               <View style={styles.sectionCopy}>
                 <ThemedText
                   style={styles.locationEyebrow}
@@ -167,13 +219,15 @@ function ConnectedExploreScreen() {
             </Animated.View>
 
             <View style={styles.cardList}>
-              {content.activities.map((activity, index) => (
-                <ExploreActivityCard
-                  card={activity}
-                  href={{ pathname: '/explore/[slug]', params: { slug: activity.experienceSlug } }}
-                  key={`${activity.experienceSlug}-${index}`}
-                />
-              ))}
+              {isCardLoading
+                ? Array.from({ length: 3 }).map((_, index) => <ExploreActivityCardSkeleton key={`activity-skeleton-${index}`} />)
+                : content.activities.map((activity, index) => (
+                    <ExploreActivityCard
+                      card={activity}
+                      href={{ pathname: '/explore/[slug]', params: { slug: activity.experienceSlug } }}
+                      key={`${activity.experienceSlug}-${index}`}
+                    />
+                  ))}
             </View>
           </BottomSheetScrollView>
         </GlassBottomSheet>
@@ -185,32 +239,6 @@ function ConnectedExploreScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  emptyRoot: {
-    flex: 1,
-    paddingHorizontal: designSystem.spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyCard: {
-    width: '100%',
-    borderRadius: 24,
-    borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-  },
-  emptyText: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: designSystem.colors.warmDark,
   },
   body: {
     flex: 1,
@@ -251,5 +279,17 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: 16,
+  },
+  noticeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  noticeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: designSystem.colors.warmDark,
   },
 });

@@ -1,4 +1,3 @@
-import { BlurView, type BlurTint } from 'expo-blur';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, type ViewStyle, type StyleProp, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -10,12 +9,11 @@ type GlassButtonProps = {
   onPress?: () => void;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  intensity?: number;
-  tint?: BlurTint;
   radius?: number;
   width?: number;
   height?: number;
   accessibilityLabel?: string;
+  variant?: 'subtle' | 'primary';
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -24,16 +22,14 @@ export function GlassButton({
   onPress,
   children,
   style,
-  intensity = 80,
-  tint,
   radius = designSystem.radii.pill,
   width = 48,
   height = 48,
   accessibilityLabel,
+  variant = 'subtle',
 }: GlassButtonProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -43,14 +39,14 @@ export function GlassButton({
   });
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.9, { damping: 15, stiffness: 300 });
+    scale.value = withSpring(0.96, { damping: 18, stiffness: 320 });
   };
 
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 300 });
   };
 
-  const resolvedTint = tint || (isDark ? 'dark' : 'light');
+  const isPrimary = variant === 'primary';
 
   return (
     <AnimatedPressable
@@ -65,60 +61,46 @@ export function GlassButton({
         animatedStyle
       ]}
     >
-      {Platform.OS === 'ios' ? (
-        <BlurView
-          intensity={intensity}
-          tint={resolvedTint}
-          style={[styles.blur, { borderRadius: radius }]}
-        >
-          <View style={[styles.innerHighlight, { borderRadius: radius }]}>
-            {children}
-          </View>
-        </BlurView>
-      ) : (
-        <View
-          style={[
-            styles.androidFill,
-            {
-              borderRadius: radius,
-              backgroundColor: isDark ? 'rgba(22,25,20,0.92)' : 'rgba(244,244,241,0.96)',
-              borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border,
-            },
-          ]}
-        >
-          {children}
-        </View>
-      )}
+      <View
+        style={[
+          styles.fill,
+          {
+            borderRadius: radius,
+            backgroundColor: isPrimary
+              ? designSystem.colors.lime
+              : isDark
+                ? 'rgba(249,249,246,0.08)'
+                : 'rgba(22,51,0,0.08)',
+            borderColor: isPrimary
+              ? 'rgba(14,15,12,0.12)'
+              : isDark
+                ? designSystem.colors.darkBorder
+                : 'rgba(14,15,12,0.12)',
+          },
+          Platform.OS === 'android' ? styles.androidFill : null,
+        ]}
+      >
+        {children}
+      </View>
     </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  blur: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  innerHighlight: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    borderTopColor: 'rgba(255, 255, 255, 0.6)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+    flexShrink: 0,
   },
-  androidFill: {
-    flex: 1,
+  fill: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  androidFill: {
+    overflow: 'hidden',
   },
 });

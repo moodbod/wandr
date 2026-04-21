@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Wandr uses your location to sort nearby regions first in Explore."
+        "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions."
       }
     },
     "android": {

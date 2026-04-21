@@ -29,6 +29,7 @@ export type HeaderAction = {
   accessibilityLabel?: string;
   href?: Href;
   onPress?: () => void;
+  isActive?: boolean;
   tone?: 'plain' | 'surface';
 };
 
@@ -141,7 +142,7 @@ export const appContent = {
     actionsTitle: 'Child screens',
     actions: [
       {
-        href: '/trip/day-plan',
+        href: '/(tabs)/trip',
         label: 'Day plan',
         description: 'Daily itinerary with times, activities, and booking-focused moments.',
       },

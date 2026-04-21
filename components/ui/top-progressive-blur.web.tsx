@@ -1,4 +1,5 @@
 import BlurEffect from 'react-progressive-blur';
+import type React from 'react';
 
 type TopProgressiveBlurProps = {
   height?: number;
@@ -6,8 +7,15 @@ type TopProgressiveBlurProps = {
 };
 
 export function TopProgressiveBlur({ height = 108, intensity = 24 }: TopProgressiveBlurProps) {
+  const ProgressiveBlur = BlurEffect as unknown as React.ComponentType<{
+    position: 'top';
+    intensity: number;
+    className?: string;
+    style?: React.CSSProperties;
+  }>;
+
   return (
-    <BlurEffect
+    <ProgressiveBlur
       position="top"
       intensity={intensity}
       className=""
