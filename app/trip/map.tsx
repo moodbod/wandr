@@ -14,28 +14,12 @@ import { TripTimelineSkeleton } from '@/components/wandr/trip/trip-skeletons';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { getTripDashboardRef, hasConvexUrl } from '@/lib/convex';
+import { getTripDashboardRef } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
-import { fallbackTripDashboard } from '@/lib/trip-fallback-content';
 import type { TripDashboard } from '@/types/trip';
 
 export default function TripMapScreen() {
-  const insets = useSafeAreaInsets();
-  const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
-
-  if (!hasConvexUrl) {
-    return (
-      <TripMapScreenView
-        currentHeading={currentHeading}
-        currentLocation={currentLocation}
-        insetsTop={insets.top}
-        trip={fallbackTripDashboard}
-        useSkeletons={false}
-      />
-    );
-  }
-
   return <ConnectedTripMapScreen />;
 }
 
@@ -54,6 +38,21 @@ function ConnectedTripMapScreen() {
     };
   });
 
+  if (!trip) {
+    return (
+      <ThemedView style={styles.root}>
+        <WandrHeader
+          config={{
+            overlay: true,
+            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+            title: 'Trip Map',
+          }}
+        />
+        <View style={styles.body} />
+      </ThemedView>
+    );
+  }
+
   return (
     <TripMapScreenView
       animatedIndex={animatedIndex}
@@ -63,8 +62,8 @@ function ConnectedTripMapScreen() {
       insetsTop={insets.top}
       sheetRef={sheetRef}
       snapPoints={snapPoints}
-      trip={trip ?? fallbackTripDashboard}
-      useSkeletons={trip === undefined}
+      trip={trip}
+      useSkeletons={false}
     />
   );
 }

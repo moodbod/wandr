@@ -1,6 +1,6 @@
 import { useQuery } from 'convex/react';
 import { Link } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -8,11 +8,10 @@ import { ThemedView } from '@/components/themed-view';
 import { ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
+import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
-import { designSystem } from '@/constants/design-system';
-import { getExplorePageContentRef, hasConvexUrl } from '@/lib/convex';
-import { fallbackExplorePageContent } from '@/lib/explore-fallback-content';
+import { getExplorePageContentRef } from '@/lib/convex';
 
 const hiddenGemMeta: Record<string, { district: string; moment: string; note: string }> = {
   'The Red Lighthouse': {
@@ -33,10 +32,6 @@ const hiddenGemMeta: Record<string, { district: string; moment: string; note: st
 };
 
 export default function ExploreHiddenGemsScreen() {
-  if (!hasConvexUrl) {
-    return <ExploreHiddenGemsScreenView insetsTop={0} isLoading={false} notice="Showing local Explore preview content." page={fallbackExplorePageContent} />;
-  }
-
   return <ConnectedExploreHiddenGemsScreen />;
 }
 
@@ -44,18 +39,23 @@ function ConnectedExploreHiddenGemsScreen() {
   const insets = useSafeAreaInsets();
   const page = useQuery(getExplorePageContentRef, { slug: 'default' });
 
+  if (!page) {
+    return (
+      <ThemedView style={styles.root}>
+        <WandrHeader config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }} />
+        <View style={[styles.content, { paddingTop: insets.top + 88, alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" />
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ExploreHiddenGemsScreenView
       insetsTop={insets.top}
-      isLoading={page === undefined}
-      notice={
-        page === undefined
-          ? 'Loading live hidden gems from Convex.'
-          : page === null
-            ? 'Using seeded hidden gems while Convex catches up.'
-            : null
-      }
-      page={page ?? fallbackExplorePageContent}
+      isLoading={false}
+      notice={null}
+      page={page}
     />
   );
 }
@@ -69,7 +69,7 @@ function ExploreHiddenGemsScreenView({
   insetsTop: number;
   isLoading: boolean;
   notice: string | null;
-  page: typeof fallbackExplorePageContent;
+  page: any;
 }) {
   const items = page.search.hiddenGems.items;
   const leadGem = items[0];

@@ -100,48 +100,6 @@ async function getResolvedItinerary(ctx: QueryCtx, travelerSlug: string): Promis
     return [];
   }
 
-  if (travelerSlug === DEMO_TRAVELER_SLUG) {
-    const bookedExperienceSlugs = new Set(bookings.map((booking) => booking.experienceSlug));
-    const bookedItinerary = bookings
-      .map<TripItineraryItem | null>((booking) => {
-        const experience = allExperiences.find((item) => item.slug === booking.experienceSlug);
-
-        if (!experience) {
-          return null;
-        }
-
-        return {
-          ...booking,
-          experience: experience as ExploreExperience,
-        };
-      })
-      .filter((item): item is TripItineraryItem => item !== null);
-
-    const unbookedServerExperiences = allExperiences.filter(
-      (experience) => !bookedExperienceSlugs.has(experience.slug)
-    );
-
-    const demoItinerary = [
-      ...bookedItinerary,
-      ...unbookedServerExperiences.map((experience, index) => ({
-        _id: `demo-trip-item-${experience.slug}`,
-        _creationTime: index,
-        experienceSlug: experience.slug,
-        travelerSlug,
-        bookedAt: bookedItinerary.length + index,
-        experience: experience as ExploreExperience,
-      })),
-    ];
-
-    if (demoItinerary.length === 0) {
-      return [];
-    }
-
-    const origin = [17.0832, -22.5609] as const;
-
-    return getOrderedRouteStops(demoItinerary, origin);
-  }
-
   if (bookings.length === 0) {
     return [];
   }

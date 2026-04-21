@@ -1,5 +1,11 @@
 
 export const demoExploreBookings = [
+  { experienceSlug: 'windhoek-craft-market-walk', travelerSlug: 'local-demo-traveler' },
+  { experienceSlug: 'naankuse-wildlife-encounter', travelerSlug: 'local-demo-traveler' },
+  { experienceSlug: 'taste-of-swakop', travelerSlug: 'local-demo-traveler' },
+  { experienceSlug: 'quad-sandboard', travelerSlug: 'local-demo-traveler' },
+  { experienceSlug: 'desert-adrenaline', travelerSlug: 'local-demo-traveler' },
+
   { experienceSlug: 'windhoek-craft-market-walk', travelerSlug: 'elias-windhoek' },
   { experienceSlug: 'windhoek-craft-market-walk', travelerSlug: 'noah-london' },
   { experienceSlug: 'naankuse-wildlife-encounter', travelerSlug: 'liam-cape-town' },

@@ -4,7 +4,7 @@ import { v } from 'convex/values';
 export const experiencesTable = defineTable({
   slug: v.string(),
   badge: v.string(),
-  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'))),
+  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'), v.literal('dark'))),
   ctaLabel: v.string(),
   title: v.string(),
   subtitle: v.string(),

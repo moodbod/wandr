@@ -11,12 +11,11 @@ import {
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { WeatherCard } from '@/components/wandr/trip/weather-card';
 import { designSystem } from '@/constants/design-system';
-import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getTripDashboardRef, hasConvexUrl } from '@/lib/convex';
+import { useCurrentLocation } from '@/hooks/use-current-location';
+import { getTripDashboardRef } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
-import { fallbackTripDashboard } from '@/lib/trip-fallback-content';
 import type { TripDashboard } from '@/types/trip';
 import { useQuery } from 'convex/react';
 import { Link, useRouter } from 'expo-router';
@@ -29,21 +28,6 @@ export default function TripScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
-
-  if (!hasConvexUrl) {
-    return (
-      <TripScreenView
-        currentHeading={currentHeading}
-        currentLocation={currentLocation}
-        insetsBottom={insets.bottom}
-        insetsTop={insets.top}
-        isDark={isDark}
-        router={router}
-        trip={fallbackTripDashboard}
-        useSkeletons={false}
-      />
-    );
-  }
 
   return (
     <ConnectedTripScreen
@@ -74,6 +58,27 @@ function ConnectedTripScreen({
 }) {
   const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
 
+  if (!trip) {
+    return (
+      <ThemedView style={styles.root}>
+        <WandrHeader
+          config={{
+            overlay: true,
+            title: 'Day plan',
+            trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
+          }}
+        />
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + designSystem.spacing.xxxl + 88 },
+          ]}>
+          <TripHeroSkeleton />
+        </ScrollView>
+      </ThemedView>
+    );
+  }
+
   return (
     <TripScreenView
       currentHeading={currentHeading}
@@ -82,8 +87,8 @@ function ConnectedTripScreen({
       insetsTop={insetsTop}
       isDark={isDark}
       router={router}
-      trip={trip ?? fallbackTripDashboard}
-      useSkeletons={trip === undefined}
+      trip={trip}
+      useSkeletons={false}
     />
   );
 }

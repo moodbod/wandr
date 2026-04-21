@@ -43,7 +43,7 @@ export type ExploreMapMarker = {
 export type ExploreActivityCard = {
   experienceSlug: string;
   badge: string;
-  badgeTone?: 'accent' | 'soft';
+  badgeTone?: 'accent' | 'soft' | 'dark';
   ctaLabel: string;
   imageUri: string;
   price: string;
@@ -55,7 +55,7 @@ export type ExploreActivityCard = {
 export type ExploreExperience = {
   slug: string;
   badge: string;
-  badgeTone?: 'accent' | 'soft';
+  badgeTone?: 'accent' | 'soft' | 'dark';
   ctaLabel: string;
   title: string;
   subtitle: string;

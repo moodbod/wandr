@@ -9,7 +9,6 @@
  */
 
 import type * as explore from "../explore.js";
-import type * as seedData from "../seedData.js";
 import type * as seeds_constants from "../seeds/constants.js";
 import type * as seeds_demoExploreBookings from "../seeds/demoExploreBookings.js";
 import type * as seeds_demoExploreTravelers from "../seeds/demoExploreTravelers.js";
@@ -32,7 +31,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   explore: typeof explore;
-  seedData: typeof seedData;
   "seeds/constants": typeof seeds_constants;
   "seeds/demoExploreBookings": typeof seeds_demoExploreBookings;
   "seeds/demoExploreTravelers": typeof seeds_demoExploreTravelers;

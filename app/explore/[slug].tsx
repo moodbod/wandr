@@ -9,8 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ExperienceFeatureCard, type ExperienceFeatureCardItem } from '@/components/wandr/explore/experience-feature-card';
 import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
-import { WandrTravelerGroup } from '@/components/wandr/traveler-group';
 import { WandrHeader } from '@/components/wandr/header';
+import { WandrTravelerGroup } from '@/components/wandr/traveler-group';
 import { designSystem } from '@/constants/design-system';
 import {
   bookExperienceRef,
@@ -19,7 +19,6 @@ import {
   getLocationLikeStateRef,
   getTripDashboardRef,
   getUserItineraryRef,
-  hasConvexUrl,
   toggleLocationLikeRef,
 } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
@@ -57,10 +56,6 @@ function formatDistanceLabel(distanceKm: number) {
 }
 
 export default function ExploreExperienceScreen() {
-  if (!hasConvexUrl) {
-    return null;
-  }
-
   return <ConnectedExploreExperienceScreen />;
 }
 

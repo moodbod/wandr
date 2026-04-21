@@ -8,42 +8,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { GlassButton } from '@/components/ui/glass-button';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { getExplorePageContentRef, getTripDashboardRef, hasConvexUrl, seedDefaultPageContentRef } from '@/lib/convex';
-import { fallbackExplorePageContent } from '@/lib/explore-fallback-content';
+import { getExplorePageContentRef, getTripDashboardRef, seedDefaultPageContentRef } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
-import { MagnifyingGlass } from 'phosphor-react-native';
 import type { ExplorePageContent } from '@/types/explore';
 import type { TripDashboard } from '@/types/trip';
+import { MagnifyingGlass } from 'phosphor-react-native';
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
-
-  if (!hasConvexUrl) {
-    return (
-      <ExploreScreenView
-        currentHeading={currentHeading}
-        currentLocation={currentLocation}
-        isCardLoading={false}
-        isDark={isDark}
-        mapTopInset={insets.top}
-        notice="Showing local Explore preview content."
-        pageContent={fallbackExplorePageContent}
-        trip={null}
-      />
-    );
-  }
 
   return (
     <ConnectedExploreScreen
@@ -112,26 +96,36 @@ function ConnectedExploreScreen({
     };
   }, [isSeeding, page, seedDefaultPageContent]);
 
+  if (!page) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.body}>
+          <GlassBottomSheet
+            index={0}
+            ref={sheetRef}
+            snapPoints={snapPoints}
+            animatedIndex={animatedIndex}>
+            <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.cardList}>
+                {Array.from({ length: 3 }).map((_, index) => <ExploreActivityCardSkeleton key={`activity-skeleton-${index}`} />)}
+              </View>
+            </BottomSheetScrollView>
+          </GlassBottomSheet>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ExploreScreenView
       currentHeading={currentHeading}
       currentLocation={currentLocation}
       headerAnimatedStyle={headerAnimatedStyle}
-      isCardLoading={page === undefined}
+      isCardLoading={false}
       isDark={isDark}
       mapTopInset={mapTopInset}
-      notice={
-        seedError
-          ? seedError
-          : page === undefined
-            ? 'Loading live Explore cards from Convex.'
-            : page === null
-              ? isSeeding
-                ? 'Preparing the default Explore page in Convex.'
-                : 'Using seeded Explore content while Convex catches up.'
-              : null
-      }
-      pageContent={page ?? fallbackExplorePageContent}
+      notice={seedError}
+      pageContent={page}
       sheetRef={sheetRef}
       snapPoints={snapPoints}
       trip={trip ?? null}

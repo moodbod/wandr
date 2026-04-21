@@ -3,7 +3,11 @@ import { v } from 'convex/values';
 import type { QueryCtx } from './_generated/server';
 
 import type { ExploreExperience } from '../constants/explore-content';
-import { demoExploreBookings, demoExploreTravelers, seedExperiences, seedHiddenGems, seedRegions } from './seedData';
+import { demoExploreBookings } from './seeds/demoExploreBookings';
+import { demoExploreTravelers } from './seeds/demoExploreTravelers';
+import { seedExperiences } from './seeds/seedExperiences';
+import { seedHiddenGems } from './seeds/seedHiddenGems';
+import { seedRegions } from './seeds/seedRegions';
 
 const markerValidator = v.object({
   id: v.string(),
@@ -17,7 +21,7 @@ const markerValidator = v.object({
 const activityValidator = v.object({
   experienceSlug: v.optional(v.string()),
   badge: v.string(),
-  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'))),
+  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'), v.literal('dark'))),
   ctaLabel: v.string(),
   imageUri: v.string(),
   price: v.string(),
@@ -61,7 +65,7 @@ const hiddenGemValidator = v.object({
 const experienceValidator = v.object({
   slug: v.string(),
   badge: v.string(),
-  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'))),
+  badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'), v.literal('dark'))),
   ctaLabel: v.string(),
   title: v.string(),
   subtitle: v.string(),
@@ -187,6 +191,10 @@ export const getPageContent = queryGeneric({
     const hiddenGems = await ctx.db.query('hiddenGems').collect();
     const allExperiences = await ctx.db.query('experiences').collect();
     
+    if (allExperiences.length === 0) {
+      return null;
+    }
+
     const experiences = await enrichExperiencesWithCommunity(ctx, allExperiences as any);
 
     const heroExp = allExperiences.find(exp => exp.isFeaturedHero);
@@ -276,7 +284,7 @@ export const seedDefaultPageContent = mutationGeneric({
   args: {},
   handler: async (ctx) => {
     // Seed regions
-    let regionId = undefined;
+    const regionMap = new Map<string, string>();
     for (const region of seedRegions) {
       const existing = await ctx.db
         .query('regions')
@@ -284,9 +292,10 @@ export const seedDefaultPageContent = mutationGeneric({
         .first();
       
       if (!existing) {
-        regionId = await ctx.db.insert('regions', region);
+        const id = await ctx.db.insert('regions', region);
+        regionMap.set(region.name, id);
       } else {
-        regionId = existing._id;
+        regionMap.set(region.name, existing._id);
       }
     }
 
@@ -300,6 +309,7 @@ export const seedDefaultPageContent = mutationGeneric({
       const isHero = exp.slug === 'etosha-game-drive';
       const isDetail = exp.slug === 'windhoek-craft-market-walk';
       const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
+      const regionId = exp.geography?.region ? regionMap.get(exp.geography.region) : undefined;
 
       if (!existing) {
         await ctx.db.insert('experiences', {
@@ -307,6 +317,16 @@ export const seedDefaultPageContent = mutationGeneric({
           isFeaturedHero: isHero,
           isFeaturedDetail: isDetail,
           isActivityCard: isActivity,
+          regionId,
+        } as any);
+      } else {
+        // If it exists, let's patch it just to make sure the flags and coordinate are up-to-date
+        await ctx.db.patch(existing._id, {
+          ...exp,
+          isFeaturedHero: isHero,
+          isFeaturedDetail: isDetail,
+          isActivityCard: isActivity,
+          regionId,
         } as any);
       }
     }
@@ -318,18 +338,16 @@ export const seedDefaultPageContent = mutationGeneric({
         .withIndex('by_title', (q) => q.eq('title', gem.title))
         .first();
       
+      const regionId = gem.geography?.region ? regionMap.get(gem.geography.region) : undefined;
+
       if (!existing) {
-        await ctx.db.insert('hiddenGems', gem as any);
+        await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
+      } else {
+        await ctx.db.patch(existing._id, { ...gem, regionId } as any);
       }
     }
 
-    return true;
-  },
-});
-
-export const ensureExploreCommunitySeed = mutationGeneric({
-  args: {},
-  handler: async (ctx) => {
+    // Seed users / travelers
     for (const traveler of demoExploreTravelers) {
       const existingTraveler = await ctx.db
         .query('appUsers')
@@ -343,6 +361,7 @@ export const ensureExploreCommunitySeed = mutationGeneric({
       }
     }
 
+    // Seed bookings
     for (const booking of demoExploreBookings) {
       const existingBooking = await ctx.db
         .query('experienceBookings')
@@ -350,19 +369,26 @@ export const ensureExploreCommunitySeed = mutationGeneric({
           q.eq('travelerSlug', booking.travelerSlug)
         )
         .collect();
-
-      const matchingBooking = existingBooking.find(
-        (candidate) => candidate.experienceSlug === booking.experienceSlug
-      );
+        
+      const matchingBooking = existingBooking.find(b => b.experienceSlug === booking.experienceSlug);
 
       if (!matchingBooking) {
         await ctx.db.insert('experienceBookings', {
-          ...booking,
+          travelerSlug: booking.travelerSlug,
+          experienceSlug: booking.experienceSlug,
           bookedAt: Date.now(),
         });
       }
     }
 
+    return true;
+  },
+});
+
+export const ensureExploreCommunitySeed = mutationGeneric({
+  args: {},
+  handler: async (ctx) => {
+    // Legacy function, replaced by seedDefaultPageContent
     return true;
   },
 });
@@ -479,15 +505,27 @@ export const resetExploreData = mutationGeneric({
       await ctx.db.delete(user._id);
     }
 
-    const pages = await ctx.db.query('explorePages').collect();
-    for (const page of pages) {
-      await ctx.db.delete(page._id);
+    const experiences = await ctx.db.query('experiences').collect();
+    for (const exp of experiences) {
+      await ctx.db.delete(exp._id);
+    }
+
+    const gems = await ctx.db.query('hiddenGems').collect();
+    for (const gem of gems) {
+      await ctx.db.delete(gem._id);
+    }
+
+    const regions = await ctx.db.query('regions').collect();
+    for (const region of regions) {
+      await ctx.db.delete(region._id);
     }
 
     return {
       deletedBookings: bookings.length,
       deletedUsers: users.length,
-      deletedPages: pages.length,
+      deletedExperiences: experiences.length,
+      deletedGems: gems.length,
+      deletedRegions: regions.length,
     };
   },
 });

@@ -12,14 +12,10 @@ import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { getHiddenGemSlug, hiddenGemDetails } from '@/constants/hidden-gems-content';
-import { getExplorePageContentRef, getLocationLikeStateRef, hasConvexUrl, toggleLocationLikeRef } from '@/lib/convex';
+import { getExplorePageContentRef, getLocationLikeStateRef, toggleLocationLikeRef } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
 
 export default function HiddenGemDetailScreen() {
-  if (!hasConvexUrl) {
-    return null;
-  }
-
   return <ConnectedHiddenGemDetailScreen />;
 }
 
