@@ -184,8 +184,61 @@ async function enrichExperiencesWithCommunity(
   return enriched;
 }
 
+async function getPersonalizedTravelerAudience(
+  ctx: QueryCtx,
+  experienceSlug: string,
+  travelerSlug?: string
+) {
+  if (!travelerSlug) {
+    return null;
+  }
+
+  const currentTraveler = await ctx.db
+    .query('appUsers')
+    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
+    .unique();
+
+  if (!currentTraveler) {
+    return null;
+  }
+
+  const bookings = await ctx.db
+    .query('experienceBookings')
+    .withIndex('by_experienceSlug', (q) => q.eq('experienceSlug', experienceSlug))
+    .take(200);
+
+  let visitorCount = 0;
+  const visitorNames: string[] = [];
+
+  for (const booking of bookings) {
+    const traveler = await ctx.db
+      .query('appUsers')
+      .withIndex('by_slug', (q) => q.eq('slug', booking.travelerSlug))
+      .unique();
+
+    if (!traveler) {
+      continue;
+    }
+
+    if (traveler.countryCode === currentTraveler.countryCode) {
+      visitorCount += 1;
+      if (!visitorNames.includes(traveler.name)) {
+        visitorNames.push(traveler.name);
+      }
+    }
+  }
+
+  return {
+    countryCode: currentTraveler.countryCode,
+    countryLabel: currentTraveler.countryLabel,
+    visitorCount,
+    visitorNames: visitorNames.slice(0, 3),
+    viewerName: currentTraveler.name,
+  };
+}
+
 export const getPageContent = queryGeneric({
-  args: { slug: v.string() },
+  args: { slug: v.string(), travelerSlug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const activities = await ctx.db.query('experiences').filter(q => q.eq(q.field('isActivityCard'), true)).collect();
     const hiddenGems = await ctx.db.query('hiddenGems').collect();
@@ -200,14 +253,30 @@ export const getPageContent = queryGeneric({
     const heroExp = allExperiences.find(exp => exp.isFeaturedHero);
     const detailExp = allExperiences.find(exp => exp.isFeaturedDetail);
 
-    const dynamicMarkers = allExperiences.filter(exp => exp.coordinate).map((exp, i) => ({
-      id: exp.slug,
-      coordinate: exp.coordinate,
-      experienceSlug: exp.slug,
-      imageUri: exp.imageUri,
-      label: exp.locationLabel || exp.title,
-      tone: i % 2 === 0 ? 'accent' : 'dark',
-    }));
+    // Combine experiences and hidden gems for the map
+    const experienceMarkers = allExperiences
+      .filter(exp => exp.coordinate)
+      .map((exp, i) => ({
+        id: exp.slug,
+        coordinate: exp.coordinate,
+        experienceSlug: exp.slug,
+        imageUri: exp.imageUri,
+        label: exp.locationLabel || exp.title,
+        tone: i % 2 === 0 ? 'accent' : 'dark' as const,
+      }));
+
+    const gemMarkers = hiddenGems
+      .filter(gem => gem.coordinate)
+      .map((gem, i) => ({
+        id: `gem-${gem._id}`,
+        coordinate: gem.coordinate!,
+        experienceSlug: undefined, // Hidden gems don't have experience slugs
+        imageUri: gem.imageUri,
+        label: gem.locationLabel || gem.title,
+        tone: 'dark' as const,
+      }));
+
+    const dynamicMarkers = [...experienceMarkers, ...gemMarkers];
 
     return {
       slug: args.slug,
@@ -222,17 +291,27 @@ export const getPageContent = queryGeneric({
           eyebrow: 'Nationwide Picks',
           title: 'Start in Windhoek, then branch out',
         },
-        activities: activities.map(exp => ({
-          experienceSlug: exp.slug,
-          badge: exp.badge,
-          badgeTone: exp.badgeTone,
-          ctaLabel: exp.ctaLabel,
-          imageUri: exp.imageUri,
-          price: exp.price,
-          priceSuffix: exp.priceSuffix,
-          subtitle: exp.subtitle,
-          title: exp.title,
-        })) as any,
+        activities: await Promise.all(
+          activities.map(async (exp) => {
+            const personalizedAudience = await getPersonalizedTravelerAudience(ctx, exp.slug, args.travelerSlug);
+
+            return {
+              experienceSlug: exp.slug,
+              badge: exp.badge,
+              badgeTone: exp.badgeTone,
+              ctaLabel: exp.ctaLabel,
+              imageUri: exp.imageUri,
+              price: exp.price,
+              priceSuffix: exp.priceSuffix,
+              subtitle: exp.subtitle,
+              title: exp.title,
+              visitorCount: personalizedAudience?.visitorCount,
+              countryLabel: personalizedAudience?.countryLabel,
+              visitorNames: personalizedAudience?.visitorNames,
+              viewerName: personalizedAudience?.viewerName,
+            };
+          })
+        ) as any,
       },
       search: {
         intro: {
@@ -280,115 +359,86 @@ export const getPageContent = queryGeneric({
   },
 });
 
-export const seedDefaultPageContent = mutationGeneric({
+export const seedExplorePageContent = mutationGeneric({
   args: {},
   handler: async (ctx) => {
+    // Clear existing data to ensure a fresh start
+    const allRegions = await ctx.db.query('regions').collect();
+    for (const r of allRegions) await ctx.db.delete(r._id);
+    
+    const allExperiences = await ctx.db.query('experiences').collect();
+    for (const e of allExperiences) await ctx.db.delete(e._id);
+    
+    const allHiddenGems = await ctx.db.query('hiddenGems').collect();
+    for (const g of allHiddenGems) await ctx.db.delete(g._id);
+    
+    const allUsers = await ctx.db.query('appUsers').collect();
+    for (const u of allUsers) await ctx.db.delete(u._id);
+    
+    const allBookings = await ctx.db.query('experienceBookings').collect();
+    for (const b of allBookings) await ctx.db.delete(b._id);
+
     // Seed regions
     const regionMap = new Map<string, string>();
     for (const region of seedRegions) {
-      const existing = await ctx.db
-        .query('regions')
-        .withIndex('by_name', (q) => q.eq('name', region.name))
-        .first();
-      
-      if (!existing) {
-        const id = await ctx.db.insert('regions', region);
-        regionMap.set(region.name, id);
-      } else {
-        regionMap.set(region.name, existing._id);
-      }
+      const id = await ctx.db.insert('regions', region);
+      regionMap.set(region.name, id);
     }
 
     // Seed experiences
     for (const exp of seedExperiences) {
-      const existing = await ctx.db
-        .query('experiences')
-        .withIndex('by_slug', (q) => q.eq('slug', exp.slug))
-        .first();
-
       const isHero = exp.slug === 'etosha-game-drive';
       const isDetail = exp.slug === 'windhoek-craft-market-walk';
       const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
       const regionId = exp.geography?.region ? regionMap.get(exp.geography.region) : undefined;
 
-      if (!existing) {
-        await ctx.db.insert('experiences', {
-          ...exp,
-          isFeaturedHero: isHero,
-          isFeaturedDetail: isDetail,
-          isActivityCard: isActivity,
-          regionId,
-        } as any);
-      } else {
-        // If it exists, let's patch it just to make sure the flags and coordinate are up-to-date
-        await ctx.db.patch(existing._id, {
-          ...exp,
-          isFeaturedHero: isHero,
-          isFeaturedDetail: isDetail,
-          isActivityCard: isActivity,
-          regionId,
-        } as any);
-      }
+      await ctx.db.insert('experiences', {
+        ...exp,
+        isFeaturedHero: isHero,
+        isFeaturedDetail: isDetail,
+        isActivityCard: isActivity,
+        regionId,
+      } as any);
     }
 
     // Seed hidden gems
     for (const gem of seedHiddenGems) {
-      const existing = await ctx.db
-        .query('hiddenGems')
-        .withIndex('by_title', (q) => q.eq('title', gem.title))
-        .first();
-      
       const regionId = gem.geography?.region ? regionMap.get(gem.geography.region) : undefined;
-
-      if (!existing) {
-        await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
-      } else {
-        await ctx.db.patch(existing._id, { ...gem, regionId } as any);
-      }
+      await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
     }
 
     // Seed users / travelers
     for (const traveler of demoExploreTravelers) {
-      const existingTraveler = await ctx.db
-        .query('appUsers')
-        .withIndex('by_slug', (q) => q.eq('slug', traveler.slug))
-        .unique();
-
-      if (!existingTraveler) {
-        await ctx.db.insert('appUsers', traveler);
-      } else {
-        await ctx.db.patch(existingTraveler._id, traveler);
-      }
+      await ctx.db.insert('appUsers', traveler);
     }
+
+    const seededDemoTripId = await ctx.db.insert('trips', {
+      name: 'Namibia Road Trip',
+      travelerSlug: 'local-demo-traveler',
+      createdAt: Date.now(),
+      status: 'active',
+    });
 
     // Seed bookings
     for (const booking of demoExploreBookings) {
-      const existingBooking = await ctx.db
-        .query('experienceBookings')
-        .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
-          q.eq('travelerSlug', booking.travelerSlug)
-        )
-        .collect();
-        
-      const matchingBooking = existingBooking.find(b => b.experienceSlug === booking.experienceSlug);
-
-      if (!matchingBooking) {
-        await ctx.db.insert('experienceBookings', {
-          travelerSlug: booking.travelerSlug,
-          experienceSlug: booking.experienceSlug,
-          bookedAt: Date.now(),
-        });
-      }
+      await ctx.db.insert('experienceBookings', {
+        travelerSlug: booking.travelerSlug,
+        experienceSlug: booking.experienceSlug,
+        tripId: booking.travelerSlug === 'local-demo-traveler' ? seededDemoTripId : undefined,
+        bookedAt: Date.now(),
+      });
     }
 
     return true;
   },
 });
 
+export const seedDefaultPageContent = seedExplorePageContent;
+
 export const ensureExploreCommunitySeed = mutationGeneric({
   args: {},
   handler: async (ctx) => {
-    // Legacy function, replaced by seedDefaultPageContent
+    // Legacy function, replaced by seedExplorePageContent
     return true;
   },
 });

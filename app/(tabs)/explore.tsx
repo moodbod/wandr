@@ -52,9 +52,9 @@ function ConnectedExploreScreen({
 }) {
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
-  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
   const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
-  const seedDefaultPageContent = useMutation(seedDefaultPageContentRef);
+  const seedExplorePageContent = useMutation(seedDefaultPageContentRef);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
   const animatedIndex = useSharedValue(0);
@@ -77,7 +77,7 @@ function ConnectedExploreScreen({
       setSeedError(null);
 
       try {
-        await seedDefaultPageContent({});
+        await seedExplorePageContent({});
       } catch (error) {
         if (isMounted) {
           setSeedError(error instanceof Error ? error.message : 'Unable to load Explore content from Convex.');
@@ -94,7 +94,7 @@ function ConnectedExploreScreen({
     return () => {
       isMounted = false;
     };
-  }, [isSeeding, page, seedDefaultPageContent]);
+  }, [isSeeding, page, seedExplorePageContent]);
 
   if (!page) {
     return (
@@ -197,12 +197,6 @@ function ExploreScreenView({
           <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
             <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
               <View style={styles.sectionCopy}>
-                <ThemedText
-                  style={styles.locationEyebrow}
-                  lightColor={designSystem.colors.darkGreen}
-                  darkColor={designSystem.colors.lime}>
-                  {content.hero.locationLabel}
-                </ThemedText>
                 <ThemedText style={styles.sectionTitle}>{content.section.title}</ThemedText>
               </View>
               <Link href="/explore/search" asChild>
@@ -253,7 +247,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 16,
   },
@@ -261,14 +255,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  locationEyebrow: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
   sectionTitle: {
     fontSize: 28,
     lineHeight: 30,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.7,
   },
   cardList: {

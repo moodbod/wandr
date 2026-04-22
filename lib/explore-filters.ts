@@ -144,7 +144,7 @@ export function buildRegionOptions(
     return a.label.localeCompare(b.label);
   });
 
-  return [{ key: 'all', label: 'All regions' }, ...discoveredRegions];
+  return discoveredRegions;
 }
 
 export function matchesIntent(category: string | undefined, visitorCount: number | undefined, activeIntent: string) {
@@ -167,7 +167,7 @@ export function matchesIntent(category: string | undefined, visitorCount: number
   return true;
 }
 
-export function matchesSearchQuery(searchQuery: string, ...values: Array<string | undefined>) {
+export function matchesSearchQuery(searchQuery: string, ...values: (string | undefined)[]) {
   const query = normalize(searchQuery);
   if (!query) {
     return true;

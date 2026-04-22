@@ -50,6 +50,10 @@ export type ExploreActivityCard = {
   priceSuffix: string;
   subtitle: string;
   title: string;
+  visitorCount?: number;
+  countryLabel?: string;
+  visitorNames?: string[];
+  viewerName?: string;
 };
 
 export type ExploreExperience = {

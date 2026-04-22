@@ -1,3 +1,4 @@
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, type ViewStyle, type StyleProp, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -47,6 +48,12 @@ export function GlassButton({
   };
 
   const isPrimary = variant === 'primary';
+  const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+  const tintColor = isPrimary
+    ? 'rgba(159, 232, 112, 0.28)'
+    : isDark
+      ? 'rgba(249, 249, 246, 0.08)'
+      : 'rgba(255, 255, 255, 0.18)';
 
   return (
     <AnimatedPressable
@@ -61,26 +68,50 @@ export function GlassButton({
         animatedStyle
       ]}
     >
-      <View
-        style={[
-          styles.fill,
-          {
-            borderRadius: radius,
-            backgroundColor: isPrimary
-              ? designSystem.colors.lime
-              : isDark
-                ? 'rgba(249,249,246,0.08)'
-                : 'rgba(22,51,0,0.08)',
-            borderColor: isPrimary
-              ? 'rgba(14,15,12,0.12)'
-              : isDark
-                ? designSystem.colors.darkBorder
-                : 'rgba(14,15,12,0.12)',
-          },
-          Platform.OS === 'android' ? styles.androidFill : null,
-        ]}
-      >
-        {children}
+      <View style={[styles.fill, { borderRadius: radius }]}>
+        {shouldUseNativeGlass ? (
+          <>
+            <GlassView
+              style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+              glassEffectStyle={isPrimary ? 'regular' : 'clear'}
+              tintColor={tintColor}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.nativeOverlay,
+                {
+                  borderRadius: radius,
+                  backgroundColor: isPrimary ? 'rgba(159, 232, 112, 0.08)' : 'rgba(255,255,255,0.04)',
+                  borderColor: isPrimary ? 'rgba(14,15,12,0.12)' : 'rgba(255,255,255,0.24)',
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <View
+            style={[
+              styles.fallbackFill,
+              {
+                borderRadius: radius,
+                backgroundColor: isPrimary
+                  ? designSystem.colors.lime
+                  : isDark
+                    ? 'rgba(249,249,246,0.08)'
+                    : 'rgba(22,51,0,0.08)',
+                borderColor: isPrimary
+                  ? 'rgba(14,15,12,0.12)'
+                  : isDark
+                    ? designSystem.colors.darkBorder
+                    : 'rgba(14,15,12,0.12)',
+              },
+              Platform.OS === 'android' ? styles.androidFill : null,
+            ]}
+          />
+        )}
+        <View style={styles.content}>
+          {children}
+        </View>
       </View>
     </AnimatedPressable>
   );
@@ -96,9 +127,22 @@ const styles = StyleSheet.create({
   fill: {
     width: '100%',
     height: '100%',
+    overflow: 'hidden',
+  },
+  fallbackFill: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  nativeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   androidFill: {
     overflow: 'hidden',

@@ -5,12 +5,14 @@ export type TripItineraryItem = {
   _creationTime: number;
   experienceSlug: string;
   travelerSlug: string;
+  tripId?: string;
   bookedAt: number;
   experience: ExploreExperience;
 };
 
 export type TripDashboardItem = TripItineraryItem & {
   status: 'completed' | 'active' | 'upcoming';
+  visitedAt?: number;
 };
 
 export type TripDashboard = {
@@ -21,6 +23,6 @@ export type TripDashboard = {
   stopCount: number;
   completedCount: number;
   activeIndex: number;
-  activeItem: TripItineraryItem | null;
+  activeItem: TripDashboardItem | null;
   items: readonly TripDashboardItem[];
 };

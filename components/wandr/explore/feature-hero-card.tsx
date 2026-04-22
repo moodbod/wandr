@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     lineHeight: 40,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1.2,
     textTransform: 'uppercase',
     color: '#ffffff',

@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     lineHeight: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.9,
     textTransform: 'uppercase',
   },
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 28,
     lineHeight: 28,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   priceSuffix: {
     fontSize: 13,
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 12,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,

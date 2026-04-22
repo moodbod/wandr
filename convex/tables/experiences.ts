@@ -12,6 +12,8 @@ export const experiencesTable = defineTable({
   imageUri: v.string(),
   price: v.string(),
   priceSuffix: v.string(),
+  rating: v.optional(v.number()),
+  reviewCount: v.optional(v.number()),
   category: v.optional(v.string()),
   coordinate: v.optional(v.array(v.number())),
   geography: v.optional(

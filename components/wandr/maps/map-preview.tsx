@@ -15,6 +15,7 @@ type MapMarker = {
   experienceSlug?: string;
   imageUri?: string;
   label?: string;
+  priceLabel?: string;
   tone?: 'accent' | 'dark';
   status?: 'completed' | 'active' | 'upcoming';
 };
@@ -39,9 +40,11 @@ function MapPreviewComponent({
   onMarkerPress,
 }: MapPreviewProps) {
   const mapRef = useRef<MapView | null>(null);
+  const hasSettledOnUserRef = useRef(false);
   const [completedRouteCoords, setCompletedRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const isWeb = Platform.OS === 'web';
+  const isIOS = Platform.OS === 'ios';
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -56,34 +59,43 @@ function MapPreviewComponent({
     }),
     [centerCoordinate, delta]
   );
-
   useEffect(() => {
-    if (isWeb || markers.length < 2) return;
+    if (isWeb || markers.length === 0) return;
 
     async function loadRoutes() {
-      const activeIndex = markers.findIndex((marker) => marker.status === 'active');
-      const pivotIndex = activeIndex === -1 ? markers.length - 1 : activeIndex;
-
-      const completed = markers.slice(0, pivotIndex + 1).map((marker) => marker.coordinate);
-      const fullRoute = markers.map((marker) => marker.coordinate);
+      // 1. Completed Route (Green): From start to user's current location
+      // We take all markers marked as 'completed' and add the user's current location at the end
+      const completedMarkers = markers.filter(m => m.status === 'completed').map(m => m.coordinate);
+      
+      // 2. Upcoming Route (Dashed): From user's current location to the rest of the trip
+      const upcomingMarkers = markers.filter(m => m.status === 'active' || m.status === 'upcoming').map(m => m.coordinate);
 
       if (userCoordinate) {
-        completed.unshift(userCoordinate);
-        fullRoute.unshift(userCoordinate);
-      }
+        // Completed path ends at user
+        const completedPathInput = [...completedMarkers, userCoordinate];
+        if (completedPathInput.length > 1) {
+          const coords = await fetchRoutePath(completedPathInput);
+          setCompletedRouteCoords(coords);
+        } else {
+          setCompletedRouteCoords([]);
+        }
 
-      if (completed.length > 1) {
-        const coords = await fetchRoutePath(completed);
-        setCompletedRouteCoords(coords);
+        // Upcoming path starts at user
+        const upcomingPathInput = [userCoordinate, ...upcomingMarkers];
+        if (upcomingPathInput.length > 1) {
+          const coords = await fetchRoutePath(upcomingPathInput);
+          setUpcomingRouteCoords(coords);
+        } else {
+          setUpcomingRouteCoords([]);
+        }
       } else {
+        // Fallback if no GPS: just show the full upcoming route from markers
+        const fullRoute = markers.map((marker) => marker.coordinate);
+        if (fullRoute.length > 1) {
+          const coords = await fetchRoutePath(fullRoute);
+          setUpcomingRouteCoords(coords);
+        }
         setCompletedRouteCoords([]);
-      }
-
-      if (fullRoute.length > 1) {
-        const coords = await fetchRoutePath(fullRoute);
-        setUpcomingRouteCoords(coords);
-      } else {
-        setUpcomingRouteCoords([]);
       }
     }
 
@@ -91,10 +103,19 @@ function MapPreviewComponent({
   }, [isWeb, markers, userCoordinate]);
 
   useEffect(() => {
-    if (isWeb || !mapRef.current) return;
+    if (isWeb || !mapRef.current || !userCoordinate || hasSettledOnUserRef.current) return;
 
-    mapRef.current.animateToRegion(region, 500);
-  }, [isWeb, region]);
+    hasSettledOnUserRef.current = true;
+    mapRef.current.animateCamera({
+      center: {
+        latitude: userCoordinate[1],
+        longitude: userCoordinate[0],
+      },
+      heading: userHeading ?? 0,
+      pitch: 45, // Slight tilt for better perspective
+      zoom: 17,
+    }, { duration: 1000 });
+  }, [isWeb, userCoordinate, userHeading]);
 
   if (isWeb) {
     return (
@@ -105,112 +126,131 @@ function MapPreviewComponent({
   }
 
   return (
-    <MapView
-      ref={mapRef}
-      style={StyleSheet.absoluteFill}
-      initialRegion={region}
-      onTouchStart={onInteract}
-      onPanDrag={onInteract}
-      onRegionChangeComplete={onInteract}
-      rotateEnabled
-      pitchEnabled
-      scrollEnabled
-      zoomEnabled
-      showsUserLocation={false}
-      showsCompass={false}
-      showsMyLocationButton={false}
-      customMapStyle={isDark ? darkMapStyle : lightMapStyle}
-    >
-      {userCoordinate ? (
-        <Marker
-          coordinate={{ latitude: userCoordinate[1], longitude: userCoordinate[0] }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          zIndex={20}
-        >
-          <View style={styles.userMarkerShell}>
-            {userHeading !== null ? (
-              <View
-                style={[
-                  styles.userHeadingWrap,
-                  {
-                    transform: [{ rotate: `${userHeading}deg` }],
-                  },
-                ]}
-              >
-                <View style={[styles.userHeadingCone, isDark && styles.userHeadingConeDark]} />
-              </View>
-            ) : null}
-            <View style={[styles.userMarkerPulse, isDark && styles.userMarkerPulseDark]} />
-            <View style={[styles.userMarkerCore, isDark && styles.userMarkerCoreDark]}>
-              <View style={styles.userMarkerDot} />
-            </View>
-          </View>
-        </Marker>
-      ) : null}
+    <View style={styles.mapRoot}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        initialRegion={region}
+        onTouchStart={onInteract}
+        onPanDrag={onInteract}
+        onRegionChangeComplete={onInteract}
+        rotateEnabled
+        pitchEnabled
+        scrollEnabled
+        zoomEnabled
+        showsUserLocation={true}
+        followsUserLocation={false}
+        showsCompass={false}
+        showsMyLocationButton={false}
+        customMapStyle={isDark ? darkMapStyle : lightMapStyle}
+      >
+        {upcomingRouteCoords && upcomingRouteCoords.length > 1 && (
+          <Polyline
+            key="upcoming-route-polyline"
+            coordinates={upcomingRouteCoords}
+            strokeColor={designSystem.colors.lime}
+            strokeWidth={3}
+            lineDashPattern={Platform.OS === 'android' ? [2, 20] : [0, 12]}
+            lineCap="round"
+            lineJoin="round"
+            zIndex={1}
+          />
+        )}
 
-      {upcomingRouteCoords.length > 1 ? (
-        <Polyline
-          coordinates={upcomingRouteCoords}
-          strokeColor={isDark ? 'rgba(249,249,246,0.32)' : 'rgba(14,15,12,0.28)'}
-          strokeWidth={3}
-          lineDashPattern={Platform.OS === 'android' ? [15, 15] : [6, 8]}
-          zIndex={1}
-        />
-      ) : null}
+        {completedRouteCoords && completedRouteCoords.length > 1 && (
+          <Polyline
+            key="completed-route-polyline"
+            coordinates={completedRouteCoords}
+            strokeColor={designSystem.colors.lime}
+            strokeWidth={8}
+            lineCap="round"
+            lineJoin="round"
+            zIndex={2}
+          />
+        )}
 
-      {completedRouteCoords.length > 1 ? (
-        <Polyline
-          coordinates={completedRouteCoords}
-          strokeColor={designSystem.colors.lime}
-          strokeWidth={3}
-          lineCap="round"
-          lineJoin="round"
-          zIndex={2}
-        />
-      ) : null}
+        {markers.map((marker, index) => {
+          const isFaded = marker.status === 'completed';
+          const isActive = marker.status === 'active';
+          const pinColor = isActive
+            ? designSystem.colors.lime
+            : marker.tone === 'dark'
+              ? designSystem.colors.warmDark
+              : designSystem.colors.darkGreen;
 
-      {markers.map((marker) => {
-        const isFaded = marker.status === 'completed';
-        const isActive = marker.status === 'active';
-
-        return (
-          <Marker
-            key={marker.id}
-            coordinate={{ latitude: marker.coordinate[1], longitude: marker.coordinate[0] }}
-            anchor={{ x: 0.5, y: 0.92 }}
-            onPress={() => onMarkerPress?.(marker)}
-            style={{ opacity: isFaded ? 0.5 : 1, zIndex: isActive ? 10 : 1 }}
-          >
-            <View style={[styles.markerShell, isActive && styles.markerShellActive]}>
-              <View
-                style={[
-                  styles.thumbnailFrame,
-                  isDark && styles.thumbnailFrameDark,
-                  isActive && styles.thumbnailFrameActive,
-                ]}
-              >
-                {marker.imageUri ? (
-                  <Image source={marker.imageUri} contentFit="cover" style={styles.thumbnailImage} />
-                ) : (
+          return (
+            <Marker
+              key={`marker-${marker.id}-${index}`}
+              coordinate={{ latitude: marker.coordinate[1], longitude: marker.coordinate[0] }}
+              anchor={{ x: 0.5, y: marker.priceLabel ? 1 : 0.92 }}
+              onPress={() => onMarkerPress?.(marker)}
+              style={{ opacity: isFaded ? 0.5 : 1, zIndex: isActive ? 10 : 1 }}
+              pinColor={pinColor}
+              title={marker.label}
+              tracksViewChanges={false}
+            >
+              {marker.priceLabel ? (
+                <View style={styles.priceMarkerShell}>
                   <View
                     style={[
-                      styles.thumbnailFallback,
-                      marker.tone === 'dark' ? styles.markerDark : styles.markerAccent,
+                      styles.priceMarker,
+                      isActive ? styles.priceMarkerActive : styles.priceMarkerDefault,
+                      marker.tone === 'dark' ? styles.priceMarkerDark : null,
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.priceMarkerLabel,
+                        isActive ? styles.priceMarkerLabelActive : null,
+                        marker.tone === 'dark' && !isActive ? styles.priceMarkerLabelDark : null,
+                      ]}
+                    >
+                      {marker.priceLabel}
+                    </ThemedText>
+                  </View>
+                  <View
+                    style={[
+                      styles.priceMarkerStem,
+                      isActive ? styles.priceMarkerStemActive : null,
+                      marker.tone === 'dark' ? styles.priceMarkerStemDark : null,
                     ]}
                   />
-                )}
-              </View>
-            </View>
-          </Marker>
-        );
-      })}
-    </MapView>
+                </View>
+              ) : (
+                <View style={[styles.markerShell, isActive && styles.markerShellActive]}>
+                  <View
+                    style={[
+                      styles.thumbnailFrame,
+                      isDark && styles.thumbnailFrameDark,
+                    ]}
+                  >
+                    {marker.imageUri ? (
+                      <Image source={marker.imageUri} contentFit="cover" style={styles.thumbnailImage} />
+                    ) : (
+                      <View
+                        style={[
+                          styles.thumbnailFallback,
+                          marker.tone === 'dark' ? styles.markerDark : styles.markerAccent,
+                        ]}
+                      />
+                    )}
+                  </View>
+                </View>
+              )}
+            </Marker>
+          );
+        })}
+      </MapView>
+    </View>
   );
 }
 
 export const MapPreview = memo(MapPreviewComponent);
 
 const styles = StyleSheet.create({
+  mapRoot: {
+    flex: 1,
+  },
   fallback: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -232,71 +272,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  userMarkerShell: {
+  priceMarkerShell: {
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 0,
   },
-  userHeadingWrap: {
-    position: 'absolute',
-    width: 96,
-    height: 96,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  userHeadingCone: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 14,
-    borderRightWidth: 14,
-    borderBottomWidth: 44,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'rgba(159, 232, 112, 0.42)',
-  },
-  userHeadingConeDark: {
-    borderBottomColor: 'rgba(159, 232, 112, 0.52)',
-  },
-  userMarkerPulse: {
-    position: 'absolute',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(159, 232, 112, 0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(159, 232, 112, 0.45)',
-  },
-  userMarkerPulseDark: {
-    backgroundColor: 'rgba(159, 232, 112, 0.28)',
-    borderColor: 'rgba(159, 232, 112, 0.58)',
-  },
-  userMarkerCore: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: designSystem.colors.darkGreen,
+  priceMarker: {
+    minWidth: 88,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: designSystem.radii.pill,
     borderWidth: 3,
-    borderColor: '#ffffff',
+    shadowColor: '#0e0f0c',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  userMarkerCoreDark: {
-    borderColor: designSystem.colors.darkBackground,
+  priceMarkerDefault: {
+    backgroundColor: designSystem.colors.ink,
+    borderColor: designSystem.colors.lime,
   },
-  userMarkerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  priceMarkerDark: {
+    backgroundColor: '#232421',
+  },
+  priceMarkerActive: {
+    backgroundColor: designSystem.colors.lime,
+    borderColor: '#29580a',
+  },
+  priceMarkerLabel: {
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  priceMarkerLabelDark: {
+    color: '#ffffff',
+  },
+  priceMarkerLabelActive: {
+    color: designSystem.colors.darkGreen,
+  },
+  priceMarkerStem: {
+    width: 3,
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: designSystem.colors.lime,
+    marginTop: -1,
+  },
+  priceMarkerStemDark: {
     backgroundColor: designSystem.colors.lime,
   },
+  priceMarkerStemActive: {
+    backgroundColor: '#29580a',
+  },
   markerShellActive: {
-    transform: [{ scale: 1.15 }],
+    transform: [{ scale: 1.04 }],
   },
   thumbnailFrame: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     overflow: 'hidden',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: designSystem.colors.background,
     backgroundColor: designSystem.colors.surfaceMuted,
   },
@@ -304,14 +342,10 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.darkBackground,
     backgroundColor: designSystem.colors.darkSurface,
   },
-  thumbnailFrameActive: {
-    borderColor: designSystem.colors.lime,
-    borderWidth: 4,
-  },
   thumbnailImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 27, // Added for Android clipping
+    borderRadius: 19,
   },
   thumbnailFallback: {
     flex: 1,
@@ -336,7 +370,7 @@ const styles = StyleSheet.create({
   markerLabel: {
     fontSize: 10,
     lineHeight: 11,
-    fontWeight: '900',
+    fontWeight: '700',
     color: designSystem.colors.darkGreen,
   },
   markerDarkLabel: {

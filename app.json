@@ -7,11 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "wandr",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions."
+        "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions even when the app is in the background."
       }
     },
     "android": {
@@ -21,8 +21,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
@@ -31,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       "expo-location",
       [
         "expo-splash-screen",

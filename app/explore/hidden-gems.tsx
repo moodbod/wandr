@@ -12,6 +12,7 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { getExplorePageContentRef } from '@/lib/convex';
+import { currentDemoTravelerSlug } from '@/lib/demo-session';
 
 const hiddenGemMeta: Record<string, { district: string; moment: string; note: string }> = {
   'The Red Lighthouse': {
@@ -37,7 +38,7 @@ export default function ExploreHiddenGemsScreen() {
 
 function ConnectedExploreHiddenGemsScreen() {
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
 
   if (!page) {
     return (
@@ -89,7 +90,6 @@ function ExploreHiddenGemsScreenView({
           { paddingTop: insetsTop + 88, paddingBottom: designSystem.spacing.xxxl * 2 },
         ]}>
         <View style={styles.hero}>
-          <ThemedText style={styles.eyebrow}>Local Guide</ThemedText>
           <ThemedText style={styles.title}>Hidden Gems</ThemedText>
           <ThemedText style={styles.description}>
             This page should help you branch away from the obvious. Think quieter, more specific, and easier to weave into a real day.
@@ -100,7 +100,6 @@ function ExploreHiddenGemsScreenView({
           <ThemedView lightColor={designSystem.colors.surface} darkColor={designSystem.colors.darkSurface} style={styles.leadCard}>
             <View style={styles.leadHeader}>
               <View style={styles.leadCopy}>
-                <ThemedText style={styles.leadLabel}>Editors&apos; first pick</ThemedText>
                 <ThemedText style={styles.leadTitle}>{leadGem.title}</ThemedText>
                 <ThemedText style={styles.leadDescription}>{getGemMeta(leadGem).note}</ThemedText>
               </View>
@@ -127,8 +126,7 @@ function ExploreHiddenGemsScreenView({
               lightColor={designSystem.colors.surface}
               darkColor={designSystem.colors.darkSurface}
               style={styles.quickCard}>
-              <ThemedText style={styles.quickLabel}>{group.title}</ThemedText>
-              <ThemedText style={styles.quickValue}>{group.items.length} stops</ThemedText>
+              <ThemedText style={styles.quickValue}>{group.title}</ThemedText>
               <ThemedText style={styles.quickDescription}>{group.description}</ThemedText>
             </ThemedView>
           ))}
@@ -137,7 +135,6 @@ function ExploreHiddenGemsScreenView({
         {groupedGems.map((group) => (
           <View key={group.title} style={styles.section}>
             <View style={styles.sectionHeading}>
-              <ThemedText style={styles.sectionEyebrow}>{group.eyebrow}</ThemedText>
               <ThemedText style={styles.sectionTitle}>{group.title}</ThemedText>
               <ThemedText style={styles.sectionDescription}>{group.description}</ThemedText>
             </View>
@@ -245,18 +242,10 @@ const styles = StyleSheet.create({
   hero: {
     gap: 10,
   },
-  eyebrow: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '900',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   title: {
     fontSize: 40,
     lineHeight: 38,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1.4,
     textTransform: 'uppercase',
   },
@@ -293,18 +282,10 @@ const styles = StyleSheet.create({
   leadCopy: {
     gap: 8,
   },
-  leadLabel: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   leadTitle: {
     fontSize: 30,
     lineHeight: 32,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1,
   },
   leadDescription: {
@@ -329,7 +310,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.9,
     textTransform: 'uppercase',
     color: designSystem.colors.warmDark,
@@ -337,7 +318,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 16,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   quickStrip: {
     gap: 12,
@@ -349,18 +330,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(159, 232, 112, 0.12)',
   },
-  quickLabel: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   quickValue: {
     fontSize: 22,
     lineHeight: 24,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.6,
   },
   quickDescription: {
@@ -375,18 +348,10 @@ const styles = StyleSheet.create({
   sectionHeading: {
     gap: 6,
   },
-  sectionEyebrow: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   sectionTitle: {
     fontSize: 28,
     lineHeight: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.8,
   },
   sectionDescription: {
@@ -415,7 +380,7 @@ const styles = StyleSheet.create({
   tagLabel: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
@@ -430,7 +395,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,

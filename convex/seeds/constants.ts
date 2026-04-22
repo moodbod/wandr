@@ -1,14 +1,94 @@
-export const SKYDIVE_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuBBtfFbx9Hxjs7g3GkzDVpEWx9aqpns22anS7muKu-SPG-PGqg-iyo3gXW4yoiCyW-q2h0lrRrL1IMDArraoamsxBwHMQO8i4_UYQXBMCFn7_0Ta2B-VIbTtuwCqoBsFMq1Z5SRsOoxtCEabmseOnWRw-6j-MDgV1wizNi1MdpjZzzLIGeSwayEOOBjAnl7CF2CfEANJfcZMJTPqJJGeMmepv7iFPzUL0tesS0BEPp5CXZeOgRh7fl7igTIESOPjuh9jXyrZKPQ9dQ';
-export const DUNES_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCKYdhOl4BZwNRIgtwmgTzMBOFCqRQHfe6Dt55uex7GmKnMAxv5C2O32HnN_30lQGYaaOu4jZ_L7pPe8gQS4cEpFYOWyxdHcOcGbJPbXYLi5S_832Sza2QipVFnZs6DKgjLONvzwG1yrojTImsSRS1As5bKLztnVFXXq0QFCyDmKev3p-rVhfZAu5HZMRiaS2uXuCZUwO3sd9c4-3sF4MkmSqP-cj9w26WAOZkT1k9bUQYFVHNDuPNhJ7Lk841-wTrDuPBdpkn35PA';
-export const ADVENTURE_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDP0wm5QppAYT1Y59Xf-t7Q8NjKOdQ3-1zbNaAKkUBFT7qlGx5lF3-HOvxHyYk56VsuncX4xuRuF7jkAdUWMXQ2tSg3ZYJjrueufiAq_zJIwBh0ZiynWwX2lAXETq5bYVMe-Pbg1JfD6SM67ZQdjxcMnfSpgfCnqFxlwtb5s8RIr9antErPacM3N0xtwD6CasUVxbKq012XAcU08p4qXob6ZsskdGdCzkdK_1w7_pq_vMLqPo4p9YBNX-EQQFwibYwFffcdWyU70EQ';
-export const FOOD_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuBJddW1UqyZ1RaFB7sRKZ94sGChYpjH1dDAXWD1tJTszBNUSM63gTe_-VY_leNsGeY4DglaeBwdXV_QcQJ8-ImEIp3sZWUiTQTCWjQ91cjbnvS8jFBRYWI11ZkyZFJFLLc1tsYXWDSGcQ6QZz1OKyTlyWwZ7J5BxoGEqrX4B5L4Pip6vpjhe6w1x3QPIbfj01fPy_bVMusTNgM7lvGZlDumVx0CUXk-2PYcuW00nj7tyao1NB8Z9KgqYJWub5RPI1zkHLdfK647xtc';
-export const SALT_PANS_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuC7DswLY8zqOIb9iDcjyR1gG8VJjEKdRFZrONWpG8BXd6nBiuL_h2BzdWJUxH4rP35v-vFX_1oUm9ntWI9HvsR8B0b20HkXBNDHS4rV6PH0YMrN9jZQvbzOK5VxPNo3lW9XpLq4s2HFRIwUw8PdwFbxyXjFbwQKe_pF1cn1_DdgUX6DKzmZk11PW8GDqy8YcaisPHABd_pK8G-bfdJxENgrdCdtGjjxiPByEpCIOMKU3FyMwTIj4MDwk8CNPrAEjR82Uj6yP6lmcv0';
-export const LIGHTHOUSE_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCBFjeeT3dJYW6Jp2cHVCA7XVcup2uuU0vPoniYX1qDhn9DQcWTr0rUzojiNGWk5P2JdxqBEexWXWnBs5iZHZScgi9GugsIIgbJW8PRnoE4TTtaBxG1EqyezRcZitnLjBSF8o0Fu8EyF684C2pLITOOOD832cGT3pzyd3xXHGq9WNq1OFXre-sanXlu_Iq2Tz2vMxsr4GGY2hq72wbVr9Sh-vea_6HXnC9MIvxxqneRuKVPA3aA2ZMtyV4buJ27bGFXRElQZ7TBKy8';
-export const ART_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCo-PHRiyIgPnNeHOoWN9VibSom9bcCeDOK9Ey3acqY_lwZJ7DBJrvlZHVTSrVR6wxsBsgK21e0Vr9X9XeS5N1e83aaRPbgrm26dPC0o5hihzm3fDCjQKy_bnjsM-YYraH-1fCpq6ydObN7VseNYW2YjqvPLoXoaV6zDd-mdCTm6m6L5rksLF6rL4aZ2ZjxfWinelc2nnQpNKbUIr5KlmyGmGEJw8yu471FXs29EiQlGHNg56NvfVGvz71YYuuHqwIyNUwekC6rCdTc';
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCATION-SPECIFIC IMAGES — one unique photo per place
+// Source: Unsplash (free to use, no attribution required for app use)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Windhoek — craft market / Independence Avenue street scene
+export const WINDHOEK_IMAGE = 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1200&q=80&fit=crop';
+
+// Naankuse / wildlife conservation — cheetah in Namibian bush
+export const NAANKUSE_IMAGE = 'https://images.unsplash.com/photo-1551009175-15bdf9dcb580?w=1200&q=80&fit=crop';
+
+// Swakopmund tandem skydive — person in freefall over desert coast
+export const SKYDIVE_IMAGE = 'https://images.unsplash.com/photo-1601024445121-e5b82f020549?w=1200&q=80&fit=crop';
+
+// Quad / sandboard — sandboarding on Namib dunes
+export const SANDBOARD_IMAGE = 'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=1200&q=80&fit=crop';
+
+// Swakopmund dining / Jetty — seafood table Atlantic coast
+export const SWAKOP_FOOD_IMAGE = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&q=80&fit=crop';
+
+// Desert adrenaline — 4x4 driving through massive Namib dunes
+export const DESERT_4X4_IMAGE = 'https://images.unsplash.com/photo-1517702145080-e4a4c8d9c4b3?w=1200&q=80&fit=crop';
+
+// Walvis Bay lagoon kayak — kayakers on flat African lagoon water
+export const LAGOON_KAYAK_IMAGE = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=1200&q=80&fit=crop';
+
+// Sandwich Harbour — dunes meeting ocean, Namib coast
+export const SANDWICH_HARBOUR_IMAGE = 'https://images.unsplash.com/photo-1547347298-4074fc3086f0?w=1200&q=80&fit=crop';
+
+// Cape Cross — massive fur seal colony on rocky coast
+export const CAPE_CROSS_IMAGE = 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=1200&q=80&fit=crop';
+
+// Twyfelfontein — ancient San rock engravings on red sandstone
+export const TWYFELFONTEIN_IMAGE = 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1200&q=80&fit=crop';
+
+// Brandberg / White Lady — hiker in dramatic African rock gorge
+export const BRANDBERG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80&fit=crop';
+
+// Petrified Forest — ancient fossilised tree trunks in open desert
+export const PETRIFIED_FOREST_IMAGE = 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1200&q=80&fit=crop';
+
+// Vingerklip — tall isolated rock monolith in semi-arid landscape
+export const VINGERKLIP_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&q=80&fit=crop';
+
+// Epupa Falls — cascading waterfall on Kunene River with baobabs
+export const EPUPA_FALLS_IMAGE = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&q=80&fit=crop';
+
+// Spitzkoppe — granite dome peaks at dusk, Namibia
+export const SPITZKOPPE_IMAGE = 'https://images.unsplash.com/photo-1484910292437-025e5d13ce87?w=1200&q=80&fit=crop';
+
+// Waterberg Plateau — red sandstone escarpment, savanna below
+export const WATERBERG_IMAGE = 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=1200&q=80&fit=crop';
+
+// Cheetah Conservation Fund — cheetah close-up on Namibian farm
+export const CHEETAH_IMAGE = 'https://images.unsplash.com/photo-1474511320723-9a56873867b5?w=1200&q=80&fit=crop';
+
+// Hoba Meteorite — large iron meteorite on farm ground, Namibia
+export const HOBA_IMAGE = 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1200&q=80&fit=crop';
+
+// Etosha Game Drive — elephant herd at waterhole, Etosha pan
+export const ETOSHA_IMAGE = 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=1200&q=80&fit=crop';
+
+// Sossusvlei — towering red dunes at sunrise, Namib desert
+export const SOSSUSVLEI_IMAGE = 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1200&q=80&fit=crop';
+
+// Deadvlei — skeletal camel thorn trees in white clay pan
+export const DEADVLEI_IMAGE = 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=1200&q=80&fit=crop';
+
+// NamibRand Dark Sky — Milky Way over open Namib desert landscape
+export const NAMIBRAND_IMAGE = 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=1200&q=80&fit=crop';
+
+// Kolmanskop Ghost Town — sand-drifted interior of abandoned mansion
+export const KOLMANSKOP_IMAGE = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80&fit=crop';
+
+// Quiver Tree Forest — aloe dichotoma silhouettes at golden sunset
+export const QUIVER_TREE_IMAGE = 'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=1200&q=80&fit=crop';
+
+// Fish River Canyon — sweeping aerial view of Africa's largest canyon
+export const FISH_CANYON_IMAGE = 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1200&q=80&fit=crop';
+
+// Ai-Ais Hot Springs — thermal pools with canyon rock backdrop
+export const AI_AIS_IMAGE = 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=80&fit=crop';
+
+// Duwisib Castle — stone castle in arid Namibian landscape
+export const DUWISIB_IMAGE = 'https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=1200&q=80&fit=crop';
+
+// Popa Falls — rushing rapids on green Okavango river, Caprivi
+export const POPA_FALLS_IMAGE = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&q=80&fit=crop';
+
+// Zambezi houseboat — golden sunset cruise on the Zambezi River
+export const ZAMBEZI_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80&fit=crop';
+
+// Walvis Bay flamingo salt pans — pink flamingos, lagoon landscape
+export const SALT_PANS_IMAGE = 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=1200&q=80&fit=crop';

@@ -230,6 +230,150 @@ export const darkMapStyle = [
       },
     ],
   },
+  {
+    featureType: 'poi',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'labels.text.fill',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#b7c4ba',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'geometry',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.attraction',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.school',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.medical',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.place_of_worship',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.sports_complex',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.government',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.lodging',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.gas_station',
+    elementType: 'labels.text.fill',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#d2dccf',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.gas_station',
+    elementType: 'geometry',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#243029',
+      },
+    ],
+  },
+  {
+    featureType: 'administrative.neighborhood',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'administrative.land_parcel',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
 ];
 
 export const lightMapStyle = [
@@ -404,6 +548,150 @@ export const lightMapStyle = [
       },
       {
         weight: 1.2,
+      },
+    ],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'labels.text.fill',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#4b544c',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'geometry',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.attraction',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.school',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.medical',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.place_of_worship',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.sports_complex',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.government',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.lodging',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.gas_station',
+    elementType: 'labels.text.fill',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#404840',
+      },
+    ],
+  },
+  {
+    featureType: 'poi.gas_station',
+    elementType: 'geometry',
+    stylers: [
+      {
+        visibility: 'on',
+      },
+      {
+        color: '#e9ece7',
+      },
+    ],
+  },
+  {
+    featureType: 'administrative.neighborhood',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'administrative.land_parcel',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
+      },
+    ],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'all',
+    stylers: [
+      {
+        visibility: 'off',
       },
     ],
   },

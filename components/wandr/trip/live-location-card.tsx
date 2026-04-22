@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   },
   bentoMapTitle: {
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },

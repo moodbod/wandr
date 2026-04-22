@@ -17,29 +17,33 @@ export function WandrTravelerGroup({
   initials = ['L', 'J'],
 }: WandrTravelerGroupProps) {
   const positiveCount = Math.max(0, count);
-  const visibleCount = Math.max(0, Math.min(initials.length, Math.max(0, positiveCount - 1), 2));
+  // Show at most 2 initials, but only if we have enough count
+  const avatarsToShow = Math.min(positiveCount, 2);
+  const remainingCount = positiveCount - avatarsToShow;
 
   return (
-    <View style={[styles.stack, { paddingRight: overlap + 8 }]}>
-      {visibleCount > 0 ? (
+    <View style={styles.stack}>
+      {avatarsToShow > 0 ? (
         <View style={[styles.avatar, styles.avatarFront, { borderColor }]}>
           <ThemedText style={styles.avatarInitial}>{initials[0]}</ThemedText>
         </View>
       ) : null}
 
-      {visibleCount > 1 ? (
+      {avatarsToShow > 1 ? (
         <View style={[styles.avatar, styles.avatarSecond, { borderColor, marginLeft: -overlap }]}>
           <ThemedText style={styles.avatarInitial}>{initials[1]}</ThemedText>
         </View>
       ) : null}
 
-      <View
-        style={[
-          styles.countAvatar,
-          { borderColor, marginLeft: visibleCount > 0 ? -overlap : 0 },
-        ]}>
-        <ThemedText style={styles.countText}>+{positiveCount}</ThemedText>
-      </View>
+      {remainingCount > 0 ? (
+        <View
+          style={[
+            styles.countAvatar,
+            { borderColor, marginLeft: -overlap },
+          ]}>
+          <ThemedText style={styles.countText}>+{remainingCount}</ThemedText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -68,7 +72,7 @@ const styles = StyleSheet.create({
   avatarInitial: {
     fontSize: 14,
     lineHeight: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     color: '#f9f9f6',
   },
   countAvatar: {
@@ -84,7 +88,7 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 13,
     lineHeight: 13,
-    fontWeight: '900',
+    fontWeight: '700',
     color: designSystem.colors.darkGreen,
   },
 });

@@ -32,35 +32,41 @@ export function TripActionSkeletons() {
 export function TripTimelineSkeleton() {
   return (
     <View style={styles.timeline}>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <View key={`trip-timeline-skeleton-${index}`} style={styles.timelineRow}>
-          <View style={styles.markerColumn}>
-            <SkeletonBlock style={styles.marker} />
-            {index < 2 ? <SkeletonBlock style={styles.connector} /> : null}
-          </View>
-          <ThemedView
-            lightColor="#ffffff"
-            darkColor={designSystem.colors.darkSurface}
-            style={[
-              styles.timelineCard,
-              useColorScheme() === 'dark' ? styles.timelineCardDark : null,
-            ]}>
-            <SkeletonBlock style={styles.timelineTitle} />
-            <SkeletonBlock style={styles.timelineSubtitle} />
-            {index === 0 ? (
-              <>
-                <SkeletonBlock style={styles.timelineBody} />
-                <SkeletonBlock style={styles.timelineImage} />
-              </>
-            ) : (
-              <View style={styles.timelineTags}>
-                <SkeletonBlock style={styles.timelineTag} />
-                <SkeletonBlock style={styles.timelineTag} />
+      <View style={styles.sectionHeaderSkeleton}>
+        <SkeletonBlock style={styles.sectionTitleSkeleton} />
+        <SkeletonBlock style={styles.sectionMetaSkeleton} />
+      </View>
+
+      <View style={styles.listContainerSkeleton}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={`trip-timeline-skeleton-${index}`} style={styles.timelineRow}>
+            <View style={styles.markerColumn}>
+              <SkeletonBlock style={styles.marker} />
+              {index < 2 ? <SkeletonBlock style={styles.connector} /> : null}
+            </View>
+            <ThemedView
+              lightColor="#ffffff"
+              darkColor={designSystem.colors.darkSurface}
+              style={[
+                styles.timelineCard,
+                useColorScheme() === 'dark' ? styles.timelineCardDark : null,
+              ]}>
+              <View style={styles.cardContentSkeleton}>
+                <View style={styles.cardLeftSkeleton}>
+                  <SkeletonBlock style={styles.dayBadgeSkeleton} />
+                  <SkeletonBlock style={styles.timelineTitle} />
+                  <SkeletonBlock style={styles.timelineBody} />
+                  <View style={styles.timelineTags}>
+                    <SkeletonBlock style={styles.timelineTag} />
+                    <SkeletonBlock style={styles.timelineTag} />
+                  </View>
+                </View>
+                <SkeletonBlock style={styles.timelineImageSmall} />
               </View>
-            )}
-          </ThemedView>
-        </View>
-      ))}
+            </ThemedView>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -125,64 +131,99 @@ const styles = StyleSheet.create({
     borderRadius: designSystem.radii.pill,
   },
   timeline: {
-    gap: 18,
+    paddingVertical: 4,
+  },
+  sectionHeaderSkeleton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  sectionTitleSkeleton: {
+    width: 120,
+    height: 32,
+    borderRadius: 8,
+  },
+  sectionMetaSkeleton: {
+    width: 80,
+    height: 20,
+    borderRadius: 6,
+  },
+  listContainerSkeleton: {
+    gap: 12,
   },
   timelineRow: {
     flexDirection: 'row',
-    gap: 16,
+    marginBottom: 12,
   },
   markerColumn: {
-    width: 56,
+    width: 48,
     alignItems: 'center',
   },
   marker: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   connector: {
-    width: 4,
+    width: 2,
     flex: 1,
-    minHeight: 96,
-    borderRadius: 999,
-    marginTop: 8,
+    minHeight: 100,
+    backgroundColor: 'rgba(14,15,12,0.08)',
   },
   timelineCard: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.12)',
-    padding: 18,
-    gap: 12,
+    borderColor: 'rgba(14,15,12,0.08)',
+    padding: 16,
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
   },
   timelineCardDark: {
     borderColor: designSystem.colors.darkBorder,
   },
-  timelineTitle: {
-    width: '58%',
-    height: 22,
+  cardContentSkeleton: {
+    flexDirection: 'row',
+    gap: 16,
   },
-  timelineSubtitle: {
-    width: '40%',
-    height: 16,
+  cardLeftSkeleton: {
+    flex: 1,
+    gap: 8,
+  },
+  dayBadgeSkeleton: {
+    width: 60,
+    height: 20,
+    borderRadius: 10,
+  },
+  timelineTitle: {
+    width: '90%',
+    height: 24,
+    borderRadius: 6,
   },
   timelineBody: {
     width: '100%',
-    height: 48,
+    height: 36,
+    borderRadius: 6,
   },
-  timelineImage: {
-    width: '100%',
-    height: 148,
-    borderRadius: 20,
+  timelineImageSmall: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
   },
   timelineTags: {
-    flexDirection: 'row',
-    gap: 10,
+    flexDirection: 'row', 
+    gap: 8,
+    marginTop: 4,
   },
   timelineTag: {
-    width: 92,
-    height: 26,
-    borderRadius: 999,
+    width: 70,
+    height: 24,
+    borderRadius: 12,
   },
   bentoGrid: {
     flexDirection: 'column',

@@ -15,6 +15,7 @@ type ExploreMapHeroProps = {
   topInset?: number;
   onInteract?: () => void;
   onLocateMe?: () => void;
+  showBackButton?: boolean;
 };
 
 export function ExploreMapHero({
@@ -26,6 +27,7 @@ export function ExploreMapHero({
   topInset = designSystem.spacing.xxxl,
   onInteract,
   onLocateMe,
+  showBackButton = false,
 }: ExploreMapHeroProps) {
   const router = useRouter();
 
@@ -36,7 +38,7 @@ export function ExploreMapHero({
         userCoordinate={userCoordinate}
         userHeading={userHeading}
         markers={markers}
-        zoomLevel={10.6}
+        zoomLevel={11.4}
         onInteract={onInteract}
         onMarkerPress={(marker) => {
           if (marker.experienceSlug) {
@@ -47,6 +49,9 @@ export function ExploreMapHero({
       <WandrHeader
         config={{
           overlay: true,
+          leadingAction: showBackButton
+            ? { kind: 'back', accessibilityLabel: 'Go back' }
+            : undefined,
           trailingActions: onLocateMe
             ? [{ kind: 'locate' as const, accessibilityLabel: 'Locate me', onPress: onLocateMe }]
             : undefined,

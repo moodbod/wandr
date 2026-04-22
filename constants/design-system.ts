@@ -48,7 +48,7 @@ export const designSystem = {
     title: {
       fontSize: 34,
       lineHeight: 38,
-      fontWeight: '900' as const,
+      fontWeight: '700' as const,
     },
     subtitle: {
       fontSize: 22,

@@ -3,20 +3,29 @@ import { useRouter } from 'expo-router';
 import {
   Bell,
   CaretLeft,
+  Check,
+  Cloud,
+  CloudFog,
+  CloudRain,
+  CloudSnow,
   FadersHorizontal,
   GearSix,
   Heart,
+  Lightning,
   List,
   MagnifyingGlass,
-  NavigationArrow,
   MapTrifold,
+  NavigationArrow,
+  PencilSimple,
   ShareNetwork,
-  UserCircle,
+  Sun,
+  UserCircle
 } from 'phosphor-react-native';
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ThemedText } from '@/components/themed-text';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import type { HeaderAction, HeaderConfig } from '@/constants/app-content';
@@ -24,11 +33,31 @@ import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
+export type { HeaderAction };
+
+type WeatherData = {
+  temp: number;
+  description: string;
+  code: number;
+};
+
+function getWeatherInfo(code: number) {
+  if (code === 0) return { desc: 'Clear', Icon: Sun };
+  if (code <= 3) return { desc: 'Cloudy', Icon: Cloud };
+  if (code <= 48) return { desc: 'Foggy', Icon: CloudFog };
+  if (code <= 55) return { desc: 'Drizzle', Icon: CloudRain };
+  if (code <= 65) return { desc: 'Rain', Icon: CloudRain };
+  if (code <= 75) return { desc: 'Snow', Icon: CloudSnow };
+  if (code >= 95) return { desc: 'Storm', Icon: Lightning };
+  return { desc: 'Clear', Icon: Sun };
+}
+
 type WandrHeaderProps = {
   config: HeaderConfig;
   bottomContent?: React.ReactNode;
   bottomContentHeight?: number;
   bottomContentVisible?: boolean;
+  weatherCoords?: readonly [number, number] | null;
 };
 
 export function WandrHeader({
@@ -36,6 +65,7 @@ export function WandrHeader({
   bottomContent,
   bottomContentHeight = 0,
   bottomContentVisible = false,
+  weatherCoords,
 }: WandrHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -43,27 +73,50 @@ export function WandrHeader({
   const isDark = colorScheme === 'dark';
   const bottomAnimation = useRef(new Animated.Value(bottomContentVisible ? 1 : 0)).current;
   const trailingActions = config.trailingActions ?? [];
-  const hasActions = Boolean(config.leadingAction || trailingActions.length > 0);
+  const hasActions = Boolean(config.leadingAction || trailingActions.length > 0 || weatherCoords);
   const isButtonOnlyHeader = true;
-  
+
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+
+  useEffect(() => {
+    if (!weatherCoords) return;
+    async function fetchWeather() {
+      try {
+        const [lng, lat] = weatherCoords!;
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code`
+        );
+        const data = await res.json();
+        if (data.current) {
+          setWeather({
+            temp: Math.round(data.current.temperature_2m),
+            code: data.current.weather_code,
+            description: getWeatherInfo(data.current.weather_code).desc,
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to fetch weather', e);
+      }
+    }
+    fetchWeather();
+  }, [weatherCoords]);
+
   const themeTextColor = useThemeColor(
     { light: designSystem.colors.ink, dark: designSystem.colors.darkText },
     'text'
   );
-  const textColor = config.overlay && isButtonOnlyHeader ? '#ffffff' : themeTextColor;
-  
-  // Define fallback colors for the BlurView tint
+  const textColor = themeTextColor;
   const blurBackgroundColor = isDark ? 'rgba(17,19,15,0.7)' : 'rgba(249,249,246,0.7)';
 
   const HeaderContainer = config.overlay || isButtonOnlyHeader ? View : BlurView;
-  const containerProps = config.overlay 
-    ? { style: [styles.shell, styles.overlayShell, { paddingTop: insets.top }] }
+  const containerProps = config.overlay
+    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingTop: insets.top }] }
     : isButtonOnlyHeader
-      ? { style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingTop: insets.top }] }
-    : { 
-        intensity: 80, 
-        tint: isDark ? 'dark' as const : 'light' as const, 
-        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top, backgroundColor: blurBackgroundColor }] 
+      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingTop: insets.top }] }
+    : {
+        intensity: 80,
+        tint: isDark ? 'dark' as const : 'light' as const,
+        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top, backgroundColor: blurBackgroundColor }]
       };
 
   useEffect(() => {
@@ -99,6 +152,9 @@ export function WandrHeader({
     ],
   };
 
+  const WeatherInfo = weather ? getWeatherInfo(weather.code) : null;
+  const WeatherIcon = WeatherInfo?.Icon ?? Sun;
+
   return (
     <HeaderContainer {...containerProps}>
       <View style={styles.content}>
@@ -124,6 +180,23 @@ export function WandrHeader({
         </View>
 
         <View style={styles.trailing}>
+          {weatherCoords ? (
+            <View style={[
+              styles.weatherBadge,
+              { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(14, 15, 12, 0.06)' }
+            ]}>
+              {weather ? (
+                <>
+                  <WeatherIcon size={16} color={textColor} weight="bold" />
+                  <ThemedText style={[styles.weatherText, { color: textColor }]}>
+                    {weather.temp}°
+                  </ThemedText>
+                </>
+              ) : (
+                <ActivityIndicator size="small" color={textColor} />
+              )}
+            </View>
+          ) : null}
           {trailingActions.map((action, index) => (
             <HeaderActionButton
               action={action}
@@ -197,6 +270,8 @@ function renderHeaderIcon(action: HeaderAction, color: string) {
       return <UserCircle color={color} size={20} weight="fill" />;
     case 'back':
       return <CaretLeft color={color} size={22} weight="bold" />;
+    case 'check':
+      return <Check color={color} size={20} weight="bold" />;
     case 'favorite':
       return <Heart color={color} size={20} weight={action.isActive ? 'fill' : 'bold'} />;
     case 'filter':
@@ -211,6 +286,8 @@ function renderHeaderIcon(action: HeaderAction, color: string) {
       return <List color={color} size={22} weight="bold" />;
     case 'notifications':
       return <Bell color={color} size={20} weight="bold" />;
+    case 'pencil':
+      return <PencilSimple color={color} size={20} weight="bold" />;
     case 'settings':
       return <GearSix color={color} size={20} weight="bold" />;
     case 'share':
@@ -273,5 +350,18 @@ const styles = StyleSheet.create({
   },
   rightAction: {
     alignItems: 'flex-end',
+  },
+  weatherBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  weatherText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

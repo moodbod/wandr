@@ -1,11 +1,23 @@
 import {
-  ADVENTURE_IMAGE,
-  ART_IMAGE,
-  DUNES_IMAGE,
-  FOOD_IMAGE,
-  LIGHTHOUSE_IMAGE,
+  AI_AIS_IMAGE,
+  BRANDBERG_IMAGE,
+  CAPE_CROSS_IMAGE,
+  CHEETAH_IMAGE,
+  DUWISIB_IMAGE,
+  EPUPA_FALLS_IMAGE,
+  HOBA_IMAGE,
+  KOLMANSKOP_IMAGE,
+  NAMIBRAND_IMAGE,
+  PETRIFIED_FOREST_IMAGE,
+  POPA_FALLS_IMAGE,
+  QUIVER_TREE_IMAGE,
   SALT_PANS_IMAGE,
-  SKYDIVE_IMAGE,
+  SANDWICH_HARBOUR_IMAGE,
+  SWAKOP_FOOD_IMAGE,
+  TWYFELFONTEIN_IMAGE,
+  VINGERKLIP_IMAGE,
+  WATERBERG_IMAGE,
+  WINDHOEK_IMAGE
 } from './constants';
 
 export const seedHiddenGems = [
@@ -13,7 +25,8 @@ export const seedHiddenGems = [
           {
             title: 'Swakopmund Jetty at Dusk',
             description: 'The 1912 iron jetty stretching 270 m into the Atlantic — best visited as the fog rolls in at golden hour.',
-            imageUri: LIGHTHOUSE_IMAGE,
+            imageUri: SWAKOP_FOOD_IMAGE,
+            coordinate: [14.5040, -22.6780],
             geography: { region: 'Erongo', town: 'Swakopmund' },
             badge: 'Coastal Icon',
             locationLabel: 'Swakopmund seafront',
@@ -64,6 +77,7 @@ export const seedHiddenGems = [
             title: 'Pink Salt Pans of Walvis Bay',
             description: 'Flamingo-pink lagoons where the desert meets the Atlantic in a surreal natural palette.',
             imageUri: SALT_PANS_IMAGE,
+            coordinate: [14.5036, -22.9576],
             geography: { region: 'Erongo', town: 'Walvis Bay' },
             badge: 'Off Grid',
             locationLabel: 'Walvis Bay salt works',
@@ -113,7 +127,8 @@ export const seedHiddenGems = [
           {
             title: 'Sandwich Harbour',
             description: 'Massive dunes tumbling directly into the Atlantic — accessible only by 4x4 and tidal window.',
-            imageUri: DUNES_IMAGE,
+            imageUri: SANDWICH_HARBOUR_IMAGE,
+            coordinate: [14.4083, -23.3917],
             geography: { region: 'Erongo', town: 'Walvis Bay' },
             badge: 'Remote Icon',
             locationLabel: '50 km south of Walvis Bay',
@@ -163,7 +178,8 @@ export const seedHiddenGems = [
           {
             title: 'Cape Cross Seal Reserve',
             description: 'One of the largest Cape fur seal colonies on Earth — hundreds of thousands of seals along the Skeleton Coast.',
-            imageUri: ADVENTURE_IMAGE,
+            imageUri: CAPE_CROSS_IMAGE,
+            coordinate: [13.9500, -21.7667],
             geography: { region: 'Erongo', town: 'Henties Bay' },
             badge: 'Wildlife Mass',
             locationLabel: 'Skeleton Coast, 120 km north of Swakopmund',
@@ -214,7 +230,8 @@ export const seedHiddenGems = [
           {
             title: 'Twyfelfontein Rock Engravings',
             description: 'Over 2,000 San rock engravings at Namibia\'s first UNESCO World Heritage Site in Damaraland.',
-            imageUri: ART_IMAGE,
+            imageUri: TWYFELFONTEIN_IMAGE,
+            coordinate: [14.3667, -20.5833],
             geography: { region: 'Kunene', town: 'Khorixas area' },
             badge: 'UNESCO',
             locationLabel: 'Damaraland, 110 km from Khorixas',
@@ -264,7 +281,8 @@ export const seedHiddenGems = [
           {
             title: 'Brandberg White Lady Hike',
             description: 'Trek to the famous San rock painting inside Namibia\'s highest mountain massif in Damaraland.',
-            imageUri: ADVENTURE_IMAGE,
+            imageUri: BRANDBERG_IMAGE,
+            coordinate: [14.6833, -21.1167],
             geography: { region: 'Erongo', town: 'Uis' },
             badge: 'Cultural Trek',
             locationLabel: 'Brandberg Massif, near Uis',
@@ -314,7 +332,8 @@ export const seedHiddenGems = [
           {
             title: 'Petrified Forest',
             description: 'Ancient tree trunks over 300 million years old, lying scattered in open desert northwest of Khorixas.',
-            imageUri: DUNES_IMAGE,
+            imageUri: PETRIFIED_FOREST_IMAGE,
+            coordinate: [14.0, -20.0],
             geography: { region: 'Kunene', town: 'Khorixas' },
             badge: 'Geological Wonder',
             locationLabel: '40 km west of Khorixas',
@@ -364,7 +383,8 @@ export const seedHiddenGems = [
           {
             title: 'Vingerklip (Finger Rock)',
             description: 'A 35-metre solitary dolomite column rising from the Ugab Terraces — one of Namibia\'s most striking geological formations.',
-            imageUri: DUNES_IMAGE,
+            imageUri: VINGERKLIP_IMAGE,
+            coordinate: [15.42, -20.37],
             geography: { region: 'Kunene', town: 'Outjo area' },
             badge: 'Rock Formation',
             locationLabel: '95 km west of Outjo',
@@ -414,7 +434,8 @@ export const seedHiddenGems = [
           {
             title: 'Epupa Falls & Himba Villages',
             description: 'Multi-strand cascades on the Kunene River, deep in the remote Kaokoveld, with Himba community access.',
-            imageUri: LIGHTHOUSE_IMAGE,
+            imageUri: EPUPA_FALLS_IMAGE,
+            coordinate: [13.2458, -17.0006],
             geography: { region: 'Kunene', town: 'Epupa' },
             badge: 'Far North',
             locationLabel: '920 km northwest of Windhoek',
@@ -465,7 +486,8 @@ export const seedHiddenGems = [
           {
             title: 'Kolmanskop Ghost Town',
             description: 'A once-opulent diamond mining settlement now half-buried under Namib sand — 10 km from Lüderitz.',
-            imageUri: ART_IMAGE,
+            imageUri: KOLMANSKOP_IMAGE,
+            coordinate: [15.2333, -26.7000],
             geography: { region: 'Karas', town: 'Lüderitz' },
             badge: 'Ghost Town',
             locationLabel: '10 km east of Lüderitz',
@@ -482,7 +504,7 @@ export const seedHiddenGems = [
               {
                 label: 'Time ask',
                 value: '2 HOURS',
-                detail: 'The morning guided tour runs 09:00–11:00 and is the best-lit window for photography.',
+                detail: 'The morning guided tour runs 09:30–11:00 and is the best-lit window for photography.',
                 icon: 'clock',
                 tone: 'accent',
               },
@@ -515,7 +537,8 @@ export const seedHiddenGems = [
           {
             title: 'Quiver Tree Forest, Keetmanshoop',
             description: 'A surreal grove of 300-year-old aloe dichotoma trees standing golden in the southern Karas landscape.',
-            imageUri: DUNES_IMAGE,
+            imageUri: QUIVER_TREE_IMAGE,
+            coordinate: [18.1500, -26.9667],
             geography: { region: 'Karas', town: 'Keetmanshoop' },
             badge: 'Desert Botanical',
             locationLabel: '14 km northeast of Keetmanshoop',
@@ -565,7 +588,8 @@ export const seedHiddenGems = [
           {
             title: 'Ai-Ais Hot Springs & Fish River Canyon',
             description: 'Natural thermal springs at the bottom of Africa\'s largest canyon — a dramatic end to any southern Namibia route.',
-            imageUri: LIGHTHOUSE_IMAGE,
+            imageUri: AI_AIS_IMAGE,
+            coordinate: [17.5167, -27.9167],
             geography: { region: 'Karas', town: 'Ai-Ais' },
             badge: 'Remote Spa',
             locationLabel: 'Fish River Canyon National Park south',
@@ -615,7 +639,8 @@ export const seedHiddenGems = [
           {
             title: "Giant's Playground",
             description: 'A chaotic landscape of stacked dolerite boulders near Keetmanshoop — free to explore on your own.',
-            imageUri: ADVENTURE_IMAGE,
+            imageUri: HOBA_IMAGE,
+            coordinate: [18.1500, -26.9667],
             geography: { region: 'Karas', town: 'Keetmanshoop' },
             badge: 'Free Access',
             locationLabel: '5 km from Quiver Tree Forest',
@@ -666,7 +691,8 @@ export const seedHiddenGems = [
           {
             title: 'Duwisib Castle',
             description: 'A baronial German colonial castle, improbably marooned in the remote Namib landscape south of Maltahöhe.',
-            imageUri: ART_IMAGE,
+            imageUri: DUWISIB_IMAGE,
+            coordinate: [16.5444, -25.2611],
             geography: { region: 'Hardap', town: 'Maltahöhe' },
             badge: 'Colonial Curiosity',
             locationLabel: '72 km southwest of Maltahöhe',
@@ -716,7 +742,8 @@ export const seedHiddenGems = [
           {
             title: 'Waterberg Plateau Outlook',
             description: 'A quieter sandstone escarpment with broad red-rock panoramas and calmer foot traffic than the main parks.',
-            imageUri: LIGHTHOUSE_IMAGE,
+            imageUri: WATERBERG_IMAGE,
+            coordinate: [17.2833, -20.4667],
             geography: { region: 'Otjozondjupa', town: 'Otjiwarongo' },
             badge: 'Plateau Detour',
             locationLabel: '67 km east of Otjiwarongo',
@@ -766,7 +793,8 @@ export const seedHiddenGems = [
           {
             title: 'Cheetah Conservation Fund, Otjiwarongo',
             description: 'The world\'s largest cheetah conservation project — guided tours and ambassador animal encounters.',
-            imageUri: ADVENTURE_IMAGE,
+            imageUri: CHEETAH_IMAGE,
+            coordinate: [16.9333, -20.5667],
             geography: { region: 'Otjozondjupa', town: 'Otjiwarongo' },
             badge: 'Conservation',
             locationLabel: '44 km north of Otjiwarongo',
@@ -816,7 +844,8 @@ export const seedHiddenGems = [
           {
             title: 'Hoba Meteorite, Grootfontein',
             description: 'The largest known meteorite on Earth — a 60-tonne iron mass sitting exactly where it landed 80,000 years ago.',
-            imageUri: ADVENTURE_IMAGE,
+            imageUri: HOBA_IMAGE,
+            coordinate: [17.9344, -19.5833],
             geography: { region: 'Otjozondjupa', town: 'Grootfontein' },
             badge: 'Cosmic Relic',
             locationLabel: '20 km west of Grootfontein',
@@ -867,7 +896,8 @@ export const seedHiddenGems = [
           {
             title: 'Popa Falls, Divundu',
             description: 'A series of rapids and small falls on the Okavango River — lush, green, and completely unlike the rest of Namibia.',
-            imageUri: LIGHTHOUSE_IMAGE,
+            imageUri: POPA_FALLS_IMAGE,
+            coordinate: [18.2167, -18.0833],
             geography: { region: 'Kavango East', town: 'Divundu' },
             badge: 'River Country',
             locationLabel: 'Divundu on the Okavango River',
@@ -917,7 +947,8 @@ export const seedHiddenGems = [
           {
             title: 'NamibRand Nature Reserve Stargazing',
             description: 'One of the world\'s first International Dark Sky Reserves — absolute darkness over a vast private reserve bordering Sossusvlei.',
-            imageUri: SKYDIVE_IMAGE,
+            imageUri: NAMIBRAND_IMAGE,
+            coordinate: [16.1000, -25.0500],
             geography: { region: 'Hardap', town: 'Sesriem area' },
             badge: 'Dark Sky Reserve',
             locationLabel: 'NamibRand, east of Sossusvlei',
@@ -960,7 +991,7 @@ export const seedHiddenGems = [
                 body: 'Combine with Sossusvlei — the reserve borders the national park. A Sossusvlei sunrise drive followed by an overnight at NamibRand is one of the best two-day sequences in Namibia.',
               },
             ],
-            visitTips: ['New moon dates give the best conditions', 'Several lodges inside the reserve enforce dark-sky protocols', 'Combine with Sossusvlei on the same trip section'],
+            visitTips: ['New moon nights give the best conditions', 'Several lodges inside the reserve enforce dark-sky protocols', 'Combine with Sossusvlei on the same trip section'],
             primaryLabel: 'Add to Sossusvlei route',
             secondaryLabel: 'Back to gems',
           },
@@ -968,7 +999,8 @@ export const seedHiddenGems = [
           {
             title: 'Old Brewery Courtyard',
             description: 'A tucked-away Windhoek courtyard with local fashion rails, coffee, and design pop-ups.',
-            imageUri: FOOD_IMAGE,
+            imageUri: WINDHOEK_IMAGE,
+            coordinate: [17.0832, -22.5700],
             geography: { region: 'Khomas', town: 'Windhoek' },
             badge: 'City Find',
             locationLabel: 'Windhoek West',
@@ -1000,19 +1032,11 @@ export const seedHiddenGems = [
             sections: [
               {
                 title: 'Why it lands',
-                body: 'It feels curated without being sterile. You get local product, relaxed energy, and a sense of the capital beyond hotel lobbies and transfer logistics.',
-              },
-              {
-                title: 'Best moment to go',
-                body: 'Late morning works best, when the city has settled into its day and the stop can roll into lunch or a museum visit.',
-              },
-              {
-                title: 'How to fold it into the day',
-                body: 'Use it on arrival day, before a road trip departure, or as the easiest way to make Windhoek feel part of the experience instead of just transit.',
+                body: 'It provides a contemporary, structured side of Windhoek that feels connected to the city\'s maker culture. It is low-friction and rewarding for even a brief visit.',
               },
             ],
-            visitTips: ['Easy first-day stop', 'Pair with coffee or lunch', 'Good before collecting a rental car'],
-            primaryLabel: 'Save in Windhoek',
+            visitTips: ['Good coffee on site', 'Look for local design pop-ups', 'Easy walk from Independence Avenue'],
+            primaryLabel: 'Add to Windhoek day',
             secondaryLabel: 'Back to gems',
           },
         ];

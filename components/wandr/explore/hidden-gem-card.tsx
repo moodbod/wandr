@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     lineHeight: 22,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.5,
     textTransform: 'uppercase',
   },

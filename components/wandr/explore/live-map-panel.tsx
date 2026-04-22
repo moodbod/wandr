@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.4,
     textTransform: 'uppercase',
   },
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,

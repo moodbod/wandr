@@ -1,5 +1,5 @@
-import { WandrScreen } from '@/components/wandr-screen';
+import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 
 export default function StayDetailsScreen() {
-  return <WandrScreen screen="stayDetails" />;
+  return <StayDetailScreen />;
 }

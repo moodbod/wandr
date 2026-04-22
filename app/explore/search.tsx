@@ -1,5 +1,5 @@
 import { useQuery } from 'convex/react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,6 +15,7 @@ import type { ExploreActivityCard as ExploreActivityCardContent, ExploreHiddenGe
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { useCurrentRegionCenter } from '@/hooks/use-current-region-center';
 import { getExplorePageContentRef } from '@/lib/convex';
+import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import {
     buildRegionOptions,
     matchesExperienceFilters,
@@ -36,11 +37,47 @@ export default function ExploreSearchScreen() {
 
 function ConnectedExploreSearchScreen() {
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
   const { coordinate: currentRegionCenter } = useCurrentRegionCenter();
-  const [activeRegion, setActiveRegion] = useState<string>('all');
+  const [activeRegion, setActiveRegion] = useState<string>('');
   const [activeIntent, setActiveIntent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const searchMatchedExperiences = useMemo(
+    () =>
+      page?.experiences.filter((e) => matchesExperienceFilters(e, 'all', 'all', searchQuery)) ?? [],
+    [page, searchQuery]
+  );
+
+  const searchMatchedGems = useMemo(
+    () =>
+      page?.search.hiddenGems.items.filter((item) => matchesHiddenGemFilters(item, 'all', searchQuery)) ?? [],
+    [page, searchQuery]
+  );
+
+  const regionOptions = useMemo(
+    () =>
+      page
+        ? buildRegionOptions(
+            searchMatchedExperiences,
+            searchMatchedGems,
+            currentRegionCenter ?? page.home.hero.centerCoordinate
+          )
+        : [],
+    [currentRegionCenter, page, searchMatchedExperiences, searchMatchedGems]
+  );
+
+  useEffect(() => {
+    if (regionOptions.length === 0) {
+      return;
+    }
+
+    const hasActiveRegion = regionOptions.some((option) => option.key === activeRegion);
+
+    if (!activeRegion || !hasActiveRegion) {
+      setActiveRegion(regionOptions[0].key);
+    }
+  }, [activeRegion, regionOptions]);
 
   if (!page) {
     return (
@@ -52,20 +89,6 @@ function ConnectedExploreSearchScreen() {
       </ThemedView>
     );
   }
-
-  const searchMatchedExperiences = page.experiences.filter((e) =>
-    matchesExperienceFilters(e, 'all', 'all', searchQuery)
-  );
-
-  const searchMatchedGems = page.search.hiddenGems.items.filter((item) =>
-    matchesHiddenGemFilters(item, 'all', searchQuery)
-  );
-
-  const regionOptions = buildRegionOptions(
-    searchMatchedExperiences,
-    searchMatchedGems,
-    currentRegionCenter ?? page.home.hero.centerCoordinate
-  );
 
   const activeIntentOptions = intentOptions.filter(
     (option) =>
@@ -79,7 +102,7 @@ function ConnectedExploreSearchScreen() {
   const filteredHiddenGems = page.search.hiddenGems.items.filter((item) =>
     matchesHiddenGemFilters(item, activeRegion, searchQuery)
   );
-  const previewCards = filteredExperiences.slice(0, 2).map<ExploreActivityCardContent>((experience) => ({
+  const previewCards = filteredExperiences.map<ExploreActivityCardContent>((experience) => ({
     badge: experience.badge,
     badgeTone: experience.badgeTone,
     ctaLabel: experience.ctaLabel,
@@ -157,7 +180,6 @@ function ExploreSearchScreenView({
         ]}
       >
         <View style={styles.hero}>
-          <ThemedText style={styles.eyebrow}>Trip Lens</ThemedText>
           <ThemedText style={styles.title}>Search Discovery</ThemedText>
           <ThemedText style={styles.description}>
             Filter by real region data first, then layer mood and search on top.
@@ -179,7 +201,6 @@ function ExploreSearchScreenView({
         {previewCards.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
-              <ThemedText style={styles.sectionEyebrow}>Best next move</ThemedText>
               <ThemedText style={styles.sectionTitle}>Start with these</ThemedText>
             </View>
             <View style={styles.cardStack}>
@@ -199,13 +220,12 @@ function ExploreSearchScreenView({
         {filteredHiddenGems.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
-              <ThemedText style={styles.sectionEyebrow}>Quieter picks</ThemedText>
               <ThemedText style={styles.sectionTitle}>Local detours worth keeping</ThemedText>
             </View>
             <View style={styles.cardStack}>
               {isLoading
                 ? Array.from({ length: 2 }).map((_, index) => <ExploreHiddenGemCardSkeleton key={`search-gem-skeleton-${index}`} />)
-                : filteredHiddenGems.slice(0, 2).map((item) => (
+                : filteredHiddenGems.map((item) => (
                     <ExploreHiddenGemCard
                       key={item.title}
                       card={item}
@@ -231,18 +251,10 @@ const styles = StyleSheet.create({
   hero: {
     gap: 10,
   },
-  eyebrow: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '900',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   title: {
     fontSize: 40,
     lineHeight: 38,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1.4,
     textTransform: 'uppercase',
   },
@@ -259,18 +271,10 @@ const styles = StyleSheet.create({
   sectionHeading: {
     gap: 4,
   },
-  sectionEyebrow: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: designSystem.colors.lime,
-  },
   sectionTitle: {
     fontSize: 26,
     lineHeight: 28,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.8,
   },
   cardStack: {

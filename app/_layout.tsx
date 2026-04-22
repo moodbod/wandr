@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { TripNotificationCenter } from '@/components/wandr/notifications/trip-notification-center';
 import { convexClient } from '@/lib/convex';
 
 export const unstable_settings = {
@@ -26,6 +27,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      {convexClient ? <TripNotificationCenter /> : null}
       <StatusBar style="auto" />
     </ThemeProvider>
   );

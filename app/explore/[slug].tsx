@@ -1,59 +1,35 @@
 import { useMutation, useQuery } from 'convex/react';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Plus } from 'phosphor-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ExperienceFeatureCard, type ExperienceFeatureCardItem } from '@/components/wandr/explore/experience-feature-card';
-import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
+import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
+import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
+import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
+import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
+import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { WandrHeader } from '@/components/wandr/header';
-import { WandrTravelerGroup } from '@/components/wandr/traveler-group';
 import { designSystem } from '@/constants/design-system';
+import type { Id } from '@/convex/_generated/dataModel';
 import {
   bookExperienceRef,
+  createTripRef,
   ensureExploreCommunitySeedRef,
   getExplorePageContentRef,
   getLocationLikeStateRef,
   getTripDashboardRef,
   getUserItineraryRef,
+  listUserTripsRef,
   toggleLocationLikeRef,
 } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
-
-function toRadians(value: number) {
-  return (value * Math.PI) / 180;
-}
-
-function getDistanceInKm(from: readonly [number, number], to: readonly [number, number]) {
-  const earthRadiusKm = 6371;
-  const [fromLng, fromLat] = from;
-  const [toLng, toLat] = to;
-  const deltaLat = toRadians(toLat - fromLat);
-  const deltaLng = toRadians(toLng - fromLng);
-  const startLat = toRadians(fromLat);
-  const endLat = toRadians(toLat);
-
-  const a =
-    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDistanceLabel(distanceKm: number) {
-  if (distanceKm < 1) {
-    return `${Math.round(distanceKm * 1000)} m`;
-  }
-
-  if (distanceKm < 100) {
-    return `${distanceKm.toFixed(1)} km`;
-  }
-
-  return `${Math.round(distanceKm)} km`;
-}
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 
 export default function ExploreExperienceScreen() {
   return <ConnectedExploreExperienceScreen />;
@@ -63,10 +39,13 @@ function ConnectedExploreExperienceScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
-  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
+  const trips = useQuery(listUserTripsRef, { travelerSlug: currentDemoTravelerSlug });
+  const primaryTripId = trips?.[0]?._id;
+  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug, tripId: primaryTripId });
   const ensureCommunitySeed = useMutation(ensureExploreCommunitySeedRef);
   const bookExperience = useMutation(bookExperienceRef);
+  const createTrip = useMutation(createTripRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
   const itinerary = useQuery(getUserItineraryRef, { travelerSlug: currentDemoTravelerSlug });
   const likeState = useQuery(getLocationLikeStateRef, {
@@ -77,6 +56,8 @@ function ConnectedExploreExperienceScreen() {
   const [bookingAction, setBookingAction] = useState<'primary' | 'secondary' | null>(null);
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
+
+  const tripSheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
     void ensureCommunitySeed({});
@@ -96,50 +77,40 @@ function ConnectedExploreExperienceScreen() {
   }
 
   const experience = page.experiences.find((item) => item.slug === slug);
+  const activityCard = page.home.activities.find((item) => item.experienceSlug === slug);
 
   if (!experience) {
     return null;
   }
 
-  const isAlreadyBooked =
-    itinerary.some((item) => item.experienceSlug === slug) || optimisticBookedSlug === slug;
-  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
-  const activeTripCoordinate = trip.activeItem?.experience.coordinate ?? trip.centerCoordinate;
-  const bookedDistanceKm =
-    isAlreadyBooked && activeTripCoordinate && experience.coordinate
-      ? getDistanceInKm(activeTripCoordinate, experience.coordinate)
-      : null;
-  const bookedDistanceLabel = bookedDistanceKm !== null ? formatDistanceLabel(bookedDistanceKm) : null;
-  const bookedCardTitle = bookedDistanceLabel ?? 'On your route';
-  const bookedCardDescription =
-    bookedDistanceLabel !== null
-      ? `${bookedDistanceLabel} from your current stop to ${experience.title}.`
-      : 'This experience is already saved in your trip itinerary and ready on your route.';
+  const bookedTrips = (itinerary || []).filter((item) => item.experienceSlug === slug);
+  const isAlreadyBooked = bookedTrips.length > 0 || optimisticBookedSlug === slug;
 
+  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
   const locationLabel = experience.locationLabel ?? page.home.hero.locationLabel;
   const galleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
-  const travelerCount = experience.travelerMomentum?.visitorCount ?? 0;
-  const shouldShowTravelerMomentum = travelerCount > 0;
-  const travelerHeadingLabel =
-    travelerCount === 1
-      ? `1 person from ${experience.travelerMomentum?.countryLabel} is visiting`
-      : `People from ${experience.travelerMomentum?.countryLabel} are visiting`;
-  const travelerSummary = experience.travelerMomentum
-    ? `${travelerCount} ${travelerCount === 1 ? 'traveler' : 'travelers'} from ${
-        experience.travelerMomentum.countryLabel
-      } booked this experience in the app.`
-    : null;
-  const tripFitItems: readonly ExperienceFeatureCardItem[] =
+  const bookingMapCenter = experience.coordinate ?? trip.centerCoordinate;
+  const bookingMapMarkers = experience.coordinate
+    ? [
+        {
+          id: experience.slug,
+          coordinate: experience.coordinate,
+          experienceSlug: experience.slug,
+          imageUri: experience.imageUri,
+          tone: 'accent' as const,
+          status: 'active' as const,
+        },
+      ]
+    : [];
+  const tripFitItems: readonly TripFitSummaryItem[] =
     experience.tripFit?.length
-      ? (experience.tripFit as unknown as ExperienceFeatureCardItem[])
+      ? (experience.tripFit as unknown as TripFitSummaryItem[])
       : [
           experience.category
             ? {
                 label: 'Category',
                 value: experience.category.toUpperCase(),
                 detail: 'A strong fit if this is the energy you want the day to hold.',
-                icon: 'compass' as const,
-                tone: 'dark' as const,
               }
             : null,
           experience.durationLabel
@@ -147,8 +118,6 @@ function ConnectedExploreExperienceScreen() {
                 label: 'Duration',
                 value: experience.durationLabel.toUpperCase(),
                 detail: 'Useful when you are balancing this booking with the rest of the trip.',
-                icon: 'clock' as const,
-                tone: 'accent' as const,
               }
             : null,
           experience.groupSizeLabel
@@ -156,13 +125,11 @@ function ConnectedExploreExperienceScreen() {
                 label: 'Group Size',
                 value: experience.groupSizeLabel.toUpperCase(),
                 detail: 'Helps you judge whether this works better solo, as a pair, or with friends.',
-                icon: 'users' as const,
-                tone: 'light' as const,
               }
             : null,
-        ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as ExperienceFeatureCardItem[];
+        ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as TripFitSummaryItem[];
 
-  const saveExperienceToTrip = async (action: 'primary' | 'secondary') => {
+  const saveExperienceToTrip = async (action: 'primary' | 'secondary', tripId?: Id<'trips'>) => {
     if (bookingAction) {
       return false;
     }
@@ -172,6 +139,7 @@ function ConnectedExploreExperienceScreen() {
       await bookExperience({
         experienceSlug: experience.slug,
         travelerSlug: currentDemoTravelerSlug,
+        tripId,
       });
       setOptimisticBookedSlug(experience.slug);
       return true;
@@ -180,12 +148,30 @@ function ConnectedExploreExperienceScreen() {
     }
   };
 
-  const handleAddToTrip = async () => {
-    await saveExperienceToTrip('primary');
+  const handleAddToTripPress = () => {
+    tripSheetRef.current?.snapToIndex(0);
+  };
+
+  const handleSelectTripForBooking = async (tripId: Id<'trips'>) => {
+    tripSheetRef.current?.close();
+    await saveExperienceToTrip('primary', tripId);
   };
 
   const handleStartJourney = async () => {
-    const didBook = await saveExperienceToTrip('secondary');
+    if (bookingAction) {
+      return;
+    }
+
+    const tripTitle = experience.locationLabel
+      ? `${experience.locationLabel.split(',')[0]?.trim() ?? experience.title} Trip`
+      : `${experience.title} Trip`;
+
+    const tripId = await createTrip({
+      name: tripTitle,
+      travelerSlug: currentDemoTravelerSlug,
+    });
+
+    const didBook = await saveExperienceToTrip('secondary', tripId);
 
     if (didBook) {
       router.push('/trip');
@@ -227,10 +213,14 @@ function ConnectedExploreExperienceScreen() {
         }}
       />
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top + 72, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
         ]}>
+        
+        <ExperienceGalleryCarousel images={galleryImages} />
+
         <View style={styles.titleBlock}>
           <View style={styles.badge}>
             <ThemedText style={styles.badgeText}>{experience.badge}</ThemedText>
@@ -239,49 +229,42 @@ function ConnectedExploreExperienceScreen() {
             <ThemedText
               adjustsFontSizeToFit
               minimumFontScale={0.4}
-              numberOfLines={1}
+              numberOfLines={2}
               style={styles.title}>
               {experience.title.toUpperCase()}
             </ThemedText>
           </View>
-          <ThemedText style={styles.subtitle}>{locationLabel}</ThemedText>
+          <View style={styles.subtitleRow}>
+            <ThemedText style={styles.subtitle}>{locationLabel}</ThemedText>
+          </View>
         </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.galleryRail}>
-          {galleryImages.map((imageUri, index) => (
-            <View key={`${imageUri}-${index}`} style={styles.galleryCard}>
-              <Image source={imageUri} contentFit="cover" style={styles.galleryImage} />
-            </View>
-          ))}
-        </ScrollView>
 
         <ThemedText style={styles.summary}>{experience.description}</ThemedText>
 
-        {shouldShowTravelerMomentum && experience.travelerMomentum ? (
-          <View style={styles.socialProof}>
-            <View style={styles.socialProofCopy}>
-              <WandrTravelerGroup count={experience.travelerMomentum.visitorCount} borderColor={designSystem.colors.surface} />
-              <ThemedText style={styles.socialProofTitle}>{travelerHeadingLabel}</ThemedText>
-            </View>
-            <ThemedText style={styles.socialProofText}>{travelerSummary}</ThemedText>
-          </View>
+        {experience.price ? (
+          <AverageSpendSection amount={experience.price} priceSuffix={experience.priceSuffix} />
         ) : null}
+
+        {experience.travelerMomentum && (
+          <TravelerMomentum
+            compact
+            regionName={activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel}
+            visitorCount={activityCard?.visitorCount ?? experience.travelerMomentum.visitorCount}
+            compactProfiles={(activityCard?.visitorNames ?? []).map((name) => ({ id: name, name }))}
+            viewerName={activityCard?.viewerName}
+            avatars={[]}
+            emptyLabel={
+              (activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel)
+                ? `Be the first traveler from ${activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel} to visit`
+                : 'Be the first traveler to visit'
+            }
+          />
+        )}
 
         {tripFitItems.length > 0 ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Trip Fit</ThemedText>
-            <View style={styles.tripFitColumn}>
-              {tripFitItems.map((item, index) => (
-                <ExperienceFeatureCard
-                  key={`${item.label}-${item.value}`}
-                  {...item}
-                  tone={item.tone ?? (index % 3 === 0 ? 'dark' : index % 3 === 1 ? 'light' : 'accent')}
-                />
-              ))}
-            </View>
+            <TripFitSummary items={tripFitItems} />
           </View>
         ) : null}
 
@@ -303,25 +286,23 @@ function ConnectedExploreExperienceScreen() {
 
         {!isAlreadyBooked ? (
           <View style={styles.actions}>
-            <JourneyCtaCard
+            <JourneyMapCta
+              centerCoordinate={bookingMapCenter}
               loadingAction={bookingAction}
-              primaryLabel={experience.booking?.addToTripLabel ?? 'Add to trip'}
+              markers={bookingMapMarkers}
+              primaryLabel="Add to trip"
               secondaryLabel="Start journey"
-              onPrimaryPress={() => {
-                void handleAddToTrip();
-              }}
-              onSecondaryPress={() => {
-                void handleStartJourney();
-              }}
+              onPrimaryPress={handleAddToTripPress}
+              onSecondaryPress={handleStartJourney}
             />
           </View>
         ) : (
           <View style={styles.actions}>
-            <JourneyCtaCard
+            <JourneyMapCta
+              centerCoordinate={bookingMapCenter}
               loadingAction={null}
-              title={bookedCardTitle}
-              description={bookedCardDescription}
-              primaryLabel="View itinerary"
+              markers={bookingMapMarkers}
+              primaryLabel="Itinerary"
               secondaryLabel="Open map"
               onPrimaryPress={() => router.push('/trip')}
               onSecondaryPress={() => router.push('/trip/map')}
@@ -329,6 +310,42 @@ function ConnectedExploreExperienceScreen() {
           </View>
         )}
       </ScrollView>
+
+      <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['50%']} enablePanDownToClose>
+        <BottomSheetView style={styles.sheetContent}>
+          <ThemedText style={styles.sheetTitle}>Add to Trip</ThemedText>
+          <ThemedText style={styles.sheetSubtitle}>
+            Choose which trip to add this experience to.
+          </ThemedText>
+
+          <ScrollView contentContainerStyle={styles.tripList}>
+            {(trips?.length ?? 0) === 0 ? (
+              <Pressable
+                style={[styles.tripOption, styles.tripOptionDefault]}
+                onPress={handleStartJourney}>
+                <View style={styles.tripOptionIcon}>
+                  <Plus size={20} color={designSystem.colors.darkGreen} weight="bold" />
+                </View>
+                <ThemedText style={styles.tripOptionName}>Create My First Trip</ThemedText>
+              </Pressable>
+            ) : null}
+
+            {trips?.map((t) => (
+              <Pressable
+                key={t._id}
+                style={styles.tripOption}
+                onPress={() => handleSelectTripForBooking(t._id as Id<'trips'>)}>
+                {t.previewImage ? (
+                  <Image source={t.previewImage} style={styles.tripOptionImage} contentFit="cover" />
+                ) : (
+                  <View style={styles.tripOptionImagePlaceholder} />
+                )}
+                <ThemedText style={styles.tripOptionName}>{t.name}</ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </BottomSheetView>
+      </GlassBottomSheet>
     </ThemedView>
   );
 }
@@ -342,7 +359,7 @@ const styles = StyleSheet.create({
     gap: designSystem.spacing.xxxl,
   },
   titleBlock: {
-    paddingTop: 64,
+    paddingTop: 12,
     gap: 8,
   },
   titleStack: {
@@ -356,39 +373,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   badgeText: {
-    fontSize: 11,
-    lineHeight: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...designSystem.type.eyebrow,
     color: designSystem.colors.darkGreen,
   },
   title: {
-    fontSize: 58,
-    lineHeight: 58,
-    fontWeight: '900',
-    letterSpacing: -1.8,
-    textTransform: 'uppercase',
+    ...designSystem.type.title,
+    fontSize: 44,
+    color: designSystem.colors.ink,
+    lineHeight: 44,
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
+    ...designSystem.type.bodyStrong,
     color: designSystem.colors.warmDark,
   },
-  galleryRail: {
+  subtitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
     gap: 12,
-    paddingRight: designSystem.spacing.lg,
-  },
-  galleryCard: {
-    width: 340,
-    height: 430,
-    borderRadius: designSystem.radii.feature,
-    overflow: 'hidden',
-  },
-  galleryImage: {
-    width: '100%',
-    height: '100%',
   },
   socialProof: {
     gap: 14,
@@ -402,7 +404,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   socialProofText: {
     fontSize: 14,
@@ -417,7 +419,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 30,
     lineHeight: 28,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1,
     textTransform: 'uppercase',
   },
@@ -426,9 +428,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '600',
     color: designSystem.colors.warmDark,
-  },
-  tripFitColumn: {
-    gap: 16,
   },
   includedList: {
     gap: 12,
@@ -453,5 +452,59 @@ const styles = StyleSheet.create({
   actions: {
     gap: 16,
     marginTop: 12,
+  },
+  sheetContent: {
+    flex: 1,
+    padding: 24,
+    gap: 16,
+  },
+  sheetTitle: {
+    ...designSystem.type.subtitle,
+    fontSize: 24,
+  },
+  sheetSubtitle: {
+    ...designSystem.type.body,
+    color: designSystem.colors.warmDark,
+    marginBottom: 8,
+  },
+  tripList: {
+    gap: 12,
+  },
+  tripOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: designSystem.colors.surface,
+    borderWidth: 1,
+    borderColor: designSystem.colors.border,
+  },
+  tripOptionDefault: {
+    backgroundColor: designSystem.colors.lime,
+    borderColor: designSystem.colors.lime,
+  },
+  tripOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripOptionImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  tripOptionImagePlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: designSystem.colors.border,
+  },
+  tripOptionName: {
+    ...designSystem.type.bodyStrong,
+    flex: 1,
   },
 });

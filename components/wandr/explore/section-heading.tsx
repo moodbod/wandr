@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 34,
     lineHeight: 32,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1,
     textTransform: 'uppercase',
   },
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 12,
     lineHeight: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: designSystem.colors.lime,

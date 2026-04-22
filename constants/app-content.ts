@@ -14,6 +14,7 @@ export type ContentSection = {
 export type HeaderActionKind =
   | 'avatar'
   | 'back'
+  | 'check'
   | 'favorite'
   | 'filter'
   | 'locate'
@@ -21,6 +22,7 @@ export type HeaderActionKind =
   | 'search'
   | 'menu'
   | 'notifications'
+  | 'pencil'
   | 'settings'
   | 'share';
 

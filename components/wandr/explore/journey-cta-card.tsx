@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 54,
     lineHeight: 52,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -2.4,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   primaryActionLabel: {
     fontSize: 15,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: '#f9f9f6',
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   secondaryActionLabel: {
     fontSize: 15,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,

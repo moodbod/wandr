@@ -132,6 +132,6 @@ const styles = StyleSheet.create({
   chipLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

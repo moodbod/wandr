@@ -10,33 +10,24 @@ const CARD_PADDING = 12;
 const INNER_RADIUS = CARD_RADIUS - CARD_PADDING;
 
 export function ExploreActivityCardSkeleton() {
-  const isDark = useColorScheme() === 'dark';
-
   return (
-    <ThemedView
-      lightColor="#ffffff"
-      darkColor={designSystem.colors.darkSurface}
-      style={[
-        styles.activityShell,
-        { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border },
-      ]}>
+    <View style={styles.activityShell}>
       <SkeletonBlock style={styles.activityImage} />
       <View style={styles.activityBody}>
         <View style={styles.metaRow}>
           <SkeletonBlock style={styles.badge} />
-          <SkeletonBlock style={styles.inlinePrice} />
         </View>
         <View style={styles.copy}>
           <SkeletonBlock style={styles.titleLine} />
           <SkeletonBlock style={styles.subtitleLine} />
-          <SkeletonBlock style={styles.subtitleShortLine} />
         </View>
-        <View style={styles.priceRow}>
-          <SkeletonBlock style={styles.priceLine} />
-          <SkeletonBlock style={styles.priceSuffixLine} />
+        <View style={styles.travelerRow}>
+          <SkeletonBlock style={styles.travelerGroup} />
+          <SkeletonBlock style={styles.travelerText} />
         </View>
+        <SkeletonBlock style={styles.ctaButton} />
       </View>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -63,20 +54,16 @@ export function ExploreHiddenGemCardSkeleton() {
 
 const styles = StyleSheet.create({
   activityShell: {
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: CARD_PADDING,
-    gap: 14,
+    gap: 16,
+    marginBottom: 24,
   },
   activityImage: {
-    height: 240,
-    borderRadius: INNER_RADIUS,
+    height: 320,
+    borderRadius: CARD_RADIUS,
   },
   activityBody: {
-    paddingHorizontal: 6,
-    paddingBottom: 8,
-    gap: 14,
+    paddingHorizontal: 4,
+    gap: 16,
   },
   metaRow: {
     flexDirection: 'row',
@@ -88,37 +75,35 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: designSystem.radii.pill,
   },
-  inlinePrice: {
-    width: 92,
-    height: 18,
-  },
   copy: {
     gap: 8,
   },
   titleLine: {
-    width: '74%',
-    height: 30,
+    width: '84%',
+    height: 36,
   },
   subtitleLine: {
     width: '100%',
-    height: 20,
+    height: 24,
   },
-  subtitleShortLine: {
-    width: '68%',
-    height: 20,
-  },
-  priceRow: {
+  travelerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
+    alignItems: 'center',
+    gap: 12,
   },
-  priceLine: {
-    width: 108,
-    height: 34,
+  travelerGroup: {
+    width: 100,
+    height: 42,
+    borderRadius: 21,
   },
-  priceSuffixLine: {
-    width: 84,
-    height: 20,
+  travelerText: {
+    width: 140,
+    height: 18,
+  },
+  ctaButton: {
+    width: '100%',
+    height: 54,
+    borderRadius: designSystem.radii.pill,
   },
   hiddenGemShell: {
     borderRadius: CARD_RADIUS,

@@ -23,7 +23,7 @@ function ConnectedHiddenGemDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default' });
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
   const likeState = useQuery(getLocationLikeStateRef, {
     travelerSlug: currentDemoTravelerSlug,
     locationKind: 'hiddenGem',
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: designSystem.colors.darkGreen,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 54,
     lineHeight: 54,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -1.8,
     textTransform: 'uppercase',
   },
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 30,
     lineHeight: 32,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.8,
     textTransform: 'uppercase',
   },
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   storyTitle: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '900',
+    fontWeight: '700',
     textTransform: 'uppercase',
   },
   storyBody: {

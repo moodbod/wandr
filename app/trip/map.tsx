@@ -14,7 +14,7 @@ import { TripTimelineSkeleton } from '@/components/wandr/trip/trip-skeletons';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { getTripDashboardRef } from '@/lib/convex';
+import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
 import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import type { TripDashboard } from '@/types/trip';
@@ -28,8 +28,13 @@ function ConnectedTripMapScreen() {
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const animatedIndex = useSharedValue(0);
+  const trips = useQuery(listUserTripsRef, { travelerSlug: currentDemoTravelerSlug });
+  const selectedTripId = trips?.[0]?._id;
 
-  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
+  const trip = useQuery(getTripDashboardRef, { 
+    travelerSlug: currentDemoTravelerSlug,
+    tripId: selectedTripId,
+  });
   const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
 
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -100,13 +105,6 @@ function TripMapScreenView({
 
   return (
     <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [{ kind: 'locate', accessibilityLabel: 'Locate me', onPress: () => setMapResetKey((prev) => prev + 1) }],
-        }}
-      />
       <View style={styles.body}>
         <View style={styles.mapLayer}>
           <ExploreMapHero
@@ -118,6 +116,8 @@ function TripMapScreenView({
             markers={markers}
             topInset={insetsTop}
             onInteract={handleMapInteract}
+            onLocateMe={() => setMapResetKey((prev) => prev + 1)}
+            showBackButton
           />
         </View>
 
@@ -185,15 +185,12 @@ const styles = StyleSheet.create({
   },
   locationEyebrow: {
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   sectionTitle: {
-    fontSize: 32,
-    lineHeight: 34,
-    fontWeight: '900',
-    letterSpacing: -1.2,
-    textTransform: 'uppercase',
+    ...designSystem.type.title,
+    color: designSystem.colors.ink,
   },
 });

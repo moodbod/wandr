@@ -1,480 +1,319 @@
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { CheckCircle, NavigationArrow } from 'phosphor-react-native';
+import { MapTrifold, X } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { WandrTravelerGroup } from '@/components/wandr/traveler-group';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { TripDashboardItem } from '@/types/trip';
 
 type TripTimelineSectionProps = {
   items: readonly TripDashboardItem[];
+  isEditing?: boolean;
+  onRemoveItem?: (itemId: string) => void;
+  removingItemId?: string | null;
   variant?: 'default' | 'sheet';
 };
 
-const MARKER_SIZE = 48;
-const MARKER_COLUMN_WIDTH = 56;
-const ACTIVE_MEDIA_RADIUS = 24;
-
-type TimelineTone = {
-  markerKind: 'active' | 'completed' | 'upcoming';
-};
-
-function getTimelineTone(status: TripDashboardItem['status']): TimelineTone {
-  switch (status) {
-    case 'active':
-      return { markerKind: 'active' };
-    case 'completed':
-      return { markerKind: 'completed' };
-    case 'upcoming':
-      return { markerKind: 'upcoming' };
-  }
-}
+const MARKER_SIZE = 32;
+const MARKER_COLUMN_WIDTH = 48;
 
 function TimelineMarker({
-  kind,
+  index,
   isDark,
 }: {
-  kind: TimelineTone['markerKind'];
+  index: number;
   isDark: boolean;
 }) {
-  if (kind === 'active') {
-    return (
-      <View style={[styles.markerBase, styles.markerActive, isDark && styles.markerActiveDark]}>
-        <NavigationArrow color={designSystem.colors.darkGreen} size={18} weight="fill" />
-      </View>
-    );
-  }
-
-  if (kind === 'completed') {
-    return (
-      <View style={[styles.markerBase, styles.markerCompleted, isDark && styles.markerCompletedDark]}>
-        <CheckCircle
-          color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark}
-          size={18}
-          weight="fill"
-        />
-      </View>
-    );
-  }
-
   return (
-    <View style={[styles.markerBase, styles.markerUpcoming, isDark && styles.markerUpcomingDark]}>
-      <View style={[styles.markerUpcomingDot, isDark && styles.markerUpcomingDotDark]} />
+    <View style={[styles.markerBase, isDark && styles.markerDark]}>
+      <ThemedText style={styles.markerText}>{index + 1}</ThemedText>
     </View>
   );
 }
 
-export function TripTimelineSection({ items, variant = 'default' }: TripTimelineSectionProps) {
+export function TripTimelineSection({
+  items,
+  isEditing = false,
+  onRemoveItem,
+  removingItemId = null,
+  variant = 'default',
+}: TripTimelineSectionProps) {
   const isDark = useColorScheme() === 'dark';
   const isSheet = variant === 'sheet';
 
   return (
     <View style={[styles.timeline, isSheet ? styles.timelineSheet : null]}>
-      {items.map((item, index) => {
-        const { experience, status } = item;
-        const tone = getTimelineTone(status);
-        const isActive = status === 'active';
-        const isLast = index === items.length - 1;
-        const squadCount = Math.max(1, Math.min(2, experience.travelerMomentum?.visitorCount ?? 1));
+      {!isSheet && (
+        <View style={styles.sectionHeader}>
+          <ThemedText style={styles.sectionTitle}>Itinerary</ThemedText>
+          <View style={styles.sectionMeta}>
+            <MapTrifold size={18} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="bold" />
+            <ThemedText style={styles.sectionMetaText}>{items.length} Places</ThemedText>
+          </View>
+        </View>
+      )}
 
-        return (
-          <Link key={item._id} href={{ pathname: '/explore/[slug]', params: { slug: experience.slug } }} asChild>
-            <Pressable style={[styles.item, isSheet ? styles.itemSheet : null]}>
-              <View style={[styles.mainRow, isSheet ? styles.rowSheet : null]}>
-                <View style={styles.markerCell}>
-                  <TimelineMarker kind={tone.markerKind} isDark={isDark} />
+      <View style={styles.listContainer}>
+        {items.map((item, index) => {
+          const { experience } = item;
+          const isLast = index === items.length - 1;
+          const isRemoving = removingItemId === item._id;
 
-                  {!isLast ? (
-                    <View style={styles.rowConnectorSlot}>
-                      <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />
+          const content = (
+            <View style={styles.mainRow}>
+              <View style={styles.markerCell}>
+                <TimelineMarker index={index} isDark={isDark} />
+                {!isLast && <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />}
+              </View>
+
+              <View style={[styles.card, isDark && styles.cardDark]}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardLeft}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.dayBadge}>
+                        <ThemedText style={styles.dayBadgeText}>Day {index + 1}</ThemedText>
+                      </View>
+                      {isEditing ? (
+                        <Pressable
+                          accessibilityLabel={`Remove ${experience.title} from itinerary`}
+                          disabled={isRemoving}
+                          onPress={() => onRemoveItem?.(item._id)}
+                          style={[styles.removeButton, isDark && styles.removeButtonDark, isRemoving && styles.removeButtonDisabled]}>
+                          <X size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
+                        </Pressable>
+                      ) : null}
                     </View>
-                  ) : null}
-                </View>
+                    
+                    <ThemedText style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
+                      {experience.title}
+                    </ThemedText>
+                    
+                    <ThemedText style={[styles.description, isDark && styles.descriptionDark]} numberOfLines={2}>
+                      {experience.description}
+                    </ThemedText>
 
-                <View
-                  style={[
-                    styles.card,
-                    isDark && styles.cardDark,
-                    isActive ? styles.cardActive : styles.cardInactive,
-                    isActive && isDark ? styles.cardActiveDark : null,
-                    !isActive && isDark ? styles.cardInactiveDark : null,
-                    isSheet ? styles.cardSheet : null,
-                  ]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerCopy}>
-                      <ThemedText
-                        style={[
-                          styles.title,
-                          isDark && styles.titleDark,
-                          isActive ? styles.titleActive : null,
-                          isActive && isDark ? styles.titleActiveDark : null,
-                        ]}>
-                        {experience.title}
-                      </ThemedText>
-                      <ThemedText
-                        style={[
-                          styles.location,
-                          isDark && styles.locationDark,
-                          isActive ? styles.locationActive : null,
-                          isActive && isDark ? styles.locationActiveDark : null,
-                        ]}>
-                        {experience.locationLabel || 'Swakopmund'}
-                      </ThemedText>
+                    <View style={styles.tagRow}>
+                      {experience.category && (
+                        <View style={[styles.tag, isDark && styles.tagDark]}>
+                          <ThemedText style={styles.tagText}>{experience.category}</ThemedText>
+                        </View>
+                      )}
+                      {experience.durationLabel && (
+                        <View style={[styles.tag, isDark && styles.tagDark]}>
+                          <ThemedText style={styles.tagText}>{experience.durationLabel}</ThemedText>
+                        </View>
+                      )}
                     </View>
                   </View>
 
-                  {isActive ? (
-                    <>
-                      <ThemedText
-                        style={[
-                          styles.description,
-                          isDark && styles.descriptionDark,
-                          isActive ? styles.descriptionActive : null,
-                          isActive && isDark ? styles.descriptionActiveDark : null,
-                        ]}>
-                        {experience.description}
-                      </ThemedText>
-
-                      {experience.imageUri ? (
-                        <View style={styles.mediaFrame}>
-                          <Image source={experience.imageUri} style={styles.media} contentFit="cover" />
-                        </View>
-                      ) : null}
-
-                      <View style={styles.metaRow}>
-                        <View style={styles.metaGroup}>
-                          <WandrTravelerGroup
-                            count={squadCount}
-                            borderColor={isActive ? designSystem.colors.mint : designSystem.colors.surface}
-                          />
-                          <ThemedText
-                            style={[
-                              styles.metaText,
-                              isDark && styles.metaTextDark,
-                              isActive ? styles.metaTextActive : null,
-                              isActive && isDark ? styles.metaTextActiveDark : null,
-                            ]}>
-                            Squad is here
-                          </ThemedText>
-                        </View>
-
-                        {experience.durationLabel ? (
-                          <ThemedText
-                            style={[
-                              styles.metaTag,
-                              isDark && styles.metaTagDark,
-                              isActive ? styles.metaTagActive : null,
-                              isActive && isDark ? styles.metaTagActiveDark : null,
-                            ]}>
-                            {experience.durationLabel}
-                          </ThemedText>
-                        ) : null}
-                      </View>
-                    </>
-                  ) : (
-                    <View style={styles.compactFooter}>
-                      {experience.category ? (
-                        <ThemedText style={[styles.compactTag, isDark && styles.compactTagDark]}>
-                          {experience.category}
-                        </ThemedText>
-                      ) : null}
-
-                      {experience.durationLabel ? (
-                        <ThemedText style={[styles.compactTag, isDark && styles.compactTagDark]}>
-                          {experience.durationLabel}
-                        </ThemedText>
-                      ) : null}
+                  {experience.imageUri && (
+                    <View style={styles.imageContainer}>
+                      <Image source={experience.imageUri} style={styles.image} contentFit="cover" />
                     </View>
                   )}
                 </View>
               </View>
+            </View>
+          );
 
-              {!isLast ? (
-                <View style={styles.connectorRow}>
-                  <View style={styles.markerCell}>
-                    <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />
-                  </View>
-                  <View style={styles.connectorSpacer} />
-                </View>
-              ) : null}
-            </Pressable>
-          </Link>
-        );
-      })}
+          if (isEditing) {
+            return (
+              <View key={item._id} style={styles.item}>
+                {content}
+              </View>
+            );
+          }
+
+          return (
+            <Link key={item._id} href={{ pathname: '/explore/[slug]', params: { slug: experience.slug } }} asChild>
+              <Pressable style={styles.item}>{content}</Pressable>
+            </Link>
+          );
+        })}
+
+        <View style={[styles.optimizedNote, isDark && styles.optimizedNoteDark]}>
+          <ThemedText style={[styles.optimizedNoteText, isDark && styles.optimizedNoteTextDark]}>
+            Your route is optimized for efficiency, helping you spend less time driving and more time at each stop.
+          </ThemedText>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   timeline: {
-    gap: 18,
-    paddingVertical: 4,
+    paddingVertical: 0,
   },
   timelineSheet: {
     marginTop: 8,
   },
-  item: {
-    gap: 0,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
-  itemSheet: {
-    gap: 0,
+  sectionTitle: {
+    ...designSystem.type.subtitle,
+    fontSize: 28, // Overriding subtitle slightly for this specific header
+  },
+  sectionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionMetaText: {
+    ...designSystem.type.bodyStrong,
+    fontSize: 15,
+    color: designSystem.colors.gray,
+  },
+  listContainer: {
+    gap: 12,
   },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 16,
-  },
-  rowSheet: {
-    gap: 18,
   },
   markerCell: {
     width: MARKER_COLUMN_WIDTH,
     alignItems: 'center',
-    flexShrink: 0,
-  },
-  rowConnectorSlot: {
-    flex: 1,
-    width: 4,
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 2,
-  },
-  connectorRow: {
-    flexDirection: 'row',
-    gap: 16,
-    height: 18,
-  },
-  connectorSpacer: {
-    flex: 1,
-  },
-  connectorLine: {
-    width: 4,
-    flex: 1,
-    borderRadius: 999,
-    backgroundColor: 'rgba(14,15,12,0.08)',
-    marginVertical: -2,
-  },
-  connectorLineDark: {
-    backgroundColor: 'rgba(249,249,246,0.14)',
+    position: 'relative',
   },
   markerBase: {
     width: MARKER_SIZE,
     height: MARKER_SIZE,
     borderRadius: MARKER_SIZE / 2,
+    backgroundColor: designSystem.colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: designSystem.colors.background,
+    zIndex: 2,
   },
-  markerActive: {
-    backgroundColor: designSystem.colors.lime,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 5,
+  markerDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderWidth: 1,
+    borderColor: designSystem.colors.darkBorder,
   },
-  markerActiveDark: {
-    borderColor: designSystem.colors.darkBackground,
+  markerText: {
+    color: '#fff',
+    ...designSystem.type.bodyStrong,
+    fontSize: 14,
   },
-  markerCompleted: {
-    backgroundColor: designSystem.colors.surface,
+  connectorLine: {
+    position: 'absolute',
+    top: MARKER_SIZE,
+    bottom: -24,
+    width: 2,
+    backgroundColor: 'rgba(14,15,12,0.08)',
+    zIndex: 1,
   },
-  markerCompletedDark: {
-    borderColor: designSystem.colors.darkBackground,
-    backgroundColor: '#20251d',
-  },
-  markerUpcoming: {
-    backgroundColor: '#eef0eb',
-  },
-  markerUpcomingDark: {
-    borderColor: designSystem.colors.darkBackground,
-    backgroundColor: '#20251d',
-  },
-  markerUpcomingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(14,15,12,0.28)',
-  },
-  markerUpcomingDotDark: {
-    backgroundColor: 'rgba(249,249,246,0.38)',
+  connectorLineDark: {
+    backgroundColor: 'rgba(249,249,246,0.14)',
   },
   card: {
     flex: 1,
-    borderRadius: 30,
-    padding: 22,
-    borderWidth: 1,
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
   },
   cardDark: {
+    backgroundColor: designSystem.colors.darkSurface,
     borderColor: designSystem.colors.darkBorder,
+    borderWidth: 1,
+    shadowOpacity: 0.2,
   },
-  cardInactive: {
-    backgroundColor: '#f4f4f1',
-    borderColor: 'rgba(14,15,12,0.05)',
-  },
-  cardInactiveDark: {
-    backgroundColor: '#1a1e18',
-    borderColor: 'rgba(249,249,246,0.06)',
-  },
-  cardActive: {
-    backgroundColor: designSystem.colors.mint,
-    borderColor: 'rgba(159,232,112,0.36)',
-    padding: 24,
-    borderRadius: 34,
-  },
-  cardActiveDark: {
-    backgroundColor: '#1b2515',
-    borderColor: 'rgba(159,232,112,0.22)',
-  },
-  cardSheet: {
-    borderRadius: 32,
-  },
-  cardHeader: {
+  cardContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  titleDark: {
-    color: 'rgba(249,249,246,0.9)',
-  },
-  title: {
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: '900',
-    letterSpacing: -0.7,
-    color: designSystem.colors.ink,
-  },
-  titleActive: {
-    fontSize: 30,
-    lineHeight: 32,
-    letterSpacing: -1,
-    color: designSystem.colors.darkGreen,
-  },
-  titleActiveDark: {
-    color: designSystem.colors.lime,
-  },
-  location: {
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: designSystem.colors.warmDark,
-  },
-  locationDark: {
-    color: 'rgba(249,249,246,0.76)',
-  },
-  locationActive: {
-    fontSize: 17,
-    lineHeight: 22,
-    color: 'rgba(22,51,0,0.7)',
-  },
-  locationActiveDark: {
-    color: 'rgba(249,249,246,0.72)',
-  },
-  description: {
-    marginTop: 14,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: 'rgba(14,15,12,0.62)',
-  },
-  descriptionDark: {
-    color: 'rgba(249,249,246,0.64)',
-  },
-  descriptionActive: {
-    color: 'rgba(22,51,0,0.74)',
-  },
-  descriptionActiveDark: {
-    color: 'rgba(249,249,246,0.76)',
-  },
-  mediaFrame: {
-    marginTop: 16,
-    height: 176,
-    borderRadius: ACTIVE_MEDIA_RADIUS,
-    overflow: 'hidden',
-  },
-  media: {
-    width: '100%',
-    height: '100%',
-  },
-  metaRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 16,
-    flexWrap: 'wrap',
   },
-  metaGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  metaText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '800',
-    color: 'rgba(14,15,12,0.56)',
-  },
-  metaTextDark: {
-    color: 'rgba(249,249,246,0.64)',
-  },
-  metaTextActive: {
-    color: 'rgba(22,51,0,0.68)',
-  },
-  metaTextActiveDark: {
-    color: 'rgba(249,249,246,0.72)',
-  },
-  metaTag: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: designSystem.colors.darkGreen,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: designSystem.radii.pill,
-  },
-  metaTagDark: {
-    backgroundColor: 'rgba(249,249,246,0.1)',
-    color: 'rgba(249,249,246,0.86)',
-  },
-  metaTagActive: {
-    backgroundColor: 'rgba(255,255,255,0.55)',
-  },
-  metaTagActiveDark: {
-    backgroundColor: 'rgba(159,232,112,0.08)',
-  },
-  compactFooter: {
-    marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  cardLeft: {
+    flex: 1,
     gap: 8,
   },
-  compactTag: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: 'rgba(14,15,12,0.52)',
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dayBadge: {
     backgroundColor: 'rgba(14,15,12,0.04)',
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: designSystem.radii.pill,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
-  compactTagDark: {
-    color: 'rgba(249,249,246,0.7)',
+  dayBadgeText: {
+    ...designSystem.type.eyebrow,
+    fontSize: 10,
+    color: designSystem.colors.gray,
+  },
+  removeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(14,15,12,0.06)',
+  },
+  removeButtonDark: {
     backgroundColor: 'rgba(249,249,246,0.08)',
+  },
+  removeButtonDisabled: {
+    opacity: 0.5,
+  },
+  title: {
+    ...designSystem.type.cardTitle,
+    color: designSystem.colors.ink,
+  },
+  titleDark: {
+    color: designSystem.colors.darkText,
+  },
+  description: {
+    ...designSystem.type.cardBody,
+    color: designSystem.colors.gray,
+  },
+  descriptionDark: {
+    color: designSystem.colors.darkMutedText,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  tag: {
+    backgroundColor: designSystem.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tagDark: {
+    backgroundColor: 'rgba(249,249,246,0.08)',
+  },
+  tagText: {
+    ...designSystem.type.eyebrow,
+    fontSize: 10,
+    color: designSystem.colors.gray,
+  },
+  imageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
   },
 });
