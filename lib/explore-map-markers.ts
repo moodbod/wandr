@@ -52,7 +52,7 @@ export function buildTripMapMarkers(
   return items
     .map((item) => ({
       ...item,
-      coordinate: item.experience.coordinate ?? DEFAULT_EXPERIENCE_COORDINATES[item.experience.slug],
+      coordinate: item.stay?.coordinate ?? item.experience.coordinate,
     }))
     .filter(
       (item): item is TripDashboardItem & { coordinate: readonly [number, number] } =>
@@ -60,11 +60,12 @@ export function buildTripMapMarkers(
     )
     .slice(0, limit)
     .map((item, index) => ({
-      id: item.experience.slug,
+      id: item._id,
       coordinate: item.coordinate,
       experienceSlug: item.experience.slug,
-      imageUri: item.experience.imageUri,
-      label: item.experience.title,
+      itemKind: item.kind,
+      imageUri: item.stay?.imageUri ?? item.experience.imageUri,
+      label: item.stay?.name ?? item.experience.title,
       tone: index % 2 === 0 ? 'accent' : 'dark',
       status: item.status,
     }));

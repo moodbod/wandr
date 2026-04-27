@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { MapFrame } from '@/components/wandr/maps/map-frame';
 import { ThemedText } from '@/components/themed-text';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
-import type { ExploreMapMarker } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
+import type { ExploreMapMarker } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type LiveLocationCardProps = {
@@ -18,7 +18,7 @@ type LiveLocationCardProps = {
 
 export function LiveLocationCard({
   title = 'Live Location',
-  subtitle = 'Walvis Bay Coast',
+  subtitle,
   centerCoordinate,
   userCoordinate = null,
   userHeading = null,
@@ -34,25 +34,32 @@ export function LiveLocationCard({
     >
       <View style={styles.bentoCardContent}>
         <ThemedText style={styles.bentoMapTitle}>{title}</ThemedText>
-        <ThemedText style={[styles.bentoMapSubtitle, isDark && styles.bentoMapSubtitleDark]}>
-          {subtitle}
-        </ThemedText>
+        {subtitle ? (
+          <ThemedText style={[styles.bentoMapSubtitle, isDark && styles.bentoMapSubtitleDark]}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
       </View>
-      <View style={[styles.bentoMapBgContainer, isDark && styles.bentoMapBgContainerDark]}>
-        <MapPreview
+      <MapFrame
+        shellStyle={[styles.bentoMapBgContainer, isDark && styles.bentoMapBgContainerDark]}
           centerCoordinate={centerCoordinate}
           userCoordinate={userCoordinate}
           userHeading={userHeading}
           markers={markers}
-          zoomLevel={11}
+          zoomLevel={14}
           onMarkerPress={(marker) => {
+            if (marker.itemKind === 'stay' && marker.experienceSlug) {
+              router.push({ pathname: '/stays/details', params: { slug: marker.experienceSlug } });
+              return;
+            }
+
             if (marker.experienceSlug) {
               router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
             }
           }}
-        />
+      >
         <View style={styles.mapShade} />
-      </View>
+      </MapFrame>
     </Pressable>
   );
 }

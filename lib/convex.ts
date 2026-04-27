@@ -4,7 +4,20 @@ import { makeFunctionReference } from 'convex/server';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import type { ExplorePageContent } from '@/types/explore';
+import type { FriendChatPayload, FriendDiscoveryPayload, FriendsDashboard } from '@/types/friends';
+import type { AppNotification } from '@/types/notifications';
+import type { StayBookingDetails } from '@/types/stays';
 import type { TripDashboard, TripItineraryItem } from '@/types/trip';
+
+export type CurrentTravelerProfile = {
+  slug: string;
+  name: string;
+  countryCode: string;
+  countryLabel: string;
+  avatarUri: string | null;
+  regionCode: string | null;
+  regionName: string | null;
+};
 
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const hasConvexUrl = Boolean(convexUrl);
@@ -102,13 +115,13 @@ export const listUserTripsRef = makeFunctionReference<
 
 export const getTravelerProfileRef = makeFunctionReference<
   'query',
-  { travelerSlug: string },
-  any
->('trip:getTravelerProfile') as FunctionReference<
+  Record<string, never>,
+  CurrentTravelerProfile | null
+>('trip:getCurrentTravelerProfile') as FunctionReference<
   'query',
   'public',
-  { travelerSlug: string },
-  any
+  Record<string, never>,
+  CurrentTravelerProfile | null
 >;
 
 export const createTripRef = makeFunctionReference<
@@ -155,6 +168,77 @@ export const deleteTripRef = makeFunctionReference<
   boolean
 >;
 
+export const bookStayRef = makeFunctionReference<
+  'mutation',
+  { staySlug: string; travelerSlug: string; tripId?: string },
+  string
+>('trip:bookStay') as FunctionReference<
+  'mutation',
+  'public',
+  { staySlug: string; travelerSlug: string; tripId?: string },
+  string
+>;
+
+export const createStayBookingRef = makeFunctionReference<
+  'mutation',
+  {
+    staySlug: string;
+    travelerSlug: string;
+    checkIn: number;
+    checkOut: number;
+    totalPrice: number;
+    stayBookingDetails: StayBookingDetails;
+    tripId?: string;
+  },
+  string
+>('trip:createStayBooking') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    staySlug: string;
+    travelerSlug: string;
+    checkIn: number;
+    checkOut: number;
+    totalPrice: number;
+    stayBookingDetails: StayBookingDetails;
+    tripId?: string;
+  },
+  string
+>;
+
+export const getStayAvailabilityRef = makeFunctionReference<
+  'query',
+  { staySlug: string },
+  any[]
+>('trip:getStayAvailability') as FunctionReference<
+  'query',
+  'public',
+  { staySlug: string },
+  any[]
+>;
+
+export const listAllStaysRef = makeFunctionReference<
+  'query',
+  Record<string, never>,
+  any[]
+>('trip:listAllStays') as FunctionReference<
+  'query',
+  'public',
+  Record<string, never>,
+  any[]
+>;
+
+export const getStayBySlugRef = makeFunctionReference<
+  'query',
+  { slug: string },
+  any | null
+>('trip:getStayBySlug') as FunctionReference<
+  'query',
+  'public',
+  { slug: string },
+  any | null
+>;
+
 export const recordTripArrivalRef = makeFunctionReference<
   'mutation',
   {
@@ -176,6 +260,132 @@ export const recordTripArrivalRef = makeFunctionReference<
   { created: boolean; experienceSlug: string | null }
 >;
 
+export const ensureFriendsSeedRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug?: string },
+  boolean
+>('friends:ensureFriendsSeed') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug?: string },
+  boolean
+>;
+
+export const getFriendsDashboardRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  FriendsDashboard
+>('friends:getFriendsDashboard') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  FriendsDashboard
+>;
+
+export const getFriendDiscoveryRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  FriendDiscoveryPayload
+>('friends:getFriendDiscovery') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  FriendDiscoveryPayload
+>;
+
+export const getFriendChatRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string; circleId?: Id<'friendCircles'> },
+  FriendChatPayload
+>('friends:getFriendChat') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string; circleId?: Id<'friendCircles'> },
+  FriendChatPayload
+>;
+
+export const actOnFriendCandidateRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; candidateSlug: string; action: 'invited' | 'passed' | 'friended' },
+  { ok: boolean; action: 'invited' | 'passed' | 'friended' }
+>('friends:actOnFriendCandidate') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; candidateSlug: string; action: 'invited' | 'passed' | 'friended' },
+  { ok: boolean; action: 'invited' | 'passed' | 'friended' }
+>;
+
+export const sendFriendMessageRef = makeFunctionReference<
+  'mutation',
+  { circleId: Id<'friendCircles'>; travelerSlug: string; body: string },
+  Id<'friendMessages'> | null
+>('friends:sendFriendMessage') as FunctionReference<
+  'mutation',
+  'public',
+  { circleId: Id<'friendCircles'>; travelerSlug: string; body: string },
+  Id<'friendMessages'> | null
+>;
+
+export const shareTripRouteInFriendChatRef = makeFunctionReference<
+  'mutation',
+  { circleId: Id<'friendCircles'>; travelerSlug: string },
+  Id<'friendMessages'>
+>('friends:shareTripRouteInFriendChat') as FunctionReference<
+  'mutation',
+  'public',
+  { circleId: Id<'friendCircles'>; travelerSlug: string },
+  Id<'friendMessages'>
+>;
+
+export const listNotificationsRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  AppNotification[]
+>('notifications:listNotifications') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  AppNotification[]
+>;
+
+export const markNotificationsReadRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; notificationIds?: Id<'appNotifications'>[] },
+  boolean
+>('notifications:markNotificationsRead') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; notificationIds?: Id<'appNotifications'>[] },
+  boolean
+>;
+
+export const createTripNotificationRef = makeFunctionReference<
+  'mutation',
+  {
+    recipientSlug: string;
+    kind: 'trip_arrival' | 'trip_rating';
+    title: string;
+    body: string;
+    href?: string;
+    entityId?: string;
+    entityLabel?: string;
+  },
+  boolean
+>('notifications:createTripNotification') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    recipientSlug: string;
+    kind: 'trip_arrival' | 'trip_rating';
+    title: string;
+    body: string;
+    href?: string;
+    entityId?: string;
+    entityLabel?: string;
+  },
+  boolean
+>;
+
 export const submitExperienceRatingRef = makeFunctionReference<
   'mutation',
   {
@@ -195,4 +405,58 @@ export const submitExperienceRatingRef = makeFunctionReference<
     review?: string;
   },
   Id<'experienceRatings'>
+>;
+
+export const listStayRatingsRef = makeFunctionReference<
+  'query',
+  {
+    staySlug: string;
+  },
+  {
+    _id: Id<'stayRatings'>;
+    rating: number;
+    review: string;
+    createdAt: number;
+    travelerSlug: string;
+    travelerName: string;
+    travelerAvatarUri: string | null;
+    travelerRegionName: string | null;
+  }[]
+>('trip:listStayRatings') as FunctionReference<
+  'query',
+  'public',
+  {
+    staySlug: string;
+  },
+  {
+    _id: Id<'stayRatings'>;
+    rating: number;
+    review: string;
+    createdAt: number;
+    travelerSlug: string;
+    travelerName: string;
+    travelerAvatarUri: string | null;
+    travelerRegionName: string | null;
+  }[]
+>;
+
+export const submitStayRatingRef = makeFunctionReference<
+  'mutation',
+  {
+    staySlug: string;
+    travelerSlug: string;
+    rating: number;
+    review?: string;
+  },
+  Id<'stayRatings'>
+>('trip:submitStayRating') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    staySlug: string;
+    travelerSlug: string;
+    rating: number;
+    review?: string;
+  },
+  Id<'stayRatings'>
 >;

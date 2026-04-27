@@ -1,8 +1,8 @@
-import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
+import { MapFrame } from '@/components/wandr/maps/map-frame';
 import { WandrHeader } from '@/components/wandr/header';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 
@@ -32,20 +32,25 @@ export function ExploreMapHero({
   const router = useRouter();
 
   return (
-    <View style={styles.shell}>
-      <MapPreview
+    <MapFrame
+      shellStyle={styles.shell}
         centerCoordinate={centerCoordinate}
         userCoordinate={userCoordinate}
         userHeading={userHeading}
         markers={markers}
-        zoomLevel={11.4}
+        zoomLevel={14}
         onInteract={onInteract}
         onMarkerPress={(marker) => {
+          if (marker.itemKind === 'stay' && marker.experienceSlug) {
+            router.push({ pathname: '/stays/details', params: { slug: marker.experienceSlug } });
+            return;
+          }
+
           if (marker.experienceSlug) {
             router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
           }
         }}
-      />
+    >
       <WandrHeader
         config={{
           overlay: true,
@@ -60,7 +65,7 @@ export function ExploreMapHero({
       <View style={[styles.overlay, { marginTop: topInset, paddingTop: 24 }]} pointerEvents="box-none">
         <View style={styles.heroHeader} pointerEvents="none" />
       </View>
-    </View>
+    </MapFrame>
   );
 }
 

@@ -16,8 +16,8 @@ import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getExplorePageContentRef, getTripDashboardRef, seedDefaultPageContentRef } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import type { ExplorePageContent } from '@/types/explore';
 import type { TripDashboard } from '@/types/trip';
@@ -52,8 +52,9 @@ function ConnectedExploreScreen({
 }) {
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
-  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug });
+  const traveler = useCurrentTraveler();
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
+  const trip = useQuery(getTripDashboardRef, { travelerSlug: traveler?.slug ?? '' });
   const seedExplorePageContent = useMutation(seedDefaultPageContentRef);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
@@ -164,7 +165,8 @@ function ExploreScreenView({
   const [mapResetKey, setMapResetKey] = useState(0);
   const content = pageContent.home;
   const tripMarkers = trip ? buildTripMapMarkers(trip.items, 10) : [];
-  const mapMarkers = tripMarkers.length > 0 ? tripMarkers : content.hero.markers;
+  const exploreMarkers = content.hero.markers;
+  const mapMarkers = [...tripMarkers, ...exploreMarkers];
   const mapCenterCoordinate = currentLocation ?? trip?.centerCoordinate ?? content.hero.centerCoordinate;
   const mapLocationLabel = trip?.dayTitle ?? content.hero.locationLabel;
 

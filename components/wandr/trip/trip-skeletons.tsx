@@ -29,7 +29,24 @@ export function TripActionSkeletons() {
   );
 }
 
+export function TripSwitcherSkeleton() {
+  return (
+    <View style={styles.switcherContainer}>
+      <View style={styles.switcherContent}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={`trip-switcher-skeleton-${index}`} style={styles.switcherCard}>
+            <SkeletonBlock style={styles.switcherImage} />
+            <SkeletonBlock style={styles.switcherLabel} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function TripTimelineSkeleton() {
+  const isDark = useColorScheme() === 'dark';
+
   return (
     <View style={styles.timeline}>
       <View style={styles.sectionHeaderSkeleton}>
@@ -49,7 +66,7 @@ export function TripTimelineSkeleton() {
               darkColor={designSystem.colors.darkSurface}
               style={[
                 styles.timelineCard,
-                useColorScheme() === 'dark' ? styles.timelineCardDark : null,
+                isDark ? styles.timelineCardDark : null,
               ]}>
               <View style={styles.cardContentSkeleton}>
                 <View style={styles.cardLeftSkeleton}>
@@ -124,6 +141,29 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     gap: 16,
+  },
+  switcherContainer: {
+    marginTop: 12,
+    marginHorizontal: -designSystem.spacing.lg,
+  },
+  switcherContent: {
+    paddingHorizontal: designSystem.spacing.lg,
+    flexDirection: 'row',
+    gap: 16,
+  },
+  switcherCard: {
+    width: 120,
+    gap: 10,
+  },
+  switcherImage: {
+    width: 120,
+    height: 180,
+    borderRadius: 20,
+  },
+  switcherLabel: {
+    width: 84,
+    height: 16,
+    borderRadius: 6,
   },
   actionButton: {
     flex: 1,

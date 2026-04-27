@@ -1,7 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -9,46 +12,48 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from 'convex/react';
 
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { WandrHeader } from '@/components/wandr/header';
+import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery-controls';
 import { StaysRailCard } from '@/components/wandr/stays/stays-rail-card';
-import { designSystem } from '@/constants/design-system';
 import { rankStayProperties } from '@/constants/stays-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
-import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
+import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 
 export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const isDark = useColorScheme() === 'dark';
-  const trips = useQuery(listUserTripsRef, { travelerSlug: currentDemoTravelerSlug });
+  const traveler = useCurrentTraveler();
+  const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
   const selectedTripId = trips?.[0]?._id;
   const trip = useQuery(getTripDashboardRef, {
-    travelerSlug: currentDemoTravelerSlug,
+    travelerSlug: traveler?.slug ?? '',
     tripId: selectedTripId,
   });
+  const dbStays = useQuery(listAllStaysRef);
   const currentLocation = useCurrentLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [discoveryMode, setDiscoveryMode] = useState<'route' | 'nearby'>('route');
   const [sortMode, setSortMode] = useState<'best' | 'price'>('best');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const scrollRef = useRef<Animated.ScrollView>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const rankedStays = useMemo(
     () =>
       rankStayProperties({
+        stays: (dbStays || []) as any,
         trip,
         currentCoordinate: currentLocation.coordinate,
     }),
-    [currentLocation.coordinate, trip]
+    [dbStays, currentLocation.coordinate, trip]
   );
   const filteredStays = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -78,32 +83,101 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   }, [discoveryMode, rankedStays, searchQuery, sortMode]);
 
   const featuredStay = filteredStays[selectedIndex] ?? filteredStays[0] ?? null;
-  const cardWidth = Math.min(windowWidth - 44, 318);
-  const cardGap = 12;
+  const featuredStayKey = featuredStay ? ((featuredStay as any).id || (featuredStay as any)._id) : null;
+  const mapStays = useMemo(() => {
+    if (!featuredStay) {
+      return [];
+    }
+
+    // Show more stays on the map for better density
+    const base = filteredStays.slice(0, 30);
+    const ordered = [featuredStay, ...base];
+
+    return ordered.filter(
+      (stay, index, all) => all.findIndex((candidate) => candidate.id === stay.id) === index
+    );
+  }, [featuredStay, filteredStays]);
+  const mapMarkers = useMemo(() => {
+    const stayMarkers = mapStays.map((stay: any) => ({
+      id: stay.id || stay._id,
+      coordinate: stay.coordinate,
+      label: stay.name,
+      priceLabel: stay.priceLabel || `$${stay.pricePerNight}`,
+      tone: (stay.id || stay._id) === featuredStayKey ? ('accent' as const) : ('dark' as const),
+      status: (stay.id || stay._id) === featuredStayKey ? ('active' as const) : ('upcoming' as const),
+    }));
+
+    // Pass all trip items to ensure the route is always complete
+    const tripMarkers = trip?.items ? buildTripMapMarkers(trip.items, 50) : [];
+
+    return [...tripMarkers, ...stayMarkers];
+  }, [featuredStayKey, mapStays, trip?.items]);
+
+  const cardWidth = Math.min(windowWidth - 72, 316);
+  const cardGap = 10;
   const snapInterval = cardWidth + cardGap;
   const railPadding = Math.max(16, (windowWidth - cardWidth) / 2);
+  const snapOffsets = useMemo(
+    () => filteredStays.map((_, index) => index * snapInterval),
+    [filteredStays, snapInterval]
+  );
 
-  const scrollToCard = (index: number) => {
+  const scrollToCard = useCallback((index: number, animated = true) => {
     scrollRef.current?.scrollTo({
       x: index * snapInterval,
-      animated: true,
+      animated,
     });
-  };
+  }, [snapInterval]);
+
+  const resetToStart = useCallback(() => {
+    setSelectedIndex(0);
+    requestAnimationFrame(() => {
+      scrollX.setValue(0);
+      scrollToCard(0, true);
+    });
+  }, [scrollToCard, scrollX]);
+
+  useEffect(() => {
+    if (filteredStays.length === 0) {
+      return;
+    }
+
+    if (selectedIndex >= filteredStays.length) {
+      resetToStart();
+    }
+  }, [filteredStays.length, resetToStart, selectedIndex]);
 
   const handleSnap = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nextIndex = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
     if (nextIndex >= 0 && nextIndex < filteredStays.length) {
       setSelectedIndex(nextIndex);
+      scrollToCard(nextIndex, false);
     }
   };
+
+  const centerCoordinate =
+    featuredStay?.coordinate ??
+    (discoveryMode === 'nearby' && currentLocation.coordinate
+      ? currentLocation.coordinate
+      : trip?.centerCoordinate) ??
+    mapMarkers[0]?.coordinate ??
+    null;
 
   return (
     <ThemedView style={styles.root}>
       <MapPreview
-        centerCoordinate={featuredStay?.coordinate ?? trip?.centerCoordinate ?? ([17.0832, -22.5609] as const)}
+        centerCoordinate={centerCoordinate}
         userCoordinate={currentLocation.coordinate}
-        markers={[]}
-        zoomLevel={6}
+        markers={mapMarkers}
+        showRoutes={true}
+        zoomLevel={12}
+        onMarkerPress={(marker) => {
+          const stayIndex = filteredStays.findIndex((s: any) => (s.id || s._id) === marker.id);
+          if (stayIndex !== -1) {
+            setSelectedIndex(stayIndex);
+            scrollToCard(stayIndex);
+          }
+        }}
       />
 
       <WandrHeader
@@ -111,61 +185,59 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           overlay: true,
           leadingAction: showBack ? { kind: 'back', accessibilityLabel: 'Go back' } : undefined,
         }}
+        bottomContent={
+          <StaysDiscoveryControls
+            discoveryMode={discoveryMode}
+            searchQuery={searchQuery}
+            sortMode={sortMode}
+            onChangeDiscoveryMode={(mode) => {
+              setDiscoveryMode(mode);
+              resetToStart();
+            }}
+            onChangeSearchQuery={(value) => {
+              setSearchQuery(value);
+              resetToStart();
+            }}
+            onResetMap={() => {
+              scrollX.setValue(0);
+            }}
+            onTogglePriceSort={() => {
+              setSortMode((current) => (current === 'price' ? 'best' : 'price'));
+              resetToStart();
+            }}
+          />
+        }
+        bottomContentHeight={132}
+        bottomContentVisible
       />
-
-      <View pointerEvents="box-none" style={[styles.discoveryBar, { top: insets.top + 54 }]}>
-        <StaysDiscoveryControls
-          discoveryMode={discoveryMode}
-          isDark={isDark}
-          searchQuery={searchQuery}
-          sortMode={sortMode}
-          onChangeDiscoveryMode={(mode) => {
-            setDiscoveryMode(mode);
-            setSelectedIndex(0);
-          }}
-          onChangeSearchQuery={(value) => {
-            setSearchQuery(value);
-            setSelectedIndex(0);
-          }}
-          onTogglePriceSort={() => {
-            setSortMode((current) => (current === 'price' ? 'best' : 'price'));
-            setSelectedIndex(0);
-          }}
-        />
-      </View>
-
-      <View style={styles.railHeader}>
-        <ThemedText style={styles.railEyebrow}>
-          {discoveryMode === 'nearby' ? 'Nearby stays' : 'On your route'}
-        </ThemedText>
-      </View>
 
       <View pointerEvents="box-none" style={styles.carouselWrap}>
         <Animated.ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={snapInterval}
-          snapToAlignment="center"
-          decelerationRate="fast"
-          disableIntervalMomentum
-          scrollEventThrottle={16}
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToOffsets={snapOffsets}
+        snapToAlignment="center"
+        decelerationRate="fast"
+        disableIntervalMomentum
+        scrollEventThrottle={16}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
             { useNativeDriver: true }
           )}
           onMomentumScrollEnd={handleSnap}
-          contentContainerStyle={[
-            styles.carouselContent,
-            {
-              paddingLeft: railPadding,
-              paddingRight: railPadding,
+        contentContainerStyle={[
+          styles.carouselContent,
+          {
+            paddingLeft: railPadding,
+            paddingRight: railPadding,
               paddingBottom: insets.bottom + 54,
             },
           ]}
           style={styles.carousel}
         >
           {filteredStays.map((stay, index) => {
+            const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
             const inputRange = [
               (index - 1) * snapInterval,
               index * snapInterval,
@@ -188,13 +260,20 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
             });
 
             return (
-              <Pressable
-                key={stay.id}
-                style={[styles.cardShell, { width: cardWidth }]}
-                onPress={() => {
-                  setSelectedIndex(index);
-                  scrollToCard(index);
-                }}
+            <Pressable
+              key={stayKey}
+              accessibilityRole="button"
+              style={[
+                styles.cardShell,
+                { width: cardWidth },
+                index !== filteredStays.length - 1 ? { marginRight: cardGap } : null,
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: '/stays/details',
+                  params: { slug: stay.slug },
+                })
+              }
               >
                 <Animated.View
                   style={[
@@ -212,7 +291,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                       isSelected={index === selectedIndex}
                       locationLabel={discoveryMode === 'nearby' ? stay.town : stay.matchedStopLabel}
                       name={stay.name}
-                      priceLabel={stay.priceLabel}
+                      priceLabel={stay.priceLabel || `$${stay.pricePerNight}`}
                       rating={stay.rating}
                     />
                   </View>
@@ -231,49 +310,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#efefec',
   },
-  discoveryBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 20,
-  },
-  railHeader: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 260,
-    pointerEvents: 'none',
-  },
-  railEyebrow: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-    color: '#ffffff',
-  },
   carouselWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 18,
-    height: 188,
+    height: 214,
+    overflow: 'visible',
   },
   carousel: {
     flex: 1,
+    overflow: 'visible',
   },
   carouselContent: {
-    gap: 12,
     alignItems: 'flex-end',
+    overflow: 'visible',
   },
   cardShell: {
     justifyContent: 'flex-end',
     alignItems: 'center',
+    overflow: 'visible',
   },
   cardMotion: {
     width: '100%',
+    overflow: 'visible',
   },
   cardInner: {
     width: '100%',
+    overflow: 'visible',
   },
 });

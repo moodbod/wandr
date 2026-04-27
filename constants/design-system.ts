@@ -46,13 +46,13 @@ export const designSystem = {
       fontWeight: '600' as const,
     },
     title: {
-      fontSize: 34,
-      lineHeight: 38,
+      fontSize: 30,
+      lineHeight: 34,
       fontWeight: '700' as const,
     },
     subtitle: {
-      fontSize: 22,
-      lineHeight: 26,
+      fontSize: 20,
+      lineHeight: 24,
       fontWeight: '700' as const,
     },
     eyebrow: {

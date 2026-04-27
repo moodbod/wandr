@@ -1,14 +1,15 @@
 import { BlurView, type BlurTint } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { MagnifyingGlass } from 'phosphor-react-native';
 import React, { forwardRef } from 'react';
 import {
   Platform,
   StyleSheet,
   TextInput,
+  View,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
-  View,
 } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
@@ -51,6 +52,44 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
 
     const icon = leftIcon ?? <MagnifyingGlass color={placeholderTextColor} size={20} weight="bold" />;
     const resolvedTint = tint ?? (isDark ? 'dark' : 'light');
+    const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+    if (shouldUseNativeGlass) {
+      return (
+        <View style={[styles.container, { borderRadius: radius }, containerStyle]}>
+          <View style={[styles.nativeGlassShell, { borderRadius: radius }]}>
+            <GlassView
+              style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+              glassEffectStyle="clear"
+              tintColor={isDark ? "rgba(12, 14, 12, 0.08)" : "rgba(255, 255, 255, 0.12)"}
+              isInteractive
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.nativeGlassOverlay,
+                {
+                  borderRadius: radius,
+                  borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.22)',
+                  backgroundColor: isDark ? 'rgba(12,14,12,0.02)' : 'rgba(255,255,255,0.02)',
+                },
+              ]}
+            />
+            <View style={styles.nativeGlassContent}>
+              <View style={styles.leftIcon}>{icon}</View>
+              <TextInput
+                ref={ref}
+                autoCapitalize={autoCapitalize}
+                autoCorrect={autoCorrect}
+                placeholderTextColor={placeholderTextColor}
+                style={[styles.input, { color: textColor }, style]}
+                {...props}
+              />
+            </View>
+          </View>
+        </View>
+      );
+    }
 
     if (Platform.OS === 'ios') {
       return (
@@ -79,8 +118,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
           styles.androidFill,
           {
             borderRadius: radius,
-            backgroundColor: isDark ? 'rgba(22,25,20,0.92)' : 'rgba(244,244,241,0.96)',
-            borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border,
+            backgroundColor: isDark ? 'rgba(22,25,20,0.84)' : 'rgba(244,244,241,0.88)',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(14,15,12,0.08)',
           },
           containerStyle,
         ]}
@@ -105,23 +144,28 @@ const styles = StyleSheet.create({
   container: {
     minHeight: 48,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
   },
   blur: {
     flex: 1,
     overflow: 'hidden',
   },
+  nativeGlassShell: {
+    minHeight: 48,
+    overflow: 'hidden',
+  },
+  nativeGlassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  nativeGlassContent: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
   innerHighlight: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    borderTopColor: 'rgba(255, 255, 255, 0.6)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,

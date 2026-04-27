@@ -14,6 +14,7 @@ export type ContentSection = {
 export type HeaderActionKind =
   | 'avatar'
   | 'back'
+  | 'call'
   | 'check'
   | 'favorite'
   | 'filter'
@@ -282,26 +283,26 @@ export const appContent = {
       },
     ],
   },
-  squadHome: {
+  friendsHome: {
     header: {
-      title: 'Squad',
+      title: 'Friends',
       trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications' }],
     },
     eyebrow: 'Wandr',
-    title: 'Squad',
+    title: 'Friends',
     description:
       'Social travel flow for matching with compatible travelers and moving into a shared group chat.',
     actionsTitle: 'Child screens',
     actions: [
       {
-        href: '/squad/discover',
-        label: 'Squad discovery',
+        href: '/friends/discover',
+        label: 'Friends discovery',
         description: 'Find travelers that match destination, pace, and travel vibe.',
       },
       {
-        href: '/squad/chat',
-        label: 'Squad chat',
-        description: 'Group conversation screen for planning together once the squad is formed.',
+        href: '/friends/chat',
+        label: 'Friends chat',
+        description: 'Group conversation screen for planning together once the friends group is formed.',
       },
     ],
     sections: [
@@ -309,20 +310,20 @@ export const appContent = {
         title: 'Planned content',
         items: [
           'Traveler match cards with shared interests and overlapping dates.',
-          'Invite and accept actions for building a temporary travel squad.',
+          'Invite and accept actions for building a temporary travel circle.',
           'Shared planning updates once a match becomes a group chat.',
         ],
       },
     ],
   },
-  squadDiscover: {
+  friendsDiscover: {
     header: {
       leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-      title: 'Squad discovery',
+      title: 'Friends discovery',
       trailingActions: [],
     },
-    eyebrow: 'Squad',
-    title: 'Squad discovery',
+    eyebrow: 'Friends',
+    title: 'Friends discovery',
     description:
       'Matching screen scaffold for finding travelers with a similar destination, vibe, and schedule.',
     sections: [
@@ -331,22 +332,22 @@ export const appContent = {
         items: [
           'Traveler cards with avatars, compatibility tags, and destination overlap.',
           'Short bios and travel style signals to help with quick decisions.',
-          'Invite, pass, and shortlist actions for forming a temporary squad.',
+          'Invite, pass, and shortlist actions for building a friends list for the trip.',
         ],
       },
     ],
   },
-  squadChat: {
+  friendsChat: {
     header: {
       leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-      title: 'The Safari Squad',
+      title: 'Safari Friends',
       subtitle: '4 active members',
-      trailingActions: [{ kind: 'settings', accessibilityLabel: 'Squad settings' }],
+      trailingActions: [{ kind: 'settings', accessibilityLabel: 'Friends settings' }],
     },
-    eyebrow: 'Squad',
-    title: 'Squad chat',
+    eyebrow: 'Friends',
+    title: 'Friends chat',
     description:
-      'Group chat scaffold for route sharing, message threads, and travel coordination once a squad is active.',
+      'Group chat scaffold for route sharing, message threads, and travel coordination once a friends group is active.',
     sections: [
       {
         title: 'Planned content',

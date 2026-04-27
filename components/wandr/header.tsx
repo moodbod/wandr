@@ -16,6 +16,7 @@ import {
   MagnifyingGlass,
   MapTrifold,
   NavigationArrow,
+  Phone,
   PencilSimple,
   ShareNetwork,
   Sun,
@@ -73,7 +74,12 @@ export function WandrHeader({
   const isDark = colorScheme === 'dark';
   const bottomAnimation = useRef(new Animated.Value(bottomContentVisible ? 1 : 0)).current;
   const trailingActions = config.trailingActions ?? [];
-  const hasActions = Boolean(config.leadingAction || trailingActions.length > 0 || weatherCoords);
+  const hasActions = Boolean(
+    config.leadingAction || trailingActions.length > 0 || weatherCoords || bottomContent
+  );
+  const hasTopRowContent = Boolean(
+    config.leadingAction || trailingActions.length > 0 || weatherCoords || config.searchPlaceholder
+  );
   const isButtonOnlyHeader = true;
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -157,58 +163,60 @@ export function WandrHeader({
 
   return (
     <HeaderContainer {...containerProps}>
-      <View style={styles.content}>
-        <View style={styles.leading}>
-          {config.leadingAction ? (
-            <HeaderActionButton
-              action={config.leadingAction}
-              iconColor={textColor}
-              onBack={() => router.back()}
-              onNavigate={(href) => router.push(href)}
-              side="left"
-            />
-          ) : null}
+      {hasTopRowContent ? (
+        <View style={styles.content}>
+          <View style={styles.leading}>
+            {config.leadingAction ? (
+              <HeaderActionButton
+                action={config.leadingAction}
+                iconColor={textColor}
+                onBack={() => router.back()}
+                onNavigate={(href) => router.push(href)}
+                side="left"
+              />
+            ) : null}
 
-          {config.searchPlaceholder ? (
-            <GlassInput
-              containerStyle={styles.searchContainer}
-              placeholder={config.searchPlaceholder}
-              style={[styles.searchInput, { color: textColor }]}
-              returnKeyType="search"
-            />
-          ) : null}
-        </View>
+            {config.searchPlaceholder ? (
+              <GlassInput
+                containerStyle={styles.searchContainer}
+                placeholder={config.searchPlaceholder}
+                style={[styles.searchInput, { color: textColor }]}
+                returnKeyType="search"
+              />
+            ) : null}
+          </View>
 
-        <View style={styles.trailing}>
-          {weatherCoords ? (
-            <View style={[
-              styles.weatherBadge,
-              { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(14, 15, 12, 0.06)' }
-            ]}>
-              {weather ? (
-                <>
-                  <WeatherIcon size={16} color={textColor} weight="bold" />
-                  <ThemedText style={[styles.weatherText, { color: textColor }]}>
-                    {weather.temp}°
-                  </ThemedText>
-                </>
-              ) : (
-                <ActivityIndicator size="small" color={textColor} />
-              )}
-            </View>
-          ) : null}
-          {trailingActions.map((action, index) => (
-            <HeaderActionButton
-              action={action}
-              iconColor={textColor}
-              key={`${action.kind}-${index}`}
-              onBack={() => router.back()}
-              onNavigate={(href) => router.push(href)}
-              side="right"
-            />
-          ))}
+          <View style={styles.trailing}>
+            {weatherCoords ? (
+              <View style={[
+                styles.weatherBadge,
+                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(14, 15, 12, 0.06)' }
+              ]}>
+                {weather ? (
+                  <>
+                    <WeatherIcon size={16} color={textColor} weight="bold" />
+                    <ThemedText style={[styles.weatherText, { color: textColor }]}>
+                      {weather.temp}°
+                    </ThemedText>
+                  </>
+                ) : (
+                  <ActivityIndicator size="small" color={textColor} />
+                )}
+              </View>
+            ) : null}
+            {trailingActions.map((action, index) => (
+              <HeaderActionButton
+                action={action}
+                iconColor={textColor}
+                key={`${action.kind}-${index}`}
+                onBack={() => router.back()}
+                onNavigate={(href) => router.push(href)}
+                side="right"
+              />
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
       {bottomContent ? (
         <Animated.View
           pointerEvents={bottomContentVisible ? 'auto' : 'none'}
@@ -247,6 +255,11 @@ function HeaderActionButton({
 
     if (action.href) {
       onNavigate(action.href);
+      return;
+    }
+
+    if (action.kind === 'notifications') {
+      onNavigate('/notifications');
     }
   };
 
@@ -270,6 +283,8 @@ function renderHeaderIcon(action: HeaderAction, color: string) {
       return <UserCircle color={color} size={20} weight="fill" />;
     case 'back':
       return <CaretLeft color={color} size={22} weight="bold" />;
+    case 'call':
+      return <Phone color={color} size={20} weight="bold" />;
     case 'check':
       return <Check color={color} size={20} weight="bold" />;
     case 'favorite':

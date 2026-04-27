@@ -11,8 +11,8 @@ import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getExplorePageContentRef } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 
 const hiddenGemMeta: Record<string, { district: string; moment: string; note: string }> = {
   'The Red Lighthouse': {
@@ -38,7 +38,8 @@ export default function ExploreHiddenGemsScreen() {
 
 function ConnectedExploreHiddenGemsScreen() {
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
+  const traveler = useCurrentTraveler();
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
 
   if (!page) {
     return (

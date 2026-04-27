@@ -58,6 +58,7 @@ function getIosAttachments(imageUri?: string) {
     {
       identifier: 'place-image',
       url: imageUri,
+      type: 'image',
       typeHint: 'public.jpeg',
     },
   ];

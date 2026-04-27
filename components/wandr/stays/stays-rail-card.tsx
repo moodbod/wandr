@@ -1,6 +1,5 @@
 import { Image } from 'expo-image';
-import { HeartStraight } from 'phosphor-react-native';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
@@ -34,9 +33,6 @@ export function StaysRailCard({
     >
       <View style={styles.propertyImageShell}>
         <Image source={imageUri} contentFit="cover" style={styles.propertyImage} />
-        <Pressable style={styles.favoriteButton}>
-          <HeartStraight size={24} color="#ffffff" weight="regular" />
-        </Pressable>
         <View style={styles.priceBadge}>
           <ThemedText style={styles.priceBadgeText}>{priceLabel}</ThemedText>
         </View>
@@ -46,15 +42,20 @@ export function StaysRailCard({
         <View style={styles.propertyMetaRow}>
           <View style={styles.ratingRow}>
             <ThemedText style={styles.ratingStar}>★</ThemedText>
-            <ThemedText style={styles.ratingText}>{rating.toFixed(1)}</ThemedText>
+            <ThemedText style={[styles.ratingText, isDark && styles.ratingTextDark]}>
+              {rating.toFixed(1)}
+            </ThemedText>
           </View>
-          <ThemedText style={styles.propertyLocation} numberOfLines={1}>
+          <ThemedText
+            style={[styles.propertyLocation, isDark && styles.propertyLocationDark]}
+            numberOfLines={1}
+          >
             {locationLabel}
           </ThemedText>
         </View>
 
         <View style={styles.propertyTitleBlock}>
-          <ThemedText numberOfLines={2} style={styles.propertyTitle}>
+          <ThemedText numberOfLines={2} style={[styles.propertyTitle, isDark && styles.propertyTitleDark]}>
             {name}
           </ThemedText>
         </View>
@@ -98,17 +99,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  favoriteButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(14,15,12,0.24)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   priceBadge: {
     position: 'absolute',
     left: 8,
@@ -145,11 +135,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: designSystem.colors.ink,
   },
+  propertyTitleDark: {
+    color: designSystem.colors.darkText,
+  },
   propertyLocation: {
     fontSize: 12,
     lineHeight: 14,
     fontWeight: '600',
     color: designSystem.colors.gray,
+  },
+  propertyLocationDark: {
+    color: 'rgba(249,249,246,0.72)',
   },
   ratingRow: {
     flexDirection: 'row',
@@ -167,5 +163,8 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     fontWeight: '700',
     color: designSystem.colors.ink,
+  },
+  ratingTextDark: {
+    color: designSystem.colors.darkText,
   },
 });

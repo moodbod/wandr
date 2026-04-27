@@ -13,9 +13,9 @@ import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreActivityCard as ExploreActivityCardContent, ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentRegionCenter } from '@/hooks/use-current-region-center';
 import { getExplorePageContentRef } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import {
     buildRegionOptions,
     matchesExperienceFilters,
@@ -37,7 +37,8 @@ export default function ExploreSearchScreen() {
 
 function ConnectedExploreSearchScreen() {
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
+  const traveler = useCurrentTraveler();
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
   const { coordinate: currentRegionCenter } = useCurrentRegionCenter();
   const [activeRegion, setActiveRegion] = useState<string>('');
   const [activeIntent, setActiveIntent] = useState<string>('all');

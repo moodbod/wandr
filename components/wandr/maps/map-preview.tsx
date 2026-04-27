@@ -21,11 +21,12 @@ type MapMarker = {
 };
 
 type MapPreviewProps = {
-  centerCoordinate: readonly [number, number];
+  centerCoordinate?: readonly [number, number] | null;
   userCoordinate?: readonly [number, number] | null;
   userHeading?: number | null;
   markers?: readonly MapMarker[];
   zoomLevel?: number;
+  showRoutes?: boolean;
   onInteract?: () => void;
   onMarkerPress?: (marker: MapMarker) => void;
 };
@@ -35,51 +36,92 @@ function MapPreviewComponent({
   userCoordinate = null,
   userHeading = null,
   markers = [],
-  zoomLevel = 11,
+  zoomLevel = 24,
+  showRoutes = true,
   onInteract,
   onMarkerPress,
 }: MapPreviewProps) {
   const mapRef = useRef<MapView | null>(null);
   const hasSettledOnUserRef = useRef(false);
-  const [completedRouteCoords, setCompletedRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const isWeb = Platform.OS === 'web';
   const isIOS = Platform.OS === 'ios';
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? markers[0]?.coordinate ?? null;
+  const markerSignature = useMemo(
+    () =>
+      markers
+        .map((marker) =>
+          [
+            marker.id,
+            marker.coordinate[0],
+            marker.coordinate[1],
+            marker.priceLabel ?? '',
+            marker.status ?? '',
+            marker.tone ?? '',
+            marker.imageUri ?? '',
+          ].join(':')
+        )
+        .join('|'),
+    [markers]
+  );
+  const mapViewKey = useMemo(() => {
+    if (!isIOS) return 'map-preview';
+    // Force a clean remount whenever marker order or marker content changes on iOS.
+    // AIRMap can crash if Fabric tries to incrementally reorder custom marker subviews.
+    return `map-preview-${markerSignature}`;
+  }, [isIOS, markerSignature]);
 
   const delta = zoomLevel ? 180 / Math.pow(2, zoomLevel) : 0.1;
 
   const region = useMemo(
     () => ({
-      latitude: centerCoordinate[1],
-      longitude: centerCoordinate[0],
+      latitude: resolvedCenterCoordinate?.[1] ?? 0,
+      longitude: resolvedCenterCoordinate?.[0] ?? 0,
       latitudeDelta: delta,
       longitudeDelta: delta,
     }),
-    [centerCoordinate, delta]
+    [delta, resolvedCenterCoordinate]
   );
+
+  // Identify "stay" markers vs "route" markers
+  const stayMarkers = useMemo(() => markers.filter((m) => !!m.priceLabel), [markers]);
+  const routeMarkers = useMemo(() => markers.filter((m) => !m.priceLabel), [markers]);
+  const shouldHideMainRouteForStayFocus = useMemo(
+    () => stayMarkers.length === 1 && stayMarkers[0].status === 'active',
+    [stayMarkers]
+  );
+
+  const routeMarkersKey = useMemo(
+    () => routeMarkers.map((m) => `${m.coordinate[0]},${m.coordinate[1]},${m.status}`).join('|'),
+    [routeMarkers]
+  );
+  const routeMarkerCoordinates = useMemo(
+    () => routeMarkers.map((marker) => marker.coordinate),
+    [routeMarkers]
+  );
+
   useEffect(() => {
-    if (isWeb || markers.length === 0) return;
+    if (isWeb || !showRoutes || routeMarkers.length === 0) {
+      setUpcomingRouteCoords([]);
+      return;
+    }
+
+    // Only draw the main trip route if we are NOT viewing a specific stay branch
+    // This keeps the map focused only on the booked room route when applicable
+    if (shouldHideMainRouteForStayFocus) {
+      setUpcomingRouteCoords([]);
+      return;
+    }
 
     async function loadRoutes() {
-      // 1. Completed Route (Green): From start to user's current location
-      // We take all markers marked as 'completed' and add the user's current location at the end
-      const completedMarkers = markers.filter(m => m.status === 'completed').map(m => m.coordinate);
-      
-      // 2. Upcoming Route (Dashed): From user's current location to the rest of the trip
-      const upcomingMarkers = markers.filter(m => m.status === 'active' || m.status === 'upcoming').map(m => m.coordinate);
+      // Upcoming route (dashed): from the user's current location to the rest of the trip.
+      const upcomingMarkers = routeMarkers
+        .filter((m) => m.status === 'active' || m.status === 'upcoming')
+        .map((m) => m.coordinate);
 
       if (userCoordinate) {
-        // Completed path ends at user
-        const completedPathInput = [...completedMarkers, userCoordinate];
-        if (completedPathInput.length > 1) {
-          const coords = await fetchRoutePath(completedPathInput);
-          setCompletedRouteCoords(coords);
-        } else {
-          setCompletedRouteCoords([]);
-        }
-
         // Upcoming path starts at user
         const upcomingPathInput = [userCoordinate, ...upcomingMarkers];
         if (upcomingPathInput.length > 1) {
@@ -89,18 +131,62 @@ function MapPreviewComponent({
           setUpcomingRouteCoords([]);
         }
       } else {
-        // Fallback if no GPS: just show the full upcoming route from markers
-        const fullRoute = markers.map((marker) => marker.coordinate);
-        if (fullRoute.length > 1) {
-          const coords = await fetchRoutePath(fullRoute);
+        // Fallback if no GPS: just show the full upcoming route from trip markers
+        if (routeMarkerCoordinates.length > 1) {
+          const coords = await fetchRoutePath(routeMarkerCoordinates);
           setUpcomingRouteCoords(coords);
+        } else {
+          setUpcomingRouteCoords([]);
         }
-        setCompletedRouteCoords([]);
       }
     }
 
     void loadRoutes();
-  }, [isWeb, markers, userCoordinate]);
+  }, [isWeb, routeMarkerCoordinates, routeMarkers, routeMarkersKey, shouldHideMainRouteForStayFocus, showRoutes, userCoordinate]);
+
+  // Handle branching routes for booked stays
+  const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
+
+  useEffect(() => {
+    if (isWeb || !showRoutes || stayMarkers.length === 0 || !userCoordinate) {
+      setStayBranchCoords({});
+      return;
+    }
+
+    async function loadStayBranches() {
+      const branches: Record<string, { latitude: number; longitude: number }[]> = {};
+      
+      // Filter for stays that are actually booked (in the itinerary)
+      // Stay markers in the itinerary are marked as 'active' or 'upcoming' 
+      // but we should only draw branches for those that aren't the main focus 
+      // if they are part of the "booked" set.
+      for (const stay of stayMarkers) {
+        // Only branch for stays that have a status indicating they are part of the trip
+        // and are not currently the main focus (to avoid clutter)
+        if (stay.status === 'active' || stay.status === 'upcoming') {
+          const branchPath = await fetchRoutePath([userCoordinate as readonly [number, number], stay.coordinate]);
+          if (branchPath.length > 1) {
+            branches[stay.id] = branchPath;
+          }
+        }
+      }
+      setStayBranchCoords(branches);
+    }
+
+    void loadStayBranches();
+  }, [isWeb, stayMarkers, showRoutes, userCoordinate]);
+
+  useEffect(() => {
+    if (isWeb || !mapRef.current || !resolvedCenterCoordinate) return;
+
+    mapRef.current.animateCamera({
+      center: {
+        latitude: resolvedCenterCoordinate[1],
+        longitude: resolvedCenterCoordinate[0],
+      },
+      zoom: zoomLevel,
+    }, { duration: 1000 });
+  }, [isWeb, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     if (isWeb || !mapRef.current || !userCoordinate || hasSettledOnUserRef.current) return;
@@ -112,7 +198,7 @@ function MapPreviewComponent({
         longitude: userCoordinate[0],
       },
       heading: userHeading ?? 0,
-      pitch: 45, // Slight tilt for better perspective
+      pitch: 45,
       zoom: 17,
     }, { duration: 1000 });
   }, [isWeb, userCoordinate, userHeading]);
@@ -125,9 +211,18 @@ function MapPreviewComponent({
     );
   }
 
+  if (!resolvedCenterCoordinate) {
+    return (
+      <View style={styles.fallback}>
+        <ThemedText style={styles.fallbackTitle}>Map data is still loading.</ThemedText>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.mapRoot}>
       <MapView
+        key={mapViewKey}
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
@@ -144,32 +239,31 @@ function MapPreviewComponent({
         showsMyLocationButton={false}
         customMapStyle={isDark ? darkMapStyle : lightMapStyle}
       >
-        {upcomingRouteCoords && upcomingRouteCoords.length > 1 && (
+        {upcomingRouteCoords.length > 0 && (
           <Polyline
             key="upcoming-route-polyline"
             coordinates={upcomingRouteCoords}
             strokeColor={designSystem.colors.lime}
-            strokeWidth={3}
-            lineDashPattern={Platform.OS === 'android' ? [2, 20] : [0, 12]}
+            strokeWidth={4}
+            lineDashPattern={[10, 8]}
             lineCap="round"
             lineJoin="round"
-            zIndex={1}
           />
         )}
 
-        {completedRouteCoords && completedRouteCoords.length > 1 && (
+        {Object.entries(stayBranchCoords).map(([id, coords]) => (
           <Polyline
-            key="completed-route-polyline"
-            coordinates={completedRouteCoords}
+            key={`branch-${id}`}
+            coordinates={coords}
             strokeColor={designSystem.colors.lime}
-            strokeWidth={8}
+            strokeWidth={4}
+            lineDashPattern={[10, 8]}
             lineCap="round"
             lineJoin="round"
-            zIndex={2}
           />
-        )}
+        ))}
 
-        {markers.map((marker, index) => {
+        {markers.map((marker) => {
           const isFaded = marker.status === 'completed';
           const isActive = marker.status === 'active';
           const pinColor = isActive
@@ -180,13 +274,18 @@ function MapPreviewComponent({
 
           return (
             <Marker
-              key={`marker-${marker.id}-${index}`}
+              key={`marker-${[
+                marker.id,
+                marker.coordinate[0],
+                marker.coordinate[1],
+                marker.priceLabel ?? '',
+                marker.status ?? '',
+              ].join('-')}`}
               coordinate={{ latitude: marker.coordinate[1], longitude: marker.coordinate[0] }}
               anchor={{ x: 0.5, y: marker.priceLabel ? 1 : 0.92 }}
               onPress={() => onMarkerPress?.(marker)}
               style={{ opacity: isFaded ? 0.5 : 1, zIndex: isActive ? 10 : 1 }}
               pinColor={pinColor}
-              title={marker.label}
               tracksViewChanges={false}
             >
               {marker.priceLabel ? (
@@ -277,35 +376,37 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   priceMarker: {
-    minWidth: 88,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: designSystem.radii.pill,
-    borderWidth: 3,
-    shadowColor: '#0e0f0c',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 8,
+    minWidth: 64,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   priceMarkerDefault: {
-    backgroundColor: designSystem.colors.ink,
-    borderColor: designSystem.colors.lime,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   priceMarkerDark: {
-    backgroundColor: '#232421',
+    backgroundColor: 'rgba(30, 31, 28, 0.95)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   priceMarkerActive: {
     backgroundColor: designSystem.colors.lime,
-    borderColor: '#29580a',
+    borderColor: designSystem.colors.darkGreen,
+    transform: [{ scale: 1.1 }],
   },
   priceMarkerLabel: {
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: '800',
-    color: '#ffffff',
+    fontSize: 14,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: designSystem.colors.ink,
   },
   priceMarkerLabelDark: {
     color: '#ffffff',
@@ -314,17 +415,16 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   priceMarkerStem: {
-    width: 3,
-    height: 18,
-    borderRadius: 999,
-    backgroundColor: designSystem.colors.lime,
+    width: 2,
+    height: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginTop: -1,
   },
   priceMarkerStemDark: {
-    backgroundColor: designSystem.colors.lime,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   priceMarkerStemActive: {
-    backgroundColor: '#29580a',
+    backgroundColor: designSystem.colors.darkGreen,
   },
   markerShellActive: {
     transform: [{ scale: 1.04 }],

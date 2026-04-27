@@ -34,6 +34,7 @@ export type ExploreMapMarker = {
   id: string;
   coordinate: readonly [number, number];
   experienceSlug?: string;
+  itemKind?: 'experience' | 'stay';
   imageUri?: string;
   label?: string;
   tone?: 'accent' | 'dark';
@@ -52,8 +53,7 @@ export type ExploreActivityCard = {
   title: string;
   visitorCount?: number;
   countryLabel?: string;
-  visitorNames?: string[];
-  viewerName?: string;
+  avatarUris?: string[];
 };
 
 export type ExploreExperience = {
@@ -86,6 +86,7 @@ export type ExploreExperience = {
     countryLabel: string;
     visitorCount: number;
     summary: string;
+    avatarUris?: readonly string[];
   };
   booking?: {
     availabilityLabel: string;

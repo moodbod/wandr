@@ -52,8 +52,8 @@ export function GlassButton({
   const tintColor = isPrimary
     ? 'rgba(159, 232, 112, 0.28)'
     : isDark
-      ? 'rgba(249, 249, 246, 0.08)'
-      : 'rgba(255, 255, 255, 0.18)';
+      ? 'rgba(249, 249, 246, 0.12)'
+      : 'rgba(255, 255, 255, 0.22)';
 
   return (
     <AnimatedPressable

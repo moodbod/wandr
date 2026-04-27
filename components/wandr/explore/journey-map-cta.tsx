@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { MapFrame } from '@/components/wandr/maps/map-frame';
 import { ThemedText } from '@/components/themed-text';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
 
@@ -30,8 +30,7 @@ export function JourneyMapCta({
 
   return (
     <View style={styles.shell}>
-      <View style={styles.mapWrap}>
-        <MapPreview centerCoordinate={centerCoordinate} markers={markers} zoomLevel={11.7} />
+      <MapFrame shellStyle={styles.mapWrap} centerCoordinate={centerCoordinate} markers={markers} zoomLevel={11.7}>
         <View style={styles.actions}>
           <Pressable disabled={isDisabled} onPress={onPrimaryPress} style={styles.primaryAction}>
             <ThemedText lightColor="#f9f9f6" darkColor="#f9f9f6" style={styles.primaryActionLabel}>
@@ -44,7 +43,7 @@ export function JourneyMapCta({
             </ThemedText>
           </Pressable>
         </View>
-      </View>
+      </MapFrame>
     </View>
   );
 }

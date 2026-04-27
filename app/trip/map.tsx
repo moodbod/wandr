@@ -14,8 +14,8 @@ import { TripTimelineSkeleton } from '@/components/wandr/trip/trip-skeletons';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { getTripDashboardRef } from '@/lib/convex';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import type { TripDashboard } from '@/types/trip';
 
@@ -28,12 +28,11 @@ function ConnectedTripMapScreen() {
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const animatedIndex = useSharedValue(0);
-  const trips = useQuery(listUserTripsRef, { travelerSlug: currentDemoTravelerSlug });
-  const selectedTripId = trips?.[0]?._id;
+  const traveler = useCurrentTraveler();
 
   const trip = useQuery(getTripDashboardRef, { 
-    travelerSlug: currentDemoTravelerSlug,
-    tripId: selectedTripId,
+    travelerSlug: traveler?.slug ?? '',
+    tripId: undefined // Map screen currently only supports default trip
   });
   const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
 
@@ -43,7 +42,7 @@ function ConnectedTripMapScreen() {
     };
   });
 
-  if (!trip) {
+  if (!traveler || !trip) {
     return (
       <ThemedView style={styles.root}>
         <WandrHeader
@@ -97,7 +96,7 @@ function TripMapScreenView({
   const [mapResetKey, setMapResetKey] = useState(0);
   const items = trip.items;
   const markers = buildTripMapMarkers(items, 10);
-  const centerCoordinate = currentLocation ?? trip.centerCoordinate;
+  const centerCoordinate = currentLocation ?? trip.centerCoordinate ?? markers[0]?.coordinate ?? null;
 
   const handleMapInteract = () => {
     sheetRef?.current?.snapToIndex(0);
@@ -106,20 +105,22 @@ function TripMapScreenView({
   return (
     <ThemedView style={styles.root}>
       <View style={styles.body}>
-        <View style={styles.mapLayer}>
-          <ExploreMapHero
-            key={mapResetKey}
-            centerCoordinate={centerCoordinate}
-            userCoordinate={currentLocation}
-            userHeading={currentHeading}
-            locationLabel={trip.dayTitle}
-            markers={markers}
-            topInset={insetsTop}
-            onInteract={handleMapInteract}
-            onLocateMe={() => setMapResetKey((prev) => prev + 1)}
-            showBackButton
-          />
-        </View>
+        {centerCoordinate ? (
+          <View style={styles.mapLayer}>
+            <ExploreMapHero
+              key={mapResetKey}
+              centerCoordinate={centerCoordinate}
+              userCoordinate={currentLocation}
+              userHeading={currentHeading}
+              locationLabel={trip.dayTitle}
+              markers={markers}
+              topInset={insetsTop}
+              onInteract={handleMapInteract}
+              onLocateMe={() => setMapResetKey((prev) => prev + 1)}
+              showBackButton
+            />
+          </View>
+        ) : null}
 
         <GlassBottomSheet
           index={1}

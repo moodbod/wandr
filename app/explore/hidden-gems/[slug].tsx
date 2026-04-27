@@ -12,8 +12,8 @@ import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { getHiddenGemSlug, hiddenGemDetails } from '@/constants/hidden-gems-content';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getExplorePageContentRef, getLocationLikeStateRef, toggleLocationLikeRef } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 
 export default function HiddenGemDetailScreen() {
   return <ConnectedHiddenGemDetailScreen />;
@@ -23,9 +23,11 @@ function ConnectedHiddenGemDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
+  const traveler = useCurrentTraveler();
+  const travelerSlug = traveler?.slug ?? '';
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
   const likeState = useQuery(getLocationLikeStateRef, {
-    travelerSlug: currentDemoTravelerSlug,
+    travelerSlug,
     locationKind: 'hiddenGem',
     locationSlug: typeof slug === 'string' ? slug : '',
   });
@@ -54,7 +56,7 @@ function ConnectedHiddenGemDetailScreen() {
 
     try {
       const result = await toggleLocationLike({
-        travelerSlug: currentDemoTravelerSlug,
+        travelerSlug,
         locationKind: 'hiddenGem',
         locationSlug: slug,
       });

@@ -12,7 +12,13 @@ export default function TabLayout() {
   );
 
   return (
-    <NativeTabs tintColor={activeColor}>
+    <NativeTabs
+      backgroundColor="rgba(248,245,236,0.82)"
+      blurEffect="systemChromeMaterialLight"
+      disableTransparentOnScrollEdge
+      shadowColor="rgba(14,15,12,0.08)"
+      tintColor={activeColor}
+    >
       <NativeTabs.Trigger name="index" hidden />
 
       <NativeTabs.Trigger name="explore">
@@ -48,8 +54,8 @@ export default function TabLayout() {
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="squad">
-        <Label>Squad</Label>
+      <NativeTabs.Trigger name="friends">
+        <Label>Friends</Label>
         <Icon
           src={{
             default: getTabIcon('account-group-outline'),

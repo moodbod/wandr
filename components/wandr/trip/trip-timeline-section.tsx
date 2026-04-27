@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { MapTrifold, X } from 'phosphor-react-native';
+import { MapPin, MapTrifold } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,14 +10,23 @@ import type { TripDashboardItem } from '@/types/trip';
 
 type TripTimelineSectionProps = {
   items: readonly TripDashboardItem[];
+  variant?: 'default' | 'sheet';
   isEditing?: boolean;
   onRemoveItem?: (itemId: string) => void;
   removingItemId?: string | null;
-  variant?: 'default' | 'sheet';
 };
 
 const MARKER_SIZE = 32;
 const MARKER_COLUMN_WIDTH = 48;
+
+function getStayNightsLabel(checkIn?: number, checkOut?: number) {
+  if (!checkIn || !checkOut) {
+    return null;
+  }
+
+  const nights = Math.max(1, Math.round((checkOut - checkIn) / 86_400_000));
+  return `${nights} night${nights === 1 ? '' : 's'}`;
+}
 
 function TimelineMarker({
   index,
@@ -33,11 +42,12 @@ function TimelineMarker({
   );
 }
 
+function buildStayContextLine(locationLabel?: string) {
+  return locationLabel ?? null;
+}
+
 export function TripTimelineSection({
   items,
-  isEditing = false,
-  onRemoveItem,
-  removingItemId = null,
   variant = 'default',
 }: TripTimelineSectionProps) {
   const isDark = useColorScheme() === 'dark';
@@ -58,86 +68,79 @@ export function TripTimelineSection({
       <View style={styles.listContainer}>
         {items.map((item, index) => {
           const { experience } = item;
+          const isStay = item.kind === 'stay' && Boolean(item.stay);
           const isLast = index === items.length - 1;
-          const isRemoving = removingItemId === item._id;
+          const stayNights = getStayNightsLabel(item.checkIn, item.checkOut);
+          const stayContextLine = buildStayContextLine(item.stay?.town ?? experience.locationLabel);
+          const title = isStay ? item.stay?.name ?? experience.title : experience.title;
+          const imageUri = isStay ? item.stay?.imageUri ?? experience.imageUri : experience.imageUri;
+          const primaryTag = isStay ? item.stay?.town ?? experience.locationLabel : experience.category;
+          const secondaryTag = isStay ? stayNights : experience.durationLabel;
+          const href = isStay
+            ? ({ pathname: '/stays/details', params: { slug: item.experienceSlug } } as const)
+            : ({ pathname: '/explore/[slug]', params: { slug: experience.slug } } as const);
 
-          const content = (
-            <View style={styles.mainRow}>
-              <View style={styles.markerCell}>
-                <TimelineMarker index={index} isDark={isDark} />
-                {!isLast && <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />}
-              </View>
+          return (
+            <Link key={item._id} href={href} asChild>
+              <Pressable style={styles.item}>
+                <View style={styles.mainRow}>
+                  <View style={styles.markerCell}>
+                    <TimelineMarker index={index} isDark={isDark} />
+                    {!isLast && <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />}
+                  </View>
 
-              <View style={[styles.card, isDark && styles.cardDark]}>
-                <View style={styles.cardContent}>
-                  <View style={styles.cardLeft}>
-                    <View style={styles.cardTopRow}>
-                      <View style={styles.dayBadge}>
-                        <ThemedText style={styles.dayBadgeText}>Day {index + 1}</ThemedText>
+                  <View style={styles.card}>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardLeft}>
+                        <ThemedText style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
+                          {title}
+                        </ThemedText>
+
+                        {isStay ? (
+                          stayContextLine ? (
+                            <View style={styles.metaRow}>
+                              <View style={styles.metaItem}>
+                                <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
+                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                  {stayContextLine}
+                                </ThemedText>
+                              </View>
+                            </View>
+                          ) : null
+                        ) : (
+                          <View style={styles.metaRow}>
+                            {primaryTag ? (
+                              <View style={styles.metaItem}>
+                                <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
+                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                  {primaryTag}
+                                </ThemedText>
+                              </View>
+                            ) : null}
+                            {secondaryTag ? (
+                              <View style={styles.metaItem}>
+                                <ThemedText style={[styles.metaDot, isDark && styles.metaDotDark]}>•</ThemedText>
+                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                  {secondaryTag}
+                                </ThemedText>
+                              </View>
+                            ) : null}
+                          </View>
+                        )}
                       </View>
-                      {isEditing ? (
-                        <Pressable
-                          accessibilityLabel={`Remove ${experience.title} from itinerary`}
-                          disabled={isRemoving}
-                          onPress={() => onRemoveItem?.(item._id)}
-                          style={[styles.removeButton, isDark && styles.removeButtonDark, isRemoving && styles.removeButtonDisabled]}>
-                          <X size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
-                        </Pressable>
-                      ) : null}
-                    </View>
-                    
-                    <ThemedText style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
-                      {experience.title}
-                    </ThemedText>
-                    
-                    <ThemedText style={[styles.description, isDark && styles.descriptionDark]} numberOfLines={2}>
-                      {experience.description}
-                    </ThemedText>
 
-                    <View style={styles.tagRow}>
-                      {experience.category && (
-                        <View style={[styles.tag, isDark && styles.tagDark]}>
-                          <ThemedText style={styles.tagText}>{experience.category}</ThemedText>
-                        </View>
-                      )}
-                      {experience.durationLabel && (
-                        <View style={[styles.tag, isDark && styles.tagDark]}>
-                          <ThemedText style={styles.tagText}>{experience.durationLabel}</ThemedText>
+                      {imageUri && (
+                        <View style={styles.imageContainer}>
+                          <Image source={imageUri} style={styles.image} contentFit="cover" />
                         </View>
                       )}
                     </View>
                   </View>
-
-                  {experience.imageUri && (
-                    <View style={styles.imageContainer}>
-                      <Image source={experience.imageUri} style={styles.image} contentFit="cover" />
-                    </View>
-                  )}
                 </View>
-              </View>
-            </View>
-          );
-
-          if (isEditing) {
-            return (
-              <View key={item._id} style={styles.item}>
-                {content}
-              </View>
-            );
-          }
-
-          return (
-            <Link key={item._id} href={{ pathname: '/explore/[slug]', params: { slug: experience.slug } }} asChild>
-              <Pressable style={styles.item}>{content}</Pressable>
+              </Pressable>
             </Link>
           );
         })}
-
-        <View style={[styles.optimizedNote, isDark && styles.optimizedNoteDark]}>
-          <ThemedText style={[styles.optimizedNoteText, isDark && styles.optimizedNoteTextDark]}>
-            Your route is optimized for efficiency, helping you spend less time driving and more time at each stop.
-          </ThemedText>
-        </View>
       </View>
     </View>
   );
@@ -145,7 +148,7 @@ export function TripTimelineSection({
 
 const styles = StyleSheet.create({
   timeline: {
-    paddingVertical: 0,
+    paddingVertical: 4,
   },
   timelineSheet: {
     marginTop: 8,
@@ -174,6 +177,9 @@ const styles = StyleSheet.create({
   listContainer: {
     gap: 12,
   },
+  item: {
+    marginBottom: 12,
+  },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -182,6 +188,7 @@ const styles = StyleSheet.create({
     width: MARKER_COLUMN_WIDTH,
     alignItems: 'center',
     position: 'relative',
+    paddingTop: 6,
   },
   markerBase: {
     width: MARKER_SIZE,
@@ -215,60 +222,21 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cardDark: {
-    backgroundColor: designSystem.colors.darkSurface,
-    borderColor: designSystem.colors.darkBorder,
-    borderWidth: 1,
-    shadowOpacity: 0.2,
+    paddingTop: 6,
+    paddingBottom: 14,
+    paddingLeft: 8,
+    paddingRight: 4,
   },
   cardContent: {
     flexDirection: 'row',
     gap: 16,
+    alignItems: 'flex-start',
   },
   cardLeft: {
     flex: 1,
+    justifyContent: 'flex-start',
     gap: 8,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  dayBadge: {
-    backgroundColor: 'rgba(14,15,12,0.04)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  dayBadgeText: {
-    ...designSystem.type.eyebrow,
-    fontSize: 10,
-    color: designSystem.colors.gray,
-  },
-  removeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(14,15,12,0.06)',
-  },
-  removeButtonDark: {
-    backgroundColor: 'rgba(249,249,246,0.08)',
-  },
-  removeButtonDisabled: {
-    opacity: 0.5,
+    minWidth: 0,
   },
   title: {
     ...designSystem.type.cardTitle,
@@ -277,40 +245,39 @@ const styles = StyleSheet.create({
   titleDark: {
     color: designSystem.colors.darkText,
   },
-  description: {
-    ...designSystem.type.cardBody,
-    color: designSystem.colors.gray,
-  },
-  descriptionDark: {
-    color: designSystem.colors.darkMutedText,
-  },
-  tagRow: {
+  metaRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
   },
-  tag: {
-    backgroundColor: designSystem.colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  tagDark: {
-    backgroundColor: 'rgba(249,249,246,0.08)',
-  },
-  tagText: {
+  metaText: {
     ...designSystem.type.eyebrow,
-    fontSize: 10,
+    fontSize: 11,
     color: designSystem.colors.gray,
   },
+  metaTextDark: {
+    color: designSystem.colors.darkMutedText,
+  },
+  metaDot: {
+    ...designSystem.type.eyebrow,
+    fontSize: 11,
+    color: designSystem.colors.gray,
+  },
+  metaDotDark: {
+    color: designSystem.colors.darkMutedText,
+  },
   imageContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 16,
+    width: 96,
+    height: 96,
+    borderRadius: 18,
     overflow: 'hidden',
+    flexShrink: 0,
   },
   image: {
     width: '100%',

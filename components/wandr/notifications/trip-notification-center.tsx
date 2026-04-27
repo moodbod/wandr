@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import type { Id } from '@/convex/_generated/dataModel';
 
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import {
   ARRIVAL_RADIUS_METERS,
   ensureNotificationSetupAsync,
@@ -15,11 +14,13 @@ import {
   type TripNotificationPayload,
 } from '@/lib/notifications';
 import {
+  createTripNotificationRef,
   getTripDashboardRef,
   recordTripArrivalRef,
   submitExperienceRatingRef,
 } from '@/lib/convex';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { TripNotificationSheet } from '@/components/wandr/notifications/trip-notification-sheet';
 
 function toRadians(value: number) {
@@ -44,10 +45,13 @@ function getDistanceInMeters(from: readonly [number, number], to: readonly [numb
 
 export function TripNotificationCenter() {
   const router = useRouter();
+  const traveler = useCurrentTraveler();
+  const travelerSlug = traveler?.slug ?? '';
   const trip = useQuery(getTripDashboardRef, {
-    travelerSlug: currentDemoTravelerSlug,
+    travelerSlug,
   });
   const recordArrival = useMutation(recordTripArrivalRef);
+  const createTripNotification = useMutation(createTripNotificationRef);
   const submitExperienceRating = useMutation(submitExperienceRatingRef);
   const { coordinate: currentLocation } = useCurrentLocation();
 
@@ -127,7 +131,7 @@ export function TripNotificationCenter() {
 
     void recordArrival({
       bookingId: activeItem._id as Id<'experienceBookings'>,
-      travelerSlug: currentDemoTravelerSlug,
+      travelerSlug,
       source: 'gps',
       coordinate: [currentLocation[0], currentLocation[1]],
     })
@@ -153,16 +157,34 @@ export function TripNotificationCenter() {
           kind: 'arrival',
           ...basePayload,
         });
+        await createTripNotification({
+          recipientSlug: travelerSlug,
+          kind: 'trip_arrival',
+          title: `You made it to ${activeItem.experience.title}`,
+          body: 'This stop has been marked as visited. Open your trip to keep the day moving.',
+          href: '/trip/map',
+          entityId: activeItem._id,
+          entityLabel: activeItem.experience.title,
+        });
 
         await scheduleRatingNotification({
           kind: 'rating',
           ...basePayload,
         });
+        await createTripNotification({
+          recipientSlug: travelerSlug,
+          kind: 'trip_rating',
+          title: `Rate ${activeItem.experience.title}`,
+          body: 'Leave a quick rating and an optional note once you have a minute.',
+          href: '/notifications',
+          entityId: activeItem._id,
+          entityLabel: activeItem.experience.title,
+        });
       })
       .catch(() => {
         handledBookingIdsRef.current.delete(activeItem._id);
       });
-  }, [currentLocation, recordArrival, trip]);
+  }, [createTripNotification, currentLocation, recordArrival, travelerSlug, trip]);
 
   const handleDismiss = () => {
     setActivePayload(null);
@@ -190,7 +212,7 @@ export function TripNotificationCenter() {
     try {
       await submitExperienceRating({
         experienceSlug: activePayload.experienceSlug,
-        travelerSlug: currentDemoTravelerSlug,
+        travelerSlug,
         rating,
         review: note.trim() || undefined,
       });

@@ -23,8 +23,9 @@ export default function RootLayout() {
         <Stack.Screen name="explore" options={{ headerShown: false }} />
         <Stack.Screen name="trip" options={{ headerShown: false }} />
         <Stack.Screen name="stays" options={{ headerShown: false }} />
-        <Stack.Screen name="squad" options={{ headerShown: false }} />
+        <Stack.Screen name="friends" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       {convexClient ? <TripNotificationCenter /> : null}

@@ -29,8 +29,8 @@ The structure is now grouped by feature area:
 | `trip/trip_map-timeline` | Trip map + timeline | `/trip/map` | Trip title, map hero, route marker context, “Day 4 Timeline” section | Uses Swiss Alps sample content, but structurally this is still the trip map screen |
 | `stays/stays_map-search` | Stays search map | `/stays` | Search field, map-first layout, nearby stay cards, pricing, bottom nav | Best fit for accommodation browsing |
 | `stays/stay_details-reviews` | Stay detail + reviews | `/stays/:id` | Large property hero, description, guest journals/reviews, neighborhood section | Detail screen paired naturally with `stays_map-search` |
-| `squad/squad_discovery` | Travel squad matching / people discovery | `/squad/discover` | Match headline, traveler cards, profile snippets, bottom nav | Best fit for finding travel companions |
-| `squad/squad_chat` | Travel squad group chat | `/squad/chat` | Squad title, shared update cards, message composer, group feed | Natural follow-up once a squad is formed |
+| `squad/squad_discovery` | Travel friends matching / people discovery | `/friends/discover` | Match headline, traveler cards, profile snippets, bottom nav | Best fit for finding travel companions |
+| `squad/squad_chat` | Travel friends group chat | `/friends/chat` | Friends title, shared update cards, message composer, group feed | Natural follow-up once a group is formed |
 | `profile/profile_overview` | Traveler profile overview | `/profile` | User identity, traveler level/status, profile stats and actions, bottom nav | Main profile/account screen |
 | `system/design-system_editorial-confidence` | Shared design direction | n/a | Color tokens, typography, spacing, component behavior | Use this as the visual system reference for all screens |
 
@@ -52,7 +52,7 @@ The structure is now grouped by feature area:
 - `stays/stays_map-search`
 - `stays/stay_details-reviews`
 
-### Squad / Social
+### Friends / Social
 
 - `squad/squad_discovery`
 - `squad/squad_chat`

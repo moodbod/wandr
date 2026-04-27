@@ -42,18 +42,9 @@ export function ExploreActivityCard({ card, href }: ExploreActivityCardProps) {
 
         {typeof card.visitorCount === 'number' ? (
           <TravelerMomentum
-            compact
             regionName={card.countryLabel ?? 'travelers'}
             visitorCount={card.visitorCount}
-            compactProfiles={(card.visitorNames ?? []).map((name) => ({ id: name, name }))}
-            viewerName={card.viewerName}
-            avatars={[
-              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-              'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop',
-            ]}
-            emptyLabel={card.countryLabel ? `Be the first traveler from ${card.countryLabel} to visit` : 'Be the first traveler to visit'}
+            avatarUris={card.avatarUris ?? []}
           />
         ) : null}
       </View>

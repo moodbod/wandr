@@ -2,10 +2,10 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { MapFrame } from '@/components/wandr/maps/map-frame';
 import { ThemedText } from '@/components/themed-text';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
-import type { ExploreMapMarker } from '@/constants/explore-content';
 import { designSystem } from '@/constants/design-system';
+import type { ExploreMapMarker } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ExploreLiveMapPanelProps = {
@@ -29,17 +29,17 @@ export function ExploreLiveMapPanel({
   const featuredMarker = markers.find((marker) => marker.experienceSlug);
 
   return (
-    <View style={styles.shell}>
-      <MapPreview
+    <MapFrame
+      shellStyle={styles.shell}
         centerCoordinate={centerCoordinate}
         markers={markers}
-        zoomLevel={11}
+        zoomLevel={14}
         onMarkerPress={(marker) => {
           if (marker.experienceSlug) {
             router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
           }
         }}
-      />
+    >
       <View style={styles.overlayCardContainer}>
         <BlurView 
           intensity={80} 
@@ -66,7 +66,7 @@ export function ExploreLiveMapPanel({
           </Pressable>
         </BlurView>
       </View>
-    </View>
+    </MapFrame>
   );
 }
 

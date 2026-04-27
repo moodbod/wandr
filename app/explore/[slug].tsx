@@ -12,11 +12,13 @@ import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
 import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
 import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
-import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
+import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import {
   bookExperienceRef,
   createTripRef,
@@ -28,7 +30,6 @@ import {
   listUserTripsRef,
   toggleLocationLikeRef,
 } from '@/lib/convex';
-import { currentDemoTravelerSlug } from '@/lib/demo-session';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 
 export default function ExploreExperienceScreen() {
@@ -39,17 +40,20 @@ function ConnectedExploreExperienceScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: currentDemoTravelerSlug });
-  const trips = useQuery(listUserTripsRef, { travelerSlug: currentDemoTravelerSlug });
+  const isDark = useColorScheme() === 'dark';
+  const traveler = useCurrentTraveler();
+  const travelerSlug = traveler?.slug ?? '';
+  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
+  const trips = useQuery(listUserTripsRef, { travelerSlug });
   const primaryTripId = trips?.[0]?._id;
-  const trip = useQuery(getTripDashboardRef, { travelerSlug: currentDemoTravelerSlug, tripId: primaryTripId });
+  const trip = useQuery(getTripDashboardRef, { travelerSlug, tripId: primaryTripId });
   const ensureCommunitySeed = useMutation(ensureExploreCommunitySeedRef);
   const bookExperience = useMutation(bookExperienceRef);
   const createTrip = useMutation(createTripRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
-  const itinerary = useQuery(getUserItineraryRef, { travelerSlug: currentDemoTravelerSlug });
+  const itinerary = useQuery(getUserItineraryRef, { travelerSlug });
   const likeState = useQuery(getLocationLikeStateRef, {
-    travelerSlug: currentDemoTravelerSlug,
+    travelerSlug,
     locationKind: 'experience',
     locationSlug: typeof slug === 'string' ? slug : '',
   });
@@ -89,7 +93,7 @@ function ConnectedExploreExperienceScreen() {
   const isLiked = optimisticLiked ?? likeState?.liked ?? false;
   const locationLabel = experience.locationLabel ?? page.home.hero.locationLabel;
   const galleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
-  const bookingMapCenter = experience.coordinate ?? trip.centerCoordinate;
+  const bookingMapCenter = experience.coordinate ?? trip.centerCoordinate ?? page.home.hero.centerCoordinate;
   const bookingMapMarkers = experience.coordinate
     ? [
         {
@@ -138,7 +142,7 @@ function ConnectedExploreExperienceScreen() {
     try {
       await bookExperience({
         experienceSlug: experience.slug,
-        travelerSlug: currentDemoTravelerSlug,
+        travelerSlug,
         tripId,
       });
       setOptimisticBookedSlug(experience.slug);
@@ -168,7 +172,7 @@ function ConnectedExploreExperienceScreen() {
 
     const tripId = await createTrip({
       name: tripTitle,
-      travelerSlug: currentDemoTravelerSlug,
+      travelerSlug,
     });
 
     const didBook = await saveExperienceToTrip('secondary', tripId);
@@ -184,7 +188,7 @@ function ConnectedExploreExperienceScreen() {
 
     try {
       const result = await toggleLocationLike({
-        travelerSlug: currentDemoTravelerSlug,
+        travelerSlug,
         locationKind: 'experience',
         locationSlug: experience.slug,
       });
@@ -195,7 +199,7 @@ function ConnectedExploreExperienceScreen() {
   };
 
   return (
-    <ThemedView style={styles.root}>
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
       <WandrHeader
         config={{
           overlay: true,
@@ -219,9 +223,12 @@ function ConnectedExploreExperienceScreen() {
           { paddingTop: insets.top + 72, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
         ]}>
         
-        <ExperienceGalleryCarousel images={galleryImages} />
+        <View style={styles.carouselContainer}>
+          <ExperienceGalleryCarousel images={galleryImages} />
+        </View>
 
-        <View style={styles.titleBlock}>
+        <View style={styles.paddedContent}>
+          <View style={styles.titleBlock}>
           <View style={styles.badge}>
             <ThemedText style={styles.badgeText}>{experience.badge}</ThemedText>
           </View>
@@ -230,16 +237,16 @@ function ConnectedExploreExperienceScreen() {
               adjustsFontSizeToFit
               minimumFontScale={0.4}
               numberOfLines={2}
-              style={styles.title}>
+              style={[styles.title, isDark && styles.titleDark]}>
               {experience.title.toUpperCase()}
             </ThemedText>
           </View>
           <View style={styles.subtitleRow}>
-            <ThemedText style={styles.subtitle}>{locationLabel}</ThemedText>
+            <ThemedText style={[styles.subtitle, isDark && styles.subtitleDark]}>{locationLabel}</ThemedText>
           </View>
         </View>
 
-        <ThemedText style={styles.summary}>{experience.description}</ThemedText>
+        <ThemedText style={[styles.summary, isDark && styles.summaryDark]}>{experience.description}</ThemedText>
 
         {experience.price ? (
           <AverageSpendSection amount={experience.price} priceSuffix={experience.priceSuffix} />
@@ -247,40 +254,16 @@ function ConnectedExploreExperienceScreen() {
 
         {experience.travelerMomentum && (
           <TravelerMomentum
-            compact
             regionName={activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel}
             visitorCount={activityCard?.visitorCount ?? experience.travelerMomentum.visitorCount}
-            compactProfiles={(activityCard?.visitorNames ?? []).map((name) => ({ id: name, name }))}
-            viewerName={activityCard?.viewerName}
-            avatars={[]}
-            emptyLabel={
-              (activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel)
-                ? `Be the first traveler from ${activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel} to visit`
-                : 'Be the first traveler to visit'
-            }
+            avatarUris={activityCard?.avatarUris ?? experience.travelerMomentum.avatarUris ?? []}
           />
         )}
 
         {tripFitItems.length > 0 ? (
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Trip Fit</ThemedText>
+            <ThemedText style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Trip Fit</ThemedText>
             <TripFitSummary items={tripFitItems} />
-          </View>
-        ) : null}
-
-        {experience.includes.length > 0 ? (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Included</ThemedText>
-            <View style={styles.includedList}>
-              {experience.includes.map((item) => (
-                <View key={item} style={styles.includedRow}>
-                  <View style={styles.bullet} />
-                  <ThemedText type="defaultSemiBold" style={styles.infoText}>
-                    {item}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
           </View>
         ) : null}
 
@@ -309,12 +292,13 @@ function ConnectedExploreExperienceScreen() {
             />
           </View>
         )}
-      </ScrollView>
+      </View>
+    </ScrollView>
 
-      <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['50%']} enablePanDownToClose>
+    <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['50%']} enablePanDownToClose>
         <BottomSheetView style={styles.sheetContent}>
-          <ThemedText style={styles.sheetTitle}>Add to Trip</ThemedText>
-          <ThemedText style={styles.sheetSubtitle}>
+          <ThemedText style={[styles.sheetTitle, isDark && styles.sheetTitleDark]}>Add to Trip</ThemedText>
+          <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
             Choose which trip to add this experience to.
           </ThemedText>
 
@@ -354,7 +338,16 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  rootDark: {
+    backgroundColor: designSystem.colors.darkBackground,
+  },
   content: {
+    gap: designSystem.spacing.xxxl,
+  },
+  carouselContainer: {
+    width: '100%',
+  },
+  paddedContent: {
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.xxxl,
   },
@@ -382,9 +375,15 @@ const styles = StyleSheet.create({
     color: designSystem.colors.ink,
     lineHeight: 44,
   },
+  titleDark: {
+    color: designSystem.colors.darkText,
+  },
   subtitle: {
     ...designSystem.type.bodyStrong,
     color: designSystem.colors.warmDark,
+  },
+  subtitleDark: {
+    color: designSystem.colors.darkMutedText,
   },
   subtitleRow: {
     flexDirection: 'row',
@@ -422,6 +421,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1,
     textTransform: 'uppercase',
+    color: designSystem.colors.ink,
+  },
+  sectionTitleDark: {
+    color: designSystem.colors.darkText,
   },
   summary: {
     fontSize: 16,
@@ -429,25 +432,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
-  includedList: {
-    gap: 12,
-  },
-  includedRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  bullet: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: designSystem.colors.lime,
-    marginTop: 6,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
+  summaryDark: {
+    color: designSystem.colors.darkMutedText,
   },
   actions: {
     gap: 16,
@@ -462,10 +448,16 @@ const styles = StyleSheet.create({
     ...designSystem.type.subtitle,
     fontSize: 24,
   },
+  sheetTitleDark: {
+    color: designSystem.colors.darkText,
+  },
   sheetSubtitle: {
     ...designSystem.type.body,
     color: designSystem.colors.warmDark,
     marginBottom: 8,
+  },
+  sheetSubtitleDark: {
+    color: designSystem.colors.darkMutedText,
   },
   tripList: {
     gap: 12,
