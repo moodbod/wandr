@@ -18,7 +18,9 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 export interface GlassInputProps extends TextInputProps {
   containerStyle?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle>;
   intensity?: number;
+  plain?: boolean;
   tint?: BlurTint;
   radius?: number;
   leftIcon?: React.ReactNode;
@@ -30,8 +32,10 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       autoCapitalize = 'none',
       autoCorrect = false,
       containerStyle,
+      contentStyle,
       intensity = 80,
       leftIcon,
+      plain = false,
       radius = designSystem.radii.pill,
       style,
       tint,
@@ -46,13 +50,29 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       'text'
     );
     const placeholderTextColor = useThemeColor(
-      { light: 'rgba(14,15,12,0.35)', dark: 'rgba(249,249,246,0.35)' },
+      { light: designSystem.colors.placeholderText, dark: designSystem.colors.darkPlaceholderText },
       'icon'
     );
 
-    const icon = leftIcon ?? <MagnifyingGlass color={placeholderTextColor} size={20} weight="bold" />;
+    const icon = leftIcon === undefined ? <MagnifyingGlass color={placeholderTextColor} size={20} weight="regular" /> : leftIcon;
     const resolvedTint = tint ?? (isDark ? 'dark' : 'light');
     const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+    if (plain) {
+      return (
+        <View style={[styles.plainContainer, contentStyle, containerStyle]}>
+          {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
+          <TextInput
+            ref={ref}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={autoCorrect}
+            placeholderTextColor={placeholderTextColor}
+            style={[styles.input, { color: textColor }, style]}
+            {...props}
+          />
+        </View>
+      );
+    }
 
     if (shouldUseNativeGlass) {
       return (
@@ -61,7 +81,7 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
             <GlassView
               style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
               glassEffectStyle="clear"
-              tintColor={isDark ? "rgba(12, 14, 12, 0.08)" : "rgba(255, 255, 255, 0.12)"}
+              tintColor={designSystem.colors.transparentWhite}
               isInteractive
             />
             <View
@@ -70,13 +90,13 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
                 styles.nativeGlassOverlay,
                 {
                   borderRadius: radius,
-                  borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.22)',
-                  backgroundColor: isDark ? 'rgba(12,14,12,0.02)' : 'rgba(255,255,255,0.02)',
+                  borderColor: isDark ? designSystem.colors.whiteOverlay : designSystem.colors.whiteOverlaySoft,
+                  backgroundColor: designSystem.colors.transparentWhite,
                 },
               ]}
             />
-            <View style={styles.nativeGlassContent}>
-              <View style={styles.leftIcon}>{icon}</View>
+            <View style={[styles.nativeGlassContent, contentStyle]}>
+              {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
               <TextInput
                 ref={ref}
                 autoCapitalize={autoCapitalize}
@@ -95,8 +115,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       return (
         <View style={[styles.container, { borderRadius: radius }, containerStyle]}>
           <BlurView intensity={intensity} tint={resolvedTint} style={[styles.blur, { borderRadius: radius }]}>
-            <View style={[styles.innerHighlight, { borderRadius: radius }]}>
-              <View style={styles.leftIcon}>{icon}</View>
+            <View style={[styles.innerHighlight, { borderRadius: radius }, contentStyle]}>
+              {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
               <TextInput
                 ref={ref}
                 autoCapitalize={autoCapitalize}
@@ -118,13 +138,14 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
           styles.androidFill,
           {
             borderRadius: radius,
-            backgroundColor: isDark ? 'rgba(22,25,20,0.84)' : 'rgba(244,244,241,0.88)',
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(14,15,12,0.08)',
+            backgroundColor: designSystem.colors.transparentWhite,
+            borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft,
           },
+          contentStyle,
           containerStyle,
         ]}
       >
-        <View style={styles.leftIcon}>{icon}</View>
+        {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
         <TextInput
           ref={ref}
           autoCapitalize={autoCapitalize}
@@ -142,15 +163,21 @@ GlassInput.displayName = 'GlassInput';
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 48,
+    minHeight: designSystem.layout.inputHeight,
     overflow: 'hidden',
+  },
+  plainContainer: {
+    minHeight: designSystem.layout.inputHeight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.layout.inputGap,
   },
   blur: {
     flex: 1,
     overflow: 'hidden',
   },
   nativeGlassShell: {
-    minHeight: 48,
+    minHeight: designSystem.layout.inputHeight,
     overflow: 'hidden',
   },
   nativeGlassOverlay: {
@@ -158,32 +185,31 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   nativeGlassContent: {
-    minHeight: 48,
+    minHeight: designSystem.layout.inputHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: designSystem.layout.inputGap,
+    paddingHorizontal: designSystem.layout.inputPaddingHorizontal,
   },
   innerHighlight: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: designSystem.layout.inputGap,
+    paddingHorizontal: designSystem.layout.inputPaddingHorizontal,
   },
   androidFill: {
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: designSystem.layout.inputGap,
+    paddingHorizontal: designSystem.layout.inputPaddingHorizontal,
   },
   input: {
     flex: 1,
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: '600',
+    ...designSystem.type.bodyStrong,
     paddingVertical: 0,
+    includeFontPadding: false,
   },
   leftIcon: {
     justifyContent: 'center',

@@ -1,0 +1,523 @@
+import { useMutation, useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
+import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
+import { Image as ExpoImage } from 'expo-image';
+import { Check, FadersHorizontal } from 'phosphor-react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { GlassInput } from '@/components/ui/glass-input';
+import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented-tabs';
+import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
+import { WandrHeader } from '@/components/wandr/header';
+import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
+import { createOpenFriendGroupRef, getFriendChatListRef, listUserTripsRef } from '@/lib/convex';
+
+type ChatFilter = 'primary' | 'groups' | 'chats';
+
+const chatFilters: { key: ChatFilter; label: string }[] = [
+  { key: 'primary', label: 'Primary' },
+  { key: 'groups', label: 'Groups' },
+  { key: 'chats', label: 'Chats' },
+];
+
+export default function FriendsChatListScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const traveler = useCurrentTraveler();
+  const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
+  const chatList = useQuery(getFriendChatListRef, { travelerSlug: traveler?.slug ?? '' });
+  const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
+  const createGroup = useMutation(createOpenFriendGroupRef);
+  const sheetRef = useRef<BottomSheet>(null);
+  const [groupName, setGroupName] = useState('');
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [selectedFriendSlugs, setSelectedFriendSlugs] = useState<string[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ChatFilter>('primary');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const isLoading = isBootstrapping || traveler === undefined || chatList === undefined;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredGroups = useMemo(() => {
+    const groups = chatList?.groups ?? [];
+    if (!normalizedSearchQuery) {
+      return groups;
+    }
+
+    return groups.filter((item) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearchQuery)
+      )
+    );
+  }, [chatList?.groups, normalizedSearchQuery]);
+  const filteredDirects = useMemo(() => {
+    const directs = chatList?.directs ?? [];
+    if (!normalizedSearchQuery) {
+      return directs;
+    }
+
+    return directs.filter((item) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearchQuery)
+      )
+    );
+  }, [chatList?.directs, normalizedSearchQuery]);
+  const showGroups = activeFilter === 'primary' || activeFilter === 'groups';
+  const showDirects = activeFilter === 'primary' || activeFilter === 'chats';
+
+  const handleCreateGroup = async () => {
+    sheetRef.current?.snapToIndex(0);
+  };
+
+  const toggleSelectedFriend = (friendSlug: string) => {
+    setSelectedFriendSlugs((current) =>
+      current.includes(friendSlug)
+        ? current.filter((slug) => slug !== friendSlug)
+        : [...current, friendSlug]
+    );
+  };
+
+  const handleSubmitCreateGroup = async () => {
+    if (!traveler?.slug || selectedFriendSlugs.length === 0) {
+      return;
+    }
+
+    setIsCreatingGroup(true);
+    try {
+      const circleId = await createGroup({
+        travelerSlug: traveler.slug,
+        name: groupName.trim() || undefined,
+        tripId: selectedTripId ? (selectedTripId as never) : undefined,
+        inviteeSlugs: selectedFriendSlugs,
+      });
+      if (circleId) {
+        setGroupName('');
+        setSelectedTripId(null);
+        setSelectedFriendSlugs([]);
+        sheetRef.current?.close();
+        router.push(`/friends/group/${circleId}` as never);
+      }
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <ThemedView style={styles.root}>
+        <WandrHeader
+          config={{
+            overlay: true,
+            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          }}
+        />
+        <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
+          <ActivityIndicator size="large" />
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.root}>
+      <WandrHeader
+        config={{
+          overlay: true,
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          trailingActions: [
+            { kind: 'plus', accessibilityLabel: 'Create group', onPress: handleCreateGroup },
+            { kind: 'notifications', accessibilityLabel: 'Notifications' },
+          ],
+        }}
+      />
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + 88,
+            paddingBottom: insets.bottom + 80,
+          },
+        ]}>
+        <View style={styles.hero}>
+          <ThemedText style={styles.title}>Chats</ThemedText>
+        </View>
+
+        {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
+
+        <GlassInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search chats"
+          returnKeyType="search"
+        />
+
+        <SegmentedTabs
+          value={activeFilter}
+          options={chatFilters}
+          onChange={setActiveFilter}
+          leadingAccessory={
+            <SegmentedTabsAccessory>
+            <FadersHorizontal color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} size={18} weight="bold" />
+            </SegmentedTabsAccessory>
+          }
+        />
+
+        {showGroups && filteredGroups.length ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
+            <View style={styles.rowList}>
+              {filteredGroups.map((item) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {showDirects && filteredDirects.length ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Chats</ThemedText>
+            <View style={styles.rowList}>
+              {filteredDirects.map((item) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {(showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
+          <View style={styles.emptyState}>
+            <ThemedText style={styles.emptyTitle}>No chats yet</ThemedText>
+            <ThemedText style={styles.emptyDescription}>
+              Try another filter or start a group.
+            </ThemedText>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <GlassBottomSheet ref={sheetRef} index={-1} snapPoints={['68%']} enablePanDownToClose>
+        <BottomSheetView style={styles.sheetContent}>
+          <View style={styles.sheetHeader}>
+            <ThemedText style={styles.sheetTitle}>Create group</ThemedText>
+            <ThemedText style={styles.sheetDescription}>Choose at least one friend to start with.</ThemedText>
+          </View>
+          <BottomSheetTextInput
+            style={[styles.sheetInput, isDark ? styles.sheetInputDark : null]}
+            placeholder="Group name"
+            placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+            value={groupName}
+            onChangeText={setGroupName}
+          />
+          <View style={styles.sheetSection}>
+            <ThemedText style={styles.sheetSectionTitle}>Friends</ThemedText>
+            <ScrollView style={styles.friendPicker} contentContainerStyle={styles.friendPickerContent}>
+              {(chatList?.friends ?? []).length === 0 ? (
+                <View style={styles.friendEmpty}>
+                  <ThemedText style={styles.friendEmptyText}>Add friends before creating a group.</ThemedText>
+                </View>
+              ) : null}
+              {(chatList?.friends ?? []).map((friend) => {
+                const isSelected = selectedFriendSlugs.includes(friend.travelerSlug);
+
+                return (
+                  <Pressable
+                    key={friend.travelerSlug}
+                    onPress={() => toggleSelectedFriend(friend.travelerSlug)}
+                    style={[styles.friendOption, isSelected ? styles.friendOptionActive : null]}>
+                    {friend.avatarUri ? (
+                      <ExpoImage source={friend.avatarUri} style={styles.friendAvatar} contentFit="cover" />
+                    ) : (
+                      <View style={styles.friendAvatarFallback}>
+                        <ThemedText style={styles.friendAvatarInitial}>{friend.name.slice(0, 1)}</ThemedText>
+                      </View>
+                    )}
+                    <View style={styles.friendOptionCopy}>
+                      <ThemedText style={styles.friendOptionName} numberOfLines={1}>
+                        {friend.name}
+                      </ThemedText>
+                      <ThemedText style={styles.friendOptionMeta} numberOfLines={1}>
+                        {friend.baseLabel}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.friendCheck, isSelected ? styles.friendCheckActive : null]}>
+                      {isSelected ? <Check color={designSystem.colors.darkGreen} size={14} weight="bold" /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <View style={styles.sheetSection}>
+            <ThemedText style={styles.sheetSectionTitle}>Optional trip</ThemedText>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tripOptionScroller}
+              contentContainerStyle={styles.tripOptionRow}>
+              <Pressable
+                onPress={() => setSelectedTripId(null)}
+                style={[styles.tripOption, selectedTripId === null ? styles.tripOptionActive : null]}>
+                <ThemedText
+                  style={[styles.tripOptionText, selectedTripId === null ? styles.tripOptionTextActive : null]}>
+                  No trip
+                </ThemedText>
+              </Pressable>
+              {(trips ?? []).map((trip) => (
+                <Pressable
+                  key={trip._id}
+                  onPress={() => setSelectedTripId(trip._id)}
+                  style={[styles.tripOption, selectedTripId === trip._id ? styles.tripOptionActive : null]}>
+                  <ThemedText
+                    style={[
+                      styles.tripOptionText,
+                      selectedTripId === trip._id ? styles.tripOptionTextActive : null,
+                    ]}
+                    numberOfLines={1}>
+                    {trip.name}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+          <Pressable
+            accessibilityLabel="Create group"
+            onPress={isCreatingGroup || selectedFriendSlugs.length === 0 ? undefined : handleSubmitCreateGroup}
+            style={[
+              styles.createButton,
+              isCreatingGroup || selectedFriendSlugs.length === 0 ? styles.createButtonDisabled : null,
+            ]}>
+            <ThemedText style={styles.createButtonText}>
+              {isCreatingGroup
+                ? 'Creating...'
+                : selectedFriendSlugs.length === 0
+                  ? 'Select friends'
+                  : `Create group (${selectedFriendSlugs.length})`}
+            </ThemedText>
+          </Pressable>
+        </BottomSheetView>
+      </GlassBottomSheet>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    paddingHorizontal: designSystem.spacing.lg,
+    gap: designSystem.spacing.xl,
+  },
+  hero: {
+    gap: 2,
+  },
+  title: {
+    fontSize: 42,
+    lineHeight: 40,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  notice: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.copper,
+  },
+  section: {
+    gap: 14,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: designSystem.colors.gray,
+  },
+  rowList: {
+    gap: 18,
+  },
+  sheetContent: {
+    flex: 1,
+    paddingHorizontal: designSystem.layout.cardPadding,
+    paddingTop: designSystem.spacing.xl,
+    paddingBottom: designSystem.spacing.xl,
+    gap: designSystem.spacing.lg,
+  },
+  sheetHeader: {
+    gap: 2,
+  },
+  sheetTitle: {
+    ...designSystem.type.subtitle,
+    color: designSystem.colors.ink,
+  },
+  sheetDescription: {
+    ...designSystem.type.bodySmall,
+    color: designSystem.colors.gray,
+  },
+  sheetInput: {
+    minHeight: designSystem.layout.inputHeight,
+    borderRadius: designSystem.radii.panel,
+    backgroundColor: designSystem.colors.surfaceRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: designSystem.colors.borderSoft,
+    paddingHorizontal: designSystem.spacing.md,
+    fontSize: 16,
+    lineHeight: 20,
+    color: designSystem.colors.ink,
+  },
+  sheetInputDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
+    color: designSystem.colors.darkText,
+  },
+  sheetSection: {
+    gap: designSystem.spacing.sm,
+  },
+  sheetSectionTitle: {
+    ...designSystem.type.label,
+    color: designSystem.colors.warmDark,
+  },
+  friendPicker: {
+    maxHeight: 156,
+    marginHorizontal: -designSystem.layout.cardPadding,
+  },
+  friendPickerContent: {
+    gap: designSystem.spacing.xs,
+    paddingHorizontal: designSystem.layout.cardPadding,
+  },
+  friendEmpty: {
+    minHeight: 52,
+    justifyContent: 'center',
+    paddingHorizontal: designSystem.spacing.sm,
+    borderRadius: designSystem.radii.panel,
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  friendEmptyText: {
+    ...designSystem.type.bodySmall,
+    color: designSystem.colors.gray,
+  },
+  friendOption: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.spacing.sm,
+    paddingHorizontal: designSystem.spacing.sm,
+    paddingVertical: designSystem.spacing.xs,
+    borderRadius: designSystem.radii.panel,
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  friendOptionActive: {
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  friendAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: designSystem.colors.surface,
+  },
+  friendAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.surface,
+  },
+  friendAvatarInitial: {
+    ...designSystem.type.label,
+    color: designSystem.colors.warmDark,
+  },
+  friendOptionCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  friendOptionName: {
+    ...designSystem.type.bodySmallStrong,
+    color: designSystem.colors.ink,
+  },
+  friendOptionMeta: {
+    ...designSystem.type.caption,
+    color: designSystem.colors.gray,
+  },
+  friendCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.surfaceRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  friendCheckActive: {
+    backgroundColor: designSystem.colors.lime,
+    borderColor: designSystem.colors.borderAccent,
+  },
+  tripOptionScroller: {
+    marginHorizontal: -designSystem.layout.cardPadding,
+  },
+  tripOptionRow: {
+    gap: designSystem.spacing.xs,
+    paddingHorizontal: designSystem.layout.cardPadding,
+  },
+  tripOption: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: designSystem.spacing.md,
+    borderRadius: designSystem.radii.pill,
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  tripOptionActive: {
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  tripOptionText: {
+    ...designSystem.type.label,
+    color: designSystem.colors.warmDark,
+  },
+  tripOptionTextActive: {
+    color: designSystem.colors.darkGreen,
+  },
+  createButton: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    backgroundColor: designSystem.colors.lime,
+    marginTop: designSystem.spacing.xs,
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
+  },
+  createButtonText: {
+    ...designSystem.type.bodySmallStrong,
+    color: designSystem.colors.darkGreen,
+  },
+  emptyState: {
+    gap: 8,
+    paddingTop: 8,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  emptyDescription: {
+    maxWidth: 320,
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.gray,
+  },
+});

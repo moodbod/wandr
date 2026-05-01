@@ -144,7 +144,7 @@ export function buildRegionOptions(
     return a.label.localeCompare(b.label);
   });
 
-  return discoveredRegions;
+  return [{ key: 'all', label: 'All regions' }, ...discoveredRegions];
 }
 
 export function matchesIntent(category: string | undefined, visitorCount: number | undefined, activeIntent: string) {

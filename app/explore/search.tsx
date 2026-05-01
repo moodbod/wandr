@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardSkeleton, ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
+import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
 import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
@@ -15,7 +16,7 @@ import type { ExploreActivityCard as ExploreActivityCardContent, ExploreHiddenGe
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentRegionCenter } from '@/hooks/use-current-region-center';
-import { getExplorePageContentRef } from '@/lib/convex';
+import { getExploreJoinableTripCardsRef, getExplorePageContentRef } from '@/lib/convex';
 import {
     buildRegionOptions,
     matchesExperienceFilters,
@@ -23,6 +24,7 @@ import {
     matchesIntent,
     type DiscoveryOption,
 } from '@/lib/explore-filters';
+import type { ExploreJoinableTripCard } from '@/types/explore';
 
 const intentOptions: readonly DiscoveryOption[] = [
   { key: 'all', label: 'Everything' },
@@ -39,6 +41,10 @@ function ConnectedExploreSearchScreen() {
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
+  const joinableTripCards = useQuery(
+    getExploreJoinableTripCardsRef,
+    traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
+  );
   const { coordinate: currentRegionCenter } = useCurrentRegionCenter();
   const [activeRegion, setActiveRegion] = useState<string>('');
   const [activeIntent, setActiveIntent] = useState<string>('all');
@@ -68,6 +74,24 @@ function ConnectedExploreSearchScreen() {
     [currentRegionCenter, page, searchMatchedExperiences, searchMatchedGems]
   );
 
+  const regionMatchedExperiences = useMemo(
+    () =>
+      page?.experiences.filter((experience) =>
+        matchesExperienceFilters(experience, activeRegion || 'all', 'all', searchQuery)
+      ) ?? [],
+    [activeRegion, page, searchQuery]
+  );
+
+  const activeIntentOptions = useMemo(
+    () =>
+      intentOptions.filter(
+        (option) =>
+          option.key === 'all' ||
+          regionMatchedExperiences.some((e) => matchesIntent(e.category, e.travelerMomentum?.visitorCount, option.key))
+      ),
+    [regionMatchedExperiences]
+  );
+
   useEffect(() => {
     if (regionOptions.length === 0) {
       return;
@@ -80,6 +104,14 @@ function ConnectedExploreSearchScreen() {
     }
   }, [activeRegion, regionOptions]);
 
+  useEffect(() => {
+    if (activeIntentOptions.some((option) => option.key === activeIntent)) {
+      return;
+    }
+
+    setActiveIntent('all');
+  }, [activeIntent, activeIntentOptions]);
+
   if (!page) {
     return (
       <ThemedView style={styles.root}>
@@ -91,17 +123,12 @@ function ConnectedExploreSearchScreen() {
     );
   }
 
-  const activeIntentOptions = intentOptions.filter(
-    (option) =>
-      option.key === 'all' ||
-      searchMatchedExperiences.some((e) => matchesIntent(e.category, e.travelerMomentum?.visitorCount, option.key))
-  );
-
+  const resolvedActiveRegion = activeRegion || 'all';
   const filteredExperiences = page.experiences.filter((experience) =>
-    matchesExperienceFilters(experience, activeRegion, activeIntent, searchQuery)
+    matchesExperienceFilters(experience, resolvedActiveRegion, activeIntent, searchQuery)
   );
   const filteredHiddenGems = page.search.hiddenGems.items.filter((item) =>
-    matchesHiddenGemFilters(item, activeRegion, searchQuery)
+    matchesHiddenGemFilters(item, resolvedActiveRegion, searchQuery)
   );
   const previewCards = filteredExperiences.map<ExploreActivityCardContent>((experience) => ({
     badge: experience.badge,
@@ -114,12 +141,16 @@ function ConnectedExploreSearchScreen() {
     subtitle: experience.locationLabel ?? experience.subtitle,
     title: experience.title,
   }));
+  const filteredJoinableTripCards = (joinableTripCards ?? []).filter((card) =>
+    filteredExperiences.some((experience) => experience.slug === card.experienceSlug)
+  );
+  const hasResults = previewCards.length > 0 || filteredJoinableTripCards.length > 0 || filteredHiddenGems.length > 0;
 
   return (
     <ExploreSearchScreenView
       activeIntent={activeIntent}
       activeIntentOptions={activeIntentOptions}
-      activeRegion={activeRegion}
+      activeRegion={resolvedActiveRegion}
       filteredHiddenGems={filteredHiddenGems}
       insetsTop={insets.top}
       isLoading={false}
@@ -128,6 +159,8 @@ function ConnectedExploreSearchScreen() {
       onRegionChange={setActiveRegion}
       onSearchQueryChange={setSearchQuery}
       page={page}
+      filteredJoinableTripCards={filteredJoinableTripCards}
+      hasResults={hasResults}
       previewCards={previewCards}
       regionOptions={regionOptions}
       searchQuery={searchQuery}
@@ -147,6 +180,8 @@ function ExploreSearchScreenView({
   onRegionChange,
   onSearchQueryChange,
   page,
+  filteredJoinableTripCards,
+  hasResults,
   previewCards,
   regionOptions,
   searchQuery,
@@ -162,6 +197,8 @@ function ExploreSearchScreenView({
   onRegionChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
   page: any;
+  filteredJoinableTripCards: ExploreJoinableTripCard[];
+  hasResults: boolean;
   previewCards: readonly ExploreActivityCardContent[];
   regionOptions: readonly DiscoveryOption[];
   searchQuery: string;
@@ -218,6 +255,23 @@ function ExploreSearchScreenView({
           </View>
         )}
 
+        {filteredJoinableTripCards.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeading}>
+              <ThemedText style={styles.sectionTitle}>Open groups to join</ThemedText>
+            </View>
+            <View style={styles.cardStack}>
+              {filteredJoinableTripCards.map((card) => (
+                <ExploreGroupTripCard
+                  key={card.circleId}
+                  card={card}
+                  href={{ pathname: '/explore/group/[circleId]', params: { circleId: card.circleId } }}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
         {filteredHiddenGems.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
@@ -235,6 +289,19 @@ function ExploreSearchScreenView({
                   ))}
             </View>
           </View>
+        )}
+
+        {!hasResults && (
+          <ThemedView
+            lightColor={designSystem.colors.surface}
+            darkColor={designSystem.colors.darkSurface}
+            style={styles.emptyCard}
+          >
+            <ThemedText style={styles.emptyTitle}>No matches yet</ThemedText>
+            <ThemedText style={styles.emptyText}>
+              Try another region, clear the search, or switch back to everything.
+            </ThemedText>
+          </ThemedView>
         )}
       </ScrollView>
     </ThemedView>
@@ -255,9 +322,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     lineHeight: 38,
-    fontWeight: '700',
-    letterSpacing: -1.4,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   description: {
     maxWidth: '94%',
@@ -275,8 +340,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 26,
     lineHeight: 28,
-    fontWeight: '700',
-    letterSpacing: -0.8,
+    fontWeight: '600',
   },
   cardStack: {
     gap: 16,
@@ -286,12 +350,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(159, 232, 112, 0.18)',
+    borderColor: designSystem.colors.limeSoft,
   },
   noticeText: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: designSystem.colors.warmDark,
+  },
+  emptyCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: designSystem.colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
 });

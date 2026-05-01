@@ -1,8 +1,8 @@
 import { useMutation, useQuery } from 'convex/react';
 import { Link, useRouter } from 'expo-router';
-import { ArrowRight, Sparkle } from 'phosphor-react-native';
+import { ArrowRight } from 'phosphor-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +11,7 @@ import { FriendCircleBanner } from '@/components/wandr/friends/friend-circle-ban
 import { FriendMatchCard } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import { actOnFriendCandidateRef, getFriendsDashboardRef } from '@/lib/convex';
@@ -18,6 +19,10 @@ import { actOnFriendCandidateRef, getFriendsDashboardRef } from '@/lib/convex';
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const screenWidth = Dimensions.get('window').width;
+  const horizontalGutter = Math.max(designSystem.spacing.lg, insets.left, insets.right);
+  const groupCardWidth = Math.max(260, screenWidth - horizontalGutter * 2);
   const traveler = useCurrentTraveler();
   const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const dashboard = useQuery(getFriendsDashboardRef, { travelerSlug: traveler?.slug ?? '' });
@@ -52,7 +57,10 @@ export default function FriendsScreen() {
         <WandrHeader
           config={{
             overlay: true,
-            trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications' }],
+            trailingActions: [
+              { kind: 'chat', accessibilityLabel: 'Open chats' },
+              { kind: 'notifications', accessibilityLabel: 'Notifications' },
+            ],
           }}
         />
         <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
@@ -67,7 +75,10 @@ export default function FriendsScreen() {
       <WandrHeader
         config={{
           overlay: true,
-          trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications' }],
+          trailingActions: [
+            { kind: 'chat', accessibilityLabel: 'Open chats' },
+            { kind: 'notifications', accessibilityLabel: 'Notifications' },
+          ],
         }}
       />
       <ScrollView
@@ -75,52 +86,56 @@ export default function FriendsScreen() {
           styles.content,
           {
             paddingTop: insets.top + 88,
-            paddingBottom: insets.bottom + 140,
+            paddingBottom: insets.bottom + 120,
           },
         ]}>
         <View style={styles.hero}>
-          <ThemedText style={styles.eyebrow}>Wandr Social</ThemedText>
           <ThemedText style={styles.title}>Friends</ThemedText>
-          <ThemedText style={styles.description}>
-            Build a real travel crew around your route, your pace, and the moments you want to chase.
-          </ThemedText>
         </View>
 
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
-        {dashboard?.activeCircle ? (
-          <FriendCircleBanner circle={dashboard.activeCircle} onPress={() => router.push('/friends/chat')} />
+        {dashboard?.activeCircles.length ? (
+          <View style={styles.groupPreview}>
+            <View style={styles.sectionTopRow}>
+              <ThemedText style={styles.groupPreviewTitle}>Groups</ThemedText>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.groupRailScroller}
+              contentContainerStyle={[
+                styles.groupRail,
+                {
+                  paddingLeft: horizontalGutter,
+                  paddingRight: horizontalGutter,
+                },
+              ]}>
+              {dashboard.activeCircles.map((circle) => (
+                <FriendCircleBanner
+                  key={circle._id}
+                  circle={circle}
+                  ctaLabel={`Open ${circle.name}`}
+                  onPress={() => router.push(`/friends/group/${circle._id}` as never)}
+                  style={{ width: groupCardWidth }}
+                />
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Sparkle color={designSystem.colors.darkGreen} size={18} weight="fill" />
-            <ThemedText style={styles.statValue}>{dashboard?.stats.freshCount ?? 0}</ThemedText>
-            <ThemedText style={styles.statLabel}>Fresh matches</ThemedText>
-          </View>
-          <View style={styles.statCard}>
-            <ThemedText style={styles.statValue}>{dashboard?.stats.invitedCount ?? 0}</ThemedText>
-            <ThemedText style={styles.statLabel}>Invited</ThemedText>
-          </View>
-          <View style={styles.statCard}>
-            <ThemedText style={styles.statValue}>{dashboard?.stats.friendCount ?? 0}</ThemedText>
-            <ThemedText style={styles.statLabel}>Friend list</ThemedText>
-          </View>
-        </View>
-
         <View style={styles.sectionHeader}>
-          <View style={styles.sectionCopy}>
-            <ThemedText style={styles.sectionTitle}>Top matches</ThemedText>
-            <ThemedText style={styles.sectionDescription}>
-              People already lining up well with your current route.
-            </ThemedText>
+          <View style={styles.sectionTopRow}>
+            <ThemedText style={styles.sectionTitle}>People to meet</ThemedText>
+            <Link href="/friends/discover" asChild>
+              <Pressable style={styles.linkPill}>
+                <ThemedText style={[styles.linkPillText, { color: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen }]}>
+                  See all
+                </ThemedText>
+                <ArrowRight color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={16} weight="bold" />
+              </Pressable>
+            </Link>
           </View>
-          <Link href="/friends/discover" asChild>
-            <Pressable style={styles.linkPill}>
-              <ThemedText style={styles.linkPillText}>See all</ThemedText>
-              <ArrowRight color={designSystem.colors.darkGreen} size={16} weight="bold" />
-            </Pressable>
-          </Link>
         </View>
 
         <View style={styles.cardStack}>
@@ -151,88 +166,56 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
-    gap: designSystem.spacing.xl,
+    gap: designSystem.spacing.lg,
   },
   hero: {
-    gap: 8,
-  },
-  eyebrow: {
-    ...designSystem.type.eyebrow,
-    color: designSystem.colors.darkGreen,
+    gap: 2,
   },
   title: {
-    fontSize: 46,
-    lineHeight: 42,
-    fontWeight: '800',
-    letterSpacing: -1.8,
-    textTransform: 'uppercase',
+    ...designSystem.type.display,
+    fontWeight: '600',
     color: designSystem.colors.ink,
-  },
-  description: {
-    maxWidth: 320,
-    fontSize: 16,
-    lineHeight: 22,
-    color: designSystem.colors.warmDark,
   },
   notice: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#a14b1a',
+    color: designSystem.colors.copper,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
+  groupPreview: {
+    gap: designSystem.spacing.sm,
   },
-  statCard: {
+  groupPreviewTitle: {
     flex: 1,
-    minHeight: 110,
-    borderRadius: 26,
-    padding: designSystem.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.78)',
-    justifyContent: 'space-between',
-  },
-  statValue: {
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '800',
+    ...designSystem.type.subtitle,
     color: designSystem.colors.ink,
   },
-  statLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    color: designSystem.colors.gray,
+  groupRail: {
+    gap: designSystem.spacing.sm,
+  },
+  groupRailScroller: {
+    marginHorizontal: -designSystem.spacing.lg,
   },
   sectionHeader: {
+    gap: 0,
+  },
+  sectionTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  sectionCopy: {
-    flex: 1,
-    gap: 4,
-  },
   sectionTitle: {
-    fontSize: 24,
-    lineHeight: 26,
-    fontWeight: '800',
+    flex: 1,
+    ...designSystem.type.title,
     color: designSystem.colors.ink,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: designSystem.colors.gray,
   },
   linkPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: designSystem.radii.pill,
-    backgroundColor: 'rgba(159,232,112,0.18)',
+    minHeight: 36,
+    minWidth: 120,
   },
   linkPillText: {
     ...designSystem.type.eyebrow,
