@@ -57,11 +57,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: designSystem.spacing.lg,
+    padding: designSystem.layout.screenPadding,
     paddingBottom: designSystem.spacing.xxxl,
-    gap: designSystem.spacing.xl,
+    gap: designSystem.layout.sectionGap,
   },
   cardList: {
-    gap: designSystem.spacing.sm,
+    gap: designSystem.layout.cardGap,
   },
 });

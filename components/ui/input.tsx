@@ -14,7 +14,7 @@ export interface InputProps extends TextInputProps {
 export const Input = forwardRef<TextInput, InputProps>(
   ({ style, leftIcon, rightIcon, containerStyle, lightColor, darkColor, ...props }, ref) => {
     const backgroundColor = useThemeColor(
-      { light: lightColor || '#f4f4f1', dark: darkColor || designSystem.colors.darkSurface },
+      { light: lightColor || designSystem.colors.surface, dark: darkColor || designSystem.colors.darkSurface },
       'card'
     );
     const textColor = useThemeColor(
@@ -22,7 +22,7 @@ export const Input = forwardRef<TextInput, InputProps>(
       'text'
     );
     const placeholderTextColor = useThemeColor(
-      { light: 'rgba(14,15,12,0.35)', dark: 'rgba(249,249,246,0.35)' },
+      { light: designSystem.colors.placeholderText, dark: designSystem.colors.darkPlaceholderText },
       'icon'
     );
 
@@ -46,24 +46,32 @@ Input.displayName = 'Input';
 const styles = StyleSheet.create({
   container: {
     borderRadius: designSystem.radii.pill,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    height: designSystem.layout.inputHeight,
+    paddingHorizontal: designSystem.layout.inputPaddingHorizontal,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: designSystem.layout.inputGap,
   },
   input: {
     flex: 1,
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: '600',
+    height: designSystem.type.bodyStrong.lineHeight,
+    ...designSystem.type.bodyStrong,
+    paddingVertical: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   leftIcon: {
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   rightIcon: {
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
 });

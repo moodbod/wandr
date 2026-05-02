@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { MapPin, MapTrifold } from 'phosphor-react-native';
+import { MapPin, MapTrifold, X } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -49,6 +49,9 @@ function buildStayContextLine(locationLabel?: string) {
 export function TripTimelineSection({
   items,
   variant = 'default',
+  isEditing = false,
+  onRemoveItem,
+  removingItemId = null,
 }: TripTimelineSectionProps) {
   const isDark = useColorScheme() === 'dark';
   const isSheet = variant === 'sheet';
@@ -80,64 +83,86 @@ export function TripTimelineSection({
             ? ({ pathname: '/stays/details', params: { slug: item.experienceSlug } } as const)
             : ({ pathname: '/explore/[slug]', params: { slug: experience.slug } } as const);
 
-          return (
-            <Link key={item._id} href={href} asChild>
-              <Pressable style={styles.item}>
-                <View style={styles.mainRow}>
-                  <View style={styles.markerCell}>
-                    <TimelineMarker index={index} isDark={isDark} />
-                    {!isLast && <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />}
-                  </View>
+          const itemContent = (
+            <Pressable style={[styles.item, isEditing && styles.itemEditing]} disabled={isEditing}>
+              <View style={styles.mainRow}>
+                <View style={styles.markerCell}>
+                  <TimelineMarker index={index} isDark={isDark} />
+                  {!isLast && <View style={[styles.connectorLine, isDark && styles.connectorLineDark]} />}
+                </View>
 
-                  <View style={styles.card}>
-                    <View style={styles.cardContent}>
-                      <View style={styles.cardLeft}>
-                        <ThemedText style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
-                          {title}
-                        </ThemedText>
+                <View style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <ThemedText style={[styles.title, isDark && styles.titleDark]} numberOfLines={2}>
+                        {title}
+                      </ThemedText>
 
-                        {isStay ? (
-                          stayContextLine ? (
-                            <View style={styles.metaRow}>
-                              <View style={styles.metaItem}>
-                                <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
-                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-                                  {stayContextLine}
-                                </ThemedText>
-                              </View>
-                            </View>
-                          ) : null
-                        ) : (
+                      {isStay ? (
+                        stayContextLine ? (
                           <View style={styles.metaRow}>
-                            {primaryTag ? (
-                              <View style={styles.metaItem}>
-                                <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
-                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-                                  {primaryTag}
-                                </ThemedText>
-                              </View>
-                            ) : null}
-                            {secondaryTag ? (
-                              <View style={styles.metaItem}>
-                                <ThemedText style={[styles.metaDot, isDark && styles.metaDotDark]}>•</ThemedText>
-                                <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-                                  {secondaryTag}
-                                </ThemedText>
-                              </View>
-                            ) : null}
+                            <View style={styles.metaItem}>
+                              <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
+                              <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                {stayContextLine}
+                              </ThemedText>
+                            </View>
                           </View>
-                        )}
-                      </View>
-
-                      {imageUri && (
-                        <View style={styles.imageContainer}>
-                          <Image source={imageUri} style={styles.image} contentFit="cover" />
+                        ) : null
+                      ) : (
+                        <View style={styles.metaRow}>
+                          {primaryTag ? (
+                            <View style={styles.metaItem}>
+                              <MapPin size={12} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="fill" />
+                              <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                {primaryTag}
+                              </ThemedText>
+                            </View>
+                          ) : null}
+                          {secondaryTag ? (
+                            <View style={styles.metaItem}>
+                              <ThemedText style={[styles.metaDot, isDark && styles.metaDotDark]}>•</ThemedText>
+                              <ThemedText style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
+                                {secondaryTag}
+                              </ThemedText>
+                            </View>
+                          ) : null}
                         </View>
                       )}
                     </View>
+
+                    {imageUri && (
+                      <View style={styles.imageContainer}>
+                        <Image source={imageUri} style={styles.image} contentFit="cover" />
+                      </View>
+                    )}
+
+                    {isEditing ? (
+                      <Pressable
+                        accessibilityLabel={`Remove ${title} from trip`}
+                        disabled={!onRemoveItem || removingItemId === item._id}
+                        onPress={() => onRemoveItem?.(item._id)}
+                        style={[styles.removeButton, isDark && styles.removeButtonDark, removingItemId === item._id && styles.removeButtonDisabled]}>
+                        <X
+                          size={16}
+                          color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+                          weight="bold"
+                        />
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
-              </Pressable>
+              </View>
+            </Pressable>
+          );
+
+          if (isEditing) {
+            return <View key={item._id}>{itemContent}</View>;
+          }
+
+          return (
+            <Link key={item._id} href={href} asChild>
+              {itemContent}
             </Link>
           );
         })}
@@ -180,6 +205,9 @@ const styles = StyleSheet.create({
   item: {
     marginBottom: 12,
   },
+  itemEditing: {
+    opacity: 1,
+  },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -205,7 +233,7 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.darkBorder,
   },
   markerText: {
-    color: '#fff',
+    color: designSystem.colors.white,
     ...designSystem.type.bodyStrong,
     fontSize: 14,
   },
@@ -214,11 +242,11 @@ const styles = StyleSheet.create({
     top: MARKER_SIZE,
     bottom: -24,
     width: 2,
-    backgroundColor: 'rgba(14,15,12,0.08)',
+    backgroundColor: designSystem.colors.borderSoft,
     zIndex: 1,
   },
   connectorLineDark: {
-    backgroundColor: 'rgba(249,249,246,0.14)',
+    backgroundColor: designSystem.colors.lightGlassSoft,
   },
   card: {
     flex: 1,
@@ -282,5 +310,25 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: -10,
+    right: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.lightGlassStrong,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  removeButtonDark: {
+    backgroundColor: designSystem.colors.darkGlassStrong,
+    borderColor: designSystem.colors.darkBorderSoft,
+  },
+  removeButtonDisabled: {
+    opacity: 0.5,
   },
 });

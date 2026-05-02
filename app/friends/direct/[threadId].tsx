@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
+import { DirectChatOptionsSheet } from '@/components/wandr/friends/direct-chat-options-sheet';
 import { FriendChatComposer } from '@/components/wandr/friends/friend-chat-composer';
 import { DirectChatMessageBubble } from '@/components/wandr/friends/friend-chat-message';
 import { FriendChatToolsSheet } from '@/components/wandr/friends/friend-chat-tools-sheet';
@@ -24,14 +26,17 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import {
   deleteDirectFriendMessageRef,
+  deleteDirectFriendThreadRef,
   getDirectChatRef,
   markDirectChatReadRef,
+  renameDirectFriendThreadRef,
   sendDirectFriendMessageRef,
 } from '@/lib/convex';
 import type { DirectChatMessage } from '@/types/friends';
 
 export default function DirectChatScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const params = useLocalSearchParams<{ threadId?: string | string[] }>();
   const threadId = Array.isArray(params.threadId) ? params.threadId[0] : params.threadId;
   const traveler = useCurrentTraveler();
@@ -46,14 +51,17 @@ export default function DirectChatScreen() {
       : 'skip'
   );
   const deleteMessage = useMutation(deleteDirectFriendMessageRef);
+  const deleteThread = useMutation(deleteDirectFriendThreadRef);
   const markRead = useMutation(markDirectChatReadRef);
+  const renameThread = useMutation(renameDirectFriendThreadRef);
   const sendMessage = useMutation(sendDirectFriendMessageRef);
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [isToolsSheetOpen, setIsToolsSheetOpen] = useState(false);
+  const [isSheetBusy, setIsSheetBusy] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<DirectChatMessage | null>(null);
   const [messageMenuAnchor, setMessageMenuAnchor] = useState<MessageActionAnchor | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
+  const menuSheetRef = useRef<BottomSheet>(null);
   const toolsSheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
@@ -105,6 +113,57 @@ export default function DirectChatScreen() {
     });
   };
 
+  const handleRenameThread = async (nextTitle: string) => {
+    if (!traveler?.slug || !chat?.threadId || isSheetBusy) {
+      return;
+    }
+
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle || trimmedTitle === chat.title) {
+      return;
+    }
+
+    setIsSheetBusy(true);
+    try {
+      await renameThread({
+        threadId: chat.threadId,
+        travelerSlug: traveler.slug,
+        title: trimmedTitle,
+      });
+    } finally {
+      setIsSheetBusy(false);
+    }
+  };
+
+  const handleDeleteThread = () => {
+    if (!traveler?.slug || !chat?.threadId || isSheetBusy) {
+      return;
+    }
+
+    Alert.alert('Delete chat?', `This deletes your chat with ${chat.participant.name} and clears its messages.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setIsSheetBusy(true);
+          try {
+            const deleted = await deleteThread({
+              threadId: chat.threadId,
+              travelerSlug: traveler.slug,
+            });
+            if (deleted) {
+              menuSheetRef.current?.close();
+              router.replace('/friends/chat');
+            }
+          } finally {
+            setIsSheetBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
   const handleMessageLongPress = (message: DirectChatMessage, anchor: MessageActionAnchor) => {
     if (!message.isOwnMessage) {
       return;
@@ -114,22 +173,6 @@ export default function DirectChatScreen() {
   };
 
   const isLoading = isBootstrapping || traveler === undefined || chat === undefined;
-
-  if (isLoading) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          }}
-        />
-        <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
 
   return (
     <ThemedView style={styles.root}>
@@ -141,6 +184,13 @@ export default function DirectChatScreen() {
           config={{
             overlay: true,
             leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+            trailingActions: [
+              {
+                kind: 'menu',
+                accessibilityLabel: 'Chat options',
+                onPress: () => menuSheetRef.current?.snapToIndex(0),
+              },
+            ],
           }}
         />
 
@@ -151,25 +201,32 @@ export default function DirectChatScreen() {
             styles.content,
             {
               paddingTop: insets.top + 88,
-              paddingBottom: insets.bottom + 184,
+              paddingBottom: insets.bottom + 156,
             },
           ]}
           keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            <ThemedText style={styles.title}>{chat?.participant.name ?? 'Chat'}</ThemedText>
+            <ThemedText style={styles.title}>{chat?.title ?? 'Chat'}</ThemedText>
             <ThemedText style={styles.subtitle}>{chat?.participant.baseLabel ?? ''}</ThemedText>
           </View>
 
           {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
           <View style={styles.messageStack}>
-            {chat?.messages.map((message) => (
-              <DirectChatMessageBubble
-                key={message._id}
-                message={message}
-                onLongPressMessage={handleMessageLongPress}
-              />
-            ))}
+            {isLoading
+              ? Array.from({ length: 5 }).map((_, index) => (
+                  <SkeletonBlock
+                    key={`direct-message-skeleton-${index}`}
+                    style={[styles.messageSkeleton, index % 2 === 0 ? styles.messageSkeletonLeft : styles.messageSkeletonRight]}
+                  />
+                ))
+              : chat?.messages.map((message) => (
+                  <DirectChatMessageBubble
+                    key={message._id}
+                    message={message}
+                    onLongPressMessage={handleMessageLongPress}
+                  />
+                ))}
           </View>
         </ScrollView>
 
@@ -187,14 +244,13 @@ export default function DirectChatScreen() {
           }}
         />
 
-        {chat && !isToolsSheetOpen ? (
-          <View style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+        {chat ? (
+          <View style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom - 12, 8) }]}>
             <FriendChatComposer
               value={draft}
               onChangeText={setDraft}
               onSubmit={handleSend}
               onOpenTools={() => {
-                setIsToolsSheetOpen(true);
                 toolsSheetRef.current?.snapToIndex(0);
               }}
               placeholder={chat.composer.placeholder}
@@ -202,12 +258,21 @@ export default function DirectChatScreen() {
             />
           </View>
         ) : null}
+
+        {chat ? (
+          <DirectChatOptionsSheet
+            chat={chat}
+            isBusy={isSheetBusy}
+            onDeleteChat={handleDeleteThread}
+            onRenameChat={handleRenameThread}
+            sheetRef={menuSheetRef}
+          />
+        ) : null}
       </KeyboardAvoidingView>
 
       {chat ? (
         <FriendChatToolsSheet
           sheetRef={toolsSheetRef}
-          onChange={(index) => setIsToolsSheetOpen(index >= 0)}
           onShareRoute={() => {}}
           quickActions={[]}
           onQuickAction={() => {}}
@@ -221,11 +286,6 @@ export default function DirectChatScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
@@ -256,13 +316,26 @@ const styles = StyleSheet.create({
   messageStack: {
     gap: 16,
   },
+  messageSkeleton: {
+    height: 54,
+    borderRadius: 22,
+    maxWidth: '78%',
+  },
+  messageSkeletonLeft: {
+    alignSelf: 'flex-start',
+    width: '68%',
+  },
+  messageSkeletonRight: {
+    alignSelf: 'flex-end',
+    width: '74%',
+  },
   composerDock: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: 20,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingHorizontal: designSystem.spacing.lg,
     backgroundColor: 'transparent',
   },

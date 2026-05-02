@@ -31,4 +31,5 @@ export const experienceBookingsTable = defineTable({
 })
   .index('by_experienceSlug', ['experienceSlug'])
   .index('by_travelerSlug_and_experienceSlug', ['travelerSlug', 'experienceSlug'])
+  .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt'])
   .index('by_tripId', ['tripId']);

@@ -2,8 +2,19 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Icon, Label, NativeTabs, VectorIcon } from 'expo-router/unstable-native-tabs';
 import React from 'react';
 
+import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+export const unstable_settings = {
+  initialRouteName: 'explore',
+};
+
 export default function TabLayout() {
-  const activeColor = '#729e57ff'; // Wise Green
+  const isDark = useColorScheme() === 'dark';
+  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.darkGreen;
+  const inactiveColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
+  const tabSurfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
+  const selectedTabTint = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteOverlayFaint;
 
   const getTabIcon = (
     name: React.ComponentProps<typeof MaterialCommunityIcons>['name']
@@ -13,11 +24,13 @@ export default function TabLayout() {
 
   return (
     <NativeTabs
-      backgroundColor="rgba(248,245,236,0.82)"
-      blurEffect="systemChromeMaterialLight"
+      backgroundColor={tabSurfaceColor}
+      blurEffect={isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
       disableTransparentOnScrollEdge
-      shadowColor="rgba(14,15,12,0.08)"
-      tintColor={activeColor}
+      iconColor={inactiveColor}
+      labelStyle={{ color: inactiveColor }}
+      shadowColor={isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft}
+      tintColor={selectedTabTint}
     >
       <NativeTabs.Trigger name="index" hidden />
 

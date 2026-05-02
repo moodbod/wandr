@@ -33,12 +33,16 @@ export function JourneyMapCta({
       <MapFrame shellStyle={styles.mapWrap} centerCoordinate={centerCoordinate} markers={markers} zoomLevel={11.7}>
         <View style={styles.actions}>
           <Pressable disabled={isDisabled} onPress={onPrimaryPress} style={styles.primaryAction}>
-            <ThemedText lightColor="#f9f9f6" darkColor="#f9f9f6" style={styles.primaryActionLabel}>
+            <ThemedText lightColor={designSystem.colors.background} darkColor={designSystem.colors.background} style={styles.primaryActionLabel}>
               {isPrimaryLoading ? 'Saving...' : primaryLabel}
             </ThemedText>
           </Pressable>
           <Pressable disabled={isDisabled} onPress={onSecondaryPress} style={styles.secondaryAction}>
-            <ThemedText style={styles.secondaryActionLabel}>
+            <ThemedText
+              lightColor={designSystem.colors.ink}
+              darkColor={designSystem.colors.ink}
+              style={styles.secondaryActionLabel}
+            >
               {isSecondaryLoading ? 'Saving...' : secondaryLabel}
             </ThemedText>
           </Pressable>
@@ -79,16 +83,14 @@ const styles = StyleSheet.create({
   primaryActionLabel: {
     fontSize: 14,
     lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: '#f9f9f6',
+    fontWeight: '600',
+    color: designSystem.colors.background,
     textAlign: 'center',
   },
   secondaryAction: {
     flex: 1,
     borderRadius: 24,
-    backgroundColor: 'rgba(249,249,246,0.92)',
+    backgroundColor: designSystem.colors.lightGlass,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 58,
@@ -97,10 +99,7 @@ const styles = StyleSheet.create({
   secondaryActionLabel: {
     fontSize: 14,
     lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: designSystem.colors.ink,
+    fontWeight: '600',
     textAlign: 'center',
   },
 });

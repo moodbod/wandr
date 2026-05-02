@@ -148,7 +148,7 @@ export const defaultExplorePageSeed = {
   content: {
     home: {
       hero: {
-        title: 'Explore Namibia',
+        title: 'Explore supported routes',
         locationLabel: 'Windhoek, NA',
         centerCoordinate: [17.0832, -22.5609],
         markers: [
@@ -220,7 +220,7 @@ export const defaultExplorePageSeed = {
       },
       section: {
         eyebrow: 'Nationwide Picks',
-        title: 'Start in Windhoek, then branch out',
+        title: 'Start with a popular place, then branch out',
       },
       activities: [
         {
@@ -293,7 +293,7 @@ export const defaultExplorePageSeed = {
     },
     search: {
       intro: {
-        title: 'Explore Namibia',
+        title: 'Explore supported routes',
         description:
           'From Windhoek to the Skeleton Coast, desert canyons, ancient rock art, wildlife reserves, and river country — uncover trips that move across Namibia with real regional coverage.',
         tags: ['Namibia', 'Nationwide'],

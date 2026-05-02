@@ -1,7 +1,9 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { WandrHeader } from '@/components/wandr/header';
+import { GlassButton } from '@/components/ui/glass-button';
+import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
+import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
 import {
   TripSwitcherSkeleton,
   TripTimelineSkeleton,
@@ -10,14 +12,19 @@ import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { createTripRef, deleteTripRef, getTripDashboardRef, listUserTripsRef, removeExperienceFromTripRef } from '@/lib/convex';
-import type { TripDashboard } from '@/types/trip';
-import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
+import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { createTripRef, deleteTripRef, getTripDashboardRef, getTripSettingsRef, inviteFriendsToTripRef, listUserTripsRef, removeExperienceFromTripRef, updateTripSettingsRef } from '@/lib/convex';
+import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
+import type { TripDashboard, TripListItem } from '@/types/trip';
+import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import { GlobeHemisphereWest, LockSimple, PencilSimple, UsersThree } from 'phosphor-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TripScreen() {
@@ -74,6 +81,17 @@ function ConnectedTripScreen({
 }) {
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(undefined);
   const trips = useQuery(listUserTripsRef, { travelerSlug });
+  const { coordinate: currentLocation } = useCurrentLocation();
+  useSyncPlanningLocationWithCurrentLocation(currentLocation);
+  const { planningLocation } = usePlanningLocation();
+  const orderedTrips = useMemo(
+    () => orderTripsByPlanningCountry(trips ?? [], planningLocation),
+    [planningLocation, trips]
+  );
+  const tripSettings = useQuery(
+    getTripSettingsRef,
+    selectedTripId ? { travelerSlug, tripId: selectedTripId } : 'skip'
+  );
   const trip = useQuery(getTripDashboardRef, { 
     travelerSlug,
     tripId: selectedTripId
@@ -81,40 +99,86 @@ function ConnectedTripScreen({
 
   const createTripMutation = useMutation(createTripRef);
   const deleteTripMutation = useMutation(deleteTripRef);
+  const inviteFriendsToTripMutation = useMutation(inviteFriendsToTripRef);
   const removeExperienceFromTripMutation = useMutation(removeExperienceFromTripRef);
-  const sheetRef = useRef<BottomSheet>(null);
+  const updateTripSettingsMutation = useMutation(updateTripSettingsRef);
+  const createSheetRef = useRef<BottomSheet>(null);
+  const settingsSheetRef = useRef<BottomSheet>(null);
   const [newTripName, setNewTripName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
+  const [isSavingTrip, setIsSavingTrip] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsVisibility, setSettingsVisibility] = useState<'private' | 'public'>('private');
+  const [settingsSeedTripId, setSettingsSeedTripId] = useState<string | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [invitingFriendSlug, setInvitingFriendSlug] = useState<string | null>(null);
+  const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
 
   useEffect(() => {
-    if (!trips || trips.length === 0) {
+    if (orderedTrips.length === 0) {
       return;
     }
 
-    const hasSelection = trips.some((candidate) => candidate._id === selectedTripId);
+    const hasSelection = orderedTrips.some((candidate) => candidate._id === selectedTripId);
     if (!selectedTripId || !hasSelection) {
-      setSelectedTripId(trips[0]._id);
+      setSelectedTripId(orderedTrips[0]._id);
     }
-  }, [selectedTripId, trips]);
+  }, [orderedTrips, selectedTripId]);
 
-  const handleCreateTrip = async () => {
-    if (!newTripName.trim()) return;
-    setIsCreating(true);
+  useEffect(() => {
+    if (!tripSettings || tripSettings.tripId === settingsSeedTripId) {
+      return;
+    }
+
+    setSettingsName(tripSettings.name);
+    setSettingsVisibility(tripSettings.visibility);
+    setSettingsSeedTripId(tripSettings.tripId);
+  }, [settingsSeedTripId, tripSettings]);
+
+  useEffect(() => {
+    if (trip) {
+      setLastResolvedTrip(trip);
+      return;
+    }
+
+    if (!selectedTripId) {
+      setLastResolvedTrip(null);
+    }
+  }, [selectedTripId, trip]);
+
+  const handleSaveTrip = async () => {
+    const trimmedName = newTripName.trim();
+    if (!trimmedName) return;
+
+    setIsSavingTrip(true);
     try {
       const tripId = await createTripMutation({
-        name: newTripName.trim(),
+        name: trimmedName,
         travelerSlug,
       });
       setSelectedTripId(tripId);
       setNewTripName('');
-      sheetRef.current?.close();
+      createSheetRef.current?.close();
     } catch (error) {
       console.error('Failed to create trip', error);
     } finally {
-      setIsCreating(false);
+      setIsSavingTrip(false);
     }
+  };
+
+  const handleOpenCreateTrip = () => {
+    setNewTripName('');
+    createSheetRef.current?.snapToIndex(0);
+  };
+
+  const handleOpenSettings = () => {
+    if (tripSettings) {
+      setSettingsName(tripSettings.name);
+      setSettingsVisibility(tripSettings.visibility);
+      setSettingsSeedTripId(tripSettings.tripId);
+    }
+    settingsSheetRef.current?.snapToIndex(0);
   };
 
   const handleRemoveItem = async (itemId: string) => {
@@ -148,7 +212,55 @@ function ConnectedTripScreen({
     }
   };
 
-  if (!trip) {
+  const handleSaveSettings = async () => {
+    if (!selectedTripId) {
+      return;
+    }
+
+    const trimmedName = settingsName.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      await updateTripSettingsMutation({
+        tripId: selectedTripId,
+        travelerSlug,
+        name: trimmedName,
+        visibility: settingsVisibility,
+      });
+      settingsSheetRef.current?.close();
+    } catch (error) {
+      console.error('Failed to update trip settings', error);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleInviteFriend = async (friendSlug: string) => {
+    if (!selectedTripId || invitingFriendSlug) {
+      return;
+    }
+
+    setInvitingFriendSlug(friendSlug);
+    try {
+      await inviteFriendsToTripMutation({
+        tripId: selectedTripId,
+        travelerSlug,
+        friendSlugs: [friendSlug],
+      });
+    } catch (error) {
+      console.error('Failed to invite friend to trip', error);
+    } finally {
+      setInvitingFriendSlug(null);
+    }
+  };
+
+  const displayTrip = trip ?? lastResolvedTrip;
+  const isInitialTripLoad = !displayTrip;
+
+  if (isInitialTripLoad) {
     return (
       <ThemedView style={styles.root}>
         <WandrHeader
@@ -177,21 +289,22 @@ function ConnectedTripScreen({
         insetsTop={insetsTop}
         isDark={isDark}
         router={router}
-        trip={trip}
-        trips={trips || []}
+        trip={displayTrip}
+        trips={orderedTrips}
         selectedTripId={selectedTripId}
         onDeleteTrip={handleDeleteTrip}
         onSelectTrip={setSelectedTripId}
-        onCreateTripPress={() => sheetRef.current?.snapToIndex(0)}
+        onCreateTripPress={handleOpenCreateTrip}
         isEditing={isEditing}
         onRemoveItem={handleRemoveItem}
+        onOpenSettings={handleOpenSettings}
         onToggleEditing={() => setIsEditing((current) => !current)}
         removingItemId={removingItemId}
-        useSkeletons={false}
+        useSkeletons={!trip}
       />
 
       <GlassBottomSheet
-        ref={sheetRef}
+        ref={createSheetRef}
         index={-1}
         snapPoints={['40%']}
         enablePanDownToClose
@@ -206,15 +319,189 @@ function ConnectedTripScreen({
             onChangeText={setNewTripName}
           />
           <Pressable 
-            style={[styles.actionBtn, styles.actionBtnPrimary, isCreating && { opacity: 0.6 }]}
-            onPress={handleCreateTrip}
-            disabled={isCreating}
+            style={[styles.actionBtn, styles.actionBtnPrimary, isSavingTrip && { opacity: 0.6 }]}
+            onPress={handleSaveTrip}
+            disabled={isSavingTrip}
           >
             <ThemedText style={styles.actionBtnPrimaryText}>
-              {isCreating ? 'Creating...' : 'Create Trip'}
+              {isSavingTrip ? 'Creating...' : 'Create Trip'}
             </ThemedText>
           </Pressable>
         </BottomSheetView>
+      </GlassBottomSheet>
+
+      <GlassBottomSheet
+        ref={settingsSheetRef}
+        index={-1}
+        snapPoints={['82%']}
+        enablePanDownToClose
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: insetsBottom + 28 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <ThemedText style={styles.sheetTitle}>Edit trip</ThemedText>
+
+          {!tripSettings ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator />
+            </View>
+          ) : (
+            <>
+              <View style={styles.fieldGroup}>
+                <ThemedText style={styles.fieldLabel}>Trip name</ThemedText>
+                <BottomSheetTextInput
+                  style={[styles.input, isDark && styles.inputDark]}
+                  placeholder="Trip name"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  value={settingsName}
+                  onChangeText={setSettingsName}
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <ThemedText style={styles.fieldLabel}>Visibility</ThemedText>
+                <View style={styles.visibilityRow}>
+                  <Pressable
+                    disabled={!tripSettings.canChangeVisibility}
+                    onPress={() => setSettingsVisibility('private')}
+                    style={[
+                      styles.visibilityOption,
+                      settingsVisibility === 'private' && styles.visibilityOptionActive,
+                      !tripSettings.canChangeVisibility && styles.visibilityOptionDisabled,
+                    ]}>
+                    <LockSimple
+                      size={18}
+                      weight="bold"
+                      color={settingsVisibility === 'private' ? designSystem.colors.darkGreen : designSystem.colors.gray}
+                    />
+                    <View style={styles.visibilityCopy}>
+                      <ThemedText style={styles.visibilityTitle}>Private</ThemedText>
+                      <ThemedText style={styles.visibilityBody}>Only you see it until you open it up.</ThemedText>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    disabled={!tripSettings.canChangeVisibility}
+                    onPress={() => setSettingsVisibility('public')}
+                    style={[
+                      styles.visibilityOption,
+                      settingsVisibility === 'public' && styles.visibilityOptionActive,
+                      !tripSettings.canChangeVisibility && styles.visibilityOptionDisabled,
+                    ]}>
+                    <GlobeHemisphereWest
+                      size={18}
+                      weight="bold"
+                      color={settingsVisibility === 'public' ? designSystem.colors.darkGreen : designSystem.colors.gray}
+                    />
+                    <View style={styles.visibilityCopy}>
+                      <ThemedText style={styles.visibilityTitle}>Public</ThemedText>
+                      <ThemedText style={styles.visibilityBody}>Lets you invite friends into this trip.</ThemedText>
+                    </View>
+                  </Pressable>
+                </View>
+                {!tripSettings.canChangeVisibility ? (
+                  <ThemedText style={styles.helperText}>
+                    This trip already has invited members, so it stays public.
+                  </ThemedText>
+                ) : null}
+              </View>
+
+              {settingsVisibility === 'public' ? (
+                <View style={styles.fieldGroup}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionHeaderCopy}>
+                      <ThemedText style={styles.fieldLabel}>Invite friends</ThemedText>
+                      <ThemedText style={styles.helperText}>
+                        Invite people already on your friends list into this trip.
+                      </ThemedText>
+                    </View>
+                    <UsersThree size={18} color={designSystem.colors.darkGreen} weight="bold" />
+                  </View>
+
+                  {tripSettings.friends.length === 0 ? (
+                    <View style={styles.emptyInviteState}>
+                      <ThemedText style={styles.emptyInviteTitle}>No friends yet</ThemedText>
+                      <ThemedText style={styles.emptyInviteBody}>
+                        Add people in Friends first, then they can be invited here.
+                      </ThemedText>
+                    </View>
+                  ) : (
+                    <View style={styles.friendList}>
+                      {tripSettings.friends.map((friend) => {
+                        const isInvited = tripSettings.invitedFriendSlugs.includes(friend.slug);
+                        const isBusy = invitingFriendSlug === friend.slug;
+
+                        return (
+                          <View key={friend.slug} style={styles.friendRow}>
+                            <View style={styles.friendIdentity}>
+                              <View style={styles.avatarWrap}>
+                                {friend.avatarUri ? (
+                                  <ExpoImage source={friend.avatarUri} style={styles.avatarImage} contentFit="cover" />
+                                ) : (
+                                  <View style={styles.avatarFallback}>
+                                    <ThemedText style={styles.avatarFallbackText}>
+                                      {friend.name.charAt(0)}
+                                    </ThemedText>
+                                  </View>
+                                )}
+                              </View>
+                              <View style={styles.friendCopy}>
+                                <ThemedText style={styles.friendName}>{friend.name}</ThemedText>
+                                <ThemedText style={styles.friendMeta}>{friend.baseLabel}</ThemedText>
+                              </View>
+                            </View>
+
+                            <GlassButton
+                              accessibilityLabel={isInvited ? `${friend.name} already invited` : `Invite ${friend.name}`}
+                              onPress={isInvited ? undefined : () => handleInviteFriend(friend.slug)}
+                              width={96}
+                              height={40}
+                              radius={20}
+                              variant={isInvited ? 'subtle' : 'primary'}
+                              style={isInvited ? styles.invitedButton : null}
+                            >
+                              <ThemedText style={isInvited ? styles.invitedButtonText : styles.inviteButtonText}>
+                                {isBusy ? 'Sending' : isInvited ? 'Invited' : 'Invite'}
+                              </ThemedText>
+                            </GlassButton>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              <View style={styles.fieldGroup}>
+                <Pressable
+                  style={[styles.actionBtn, styles.actionBtnPrimary, isSavingSettings && styles.actionDisabled]}
+                  onPress={handleSaveSettings}
+                  disabled={isSavingSettings}
+                >
+                  <ThemedText style={styles.actionBtnPrimaryText}>
+                    {isSavingSettings ? 'Saving...' : 'Save trip settings'}
+                  </ThemedText>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.actionBtn, styles.actionBtnDark]}
+                  onPress={() => {
+                    settingsSheetRef.current?.close();
+                    setIsEditing(true);
+                  }}
+                >
+                  <View style={styles.inlineActionRow}>
+                    <PencilSimple size={18} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
+                    <ThemedText style={styles.inlineActionText}>Edit itinerary</ThemedText>
+                  </View>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </BottomSheetScrollView>
       </GlassBottomSheet>
     </>
   );
@@ -233,6 +520,7 @@ function TripScreenView({
   onCreateTripPress,
   isEditing,
   onRemoveItem,
+  onOpenSettings,
   onToggleEditing,
   removingItemId,
   useSkeletons,
@@ -242,18 +530,43 @@ function TripScreenView({
   isDark: boolean;
   router: ReturnType<typeof useRouter>;
   trip: TripDashboard;
-  trips: any[];
+  trips: TripListItem[];
   selectedTripId?: string;
   onDeleteTrip: (id: string) => void;
   onSelectTrip: (id: string) => void;
   onCreateTripPress: () => void;
   isEditing: boolean;
   onRemoveItem: (itemId: string) => void;
+  onOpenSettings: () => void;
   onToggleEditing: () => void;
   removingItemId: string | null;
   useSkeletons: boolean;
 }) {
   const items = trip.items;
+  const canEditTrip = !trip.isGroupTrip || Boolean(trip.group?.isHost);
+  const trailingActions: HeaderAction[] = [
+    ...(canEditTrip
+      ? [
+          {
+            kind: isEditing ? 'check' : 'pencil',
+            accessibilityLabel: isEditing ? 'Done editing itinerary' : 'Edit trip',
+            tone: 'surface',
+            onPress: isEditing ? onToggleEditing : onOpenSettings,
+          } satisfies HeaderAction,
+        ]
+      : []),
+    {
+      kind: 'map',
+      accessibilityLabel: 'Start trip',
+      tone: 'surface',
+      onPress: () =>
+        router.push({
+          pathname: '/trip/map',
+          params: selectedTripId ? { tripId: selectedTripId } : undefined,
+        }),
+    },
+    { kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' },
+  ];
 
   return (
     <ThemedView style={styles.root}>
@@ -261,16 +574,7 @@ function TripScreenView({
         config={{
           overlay: true,
           title: 'Trip',
-          trailingActions: [
-            {
-              kind: isEditing ? 'check' : 'pencil',
-              accessibilityLabel: isEditing ? 'Done editing trip' : 'Edit trip',
-              tone: 'surface',
-              onPress: onToggleEditing,
-            },
-            { kind: 'map', accessibilityLabel: 'Start trip', tone: 'surface', href: '/trip/map' },
-            { kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' },
-          ],
+          trailingActions,
         }}
       />
       <ScrollView
@@ -283,12 +587,19 @@ function TripScreenView({
         {/* Trip Switcher Cards */}
         <TripSwitcher
           trips={trips}
-          currentTrip={trip}
           selectedTripId={selectedTripId}
+          isEditing={false}
           onDeleteTrip={onDeleteTrip}
           onSelectTrip={onSelectTrip}
           onNewTrip={() => router.push('/explore/search')}
         />
+
+        {trip.group ? (
+          <TripGroupPanel
+            group={trip.group}
+            onOpenChat={() => router.push(`/friends/group/${trip.group?.circleId}` as never)}
+          />
+        ) : null}
 
         {useSkeletons ? (
           <TripTimelineSkeleton />
@@ -328,18 +639,28 @@ const styles = StyleSheet.create({
   },
   actionBtnDark: {
     borderColor: designSystem.colors.darkBorder,
+    backgroundColor: 'transparent',
   },
   actionBtnPrimaryText: {
     ...designSystem.type.bodyStrong,
     color: designSystem.colors.darkGreen,
   },
+  actionDisabled: {
+    opacity: 0.6,
+  },
   sheetContent: {
-    flex: 1,
     padding: 24,
     gap: 20,
   },
   sheetTitle: {
     ...designSystem.type.subtitle,
+  },
+  fieldGroup: {
+    gap: 12,
+  },
+  fieldLabel: {
+    ...designSystem.type.eyebrow,
+    color: designSystem.colors.darkGreen,
   },
   input: {
     height: 64,
@@ -352,5 +673,147 @@ const styles = StyleSheet.create({
   inputDark: {
     backgroundColor: designSystem.colors.darkSurface,
     color: designSystem.colors.darkText,
+  },
+  visibilityRow: {
+    gap: 12,
+  },
+  visibilityOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: designSystem.colors.scrimFaint,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  visibilityOptionActive: {
+    backgroundColor: designSystem.colors.limeSoft,
+    borderColor: designSystem.colors.borderAccent,
+  },
+  visibilityOptionDisabled: {
+    opacity: 0.75,
+  },
+  visibilityCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  visibilityTitle: {
+    ...designSystem.type.bodyStrong,
+    color: designSystem.colors.ink,
+  },
+  visibilityBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.gray,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.gray,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sectionHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  emptyInviteState: {
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: designSystem.colors.scrimFaint,
+    gap: 4,
+  },
+  emptyInviteTitle: {
+    ...designSystem.type.bodyStrong,
+    color: designSystem.colors.ink,
+  },
+  emptyInviteBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.gray,
+  },
+  friendList: {
+    gap: 12,
+  },
+  friendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  friendIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: designSystem.colors.surface,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.surfaceMuted,
+  },
+  avatarFallbackText: {
+    ...designSystem.type.bodyStrong,
+    color: designSystem.colors.darkGreen,
+  },
+  friendCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  friendName: {
+    ...designSystem.type.bodyStrong,
+    color: designSystem.colors.ink,
+  },
+  friendMeta: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: designSystem.colors.gray,
+  },
+  inviteButtonText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
+  },
+  invitedButton: {
+    opacity: 0.8,
+  },
+  invitedButtonText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: designSystem.colors.gray,
+  },
+  inlineActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inlineActionText: {
+    ...designSystem.type.bodyStrong,
+  },
+  loadingState: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -33,7 +33,7 @@ export function ExploreHiddenGemCard({ card, href }: ExploreHiddenGemCardProps) 
 
   return (
     <ThemedView
-      lightColor="#ffffff"
+      lightColor={designSystem.colors.white}
       darkColor={designSystem.colors.darkSurface}
       style={[
         styles.shell,
@@ -74,14 +74,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     lineHeight: 22,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   description: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
 });

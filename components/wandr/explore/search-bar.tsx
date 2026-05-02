@@ -9,21 +9,16 @@ type ExploreSearchBarProps = {
 export function ExploreSearchBar({ placeholder }: ExploreSearchBarProps) {
   return (
     <GlassInput
-      containerStyle={styles.shell}
       editable={false}
       placeholder={placeholder}
-      style={styles.input}
+      intensity={70}
+      containerStyle={styles.input}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    minHeight: 64,
-  },
   input: {
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: '600',
+    width: '100%',
   },
 });

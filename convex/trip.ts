@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
-import { mutation, query, type QueryCtx } from './_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
 import type { ExploreExperience } from '../constants/explore-content';
 import type { StayBookingDetails, StayProperty } from '../types/stays';
@@ -38,6 +38,242 @@ async function getTripById(ctx: QueryCtx, tripId?: string) {
   }
 
   return await ctx.db.get(tripId as Id<'trips'>);
+}
+
+async function getTripByIdForMutation(ctx: MutationCtx, tripId: Id<'trips'>) {
+  return await ctx.db.get(tripId);
+}
+
+async function getTripBookings(ctx: QueryCtx | MutationCtx, tripId: Id<'trips'>) {
+  return await ctx.db
+    .query('experienceBookings')
+    .withIndex('by_tripId', (q) => q.eq('tripId', tripId))
+    .collect();
+}
+
+async function getTripDestinationLabel(ctx: QueryCtx | MutationCtx, tripId: Id<'trips'>, fallbackName: string) {
+  const bookings = await getTripBookings(ctx, tripId);
+  const firstBooking = [...bookings].sort((a, b) => a.bookedAt - b.bookedAt)[0];
+
+  if (!firstBooking) {
+    return fallbackName;
+  }
+
+  const [experience, stay] = await Promise.all([
+    ctx.db
+      .query('experiences')
+      .withIndex('by_slug', (q) => q.eq('slug', firstBooking.experienceSlug))
+      .unique(),
+    ctx.db
+      .query('stays')
+      .withIndex('by_slug', (q) => q.eq('slug', firstBooking.experienceSlug))
+      .unique(),
+  ]);
+
+  return experience?.locationLabel ?? stay?.locationLabel ?? fallbackName;
+}
+
+async function getInviteableFriends(ctx: QueryCtx, travelerSlug: string) {
+  const connections = await ctx.db
+    .query('friendConnections')
+    .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
+    .collect();
+
+  const friendViews = await Promise.all(
+    connections.map(async (connection) => {
+      const [user, profile] = await Promise.all([
+        ctx.db
+          .query('appUsers')
+          .withIndex('by_slug', (q) => q.eq('slug', connection.friendSlug))
+          .unique(),
+        ctx.db
+          .query('travelerProfiles')
+          .withIndex('by_slug', (q) => q.eq('travelerSlug', connection.friendSlug))
+          .unique(),
+      ]);
+
+      if (!user) {
+        return null;
+      }
+
+      return {
+        slug: user.slug,
+        name: user.name,
+        avatarUri: profile?.avatarUri ?? null,
+        baseLabel: profile?.regionName ?? user.countryLabel,
+        phoneNumber: user.phoneNumber ?? null,
+      };
+    })
+  );
+
+  return friendViews
+    .filter((friend): friend is NonNullable<typeof friend> => friend !== null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function insertTripNotification(
+  ctx: MutationCtx,
+  args: {
+    recipientSlug: string;
+    actorSlug: string;
+    title: string;
+    body: string;
+    href?: string;
+    entityId?: string;
+    entityLabel?: string;
+  }
+) {
+  await ctx.db.insert('appNotifications', {
+    recipientSlug: args.recipientSlug,
+    actorSlug: args.actorSlug,
+    kind: 'trip_invite',
+    title: args.title,
+    body: args.body,
+    href: args.href,
+    entityId: args.entityId,
+    entityLabel: args.entityLabel,
+    createdAt: Date.now(),
+  });
+}
+
+async function ensureTripCircle(ctx: MutationCtx, trip: Doc<'trips'>) {
+  if (trip.circleId) {
+    return trip.circleId;
+  }
+
+  const destinationLabel = await getTripDestinationLabel(ctx, trip._id, trip.name);
+  const hostUser = await ctx.db
+    .query('appUsers')
+    .withIndex('by_slug', (q) => q.eq('slug', trip.travelerSlug))
+    .unique();
+  const slugBase = trip.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'trip-group';
+  const now = Date.now();
+  const circleId = await ctx.db.insert('friendCircles', {
+    slug: `${trip.travelerSlug}-${slugBase}-${now.toString().slice(-5)}`,
+    name: trip.name,
+    destinationLabel,
+    heroLabel: 'Trip planning group',
+    status: 'active',
+    visibility: 'open',
+    createdBySlug: trip.travelerSlug,
+    tripId: trip._id,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await ctx.db.insert('friendCircleMembers', {
+    circleId,
+    travelerSlug: trip.travelerSlug,
+    role: 'host',
+    status: 'active',
+    joinedAt: now,
+  });
+
+  await ctx.db.insert('friendMessages', {
+    circleId,
+    senderSlug: trip.travelerSlug,
+    kind: 'system',
+    body: `${hostUser?.name?.split(' ')[0] ?? 'Someone'} opened this trip group.`,
+    createdAt: now,
+  });
+
+  await ctx.db.patch(trip._id, {
+    circleId,
+    groupRole: 'host',
+    visibility: 'public',
+  });
+
+  return circleId;
+}
+
+async function cloneTripBookingsForInvitee(
+  ctx: MutationCtx,
+  hostTripId: Id<'trips'>,
+  memberTripId: Id<'trips'>,
+  inviteeSlug: string
+) {
+  const hostBookings = await getTripBookings(ctx, hostTripId);
+
+  for (const booking of hostBookings) {
+    const existing = await ctx.db
+      .query('experienceBookings')
+      .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
+        q.eq('travelerSlug', inviteeSlug).eq('experienceSlug', booking.experienceSlug)
+      )
+      .collect();
+
+    const alreadyOnTrip = existing.find((candidate) => candidate.tripId === memberTripId);
+    if (alreadyOnTrip) {
+      continue;
+    }
+
+    await ctx.db.insert('experienceBookings', {
+      experienceSlug: booking.experienceSlug,
+      travelerSlug: inviteeSlug,
+      tripId: memberTripId,
+      bookedAt: booking.bookedAt,
+      bookingType: booking.bookingType,
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      totalPrice: booking.totalPrice,
+      stayBookingDetails: booking.stayBookingDetails,
+    });
+  }
+}
+
+async function getTripGroupDetails(
+  ctx: QueryCtx,
+  circleId: Id<'friendCircles'>,
+  travelerSlug: string
+) {
+  const circle = await ctx.db.get(circleId);
+  if (!circle) {
+    return null;
+  }
+
+  const memberships = await ctx.db
+    .query('friendCircleMembers')
+    .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
+    .collect();
+
+  const members = await Promise.all(
+    memberships.map(async (membership) => {
+      const [user, profile] = await Promise.all([
+        ctx.db
+          .query('appUsers')
+          .withIndex('by_slug', (q) => q.eq('slug', membership.travelerSlug))
+          .unique(),
+        ctx.db
+          .query('travelerProfiles')
+          .withIndex('by_slug', (q) => q.eq('travelerSlug', membership.travelerSlug))
+          .unique(),
+      ]);
+
+      return {
+        travelerSlug: membership.travelerSlug,
+        name: user?.name ?? membership.travelerSlug,
+        avatarUri: profile?.avatarUri ?? null,
+        baseLabel: profile?.regionName ?? user?.countryLabel ?? '',
+        status: membership.status,
+        role: membership.role,
+      };
+    })
+  );
+
+  const activeMembers = members.filter((member) => member.status === 'active');
+
+  return {
+    circleId,
+    name: circle.name,
+    destinationLabel: circle.destinationLabel,
+    memberCount: activeMembers.length,
+    invitedCount: members.filter((member) => member.status === 'invited').length,
+    isHost: members.some((member) => member.travelerSlug === travelerSlug && member.role === 'host'),
+    members,
+  };
 }
 
 function isCoordinate(value: readonly number[] | undefined): value is readonly [number, number] {
@@ -139,6 +375,9 @@ function buildStayExperience(stay: StayProperty): ExploreExperience {
     price: `N$${stay.pricePerNight}`,
     priceSuffix: '/night',
     category: 'Stay',
+    countryCode: stay.countryCode,
+    countryLabel: stay.countryLabel,
+    planningLocationId: stay.planningLocationId,
     coordinate: isCoordinate(stay.coordinate) ? stay.coordinate : undefined,
     geography: {
       region: stay.region,
@@ -390,6 +629,9 @@ export const getTripDashboard = query({
       activeItem,
       tripId: resolvedTripId ?? null,
       tripName: trip?.name ?? null,
+      visibility: trip?.visibility ?? 'private',
+      isGroupTrip: Boolean(trip?.circleId),
+      group: trip?.circleId ? await getTripGroupDetails(ctx, trip.circleId, args.travelerSlug) : null,
       items,
     };
   },
@@ -398,15 +640,12 @@ export const getTripDashboard = query({
 export const getCurrentTravelerProfile = query({
   args: {},
   handler: async (ctx) => {
-    const trips = await ctx.db.query('trips').collect();
-    const mostRecentTrip = [...trips].sort((a, b) => b.createdAt - a.createdAt)[0];
-
-    const travelers = await ctx.db.query('appUsers').collect();
-    const sortedTravelers = [...travelers].sort((a, b) => a.name.localeCompare(b.name));
     const traveler =
-      (mostRecentTrip
-        ? sortedTravelers.find((candidate) => candidate.slug === mostRecentTrip.travelerSlug)
-        : null) ?? sortedTravelers[0];
+      (await ctx.db
+        .query('appUsers')
+        .withIndex('by_slug', (q) => q.eq('slug', 'local-demo-traveler'))
+        .unique()) ??
+      (await ctx.db.query('appUsers').order('asc').first());
 
     if (!traveler) {
       return null;
@@ -422,6 +661,7 @@ export const getCurrentTravelerProfile = query({
       name: traveler.name,
       countryCode: traveler.countryCode,
       countryLabel: traveler.countryLabel,
+      phoneNumber: traveler.phoneNumber ?? null,
       avatarUri: profile?.avatarUri ?? null,
       regionCode: profile?.regionCode ?? null,
       regionName: profile?.regionName ?? null,
@@ -442,15 +682,249 @@ export const listUserTrips = query({
       trips.map(async (trip) => {
         const itinerary = await getResolvedItinerary(ctx, args.travelerSlug, trip._id);
         const previewImage = itinerary[0]?.experience.imageUri ?? null;
+        const centerCoordinate = itinerary.find((item) => item.experience.coordinate)?.experience.coordinate ?? null;
         return {
           ...trip,
           name: trip.name.toLowerCase() === 'default' ? 'My Trip' : trip.name,
+          visibility: trip.visibility ?? 'private',
           previewImage,
+          centerCoordinate,
+          isGroupTrip: Boolean(trip.circleId),
         };
       })
     );
 
     return tripsWithPreviews;
+  },
+});
+
+export const listTravelerHistory = query({
+  args: { travelerSlug: v.string() },
+  handler: async (ctx, args) => {
+    const bookings = await ctx.db
+      .query('experienceBookings')
+      .withIndex('by_travelerSlug_and_experienceSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .order('desc')
+      .take(8);
+
+    if (bookings.length === 0) {
+      return [];
+    }
+
+    const [experiences, stays] = await Promise.all([
+      ctx.db.query('experiences').collect(),
+      ctx.db.query('stays').collect(),
+    ]);
+
+    const history: {
+      _id: Id<'experienceBookings'>;
+      slug: string;
+      title: string;
+      subtitle: string;
+      imageUri: string | null;
+      createdAt: number;
+      kind: 'experience' | 'stay';
+      tripId?: Id<'trips'>;
+    }[] = [];
+
+    for (const booking of bookings) {
+      const stay = stays.find((item) => item.slug === booking.experienceSlug);
+      const experience = experiences.find((item) => item.slug === booking.experienceSlug);
+
+      if (stay && (booking.bookingType === 'stay' || !experience)) {
+        history.push({
+          _id: booking._id,
+          slug: stay.slug,
+          title: stay.name,
+          subtitle: stay.locationLabel,
+          imageUri: stay.imageUri,
+          createdAt: booking.bookedAt,
+          kind: 'stay',
+          tripId: booking.tripId,
+        });
+        continue;
+      }
+
+      if (!experience) {
+        continue;
+      }
+
+      history.push({
+        _id: booking._id,
+        slug: experience.slug,
+        title: experience.title,
+        subtitle: experience.locationLabel ?? experience.category ?? 'Experience',
+        imageUri: experience.imageUri,
+        createdAt: booking.bookedAt,
+        kind: 'experience',
+        tripId: booking.tripId,
+      });
+    }
+
+    return history;
+  },
+});
+
+export const listTravelerBookings = query({
+  args: { travelerSlug: v.string() },
+  handler: async (ctx, args) => {
+    const [experienceBookings, stayBookings] = await Promise.all([
+      ctx.db
+        .query('experienceBookings')
+        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+        .order('desc')
+        .take(24),
+      ctx.db
+        .query('stayBookings')
+        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+        .order('desc')
+        .take(24),
+    ]);
+
+    const tripNameById = new Map<Id<'trips'>, string>();
+    for (const booking of experienceBookings) {
+      if (!booking.tripId || tripNameById.has(booking.tripId)) {
+        continue;
+      }
+
+      const trip = await ctx.db.get(booking.tripId);
+      if (trip) {
+        tripNameById.set(trip._id, trip.name.toLowerCase() === 'default' ? 'My Trip' : trip.name);
+      }
+    }
+
+    const experienceTripByStaySlug = new Map<
+      string,
+      { tripId?: Id<'trips'>; tripName?: string | null; bookedAt: number }
+    >();
+    for (const booking of experienceBookings) {
+      if (booking.bookingType !== 'stay') {
+        continue;
+      }
+
+      const previous = experienceTripByStaySlug.get(booking.experienceSlug);
+      if (previous && previous.bookedAt >= booking.bookedAt) {
+        continue;
+      }
+
+      experienceTripByStaySlug.set(booking.experienceSlug, {
+        tripId: booking.tripId,
+        tripName: booking.tripId ? tripNameById.get(booking.tripId) ?? null : null,
+        bookedAt: booking.bookedAt,
+      });
+    }
+
+    const stayBookingSlugs = new Set(stayBookings.map((booking) => booking.staySlug));
+    const bookings: {
+      _id: string;
+      source: 'experienceBooking' | 'stayBooking';
+      slug: string;
+      title: string;
+      subtitle: string;
+      imageUri: string | null;
+      bookedAt: number;
+      kind: 'experience' | 'stay';
+      status: 'planned' | 'pending' | 'confirmed' | 'cancelled';
+      statusLabel: string;
+      tripId?: Id<'trips'>;
+      tripName?: string | null;
+      checkIn?: number;
+      checkOut?: number;
+      totalPrice?: number;
+      detailLabel?: string;
+    }[] = [];
+
+    for (const stayBooking of stayBookings) {
+      const stay = await ctx.db
+        .query('stays')
+        .withIndex('by_slug', (q) => q.eq('slug', stayBooking.staySlug))
+        .unique();
+
+      if (!stay) {
+        continue;
+      }
+
+      const tripContext = experienceTripByStaySlug.get(stayBooking.staySlug);
+      bookings.push({
+        _id: stayBooking._id,
+        source: 'stayBooking',
+        slug: stay.slug,
+        title: stay.name,
+        subtitle: stay.locationLabel,
+        imageUri: stay.imageUri,
+        bookedAt: stayBooking.bookedAt,
+        kind: 'stay',
+        status: stayBooking.status,
+        statusLabel: stayBooking.status === 'pending' ? 'Requested' : stayBooking.status,
+        tripId: tripContext?.tripId,
+        tripName: tripContext?.tripName ?? null,
+        checkIn: stayBooking.checkIn,
+        checkOut: stayBooking.checkOut,
+        totalPrice: stayBooking.totalPrice,
+        detailLabel: stayBooking.stayBookingDetails?.guestSummary,
+      });
+    }
+
+    for (const experienceBooking of experienceBookings) {
+      if (experienceBooking.bookingType === 'stay' && stayBookingSlugs.has(experienceBooking.experienceSlug)) {
+        continue;
+      }
+
+      const [experience, stay] = await Promise.all([
+        ctx.db
+          .query('experiences')
+          .withIndex('by_slug', (q) => q.eq('slug', experienceBooking.experienceSlug))
+          .unique(),
+        ctx.db
+          .query('stays')
+          .withIndex('by_slug', (q) => q.eq('slug', experienceBooking.experienceSlug))
+          .unique(),
+      ]);
+
+      if (stay && (experienceBooking.bookingType === 'stay' || !experience)) {
+        bookings.push({
+          _id: experienceBooking._id,
+          source: 'experienceBooking',
+          slug: stay.slug,
+          title: stay.name,
+          subtitle: stay.locationLabel,
+          imageUri: stay.imageUri,
+          bookedAt: experienceBooking.bookedAt,
+          kind: 'stay',
+          status: 'planned',
+          statusLabel: 'Planned',
+          tripId: experienceBooking.tripId,
+          tripName: experienceBooking.tripId ? tripNameById.get(experienceBooking.tripId) ?? null : null,
+          checkIn: experienceBooking.checkIn,
+          checkOut: experienceBooking.checkOut,
+          totalPrice: experienceBooking.totalPrice,
+          detailLabel: experienceBooking.stayBookingDetails?.guestSummary,
+        });
+        continue;
+      }
+
+      if (!experience) {
+        continue;
+      }
+
+      bookings.push({
+        _id: experienceBooking._id,
+        source: 'experienceBooking',
+        slug: experience.slug,
+        title: experience.title,
+        subtitle: experience.locationLabel ?? experience.category ?? 'Experience',
+        imageUri: experience.imageUri,
+        bookedAt: experienceBooking.bookedAt,
+        kind: 'experience',
+        status: 'planned',
+        statusLabel: 'Planned',
+        tripId: experienceBooking.tripId,
+        tripName: experienceBooking.tripId ? tripNameById.get(experienceBooking.tripId) ?? null : null,
+        detailLabel: experience.durationLabel,
+      });
+    }
+
+    return bookings.sort((a, b) => b.bookedAt - a.bookedAt).slice(0, 24);
   },
 });
 
@@ -463,10 +937,229 @@ export const createTrip = mutation({
     const tripId = await ctx.db.insert('trips', {
       name: args.name,
       travelerSlug: args.travelerSlug,
+      visibility: 'private',
       createdAt: Date.now(),
       status: 'active',
     });
     return tripId;
+  },
+});
+
+export const getTripSettings = query({
+  args: {
+    tripId: v.id('trips'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const trip = await ctx.db.get(args.tripId);
+
+    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+      return null;
+    }
+
+    const [friends, invites] = await Promise.all([
+      getInviteableFriends(ctx, args.travelerSlug),
+      ctx.db
+        .query('tripInvites')
+        .withIndex('by_tripId', (q) => q.eq('tripId', args.tripId))
+        .collect(),
+    ]);
+
+    return {
+      tripId: trip._id,
+      name: trip.name,
+      visibility: trip.visibility ?? 'private',
+      canChangeVisibility: !Boolean(trip.circleId),
+      isGroupTrip: Boolean(trip.circleId),
+      invitedFriendSlugs: invites.map((invite) => invite.inviteeSlug),
+      friends,
+    };
+  },
+});
+
+export const renameTrip = mutation({
+  args: {
+    tripId: v.id('trips'),
+    travelerSlug: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const trip = await ctx.db.get(args.tripId);
+
+    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+      return false;
+    }
+
+    const trimmedName = args.name.trim();
+    if (!trimmedName) {
+      return false;
+    }
+
+    await ctx.db.patch(args.tripId, { name: trimmedName });
+    return true;
+  },
+});
+
+export const updateTripSettings = mutation({
+  args: {
+    tripId: v.id('trips'),
+    travelerSlug: v.string(),
+    name: v.string(),
+    visibility: v.union(v.literal('private'), v.literal('public')),
+  },
+  handler: async (ctx, args) => {
+    const trip = await getTripByIdForMutation(ctx, args.tripId);
+
+    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+      return false;
+    }
+
+    const trimmedName = args.name.trim();
+    if (!trimmedName) {
+      return false;
+    }
+
+    const patch: Partial<Doc<'trips'>> = {
+      name: trimmedName,
+    };
+
+    if (!trip.circleId) {
+      patch.visibility = args.visibility;
+    }
+
+    await ctx.db.patch(args.tripId, patch);
+
+    const nextTrip = {
+      ...trip,
+      ...patch,
+    } as Doc<'trips'>;
+
+    let circleId = trip.circleId;
+    if (args.visibility === 'public' && !circleId) {
+      circleId = await ensureTripCircle(ctx, nextTrip);
+    }
+
+    if (circleId) {
+      const destinationLabel = await getTripDestinationLabel(ctx, args.tripId, trimmedName);
+      await ctx.db.patch(circleId, {
+        name: trimmedName,
+        destinationLabel,
+        visibility: args.visibility === 'public' ? 'open' : 'private',
+        updatedAt: Date.now(),
+      });
+    }
+
+    return true;
+  },
+});
+
+export const inviteFriendsToTrip = mutation({
+  args: {
+    tripId: v.id('trips'),
+    travelerSlug: v.string(),
+    friendSlugs: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const trip = await getTripByIdForMutation(ctx, args.tripId);
+    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+      return false;
+    }
+
+    if ((trip.visibility ?? 'private') !== 'public' && !trip.circleId) {
+      return false;
+    }
+
+    const inviter = await ctx.db
+      .query('appUsers')
+      .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+      .unique();
+    if (!inviter) {
+      return false;
+    }
+
+    const uniqueFriendSlugs = [...new Set(args.friendSlugs)].filter((slug) => slug !== args.travelerSlug);
+    if (uniqueFriendSlugs.length === 0) {
+      return true;
+    }
+
+    const circleId = await ensureTripCircle(ctx, trip);
+
+    for (const friendSlug of uniqueFriendSlugs) {
+      const connection = await ctx.db
+        .query('friendConnections')
+        .withIndex('by_travelerSlug_and_friendSlug', (q) =>
+          q.eq('travelerSlug', args.travelerSlug).eq('friendSlug', friendSlug)
+        )
+        .unique();
+
+      if (!connection) {
+        continue;
+      }
+
+      const existingInvite = await ctx.db
+        .query('tripInvites')
+        .withIndex('by_tripId_and_inviteeSlug', (q) => q.eq('tripId', args.tripId).eq('inviteeSlug', friendSlug))
+        .unique();
+
+      if (!existingInvite) {
+        await ctx.db.insert('tripInvites', {
+          tripId: args.tripId,
+          circleId,
+          inviterSlug: args.travelerSlug,
+          inviteeSlug: friendSlug,
+          createdAt: Date.now(),
+          status: 'invited',
+        });
+      }
+
+      const existingMembership = await ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) => q.eq('circleId', circleId).eq('travelerSlug', friendSlug))
+        .unique();
+
+      if (!existingMembership) {
+        await ctx.db.insert('friendCircleMembers', {
+          circleId,
+          travelerSlug: friendSlug,
+          role: 'member',
+          status: 'invited',
+          joinedAt: Date.now(),
+          note: `Invited to ${trip.name}`,
+        });
+      }
+
+      const existingMemberTrip = await ctx.db
+        .query('trips')
+        .withIndex('by_travelerSlug_and_circleId', (q) => q.eq('travelerSlug', friendSlug).eq('circleId', circleId))
+        .unique();
+
+      const memberTripId =
+        existingMemberTrip?._id ??
+        (await ctx.db.insert('trips', {
+          name: trip.name,
+          travelerSlug: friendSlug,
+          visibility: 'public',
+          circleId,
+          groupRole: 'member',
+          sourceTripId: trip._id,
+          createdAt: Date.now(),
+          status: trip.status,
+        }));
+
+      await cloneTripBookingsForInvitee(ctx, trip._id, memberTripId, friendSlug);
+
+      await insertTripNotification(ctx, {
+        recipientSlug: friendSlug,
+        actorSlug: args.travelerSlug,
+        title: `${inviter.name} invited you to ${trip.name}`,
+        body: `The trip is now in your trip list, and you can jump into the shared plan whenever you're ready.`,
+        href: '/trip',
+        entityId: trip._id,
+        entityLabel: trip.name,
+      });
+    }
+
+    return true;
   },
 });
 
@@ -483,6 +1176,7 @@ export const addExperienceToTrip = mutation({
       (await ctx.db.insert('trips', {
         name: 'My Trip',
         travelerSlug: args.travelerSlug,
+        visibility: 'private',
         createdAt: Date.now(),
         status: 'active',
       }));
@@ -866,5 +1560,28 @@ export const getStayAvailability = query({
       .withIndex('by_staySlug', (q) => q.eq('staySlug', args.staySlug))
       .filter((q) => q.eq(q.field('status'), 'confirmed'))
       .collect();
+  },
+});
+
+export const getTravelerStayBooking = query({
+  args: {
+    staySlug: v.string(),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const bookings = await ctx.db
+      .query('stayBookings')
+      .withIndex('by_staySlug', (q) => q.eq('staySlug', args.staySlug))
+      .collect();
+
+    return (
+      bookings
+        .filter(
+          (booking) =>
+            booking.travelerSlug === args.travelerSlug &&
+            booking.status !== 'cancelled'
+        )
+        .sort((a, b) => b.bookedAt - a.bookedAt)[0] ?? null
+    );
   },
 });

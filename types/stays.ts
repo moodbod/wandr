@@ -51,6 +51,9 @@ export type StayProperty = {
   locationLabel: string;
   town: string;
   region: string;
+  countryCode?: string;
+  countryLabel?: string;
+  planningLocationId?: string;
   coordinate: readonly [number, number];
   imageUri: string;
   galleryImages: readonly string[];

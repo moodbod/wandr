@@ -1,256 +1,170 @@
 import { Image as ExpoImage } from 'expo-image';
-import { Clock, MapPin, UserPlus, X } from 'phosphor-react-native';
+import { X } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendCandidate } from '@/types/friends';
-
-function ActionButton({
-  label,
-  onPress,
-  tone = 'neutral',
-  disabled = false,
-  icon,
-}: {
-  label: string;
-  onPress: () => void;
-  tone?: 'neutral' | 'primary' | 'soft';
-  disabled?: boolean;
-  icon?: React.ReactNode;
-}) {
-  const backgroundColor =
-    tone === 'primary'
-      ? designSystem.colors.lime
-      : tone === 'soft'
-        ? 'rgba(159,232,112,0.14)'
-        : 'rgba(14,15,12,0.06)';
-
-  const textColor = tone === 'neutral' ? designSystem.colors.ink : designSystem.colors.darkGreen;
-
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.actionButton, { backgroundColor }, disabled ? styles.actionButtonDisabled : null]}>
-      {icon}
-      <ThemedText style={[styles.actionButtonText, { color: textColor }]}>{label}</ThemedText>
-    </Pressable>
-  );
-}
 
 export function FriendMatchCard({
   candidate,
   onInvite,
   onPass,
   onFriend,
+  onOpenProfile,
   disabled = false,
 }: {
   candidate: FriendCandidate;
   onInvite: () => void;
   onPass: () => void;
   onFriend: () => void;
+  onOpenProfile?: () => void;
   disabled?: boolean;
 }) {
-  const stateLabel =
-    candidate.actionState === 'invited'
-      ? 'Invited'
-      : candidate.actionState === 'friended'
-        ? 'Friend added'
-        : candidate.actionState === 'passed'
-          ? 'Passed'
-          : `${candidate.matchScore}% match`;
+  const isDark = useColorScheme() === 'dark';
+  const hasPassed = candidate.actionState === 'passed';
+  const hasFriended = candidate.actionState === 'friended';
+  const hasInvited = candidate.actionState === 'invited';
+  const primaryLabel = hasInvited ? 'Invited' : hasFriended ? 'Invite' : 'Friend';
+  const primaryAction = hasFriended ? onInvite : onFriend;
+  const primaryDisabled = disabled || hasInvited || hasPassed;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <View style={styles.identityRow}>
-          {candidate.avatarUri ? <ExpoImage source={candidate.avatarUri} style={styles.avatar} contentFit="cover" /> : null}
-          <View style={styles.identityCopy}>
-            <ThemedText style={styles.name}>{candidate.name}</ThemedText>
-            <ThemedText style={styles.location}>{candidate.baseLabel}</ThemedText>
-          </View>
+    <View style={[styles.row, hasPassed ? styles.rowMuted : null]}>
+      <Pressable
+        accessibilityLabel={`View ${candidate.name}'s profile`}
+        disabled={!onOpenProfile}
+        onPress={onOpenProfile}
+        style={styles.avatarButton}>
+        {candidate.avatarUri ? (
+          <ExpoImage source={candidate.avatarUri} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={styles.avatarPlaceholder} />
+        )}
+      </Pressable>
+
+      <View style={styles.identity}>
+        <View style={styles.nameRow}>
+          <ThemedText style={styles.name} numberOfLines={1}>
+            {candidate.name}
+          </ThemedText>
+          <ThemedText style={[styles.matchText, { color: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen }]}>
+            {candidate.matchScore}% match
+          </ThemedText>
         </View>
-        <View style={styles.matchBadge}>
-          <ThemedText style={styles.matchBadgeText}>{stateLabel}</ThemedText>
-        </View>
+        <ThemedText style={styles.contextText} numberOfLines={1}>
+          {candidate.baseLabel}
+        </ThemedText>
       </View>
 
-      <View style={styles.copyBlock}>
-        <ThemedText style={styles.headline}>{candidate.headline}</ThemedText>
-        <ThemedText style={styles.bio}>{candidate.bio}</ThemedText>
-      </View>
+      <View style={styles.actions}>
+        <Pressable
+          accessibilityLabel={`${primaryLabel} ${candidate.name}`}
+          disabled={primaryDisabled}
+          onPress={primaryAction}
+          style={[styles.primaryAction, primaryDisabled ? styles.actionDisabled : null]}>
+          <ThemedText style={styles.primaryActionText}>{primaryLabel}</ThemedText>
+        </Pressable>
 
-      <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <MapPin color={designSystem.colors.gray} size={14} weight="bold" />
-          <ThemedText style={styles.metaText}>{candidate.destinationLabel}</ThemedText>
-        </View>
-        <View style={styles.metaItem}>
-          <Clock color={designSystem.colors.gray} size={14} weight="bold" />
-          <ThemedText style={styles.metaText}>{candidate.arrivalWindowLabel}</ThemedText>
-        </View>
-      </View>
-
-      <View style={styles.interestWrap}>
-        {candidate.sharedInterests.slice(0, 3).map((interest) => (
-          <View key={`${candidate.travelerSlug}-${interest}`} style={styles.interestChip}>
-            <ThemedText style={styles.interestText}>{interest}</ThemedText>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.actionsRow}>
-        <ActionButton
-          label={candidate.actionState === 'passed' ? 'Passed' : 'Pass'}
+        <Pressable
+          accessibilityLabel={hasPassed ? `${candidate.name} removed` : `Remove ${candidate.name}`}
+          disabled={disabled || hasPassed}
           onPress={onPass}
-          disabled={disabled || candidate.actionState === 'passed'}
-          icon={<X color={designSystem.colors.ink} size={16} weight="bold" />}
-        />
-        <ActionButton
-          label={candidate.actionState === 'friended' ? 'Friend added' : 'Add friend'}
-          onPress={onFriend}
-          tone="soft"
-          disabled={disabled || candidate.actionState === 'friended'}
-          icon={<UserPlus color={designSystem.colors.darkGreen} size={16} weight="bold" />}
-        />
-        <ActionButton
-          label={candidate.actionState === 'invited' ? 'Invited' : 'Invite'}
-          onPress={onInvite}
-          tone="primary"
-          disabled={disabled || candidate.actionState === 'invited'}
-        />
+          style={[styles.removeAction, disabled || hasPassed ? styles.actionDisabled : null]}>
+          <X color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} size={17} weight="bold" />
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    gap: designSystem.spacing.md,
-    borderRadius: 32,
-    padding: designSystem.spacing.lg,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.06)',
-    shadowColor: 'rgba(14,15,12,0.08)',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    elevation: 6,
-  },
-  headerRow: {
+  row: {
+    minHeight: 88,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: designSystem.spacing.md,
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 13,
   },
-  identityRow: {
+  rowMuted: {
+    opacity: 0.42,
+  },
+  identity: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: designSystem.spacing.md,
+    minWidth: 0,
+    gap: 5,
+    paddingTop: 1,
+  },
+  avatarButton: {
+    borderRadius: 30,
   },
   avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: designSystem.colors.surface,
   },
-  identityCopy: {
-    flex: 1,
-    gap: 4,
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
   },
   name: {
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: '700',
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 19,
+    lineHeight: 23,
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
-  location: {
-    fontSize: 14,
-    lineHeight: 18,
+  matchText: {
+    flexShrink: 0,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: '600',
-    color: designSystem.colors.gray,
-  },
-  matchBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: designSystem.radii.pill,
-    backgroundColor: 'rgba(159,232,112,0.18)',
-  },
-  matchBadgeText: {
-    ...designSystem.type.eyebrow,
     color: designSystem.colors.darkGreen,
   },
-  copyBlock: {
-    gap: 6,
-  },
-  headline: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: designSystem.colors.ink,
-  },
-  bio: {
+  contextText: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 17,
     color: designSystem.colors.warmDark,
   },
-  metaRow: {
-    gap: 10,
-  },
-  metaItem: {
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
+    paddingTop: 8,
   },
-  metaText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '600',
-    color: designSystem.colors.gray,
-  },
-  interestWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  interestChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: designSystem.radii.pill,
-    backgroundColor: designSystem.colors.surface,
-  },
-  interestText: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '700',
-    color: designSystem.colors.warmDark,
-    textTransform: 'uppercase',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  actionButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: designSystem.radii.pill,
-    flexDirection: 'row',
+  primaryAction: {
+    minWidth: 78,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: designSystem.colors.lime,
   },
-  actionButtonDisabled: {
-    opacity: 0.7,
+  primaryActionText: {
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
   },
-  actionButtonText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  removeAction: {
+    width: 24,
+    height: 36,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  actionDisabled: {
+    opacity: 0.48,
   },
 });

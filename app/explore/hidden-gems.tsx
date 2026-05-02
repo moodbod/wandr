@@ -1,6 +1,6 @@
 import { useQuery } from 'convex/react';
 import { Link } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -41,21 +41,10 @@ function ConnectedExploreHiddenGemsScreen() {
   const traveler = useCurrentTraveler();
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
 
-  if (!page) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }} />
-        <View style={[styles.content, { paddingTop: insets.top + 88, alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
-
   return (
     <ExploreHiddenGemsScreenView
       insetsTop={insets.top}
-      isLoading={false}
+      isLoading={!page}
       notice={null}
       page={page}
     />
@@ -71,11 +60,11 @@ function ExploreHiddenGemsScreenView({
   insetsTop: number;
   isLoading: boolean;
   notice: string | null;
-  page: any;
+  page: any | null | undefined;
 }) {
-  const items = page.search.hiddenGems.items;
+  const items = page?.search.hiddenGems.items ?? [];
   const leadGem = items[0];
-  const groupedGems = buildGemGroups(items);
+  const groupedGems = isLoading ? buildLoadingGemGroups() : buildGemGroups(items);
 
   return (
     <ThemedView style={styles.root}>
@@ -97,18 +86,20 @@ function ExploreHiddenGemsScreenView({
           </ThemedText>
         </View>
 
-        {leadGem ? (
+        {isLoading || leadGem ? (
           <ThemedView lightColor={designSystem.colors.surface} darkColor={designSystem.colors.darkSurface} style={styles.leadCard}>
-            <View style={styles.leadHeader}>
-              <View style={styles.leadCopy}>
-                <ThemedText style={styles.leadTitle}>{leadGem.title}</ThemedText>
-                <ThemedText style={styles.leadDescription}>{getGemMeta(leadGem).note}</ThemedText>
+            {leadGem ? (
+              <View style={styles.leadHeader}>
+                <View style={styles.leadCopy}>
+                  <ThemedText style={styles.leadTitle}>{leadGem.title}</ThemedText>
+                  <ThemedText style={styles.leadDescription}>{getGemMeta(leadGem).note}</ThemedText>
+                </View>
+                <View style={styles.statGrid}>
+                  <GemStat label="Pocket" value={getGemMeta(leadGem).district} />
+                  <GemStat label="Best for" value={getGemMeta(leadGem).moment} />
+                </View>
               </View>
-            <View style={styles.statGrid}>
-              <GemStat label="Pocket" value={getGemMeta(leadGem).district} />
-              <GemStat label="Best for" value={getGemMeta(leadGem).moment} />
-            </View>
-            </View>
+            ) : null}
             {isLoading ? (
               <ExploreHiddenGemCardSkeleton />
             ) : (
@@ -232,6 +223,25 @@ function buildGemGroups(items: readonly ExploreHiddenGem[]) {
     .filter((group) => group.items.length > 0);
 }
 
+function buildLoadingGemGroups() {
+  return [
+    {
+      key: 'loading-coastal',
+      title: 'Coastal detours',
+      eyebrow: 'Airy and scenic',
+      description: 'When the day needs space, sea air, and somewhere to slow down for a minute.',
+      items: [],
+    },
+    {
+      key: 'loading-offbeat',
+      title: 'Off-grid moments',
+      eyebrow: 'A little stranger',
+      description: 'Small excursions that feel more like discoveries than checklist stops.',
+      items: [],
+    },
+  ];
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -246,9 +256,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     lineHeight: 38,
-    fontWeight: '700',
-    letterSpacing: -1.4,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   description: {
     maxWidth: '94%',
@@ -262,12 +270,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(159, 232, 112, 0.18)',
+    borderColor: designSystem.colors.limeSoft,
   },
   noticeText: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   leadCard: {
@@ -275,7 +283,7 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 18,
     borderWidth: 1,
-    borderColor: 'rgba(159, 232, 112, 0.18)',
+    borderColor: designSystem.colors.limeSoft,
   },
   leadHeader: {
     gap: 16,
@@ -286,8 +294,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 30,
     lineHeight: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
+    fontWeight: '600',
   },
   leadDescription: {
     fontSize: 15,
@@ -305,21 +312,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: 'rgba(159, 232, 112, 0.08)',
+    backgroundColor: designSystem.colors.limeSoft,
     gap: 4,
   },
   statLabel: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   statValue: {
     fontSize: 16,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   quickStrip: {
     gap: 12,
@@ -329,13 +334,12 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(159, 232, 112, 0.12)',
+    borderColor: designSystem.colors.limeSoft,
   },
   quickValue: {
     fontSize: 22,
     lineHeight: 24,
-    fontWeight: '700',
-    letterSpacing: -0.6,
+    fontWeight: '600',
   },
   quickDescription: {
     fontSize: 14,
@@ -352,8 +356,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 28,
     lineHeight: 30,
-    fontWeight: '700',
-    letterSpacing: -0.8,
+    fontWeight: '600',
   },
   sectionDescription: {
     fontSize: 15,
@@ -376,14 +379,12 @@ const styles = StyleSheet.create({
     borderRadius: designSystem.radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(159, 232, 112, 0.08)',
+    backgroundColor: designSystem.colors.limeSoft,
   },
   tagLabel: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   cta: {
     alignItems: 'center',
@@ -396,9 +397,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
 });

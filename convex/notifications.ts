@@ -15,8 +15,46 @@ export const listNotifications = query({
 
     return notifications.map((notification) => ({
       ...notification,
+      isViewed: Boolean(notification.viewedAt),
       isRead: Boolean(notification.readAt),
     }));
+  },
+});
+
+export const markNotificationsViewed = mutation({
+  args: {
+    travelerSlug: v.string(),
+    notificationIds: v.optional(v.array(v.id('appNotifications'))),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    if (args.notificationIds && args.notificationIds.length > 0) {
+      for (const notificationId of args.notificationIds) {
+        const notification = await ctx.db.get(notificationId);
+        if (!notification || notification.recipientSlug !== args.travelerSlug || notification.viewedAt) {
+          continue;
+        }
+
+        await ctx.db.patch(notificationId, { viewedAt: now });
+      }
+
+      return true;
+    }
+
+    const unviewed = await ctx.db
+      .query('appNotifications')
+      .withIndex('by_recipientSlug_and_viewedAt', (q) => q.eq('recipientSlug', args.travelerSlug))
+      .collect();
+
+    for (const notification of unviewed) {
+      if (notification.viewedAt) {
+        continue;
+      }
+      await ctx.db.patch(notification._id, { viewedAt: now });
+    }
+
+    return true;
   },
 });
 
@@ -35,7 +73,7 @@ export const markNotificationsRead = mutation({
           continue;
         }
 
-        await ctx.db.patch(notificationId, { readAt: now });
+        await ctx.db.patch(notificationId, { readAt: now, viewedAt: notification.viewedAt ?? now });
       }
 
       return true;
@@ -50,7 +88,7 @@ export const markNotificationsRead = mutation({
       if (notification.readAt) {
         continue;
       }
-      await ctx.db.patch(notification._id, { readAt: now });
+      await ctx.db.patch(notification._id, { readAt: now, viewedAt: notification.viewedAt ?? now });
     }
 
     return true;

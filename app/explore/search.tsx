@@ -1,6 +1,6 @@
 import { useQuery } from 'convex/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,11 +11,16 @@ import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
 import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
+import {
+  coordinateIsInPlanningLocation,
+  destinationMatchesPlanningLocation,
+} from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreActivityCard as ExploreActivityCardContent, ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
+import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { useCurrentRegionCenter } from '@/hooks/use-current-region-center';
+import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { getExploreJoinableTripCardsRef, getExplorePageContentRef } from '@/lib/convex';
 import {
     buildRegionOptions,
@@ -45,21 +50,59 @@ function ConnectedExploreSearchScreen() {
     getExploreJoinableTripCardsRef,
     traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
   );
-  const { coordinate: currentRegionCenter } = useCurrentRegionCenter();
+  const { coordinate: currentLocation } = useCurrentLocation();
+  const { planningLocation } = usePlanningLocation();
   const [activeRegion, setActiveRegion] = useState<string>('');
   const [activeIntent, setActiveIntent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  useSyncPlanningLocationWithCurrentLocation(currentLocation);
+
+  const locationExperiences = useMemo(
+    () =>
+      page?.experiences.filter((experience) =>
+        destinationMatchesPlanningLocation({
+          coordinate: experience.coordinate,
+          countryCode: experience.countryCode,
+          countryLabel: experience.countryLabel,
+          location: planningLocation,
+          planningLocationId: experience.planningLocationId,
+          labels: [
+            experience.locationLabel,
+            experience.geography?.region,
+            experience.geography?.town,
+            experience.title,
+            experience.subtitle,
+            experience.description,
+          ],
+        })
+      ) ?? [],
+    [page, planningLocation]
+  );
+
+  const locationHiddenGems = useMemo(
+    () =>
+      page?.search.hiddenGems.items.filter((item) =>
+        destinationMatchesPlanningLocation({
+          countryCode: item.countryCode,
+          countryLabel: item.countryLabel,
+          location: planningLocation,
+          planningLocationId: item.planningLocationId,
+          labels: [item.title, item.description, item.geography?.region, item.geography?.town],
+        })
+      ) ?? [],
+    [page, planningLocation]
+  );
 
   const searchMatchedExperiences = useMemo(
     () =>
-      page?.experiences.filter((e) => matchesExperienceFilters(e, 'all', 'all', searchQuery)) ?? [],
-    [page, searchQuery]
+      locationExperiences.filter((e) => matchesExperienceFilters(e, 'all', 'all', searchQuery)),
+    [locationExperiences, searchQuery]
   );
 
   const searchMatchedGems = useMemo(
     () =>
-      page?.search.hiddenGems.items.filter((item) => matchesHiddenGemFilters(item, 'all', searchQuery)) ?? [],
-    [page, searchQuery]
+      locationHiddenGems.filter((item) => matchesHiddenGemFilters(item, 'all', searchQuery)),
+    [locationHiddenGems, searchQuery]
   );
 
   const regionOptions = useMemo(
@@ -68,18 +111,20 @@ function ConnectedExploreSearchScreen() {
         ? buildRegionOptions(
             searchMatchedExperiences,
             searchMatchedGems,
-            currentRegionCenter ?? page.home.hero.centerCoordinate
+            coordinateIsInPlanningLocation(currentLocation, planningLocation)
+              ? currentLocation ?? undefined
+              : planningLocation.centerCoordinate ?? page.home.hero.centerCoordinate
           )
         : [],
-    [currentRegionCenter, page, searchMatchedExperiences, searchMatchedGems]
+    [currentLocation, page, planningLocation, searchMatchedExperiences, searchMatchedGems]
   );
 
   const regionMatchedExperiences = useMemo(
     () =>
-      page?.experiences.filter((experience) =>
+      locationExperiences.filter((experience) =>
         matchesExperienceFilters(experience, activeRegion || 'all', 'all', searchQuery)
-      ) ?? [],
-    [activeRegion, page, searchQuery]
+      ),
+    [activeRegion, locationExperiences, searchQuery]
   );
 
   const activeIntentOptions = useMemo(
@@ -112,22 +157,11 @@ function ConnectedExploreSearchScreen() {
     setActiveIntent('all');
   }, [activeIntent, activeIntentOptions]);
 
-  if (!page) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }} />
-        <View style={[styles.content, { paddingTop: insets.top + 88, alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
-
   const resolvedActiveRegion = activeRegion || 'all';
-  const filteredExperiences = page.experiences.filter((experience) =>
+  const filteredExperiences = locationExperiences.filter((experience) =>
     matchesExperienceFilters(experience, resolvedActiveRegion, activeIntent, searchQuery)
   );
-  const filteredHiddenGems = page.search.hiddenGems.items.filter((item) =>
+  const filteredHiddenGems = locationHiddenGems.filter((item) =>
     matchesHiddenGemFilters(item, resolvedActiveRegion, searchQuery)
   );
   const previewCards = filteredExperiences.map<ExploreActivityCardContent>((experience) => ({
@@ -141,10 +175,31 @@ function ConnectedExploreSearchScreen() {
     subtitle: experience.locationLabel ?? experience.subtitle,
     title: experience.title,
   }));
-  const filteredJoinableTripCards = (joinableTripCards ?? []).filter((card) =>
-    filteredExperiences.some((experience) => experience.slug === card.experienceSlug)
-  );
-  const hasResults = previewCards.length > 0 || filteredJoinableTripCards.length > 0 || filteredHiddenGems.length > 0;
+  const locationExperienceBySlug = new Map(locationExperiences.map((experience) => [experience.slug, experience]));
+  const filteredJoinableTripCards = (joinableTripCards ?? []).filter((card) => {
+    const experience = locationExperienceBySlug.get(card.experienceSlug);
+    const matchesLocation =
+      Boolean(experience) ||
+      destinationMatchesPlanningLocation({
+        countryCode: card.countryCode,
+        countryLabel: card.countryLabel,
+        location: planningLocation,
+        planningLocationId: card.planningLocationId,
+        labels: [card.locationLabel, card.destinationLabel, card.experienceTitle],
+      });
+
+    if (!matchesLocation) {
+      return false;
+    }
+
+    return experience
+      ? matchesExperienceFilters(experience, 'all', 'all', searchQuery)
+      : [card.experienceTitle, card.locationLabel, card.destinationLabel, card.groupName].some((value) =>
+          value.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        );
+  });
+  const isLoading = !page;
+  const hasResults = isLoading || previewCards.length > 0 || filteredJoinableTripCards.length > 0 || filteredHiddenGems.length > 0;
 
   return (
     <ExploreSearchScreenView
@@ -153,12 +208,13 @@ function ConnectedExploreSearchScreen() {
       activeRegion={resolvedActiveRegion}
       filteredHiddenGems={filteredHiddenGems}
       insetsTop={insets.top}
-      isLoading={false}
+      isLoading={isLoading}
       notice={null}
       onIntentChange={setActiveIntent}
       onRegionChange={setActiveRegion}
       onSearchQueryChange={setSearchQuery}
       page={page}
+      planningLocationLabel={planningLocation.label}
       filteredJoinableTripCards={filteredJoinableTripCards}
       hasResults={hasResults}
       previewCards={previewCards}
@@ -180,6 +236,7 @@ function ExploreSearchScreenView({
   onRegionChange,
   onSearchQueryChange,
   page,
+  planningLocationLabel,
   filteredJoinableTripCards,
   hasResults,
   previewCards,
@@ -196,7 +253,8 @@ function ExploreSearchScreenView({
   onIntentChange: (value: string) => void;
   onRegionChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
-  page: any;
+  page: any | null | undefined;
+  planningLocationLabel: string;
   filteredJoinableTripCards: ExploreJoinableTripCard[];
   hasResults: boolean;
   previewCards: readonly ExploreActivityCardContent[];
@@ -218,7 +276,7 @@ function ExploreSearchScreenView({
         ]}
       >
         <View style={styles.hero}>
-          <ThemedText style={styles.title}>Search Discovery</ThemedText>
+          <ThemedText style={styles.title}>Search {planningLocationLabel}</ThemedText>
           <ThemedText style={styles.description}>
             Filter by real region data first, then layer mood and search on top.
           </ThemedText>
@@ -233,10 +291,10 @@ function ExploreSearchScreenView({
           onIntentChange={onIntentChange}
           onRegionChange={onRegionChange}
           onSearchQueryChange={onSearchQueryChange}
-          searchPlaceholder={page.search.intro.searchPlaceholder}
+          searchPlaceholder={page?.search.intro.searchPlaceholder ?? 'Search by place, activity, or mood'}
         />
 
-        {previewCards.length > 0 && (
+        {(isLoading || previewCards.length > 0) && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <ThemedText style={styles.sectionTitle}>Start with these</ThemedText>
@@ -272,7 +330,7 @@ function ExploreSearchScreenView({
           </View>
         )}
 
-        {filteredHiddenGems.length > 0 && (
+        {(isLoading || filteredHiddenGems.length > 0) && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <ThemedText style={styles.sectionTitle}>Local detours worth keeping</ThemedText>

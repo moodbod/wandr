@@ -139,7 +139,7 @@ export function TripNotificationSheet({
                           ? designSystem.colors.darkGreen
                           : isDark
                             ? designSystem.colors.darkMutedText
-                            : 'rgba(69,71,69,0.42)'
+                            : designSystem.colors.subtleText
                       }
                     />
                   </Pressable>
@@ -152,7 +152,7 @@ export function TripNotificationSheet({
               numberOfLines={4}
               onChangeText={onNoteChange}
               placeholder="Add a note"
-              placeholderTextColor={isDark ? 'rgba(249,249,246,0.34)' : 'rgba(14,15,12,0.3)'}
+              placeholderTextColor={isDark ? designSystem.colors.darkPlaceholderTextSoft : designSystem.colors.placeholderTextFaint}
               style={[styles.noteInput, isDark && styles.noteInputDark]}
               textAlignVertical="top"
               value={note}
@@ -195,9 +195,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontWeight: '600',
     color: designSystem.colors.gray,
   },
   placeTitle: {

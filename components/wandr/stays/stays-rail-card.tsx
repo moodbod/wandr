@@ -34,7 +34,13 @@ export function StaysRailCard({
       <View style={styles.propertyImageShell}>
         <Image source={imageUri} contentFit="cover" style={styles.propertyImage} />
         <View style={styles.priceBadge}>
-          <ThemedText style={styles.priceBadgeText}>{priceLabel}</ThemedText>
+          <ThemedText
+            lightColor={designSystem.colors.ink}
+            darkColor={designSystem.colors.ink}
+            style={styles.priceBadgeText}
+          >
+            {priceLabel}
+          </ThemedText>
         </View>
       </View>
 
@@ -68,14 +74,14 @@ const styles = StyleSheet.create({
   propertyCard: {
     width: '100%',
     borderRadius: 22,
-    backgroundColor: '#ffffff',
+    backgroundColor: designSystem.colors.white,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.05)',
+    borderColor: designSystem.colors.scrimWash,
     padding: 8,
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 10,
-    shadowColor: '#0e0f0c',
+    shadowColor: designSystem.colors.ink,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -86,7 +92,7 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.darkBorder,
   },
   propertyCardSelected: {
-    borderColor: 'rgba(159,232,112,0.35)',
+    borderColor: designSystem.colors.limeSoft,
   },
   propertyImageShell: {
     width: 118,
@@ -104,15 +110,14 @@ const styles = StyleSheet.create({
     left: 8,
     bottom: 8,
     borderRadius: designSystem.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: designSystem.colors.whiteGlassHigh,
     paddingHorizontal: 9,
     paddingVertical: 6,
   },
   priceBadgeText: {
     fontSize: 12,
     lineHeight: 12,
-    fontWeight: '800',
-    color: designSystem.colors.ink,
+    fontWeight: '600',
   },
   propertyBody: {
     flex: 1,
@@ -132,7 +137,7 @@ const styles = StyleSheet.create({
   propertyTitle: {
     fontSize: 20,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   propertyTitleDark: {
@@ -145,7 +150,7 @@ const styles = StyleSheet.create({
     color: designSystem.colors.gray,
   },
   propertyLocationDark: {
-    color: 'rgba(249,249,246,0.72)',
+    color: designSystem.colors.darkTextSoft,
   },
   ratingRow: {
     flexDirection: 'row',
@@ -161,7 +166,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 12,
     lineHeight: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   ratingTextDark: {

@@ -39,6 +39,7 @@ export function buildExperienceMapMarkers(
         experienceSlug: experience.slug,
         imageUri: experience.imageUri,
         label: experience.title,
+        popularityScore: experience.travelerMomentum?.visitorCount ?? 0,
         tone: index % 2 === 0 ? 'accent' : 'dark',
         status,
       };
@@ -66,6 +67,7 @@ export function buildTripMapMarkers(
       itemKind: item.kind,
       imageUri: item.stay?.imageUri ?? item.experience.imageUri,
       label: item.stay?.name ?? item.experience.title,
+      popularityScore: 1000 - index,
       tone: index % 2 === 0 ? 'accent' : 'dark',
       status: item.status,
     }));

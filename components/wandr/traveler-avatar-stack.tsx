@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type TravelerAvatarStackProps = {
   avatars: readonly string[];
@@ -15,6 +16,7 @@ export function TravelerAvatarStack({
   totalCount,
   size = 'default',
 }: TravelerAvatarStackProps) {
+  const isDark = useColorScheme() === 'dark';
   const visibleAvatars = avatars.slice(0, 2);
   const remainingCount = Math.max(0, totalCount - visibleAvatars.length);
   const avatarSize = size === 'compact' ? 28 : 32;
@@ -38,6 +40,7 @@ export function TravelerAvatarStack({
               borderRadius,
               marginLeft: index === 0 ? 0 : -overlap,
               zIndex: 10 - index,
+              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
             },
           ]}>
           <ExpoImage source={uri} style={styles.avatar} contentFit="cover" />
@@ -54,6 +57,8 @@ export function TravelerAvatarStack({
               borderRadius,
               marginLeft: visibleAvatars.length > 0 ? -overlap : 0,
               zIndex: 0,
+              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
+              backgroundColor: isDark ? designSystem.colors.darkSurfaceOverlay : designSystem.colors.borderFaint,
             },
           ]}>
           <ThemedText style={[styles.moreText, size === 'compact' ? styles.moreTextCompact : null]}>+</ThemedText>
@@ -70,7 +75,6 @@ const styles = StyleSheet.create({
   },
   avatarWrapper: {
     borderWidth: 2,
-    borderColor: '#fff',
     overflow: 'hidden',
     backgroundColor: designSystem.colors.surface,
   },
@@ -82,13 +86,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(14,15,12,0.06)',
   },
   moreText: {
     fontSize: 12,
     lineHeight: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   moreTextCompact: {

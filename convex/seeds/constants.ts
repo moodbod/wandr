@@ -92,3 +92,12 @@ export const ZAMBEZI_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21
 
 // Walvis Bay flamingo salt pans — pink flamingos, lagoon landscape
 export const SALT_PANS_IMAGE = 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=1200&q=80&fit=crop';
+
+// South Africa starter coverage
+export const CAPE_TOWN_IMAGE = 'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=1200&q=80&fit=crop';
+export const TABLE_MOUNTAIN_IMAGE = 'https://images.unsplash.com/photo-1588451400277-8eae8bad5a04?w=1200&q=80&fit=crop';
+export const WATERFRONT_IMAGE = 'https://images.unsplash.com/photo-1576485290814-1c72aa4bbb8e?w=1200&q=80&fit=crop';
+export const KIRSTENBOSCH_IMAGE = 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1200&q=80&fit=crop';
+export const WINELANDS_IMAGE = 'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=1200&q=80&fit=crop';
+export const CAPE_POINT_IMAGE = 'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=1200&q=80&fit=crop';
+export const ROBBEN_ISLAND_IMAGE = 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1200&q=80&fit=crop';

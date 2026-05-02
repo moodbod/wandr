@@ -107,7 +107,14 @@ export function FriendChatToolsSheet({
       snapPoints={sheetSnapPoints}
       enablePanDownToClose>
       <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
-        <View style={[styles.sheetSearch, isDark ? styles.sheetSearchDark : null]}>
+        <View
+          style={[
+            styles.sheetSearch,
+            {
+              backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint,
+              borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft,
+            },
+          ]}>
           <MagnifyingGlass
             color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
             size={20}
@@ -259,14 +266,11 @@ const styles = StyleSheet.create({
   sheetSearch: {
     minHeight: 56,
     borderRadius: 18,
+    borderWidth: 1,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: designSystem.colors.scrimFaint,
-  },
-  sheetSearchDark: {
-    backgroundColor: designSystem.colors.darkSurfaceBorder,
   },
   sheetSearchInput: {
     flex: 1,

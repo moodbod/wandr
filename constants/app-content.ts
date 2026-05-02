@@ -1,4 +1,5 @@
 import type { Href } from 'expo-router';
+import type { ReactNode } from 'react';
 
 export type ActionLink = {
   href: Href;
@@ -15,6 +16,7 @@ export type HeaderActionKind =
   | 'avatar'
   | 'back'
   | 'call'
+  | 'chat'
   | 'check'
   | 'favorite'
   | 'filter'
@@ -24,6 +26,7 @@ export type HeaderActionKind =
   | 'menu'
   | 'notifications'
   | 'pencil'
+  | 'plus'
   | 'settings'
   | 'share';
 
@@ -33,6 +36,8 @@ export type HeaderAction = {
   href?: Href;
   onPress?: () => void;
   isActive?: boolean;
+  isLoading?: boolean;
+  render?: ReactNode | ((props: { iconColor: string }) => ReactNode);
   tone?: 'plain' | 'surface';
 };
 

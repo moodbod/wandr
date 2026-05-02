@@ -14,6 +14,7 @@ type GlassButtonProps = {
   width?: number;
   height?: number;
   accessibilityLabel?: string;
+  disabled?: boolean;
   variant?: 'subtle' | 'primary';
 };
 
@@ -27,6 +28,7 @@ export function GlassButton({
   width = 48,
   height = 48,
   accessibilityLabel,
+  disabled = false,
   variant = 'subtle',
 }: GlassButtonProps) {
   const colorScheme = useColorScheme();
@@ -40,6 +42,9 @@ export function GlassButton({
   });
 
   const handlePressIn = () => {
+    if (disabled) {
+      return;
+    }
     scale.value = withSpring(0.96, { damping: 18, stiffness: 320 });
   };
 
@@ -49,21 +54,22 @@ export function GlassButton({
 
   const isPrimary = variant === 'primary';
   const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
-  const tintColor = isPrimary
-    ? 'rgba(159, 232, 112, 0.28)'
-    : isDark
-      ? 'rgba(249, 249, 246, 0.12)'
-      : 'rgba(255, 255, 255, 0.22)';
+  const tintColor = isPrimary ? designSystem.colors.limeSoft : designSystem.colors.transparentWhite;
+  const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
+  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
 
   return (
     <AnimatedPressable
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[
         styles.container, 
         { borderRadius: radius, width, height }, 
+        disabled ? styles.disabled : null,
         style, 
         animatedStyle
       ]}
@@ -82,8 +88,8 @@ export function GlassButton({
                 styles.nativeOverlay,
                 {
                   borderRadius: radius,
-                  backgroundColor: isPrimary ? 'rgba(159, 232, 112, 0.08)' : 'rgba(255,255,255,0.04)',
-                  borderColor: isPrimary ? 'rgba(14,15,12,0.12)' : 'rgba(255,255,255,0.24)',
+                  backgroundColor: isPrimary ? designSystem.colors.limeSoft : surfaceColor,
+                  borderColor: isPrimary ? designSystem.colors.border : borderColor,
                 },
               ]}
             />
@@ -96,14 +102,10 @@ export function GlassButton({
                 borderRadius: radius,
                 backgroundColor: isPrimary
                   ? designSystem.colors.lime
-                  : isDark
-                    ? 'rgba(249,249,246,0.08)'
-                    : 'rgba(22,51,0,0.08)',
+                  : surfaceColor,
                 borderColor: isPrimary
-                  ? 'rgba(14,15,12,0.12)'
-                  : isDark
-                    ? designSystem.colors.darkBorder
-                    : 'rgba(14,15,12,0.12)',
+                  ? designSystem.colors.border
+                  : borderColor,
               },
               Platform.OS === 'android' ? styles.androidFill : null,
             ]}
@@ -123,6 +125,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     flexShrink: 0,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   fill: {
     width: '100%',

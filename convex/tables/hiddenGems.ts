@@ -5,6 +5,9 @@ export const hiddenGemsTable = defineTable({
   title: v.string(),
   description: v.string(),
   imageUri: v.string(),
+  countryCode: v.optional(v.string()),
+  countryLabel: v.optional(v.string()),
+  planningLocationId: v.optional(v.string()),
   coordinate: v.optional(v.array(v.number())),
   geography: v.optional(
     v.object({

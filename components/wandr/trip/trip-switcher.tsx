@@ -1,28 +1,30 @@
 import { Image as ExpoImage } from 'expo-image';
-import { Plus, X } from 'phosphor-react-native';
+import { Plus, UsersThree, X } from 'phosphor-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import type { TripDashboard } from '@/types/trip';
+import type { TripListItem } from '@/types/trip';
 
 type TripSwitcherProps = {
-  trips: any[];
-  currentTrip: TripDashboard;
+  trips: TripListItem[];
   selectedTripId?: string;
+  isEditing?: boolean;
   onDeleteTrip: (id: string) => void;
   onSelectTrip: (id: string) => void;
   onNewTrip: () => void;
+  onRenameTrip?: (id: string, name: string) => void;
 };
 
 export function TripSwitcher({
   trips,
-  currentTrip,
   selectedTripId,
+  isEditing = false,
   onDeleteTrip,
   onSelectTrip,
   onNewTrip,
+  onRenameTrip,
 }: TripSwitcherProps) {
   const isDark = useColorScheme() === 'dark';
 
@@ -43,12 +45,19 @@ export function TripSwitcher({
           <Pressable 
             key={t._id} 
             style={styles.tripCard}
-            onPress={() => onSelectTrip(t._id)}
+            onPress={() => {
+              if (isEditing && onRenameTrip) {
+                onRenameTrip?.(t._id, t.name);
+                return;
+              }
+
+              onSelectTrip(t._id);
+            }}
           >
             <View style={[styles.imageFrame, isDark && styles.imageFrameDark, selectedTripId === t._id && styles.imageFrameActive]}>
-              {(selectedTripId === t._id ? currentTrip.items[0]?.experience.imageUri : t.previewImage) ? (
+              {t.previewImage ? (
                 <ExpoImage 
-                  source={selectedTripId === t._id ? currentTrip.items[0]?.experience.imageUri : t.previewImage} 
+                  source={t.previewImage} 
                   style={StyleSheet.absoluteFill} 
                   contentFit="cover"
                 />
@@ -64,6 +73,15 @@ export function TripSwitcher({
                 style={[styles.deleteButton, isDark && styles.deleteButtonDark]}>
                 <X size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
               </Pressable>
+              {t.isGroupTrip ? (
+                <View style={[styles.groupBadge, isDark && styles.groupBadgeDark]}>
+                  <UsersThree
+                    size={13}
+                    color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+                    weight="bold"
+                  />
+                </View>
+              ) : null}
             </View>
             <ThemedText 
               numberOfLines={1} 
@@ -130,7 +148,7 @@ const styles = StyleSheet.create({
   },
   tripCardNameActive: {
     color: designSystem.colors.ink,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   deleteButton: {
     position: 'absolute',
@@ -141,9 +159,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(249,249,246,0.92)',
+    backgroundColor: designSystem.colors.lightGlass,
   },
   deleteButtonDark: {
-    backgroundColor: 'rgba(17,19,15,0.88)',
+    backgroundColor: designSystem.colors.darkGlass,
+  },
+  groupBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.lightGlass,
+  },
+  groupBadgeDark: {
+    backgroundColor: designSystem.colors.darkGlass,
   },
 });

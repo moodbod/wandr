@@ -23,7 +23,7 @@ export function WandrContentPanel({ children, style }: WandrContentPanelProps) {
 const styles = StyleSheet.create({
   panel: {
     borderRadius: designSystem.radii.panel,
-    padding: 18,
-    gap: 14,
+    padding: designSystem.layout.cardPadding,
+    gap: designSystem.spacing.sm,
   },
 });

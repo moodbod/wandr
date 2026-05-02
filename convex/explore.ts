@@ -2,12 +2,115 @@ import { mutationGeneric, queryGeneric } from 'convex/server';
 import { v } from 'convex/values';
 import type { QueryCtx } from './_generated/server';
 
+import { getPlanningLocationMetadataForDestination } from '../constants/planning-countries';
 import type { ExploreExperience } from '../constants/explore-content';
 import { demoExploreBookings } from './seeds/demoExploreBookings';
 import { demoExploreTravelers } from './seeds/demoExploreTravelers';
 import { seedExperiences } from './seeds/seedExperiences';
 import { seedHiddenGems } from './seeds/seedHiddenGems';
 import { seedRegions } from './seeds/seedRegions';
+import { seedStays } from './seeds/seedStays';
+
+type ExploreJoinableTrip = {
+  circleId: string;
+  tripId: string;
+  tripName: string;
+  groupName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+};
+
+type ExploreJoinableTripCard = {
+  circleId: string;
+  experienceSlug: string;
+  experienceTitle: string;
+  experienceImageUri: string;
+  locationLabel: string;
+  countryCode?: string;
+  countryLabel?: string;
+  planningLocationId?: string;
+  tripName: string;
+  groupName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+};
+
+type ExploreGroupTripDetail = {
+  circleId: string;
+  groupName: string;
+  tripName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+  heroImageUri: string;
+  locationLabel: string;
+  summary: string;
+  isMember: boolean;
+  itinerary: {
+    bookingId: string;
+    experienceSlug: string;
+    title: string;
+    locationLabel: string;
+    imageUri: string;
+    bookedAt: number;
+  }[];
+};
+
+function getHiddenGemSlug(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getMapPopularityScore(experience: {
+  travelerMomentum?: { visitorCount: number };
+  isFeaturedHero?: boolean;
+  isFeaturedDetail?: boolean;
+  isActivityCard?: boolean;
+}) {
+  return (
+    (experience.travelerMomentum?.visitorCount ?? 0) +
+    (experience.isFeaturedHero ? 75 : 0) +
+    (experience.isFeaturedDetail ? 45 : 0) +
+    (experience.isActivityCard ? 25 : 0)
+  );
+}
+
+const exploreOpenGroupSeeds = [
+  {
+    experienceSlug: 'naankuse-wildlife-encounter',
+    hostSlug: 'james-toronto',
+    memberSlugs: ['maya-new-york', 'liam-cape-town'],
+    groupName: "James' Wildlife Loop",
+    tripName: 'N/aankuse wildlife morning',
+    destinationLabel: 'Windhoek wildlife loop',
+    heroLabel: 'Wildlife start',
+  },
+  {
+    experienceSlug: 'sossusvlei-sunrise-drive',
+    hostSlug: 'anna-berlin',
+    memberSlugs: ['jonas-hamburg', 'mia-munich'],
+    groupName: "Anna's Dune Sunrise Crew",
+    tripName: 'Sossusvlei first-light run',
+    destinationLabel: 'Sossusvlei sunrise run',
+    heroLabel: 'Dune crew',
+  },
+  {
+    experienceSlug: 'etosha-game-drive',
+    hostSlug: 'maya-new-york',
+    memberSlugs: ['james-toronto', 'zoe-paris'],
+    groupName: "Maya's Etosha Circle",
+    tripName: 'Etosha game-drive day',
+    destinationLabel: 'Etosha safari day',
+    heroLabel: 'Safari group',
+  },
+] as const;
 
 const markerValidator = v.object({
   id: v.string(),
@@ -15,6 +118,7 @@ const markerValidator = v.object({
   experienceSlug: v.optional(v.string()),
   imageUri: v.optional(v.string()),
   label: v.optional(v.string()),
+  popularityScore: v.optional(v.number()),
   tone: v.optional(v.union(v.literal('accent'), v.literal('dark'))),
 });
 
@@ -57,6 +161,9 @@ const hiddenGemValidator = v.object({
   title: v.string(),
   description: v.string(),
   imageUri: v.string(),
+  countryCode: v.optional(v.string()),
+  countryLabel: v.optional(v.string()),
+  planningLocationId: v.optional(v.string()),
   geography: v.optional(
     v.object({
       region: v.string(),
@@ -77,6 +184,9 @@ const experienceValidator = v.object({
   price: v.string(),
   priceSuffix: v.string(),
   category: v.optional(v.string()),
+  countryCode: v.optional(v.string()),
+  countryLabel: v.optional(v.string()),
+  planningLocationId: v.optional(v.string()),
   coordinate: v.optional(v.array(v.number())),
   geography: v.optional(
     v.object({
@@ -256,6 +366,322 @@ async function getPersonalizedTravelerAudience(
   };
 }
 
+export const getJoinableTripsForExperience = queryGeneric({
+  args: {
+    experienceSlug: v.string(),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const bookings = await ctx.db
+      .query('experienceBookings')
+      .withIndex('by_experienceSlug', (q) => q.eq('experienceSlug', args.experienceSlug))
+      .take(200);
+
+    const seenCircleIds = new Set<string>();
+    const results: ExploreJoinableTrip[] = [];
+
+    for (const booking of bookings) {
+      if (!booking.tripId) {
+        continue;
+      }
+
+      const trip = await ctx.db.get(booking.tripId);
+      if (!trip?.circleId || trip.travelerSlug === args.travelerSlug || trip.groupRole !== 'host') {
+        continue;
+      }
+
+      if (seenCircleIds.has(trip.circleId)) {
+        continue;
+      }
+
+      const [circle, hostUser, members] = await Promise.all([
+        ctx.db.get(trip.circleId),
+        ctx.db
+          .query('appUsers')
+          .withIndex('by_slug', (q) => q.eq('slug', trip.travelerSlug))
+          .unique(),
+        ctx.db
+          .query('friendCircleMembers')
+          .withIndex('by_circleId', (q) => q.eq('circleId', trip.circleId!))
+          .collect(),
+      ]);
+
+      const existingMembership = members.find((member) => member.travelerSlug === args.travelerSlug) ?? null;
+
+      if (!circle || (circle.visibility !== 'open' && trip.visibility !== 'public') || existingMembership) {
+        continue;
+      }
+
+      const avatarUris: string[] = [];
+      for (const member of members) {
+        if (member.status !== 'active') {
+          continue;
+        }
+        const profile = await ctx.db
+          .query('travelerProfiles')
+          .withIndex('by_slug', (q) => q.eq('travelerSlug', member.travelerSlug))
+          .unique();
+        if (profile?.avatarUri) {
+          avatarUris.push(profile.avatarUri);
+        }
+      }
+
+      seenCircleIds.add(trip.circleId);
+      results.push({
+        circleId: trip.circleId,
+        tripId: trip._id,
+        tripName: trip.name,
+        groupName: circle.name,
+        hostName: hostUser?.name ?? 'Traveler',
+        destinationLabel: circle.destinationLabel,
+        memberCount: members.filter((member) => member.status === 'active').length,
+        avatarUris: avatarUris.slice(0, 4),
+      });
+    }
+
+    return results;
+  },
+});
+
+export const getJoinableTripCards = queryGeneric({
+  args: {
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args): Promise<ExploreJoinableTripCard[]> => {
+    const fallbackExperience = await ctx.db.query('experiences').filter((q) => q.eq(q.field('isActivityCard'), true)).first();
+    const circles = await ctx.db.query('friendCircles').collect();
+    const results: ExploreJoinableTripCard[] = [];
+    const seenCircleIds = new Set<string>();
+
+    for (const circle of circles) {
+      if (!circle.tripId || circle.status !== 'active' || seenCircleIds.has(circle._id)) {
+        continue;
+      }
+
+      const trip = await ctx.db.get(circle.tripId);
+      if (!trip || trip.groupRole !== 'host' || (circle.visibility !== 'open' && trip.visibility !== 'public')) {
+        continue;
+      }
+
+      const [hostUser, members, bookings] = await Promise.all([
+        ctx.db
+          .query('appUsers')
+          .withIndex('by_slug', (q) => q.eq('slug', trip.travelerSlug))
+          .unique(),
+        ctx.db
+          .query('friendCircleMembers')
+          .withIndex('by_circleId', (q) => q.eq('circleId', circle._id))
+          .collect(),
+        ctx.db
+          .query('experienceBookings')
+          .withIndex('by_tripId', (q) => q.eq('tripId', trip._id))
+          .collect(),
+      ]);
+
+      const existingMembership = members.find((member) => member.travelerSlug === args.travelerSlug) ?? null;
+
+      if (existingMembership) {
+        continue;
+      }
+
+      const firstBooking = [...bookings].sort((a, b) => a.bookedAt - b.bookedAt)[0];
+      const experience = firstBooking
+        ? await ctx.db
+            .query('experiences')
+            .withIndex('by_slug', (q) => q.eq('slug', firstBooking.experienceSlug))
+            .unique()
+        : null;
+      const cardExperience = experience ?? fallbackExperience;
+
+      if (!cardExperience) {
+        continue;
+      }
+
+      const avatarUris: string[] = [];
+      for (const member of members) {
+        if (member.status !== 'active') {
+          continue;
+        }
+
+        const profile = await ctx.db
+          .query('travelerProfiles')
+          .withIndex('by_slug', (q) => q.eq('travelerSlug', member.travelerSlug))
+          .unique();
+
+        if (profile?.avatarUri && !avatarUris.includes(profile.avatarUri)) {
+          avatarUris.push(profile.avatarUri);
+        }
+      }
+
+      seenCircleIds.add(circle._id);
+      results.push({
+        circleId: circle._id,
+        experienceSlug: experience?.slug ?? '',
+        experienceTitle: experience?.title ?? trip.name,
+        experienceImageUri: cardExperience.imageUri,
+        locationLabel: experience?.locationLabel ?? circle.destinationLabel,
+        countryCode: experience?.countryCode,
+        countryLabel: experience?.countryLabel,
+        planningLocationId: experience?.planningLocationId,
+        tripName: trip.name,
+        groupName: circle.name,
+        hostName: hostUser?.name ?? 'Traveler',
+        destinationLabel: circle.destinationLabel,
+        memberCount: members.filter((member) => member.status === 'active').length,
+        avatarUris: avatarUris.slice(0, 4),
+      });
+    }
+
+    return results
+      .sort((a, b) => b.memberCount - a.memberCount || a.groupName.localeCompare(b.groupName))
+      .slice(0, 6);
+  },
+});
+
+export const getGroupTripDetail = queryGeneric({
+  args: {
+    circleId: v.id('friendCircles'),
+    travelerSlug: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<ExploreGroupTripDetail | null> => {
+    const circle = await ctx.db.get(args.circleId);
+    if (!circle?.tripId) {
+      return null;
+    }
+
+    const [trip, hostUser, members, bookings, experiences] = await Promise.all([
+      ctx.db.get(circle.tripId),
+      ctx.db
+        .query('appUsers')
+        .withIndex('by_slug', (q) => q.eq('slug', circle.createdBySlug))
+        .unique(),
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId', (q) => q.eq('circleId', args.circleId))
+        .collect(),
+      ctx.db
+        .query('experienceBookings')
+        .withIndex('by_tripId', (q) => q.eq('tripId', circle.tripId))
+        .collect(),
+      ctx.db.query('experiences').collect(),
+    ]);
+
+    if (!trip) {
+      return null;
+    }
+
+    const activeMembers = members.filter((member) => member.status === 'active');
+    const avatarUris: string[] = [];
+    for (const member of activeMembers) {
+      const profile = await ctx.db
+        .query('travelerProfiles')
+        .withIndex('by_slug', (q) => q.eq('travelerSlug', member.travelerSlug))
+        .unique();
+      if (profile?.avatarUri && !avatarUris.includes(profile.avatarUri)) {
+        avatarUris.push(profile.avatarUri);
+      }
+    }
+
+    const itinerary = bookings
+      .map((booking) => {
+        const experience = experiences.find((item) => item.slug === booking.experienceSlug);
+        if (!experience) {
+          return null;
+        }
+
+        return {
+          bookingId: booking._id,
+          experienceSlug: experience.slug,
+          title: experience.title,
+          locationLabel: experience.locationLabel ?? experience.subtitle,
+          imageUri: experience.imageUri,
+          bookedAt: booking.bookedAt,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => a.bookedAt - b.bookedAt);
+
+    const firstStop = itinerary[0] ?? null;
+
+    return {
+      circleId: circle._id,
+      groupName: circle.name,
+      tripName: trip.name,
+      hostName: hostUser?.name ?? 'Traveler',
+      destinationLabel: circle.destinationLabel,
+      memberCount: activeMembers.length,
+      avatarUris: avatarUris.slice(0, 4),
+      heroImageUri: firstStop?.imageUri ?? '',
+      locationLabel: firstStop?.locationLabel ?? circle.destinationLabel,
+      summary:
+        itinerary.length > 1
+          ? `${itinerary.length} experiences planned together for this group trip.`
+          : 'A shared group trip built around one planned experience.',
+      isMember: activeMembers.some((member) => member.travelerSlug === args.travelerSlug),
+      itinerary,
+    };
+  },
+});
+
+export const requestJoinTripFromExperience = mutationGeneric({
+  args: {
+    travelerSlug: v.string(),
+    circleId: v.id('friendCircles'),
+    experienceSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const [requester, circle, members] = await Promise.all([
+      ctx.db
+        .query('appUsers')
+        .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+        .unique(),
+      ctx.db.get(args.circleId),
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId', (q) => q.eq('circleId', args.circleId))
+        .collect(),
+    ]);
+
+    const existingMembership = members.find((member) => member.travelerSlug === args.travelerSlug) ?? null;
+    const trip = circle?.tripId ? await ctx.db.get(circle.tripId) : null;
+
+    if (!requester || !circle || (circle.visibility !== 'open' && trip?.visibility !== 'public') || existingMembership) {
+      return false;
+    }
+
+    const existingRequest = await ctx.db
+      .query('appNotifications')
+      .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', circle.createdBySlug))
+      .collect();
+    const hasPendingRequest = existingRequest.some(
+      (notification) =>
+        notification.kind === 'trip_join_request' &&
+        notification.actorSlug === requester.slug &&
+        notification.entityId === circle._id &&
+        (notification.actionStatus ?? 'pending') === 'pending'
+    );
+
+    if (hasPendingRequest) {
+      return true;
+    }
+
+    await ctx.db.insert('appNotifications', {
+      recipientSlug: circle.createdBySlug,
+      actorSlug: requester.slug,
+      kind: 'trip_join_request',
+      title: `${requester.name} wants to join your trip`,
+      body: `${requester.name} requested to join ${circle.name} from Explore.`,
+      href: `/friends/group/${circle._id}`,
+      entityId: circle._id,
+      entityLabel: circle.name,
+      actionStatus: 'pending',
+      createdAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
 export const getPageContent = queryGeneric({
   args: { slug: v.string(), travelerSlug: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -281,6 +707,7 @@ export const getPageContent = queryGeneric({
         experienceSlug: exp.slug,
         imageUri: exp.imageUri,
         label: exp.locationLabel || exp.title,
+        popularityScore: getMapPopularityScore(exp),
         tone: i % 2 === 0 ? 'accent' : 'dark' as const,
       }));
 
@@ -292,6 +719,7 @@ export const getPageContent = queryGeneric({
         experienceSlug: undefined, // Hidden gems don't have experience slugs
         imageUri: gem.imageUri,
         label: gem.locationLabel || gem.title,
+        popularityScore: Math.max(1, hiddenGems.length - i),
         tone: 'dark' as const,
       }));
 
@@ -301,14 +729,14 @@ export const getPageContent = queryGeneric({
       slug: args.slug,
       home: {
         hero: {
-          title: 'Explore Namibia',
+          title: 'Explore supported routes',
           locationLabel: 'Windhoek, NA',
           centerCoordinate: [17.0832, -22.5609],
           markers: dynamicMarkers as any,
         },
         section: {
           eyebrow: 'Nationwide Picks',
-          title: 'Start in Windhoek, then branch out',
+          title: 'Start with a popular place, then branch out',
         },
         activities: await Promise.all(
           activities.map(async (exp) => {
@@ -333,10 +761,10 @@ export const getPageContent = queryGeneric({
       },
       search: {
         intro: {
-          title: 'Explore Namibia',
-          description: 'From Windhoek to the coast, desert, wildlife reserves, and river country, uncover trips that move across Namibia with real regional coverage.',
+          title: 'Explore supported routes',
+          description: 'Browse places where WANDR has real coverage first, then branch into nearby experiences, stays, and trip-ready routes.',
           tags: ['Namibia', 'Nationwide'],
-          searchPlaceholder: 'Search Windhoek, Etosha, Sossusvlei...',
+          searchPlaceholder: 'Search Cape Town, Windhoek, Etosha, Sossusvlei...',
         },
         featured: {
           hero: heroExp ? {
@@ -377,6 +805,74 @@ export const getPageContent = queryGeneric({
   },
 });
 
+export const backfillLocationCountries = mutationGeneric({
+  args: {},
+  handler: async (ctx) => {
+    let updatedCount = 0;
+
+    const regions = await ctx.db.query('regions').collect();
+    for (const region of regions) {
+      const metadata = getPlanningLocationMetadataForDestination({
+        coordinate: region.centerCoordinate as readonly [number, number],
+        region: region.name,
+        labels: [region.name],
+      });
+
+      if (metadata.planningLocationId && region.planningLocationId !== metadata.planningLocationId) {
+        await ctx.db.patch(region._id, metadata);
+        updatedCount += 1;
+      }
+    }
+
+    const experiences = await ctx.db.query('experiences').collect();
+    for (const experience of experiences) {
+      const metadata = getPlanningLocationMetadataForDestination({
+        coordinate: experience.coordinate as readonly [number, number] | undefined,
+        region: experience.geography?.region,
+        town: experience.geography?.town,
+        labels: [experience.locationLabel, experience.title, experience.subtitle],
+      });
+
+      if (metadata.planningLocationId && experience.planningLocationId !== metadata.planningLocationId) {
+        await ctx.db.patch(experience._id, metadata);
+        updatedCount += 1;
+      }
+    }
+
+    const hiddenGems = await ctx.db.query('hiddenGems').collect();
+    for (const gem of hiddenGems) {
+      const metadata = getPlanningLocationMetadataForDestination({
+        coordinate: gem.coordinate as readonly [number, number] | undefined,
+        region: gem.geography?.region,
+        town: gem.geography?.town,
+        labels: [gem.locationLabel, gem.title, gem.description],
+      });
+
+      if (metadata.planningLocationId && gem.planningLocationId !== metadata.planningLocationId) {
+        await ctx.db.patch(gem._id, metadata);
+        updatedCount += 1;
+      }
+    }
+
+    const stays = await ctx.db.query('stays').collect();
+    for (const stay of stays) {
+      const metadata = getPlanningLocationMetadataForDestination({
+        coordinate: stay.coordinate as readonly [number, number],
+        region: stay.region,
+        town: stay.town,
+        labels: [stay.locationLabel, stay.name],
+      });
+
+      if (metadata.planningLocationId && stay.planningLocationId !== metadata.planningLocationId) {
+        await ctx.db.patch(stay._id, metadata);
+        updatedCount += 1;
+      }
+    }
+
+    return { updatedCount };
+  },
+});
+
 export const seedExplorePageContent = mutationGeneric({
   args: {},
   handler: async (ctx) => {
@@ -399,6 +895,18 @@ export const seedExplorePageContent = mutationGeneric({
     const allBookings = await ctx.db.query('experienceBookings').collect();
     for (const b of allBookings) await ctx.db.delete(b._id);
 
+    const allFriendMessages = await ctx.db.query('friendMessages').collect();
+    for (const message of allFriendMessages) await ctx.db.delete(message._id);
+
+    const allFriendCircleMembers = await ctx.db.query('friendCircleMembers').collect();
+    for (const member of allFriendCircleMembers) await ctx.db.delete(member._id);
+
+    const allFriendCircles = await ctx.db.query('friendCircles').collect();
+    for (const circle of allFriendCircles) await ctx.db.delete(circle._id);
+
+    const allTrips = await ctx.db.query('trips').collect();
+    for (const trip of allTrips) await ctx.db.delete(trip._id);
+
     // Seed regions
     const regionMap = new Map<string, string>();
     for (const region of seedRegions) {
@@ -410,11 +918,17 @@ export const seedExplorePageContent = mutationGeneric({
     for (const exp of seedExperiences) {
       const isHero = exp.slug === 'etosha-game-drive';
       const isDetail = exp.slug === 'windhoek-craft-market-walk';
-      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
+      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive', 'table-mountain-first-light', 'va-waterfront-food-harbour', 'kirstenbosch-garden-walk'].includes(exp.slug);
       const regionId = exp.geography?.region ? regionMap.get(exp.geography.region) : undefined;
 
       await ctx.db.insert('experiences', {
         ...exp,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: exp.coordinate,
+          region: exp.geography?.region,
+          town: exp.geography?.town,
+          labels: [exp.locationLabel, exp.title, exp.subtitle],
+        }),
         isFeaturedHero: isHero,
         isFeaturedDetail: isDetail,
         isActivityCard: isActivity,
@@ -425,7 +939,16 @@ export const seedExplorePageContent = mutationGeneric({
     // Seed hidden gems
     for (const gem of seedHiddenGems) {
       const regionId = gem.geography?.region ? regionMap.get(gem.geography.region) : undefined;
-      await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
+      await ctx.db.insert('hiddenGems', {
+        ...gem,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: gem.coordinate,
+          region: gem.geography?.region,
+          town: gem.geography?.town,
+          labels: [gem.locationLabel, gem.title, gem.description],
+        }),
+        regionId,
+      } as any);
     }
 
     // Seed users / travelers
@@ -435,6 +958,7 @@ export const seedExplorePageContent = mutationGeneric({
         name: traveler.name,
         countryCode: traveler.countryCode,
         countryLabel: traveler.countryLabel,
+        phoneNumber: traveler.phoneNumber,
       });
       await ctx.db.insert('travelerProfiles', {
         travelerSlug: traveler.slug,
@@ -454,6 +978,73 @@ export const seedExplorePageContent = mutationGeneric({
       });
     }
 
+    for (const [index, groupSeed] of exploreOpenGroupSeeds.entries()) {
+      const now = Date.now() - (index + 1) * 1000 * 60 * 45;
+      const experience = await ctx.db
+        .query('experiences')
+        .withIndex('by_slug', (q) => q.eq('slug', groupSeed.experienceSlug))
+        .unique();
+
+      if (!experience) {
+        continue;
+      }
+
+      const circleId = await ctx.db.insert('friendCircles', {
+        slug: `${groupSeed.hostSlug}-${groupSeed.experienceSlug}-group`,
+        name: groupSeed.groupName,
+        destinationLabel: groupSeed.destinationLabel,
+        heroLabel: groupSeed.heroLabel,
+        status: 'active',
+        visibility: 'open',
+        createdBySlug: groupSeed.hostSlug,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const hostTripId = await ctx.db.insert('trips', {
+        name: groupSeed.tripName,
+        travelerSlug: groupSeed.hostSlug,
+        circleId,
+        groupRole: 'host',
+        createdAt: now,
+        status: 'active',
+      });
+
+      await ctx.db.patch(circleId, {
+        tripId: hostTripId,
+      });
+
+      const activeMembers = [groupSeed.hostSlug, ...groupSeed.memberSlugs];
+      for (const [memberIndex, travelerSlug] of activeMembers.entries()) {
+        await ctx.db.insert('friendCircleMembers', {
+          circleId,
+          travelerSlug,
+          role: memberIndex === 0 ? 'host' : 'member',
+          status: 'active',
+          joinedAt: now + memberIndex * 1000 * 60 * 5,
+        });
+
+        if (memberIndex > 0) {
+          await ctx.db.insert('trips', {
+            name: groupSeed.tripName,
+            travelerSlug,
+            circleId,
+            groupRole: 'member',
+            sourceTripId: hostTripId,
+            createdAt: now + memberIndex * 1000 * 60 * 5,
+            status: 'active',
+          });
+        }
+      }
+
+      await ctx.db.insert('experienceBookings', {
+        travelerSlug: groupSeed.hostSlug,
+        experienceSlug: groupSeed.experienceSlug,
+        tripId: hostTripId,
+        bookedAt: now,
+      });
+    }
+
     return true;
   },
 });
@@ -463,7 +1054,174 @@ export const seedDefaultPageContent = seedExplorePageContent;
 export const ensureExploreCommunitySeed = mutationGeneric({
   args: {},
   handler: async (ctx) => {
-    // Legacy function, replaced by seedExplorePageContent
+    for (const circle of await ctx.db.query('friendCircles').collect()) {
+      const trip = circle.tripId ? await ctx.db.get(circle.tripId) : null;
+      if (trip?.visibility === 'public' && circle.visibility !== 'open') {
+        await ctx.db.patch(circle._id, {
+          visibility: 'open',
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    for (const traveler of demoExploreTravelers) {
+      const existingUser = await ctx.db
+        .query('appUsers')
+        .withIndex('by_slug', (q) => q.eq('slug', traveler.slug))
+        .unique();
+
+      if (!existingUser) {
+        await ctx.db.insert('appUsers', {
+          slug: traveler.slug,
+          name: traveler.name,
+          countryCode: traveler.countryCode,
+          countryLabel: traveler.countryLabel,
+          phoneNumber: traveler.phoneNumber,
+        });
+      }
+
+      const existingProfile = await ctx.db
+        .query('travelerProfiles')
+        .withIndex('by_slug', (q) => q.eq('travelerSlug', traveler.slug))
+        .unique();
+
+      if (!existingProfile) {
+        await ctx.db.insert('travelerProfiles', {
+          travelerSlug: traveler.slug,
+          name: traveler.name,
+          avatarUri: traveler.avatarUri,
+          regionCode: traveler.countryCode,
+          regionName: traveler.countryLabel,
+        });
+      }
+    }
+
+    for (const [index, groupSeed] of exploreOpenGroupSeeds.entries()) {
+      const existingCircle = await ctx.db
+        .query('friendCircles')
+        .withIndex('by_slug', (q) => q.eq('slug', `${groupSeed.hostSlug}-${groupSeed.experienceSlug}-group`))
+        .unique();
+
+      if (existingCircle) {
+        if (existingCircle.visibility !== 'open') {
+          await ctx.db.patch(existingCircle._id, {
+            visibility: 'open',
+            updatedAt: Date.now(),
+          });
+        }
+
+        const existingTrip = existingCircle.tripId ? await ctx.db.get(existingCircle.tripId) : null;
+        if (!existingTrip) {
+          const now = Date.now() - (index + 1) * 1000 * 60 * 45;
+          const hostTripId = await ctx.db.insert('trips', {
+            name: groupSeed.tripName,
+            travelerSlug: groupSeed.hostSlug,
+            visibility: 'public',
+            circleId: existingCircle._id,
+            groupRole: 'host',
+            createdAt: now,
+            status: 'active',
+          });
+
+          await ctx.db.patch(existingCircle._id, {
+            tripId: hostTripId,
+            updatedAt: Date.now(),
+          });
+
+          const existingHostMembership = await ctx.db
+            .query('friendCircleMembers')
+            .withIndex('by_circleId', (q) => q.eq('circleId', existingCircle._id))
+            .filter((q) => q.eq(q.field('travelerSlug'), groupSeed.hostSlug))
+            .unique();
+
+          if (!existingHostMembership) {
+            await ctx.db.insert('friendCircleMembers', {
+              circleId: existingCircle._id,
+              travelerSlug: groupSeed.hostSlug,
+              role: 'host',
+              status: 'active',
+              joinedAt: now,
+            });
+          }
+
+          await ctx.db.insert('experienceBookings', {
+            travelerSlug: groupSeed.hostSlug,
+            experienceSlug: groupSeed.experienceSlug,
+            tripId: hostTripId,
+            bookedAt: now,
+          });
+        }
+        continue;
+      }
+
+      const experience = await ctx.db
+        .query('experiences')
+        .withIndex('by_slug', (q) => q.eq('slug', groupSeed.experienceSlug))
+        .unique();
+
+      if (!experience) {
+        continue;
+      }
+
+      const now = Date.now() - (index + 1) * 1000 * 60 * 45;
+      const circleId = await ctx.db.insert('friendCircles', {
+        slug: `${groupSeed.hostSlug}-${groupSeed.experienceSlug}-group`,
+        name: groupSeed.groupName,
+        destinationLabel: groupSeed.destinationLabel,
+        heroLabel: groupSeed.heroLabel,
+        status: 'active',
+        visibility: 'open',
+        createdBySlug: groupSeed.hostSlug,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const hostTripId = await ctx.db.insert('trips', {
+        name: groupSeed.tripName,
+        travelerSlug: groupSeed.hostSlug,
+        visibility: 'public',
+        circleId,
+        groupRole: 'host',
+        createdAt: now,
+        status: 'active',
+      });
+
+      await ctx.db.patch(circleId, {
+        tripId: hostTripId,
+      });
+
+      const activeMembers = [groupSeed.hostSlug, ...groupSeed.memberSlugs];
+      for (const [memberIndex, travelerSlug] of activeMembers.entries()) {
+        await ctx.db.insert('friendCircleMembers', {
+          circleId,
+          travelerSlug,
+          role: memberIndex === 0 ? 'host' : 'member',
+          status: 'active',
+          joinedAt: now + memberIndex * 1000 * 60 * 5,
+        });
+
+        if (memberIndex > 0) {
+          await ctx.db.insert('trips', {
+            name: groupSeed.tripName,
+            travelerSlug,
+            visibility: 'public',
+            circleId,
+            groupRole: 'member',
+            sourceTripId: hostTripId,
+            createdAt: now + memberIndex * 1000 * 60 * 5,
+            status: 'active',
+          });
+        }
+      }
+
+      await ctx.db.insert('experienceBookings', {
+        travelerSlug: groupSeed.hostSlug,
+        experienceSlug: groupSeed.experienceSlug,
+        tripId: hostTripId,
+        bookedAt: now,
+      });
+    }
+
     return true;
   },
 });
@@ -490,6 +1248,73 @@ export const getLocationLikeState = queryGeneric({
     return {
       liked: Boolean(like),
     };
+  },
+});
+
+export const listSavedPlaces = queryGeneric({
+  args: { travelerSlug: v.string() },
+  handler: async (ctx, args) => {
+    const likes = await ctx.db
+      .query('locationLikes')
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .order('desc')
+      .take(8);
+
+    if (likes.length === 0) {
+      return [];
+    }
+
+    const [experiences, hiddenGems] = await Promise.all([
+      ctx.db.query('experiences').collect(),
+      ctx.db.query('hiddenGems').collect(),
+    ]);
+
+    const savedPlaces: {
+      _id: string;
+      slug: string;
+      title: string;
+      subtitle: string;
+      imageUri: string | null;
+      createdAt: number;
+      kind: 'experience' | 'hiddenGem';
+    }[] = [];
+
+    for (const like of likes) {
+      if (like.locationKind === 'experience') {
+        const experience = experiences.find((item) => item.slug === like.locationSlug);
+        if (!experience) {
+          continue;
+        }
+
+        savedPlaces.push({
+          _id: like._id,
+          slug: experience.slug,
+          title: experience.title,
+          subtitle: experience.locationLabel ?? experience.category ?? 'Experience',
+          imageUri: experience.imageUri,
+          createdAt: like.likedAt,
+          kind: 'experience',
+        });
+        continue;
+      }
+
+      const hiddenGem = hiddenGems.find((item) => getHiddenGemSlug(item.title) === like.locationSlug);
+      if (!hiddenGem) {
+        continue;
+      }
+
+      savedPlaces.push({
+        _id: like._id,
+        slug: like.locationSlug,
+        title: hiddenGem.title,
+        subtitle: hiddenGem.locationLabel ?? hiddenGem.geography?.region ?? 'Hidden gem',
+        imageUri: hiddenGem.imageUri,
+        createdAt: like.likedAt,
+        kind: 'hiddenGem',
+      });
+    }
+
+    return savedPlaces;
   },
 });
 
@@ -621,11 +1446,17 @@ export const resetExploreData = mutationGeneric({
     for (const exp of seedExperiences) {
       const isHero = exp.slug === 'etosha-game-drive';
       const isDetail = exp.slug === 'windhoek-craft-market-walk';
-      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
+      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive', 'table-mountain-first-light', 'va-waterfront-food-harbour', 'kirstenbosch-garden-walk'].includes(exp.slug);
       const regionId = exp.geography?.region ? regionMap.get(exp.geography.region) : undefined;
 
       await ctx.db.insert('experiences', {
         ...exp,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: exp.coordinate,
+          region: exp.geography?.region,
+          town: exp.geography?.town,
+          labels: [exp.locationLabel, exp.title, exp.subtitle],
+        }),
         isFeaturedHero: isHero,
         isFeaturedDetail: isDetail,
         isActivityCard: isActivity,
@@ -636,7 +1467,16 @@ export const resetExploreData = mutationGeneric({
     // Seed hidden gems
     for (const gem of seedHiddenGems) {
       const regionId = gem.geography?.region ? regionMap.get(gem.geography.region) : undefined;
-      await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
+      await ctx.db.insert('hiddenGems', {
+        ...gem,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: gem.coordinate,
+          region: gem.geography?.region,
+          town: gem.geography?.town,
+          labels: [gem.locationLabel, gem.title, gem.description],
+        }),
+        regionId,
+      } as any);
     }
 
     // Seed stays
@@ -882,9 +1722,18 @@ export const resetExploreData = mutationGeneric({
       },
     ];
 
-    for (const stay of stayProperties) {
+    for (const stay of [...stayProperties, ...seedStays]) {
       const regionId = stay.region ? regionMap.get(stay.region) : undefined;
-      await ctx.db.insert('stays', { ...stay, regionId } as any);
+      await ctx.db.insert('stays', {
+        ...stay,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: stay.coordinate,
+          region: stay.region,
+          town: stay.town,
+          labels: [stay.locationLabel, stay.name],
+        }),
+        regionId,
+      } as any);
     }
 
     // Seed users / travelers

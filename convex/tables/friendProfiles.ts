@@ -7,6 +7,7 @@ export const friendProfilesTable = defineTable({
   bio: v.string(),
   baseLabel: v.string(),
   destinationLabel: v.string(),
+  discoverViewCount: v.optional(v.number()),
   travelPace: v.union(v.literal('slow'), v.literal('balanced'), v.literal('fast')),
   vibe: v.union(
     v.literal('adventure'),

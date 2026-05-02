@@ -1,10 +1,12 @@
 import type { MutationCtx } from './_generated/server';
+import { getPlanningLocationMetadataForDestination } from '../constants/planning-countries';
 import { mutation } from './_generated/server';
 import { demoExploreBookings } from './seeds/demoExploreBookings';
 import { demoExploreTravelers } from './seeds/demoExploreTravelers';
 import { seedExperiences } from './seeds/seedExperiences';
 import { seedHiddenGems } from './seeds/seedHiddenGems';
 import { seedRegions } from './seeds/seedRegions';
+import { seedStays } from './seeds/seedStays';
 
 export const seed = mutation({
   args: {},
@@ -62,10 +64,16 @@ export const seed = mutation({
       const regionId = experience.geography?.region ? regionIds[experience.geography.region] : undefined;
       const isHero = experience.slug === 'etosha-game-drive';
       const isDetail = experience.slug === 'windhoek-craft-market-walk';
-      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(experience.slug);
+      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive', 'table-mountain-first-light', 'va-waterfront-food-harbour', 'kirstenbosch-garden-walk'].includes(experience.slug);
 
       await ctx.db.insert('experiences', {
         ...experience,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: experience.coordinate,
+          region: experience.geography?.region,
+          town: experience.geography?.town,
+          labels: [experience.locationLabel, experience.title, experience.subtitle],
+        }),
         regionId,
         isFeaturedHero: isHero,
         isFeaturedDetail: isDetail,
@@ -78,6 +86,12 @@ export const seed = mutation({
       const regionId = gem.geography?.region ? regionIds[gem.geography.region] : undefined;
       await ctx.db.insert('hiddenGems', {
         ...gem,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: gem.coordinate,
+          region: gem.geography?.region,
+          town: gem.geography?.town,
+          labels: [gem.locationLabel, gem.title, gem.description],
+        }),
         regionId,
       } as any);
     }
@@ -325,10 +339,16 @@ export const seed = mutation({
       },
     ] as const;
 
-    for (const stay of stayProperties) {
+    for (const stay of [...stayProperties, ...seedStays]) {
       const regionId = stay.region ? regionIds[stay.region] : undefined;
       await ctx.db.insert('stays', {
         ...stay,
+        ...getPlanningLocationMetadataForDestination({
+          coordinate: stay.coordinate,
+          region: stay.region,
+          town: stay.town,
+          labels: [stay.locationLabel, stay.name],
+        }),
         regionId,
       } as any);
     }

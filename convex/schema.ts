@@ -6,8 +6,13 @@ import { appNotificationsTable } from './tables/appNotifications';
 import { experienceBookingsTable } from './tables/experienceBookings';
 import { experiencesTable } from './tables/experiences';
 import { friendCircleMembersTable } from './tables/friendCircleMembers';
+import { friendCircleReadStatesTable } from './tables/friendCircleReadStates';
 import { friendConnectionsTable } from './tables/friendConnections';
+import { friendCallsTable } from './tables/friendCalls';
 import { friendCirclesTable } from './tables/friendCircles';
+import { friendDirectMessagesTable } from './tables/friendDirectMessages';
+import { friendDirectReadStatesTable } from './tables/friendDirectReadStates';
+import { friendDirectThreadsTable } from './tables/friendDirectThreads';
 import { friendMatchActionsTable } from './tables/friendMatchActions';
 import { friendMessagesTable } from './tables/friendMessages';
 import { friendProfilesTable } from './tables/friendProfiles';
@@ -15,11 +20,13 @@ import { hiddenGemsTable } from './tables/hiddenGems';
 import { locationLikesTable } from './tables/locationLikes';
 import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
+import { tripInvitesTable } from './tables/tripInvites';
 import { tripsTable } from './tables/trips';
 
 export default defineSchema({
   regions: regionsTable,
   trips: tripsTable,
+  tripInvites: tripInvitesTable,
   experiences: experiencesTable,
 
   experienceRatings: defineTable({
@@ -55,13 +62,30 @@ export default defineSchema({
   friendProfiles: friendProfilesTable,
   friendCircles: friendCirclesTable,
   friendCircleMembers: friendCircleMembersTable,
+  friendCircleReadStates: friendCircleReadStatesTable,
   friendMessages: friendMessagesTable,
+  friendDirectReadStates: friendDirectReadStatesTable,
+  friendDirectThreads: friendDirectThreadsTable,
+  friendDirectMessages: friendDirectMessagesTable,
   friendMatchActions: friendMatchActionsTable,
   friendConnections: friendConnectionsTable,
+  friendCalls: friendCallsTable,
 
   appUsers: appUsersTable,
   experienceBookings: experienceBookingsTable,
   locationLikes: locationLikesTable,
+  locationPhotos: defineTable({
+    locationKind: v.union(v.literal('experience'), v.literal('stay')),
+    locationSlug: v.string(),
+    travelerSlug: v.string(),
+    storageId: v.id('_storage'),
+    caption: v.optional(v.string()),
+    source: v.union(v.literal('user'), v.literal('host')),
+    status: v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected')),
+    createdAt: v.number(),
+  })
+    .index('by_location_and_status', ['locationKind', 'locationSlug', 'status'])
+    .index('by_travelerSlug_and_createdAt', ['travelerSlug', 'createdAt']),
   tripVisits: defineTable({
     bookingId: v.id('experienceBookings'),
     tripId: v.optional(v.id('trips')),
@@ -100,5 +124,8 @@ export default defineSchema({
         roomSummary: v.string(),
       })
     ),
-  }).index('by_staySlug', ['staySlug']).index('by_travelerSlug', ['travelerSlug']),
+  })
+    .index('by_staySlug', ['staySlug'])
+    .index('by_travelerSlug', ['travelerSlug'])
+    .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt']),
 });

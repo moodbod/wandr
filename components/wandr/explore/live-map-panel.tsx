@@ -40,11 +40,18 @@ export function ExploreLiveMapPanel({
           }
         }}
     >
-      <View style={styles.overlayCardContainer}>
+      <View
+        style={[
+          styles.overlayCardContainer,
+          { borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft },
+        ]}>
         <BlurView 
           intensity={80} 
           tint={isDark ? 'dark' : 'light'} 
-          style={[styles.overlayCard, { backgroundColor: isDark ? 'rgba(84, 84, 84, 0.5)' : 'rgba(255,255,255,0.7)' }]}
+          style={[
+            styles.overlayCard,
+            { backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint },
+          ]}
         >
           <ThemedText style={styles.title}>{title}</ThemedText>
           <ThemedText 
@@ -75,7 +82,7 @@ const styles = StyleSheet.create({
     height: 400,
     borderRadius: 32,
     overflow: 'hidden',
-    backgroundColor: '#e2e3e0',
+    backgroundColor: designSystem.colors.liveMapPanel,
     position: 'relative',
   },
   overlayCardContainer: {
@@ -86,7 +93,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: designSystem.colors.border,
   },
   overlayCard: {
     padding: 16,
@@ -95,14 +101,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   description: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   cta: {
     marginTop: 10,
@@ -115,9 +119,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
 });

@@ -4,6 +4,8 @@ import { BlurView, BlurViewProps } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 
+import { designSystem } from '@/constants/design-system';
+
 type ProgressiveBlurViewProps = BlurViewProps & {
   height?: number;
 };
@@ -15,7 +17,7 @@ export function ProgressiveBlurView({ style, height = 100, ...props }: Progressi
         style={StyleSheet.absoluteFill}
         maskElement={
           <LinearGradient
-            colors={['#FFFFFF', '#FFFFFF', 'rgba(255,255,255,0)']}
+            colors={[designSystem.colors.white, designSystem.colors.white, designSystem.colors.transparentWhite]}
             locations={[0, 0.6, 1]}
             style={StyleSheet.absoluteFill}
           />

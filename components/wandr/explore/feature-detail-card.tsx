@@ -23,7 +23,7 @@ export function ExploreFeatureDetailCard({ card, href }: ExploreFeatureDetailCar
 
   return (
     <ThemedView 
-      lightColor="#ffffff" 
+      lightColor={designSystem.colors.white} 
       darkColor={designSystem.colors.darkSurface} 
       style={[
         styles.shell, 
@@ -74,22 +74,18 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   title: {
     fontSize: 30,
     lineHeight: 30,
-    fontWeight: '700',
-    letterSpacing: -0.9,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   description: {
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   footer: {
@@ -107,12 +103,12 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 28,
     lineHeight: 28,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   priceSuffix: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.gray,
   },
   cta: {
@@ -124,9 +120,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 12,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
 });

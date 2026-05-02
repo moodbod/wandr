@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
+import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { MapFrame } from '@/components/wandr/maps/map-frame';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
+import { type PlanningLocation } from '@/constants/planning-countries';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
@@ -12,9 +14,13 @@ type ExploreMapHeroProps = {
   userCoordinate?: readonly [number, number] | null;
   userHeading?: number | null;
   markers: readonly ExploreMapMarker[];
+  routeCoordinates?: readonly (readonly [number, number])[];
+  showRoutes?: boolean;
   topInset?: number;
   onInteract?: () => void;
   onLocateMe?: () => void;
+  onOpenLocationSheet?: () => void;
+  planningLocation?: PlanningLocation;
   showBackButton?: boolean;
 };
 
@@ -24,9 +30,13 @@ export function ExploreMapHero({
   userCoordinate = null,
   userHeading = null,
   markers,
+  routeCoordinates,
+  showRoutes = true,
   topInset = designSystem.spacing.xxxl,
   onInteract,
   onLocateMe,
+  onOpenLocationSheet,
+  planningLocation,
   showBackButton = false,
 }: ExploreMapHeroProps) {
   const router = useRouter();
@@ -38,7 +48,9 @@ export function ExploreMapHero({
         userCoordinate={userCoordinate}
         userHeading={userHeading}
         markers={markers}
+        routeCoordinates={routeCoordinates}
         zoomLevel={14}
+        showRoutes={showRoutes}
         onInteract={onInteract}
         onMarkerPress={(marker) => {
           if (marker.itemKind === 'stay' && marker.experienceSlug) {
@@ -61,8 +73,13 @@ export function ExploreMapHero({
             ? [{ kind: 'locate' as const, accessibilityLabel: 'Locate me', onPress: onLocateMe }]
             : undefined,
         }}
+        leadingContent={
+          planningLocation && onOpenLocationSheet ? (
+            <HeaderLocationSelector location={planningLocation} onPress={onOpenLocationSheet} />
+          ) : undefined
+        }
       />
-      <View style={[styles.overlay, { marginTop: topInset, paddingTop: 24 }]} pointerEvents="box-none">
+      <View style={[styles.overlay, { marginTop: topInset, paddingTop: 18 }]} pointerEvents="box-none">
         <View style={styles.heroHeader} pointerEvents="none" />
       </View>
     </MapFrame>
@@ -73,7 +90,7 @@ const styles = StyleSheet.create({
   shell: {
     height: '100%',
     overflow: 'hidden',
-    backgroundColor: '#eeeeeb',
+    backgroundColor: designSystem.colors.mapFallback,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

@@ -27,6 +27,9 @@ export type ExploreHiddenGem = {
   title: string;
   description: string;
   imageUri: string;
+  countryCode?: string;
+  countryLabel?: string;
+  planningLocationId?: string;
   geography?: ExploreGeography;
 };
 
@@ -37,6 +40,7 @@ export type ExploreMapMarker = {
   itemKind?: 'experience' | 'stay';
   imageUri?: string;
   label?: string;
+  popularityScore?: number;
   tone?: 'accent' | 'dark';
   status?: 'completed' | 'active' | 'upcoming';
 };
@@ -68,6 +72,9 @@ export type ExploreExperience = {
   price: string;
   priceSuffix: string;
   category?: string;
+  countryCode?: string;
+  countryLabel?: string;
+  planningLocationId?: string;
   coordinate?: readonly [number, number];
   geography?: ExploreGeography;
   locationLabel?: string;

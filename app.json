@@ -3,6 +3,7 @@
     "name": "wandr",
     "slug": "wandr",
     "version": "1.0.0",
+    "description": "Wandr helps travelers plan trips, coordinate with friends, and keep useful trip details close.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "wandr",
@@ -11,8 +12,17 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions even when the app is in the background."
-      }
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions even when the app is in the background.",
+        "NSPhotoLibraryUsageDescription": "Wandr lets you choose photos from your library to share with places and stays.",
+        "NSCameraUsageDescription": "Wandr uses your camera for group video calls.",
+        "NSMicrophoneUsageDescription": "Wandr uses your microphone for voice and video calls.",
+        "UIBackgroundModes": [
+          "audio",
+          "audio"
+        ]
+      },
+      "bitcode": false,
+      "bundleIdentifier": "com.tuyoleni.wandr"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +31,22 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ],
+      "package": "com.tuyoleni.wandr"
     },
     "web": {
       "output": "static",
@@ -31,18 +56,28 @@
       "expo-router",
       "expo-notifications",
       "expo-location",
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#f9f9f6",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#11130f"
           }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Wandr lets you choose photos from your library to share with places and stays."
+        }
+      ],
+      "expo-web-browser",
+      "@rnmapbox/maps"
     ],
     "experiments": {
       "typedRoutes": true,

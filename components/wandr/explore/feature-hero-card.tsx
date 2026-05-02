@@ -49,12 +49,12 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: designSystem.colors.blackOverlay,
   },
   content: {
     padding: 28,
     gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.24)',
+    backgroundColor: designSystem.colors.darkScrim,
   },
   cta: {
     marginTop: 8,
@@ -67,9 +67,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 13,
     lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   badge: {
@@ -82,24 +80,20 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   title: {
     fontSize: 40,
     lineHeight: 40,
-    fontWeight: '700',
-    letterSpacing: -1.2,
-    textTransform: 'uppercase',
-    color: '#ffffff',
+    fontWeight: '600',
+    color: designSystem.colors.white,
   },
   description: {
     maxWidth: 320,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.84)',
+    fontWeight: '600',
+    color: designSystem.colors.darkTextMedium,
   },
 });

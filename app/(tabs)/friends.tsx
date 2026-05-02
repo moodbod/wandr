@@ -1,12 +1,13 @@
 import { useMutation, useQuery } from 'convex/react';
 import { Link, useRouter } from 'expo-router';
 import { ArrowRight } from 'phosphor-react-native';
-import { useState } from 'react';
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { FriendCircleBanner } from '@/components/wandr/friends/friend-circle-banner';
 import { FriendMatchCard } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
@@ -20,14 +21,19 @@ export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth } = useWindowDimensions();
   const horizontalGutter = Math.max(designSystem.spacing.lg, insets.left, insets.right);
-  const groupCardWidth = Math.max(260, screenWidth - horizontalGutter * 2);
+  const groupCardWidth = Math.min(312, Math.max(260, screenWidth - horizontalGutter * 3));
   const traveler = useCurrentTraveler();
   const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const dashboard = useQuery(getFriendsDashboardRef, { travelerSlug: traveler?.slug ?? '' });
   const actOnCandidate = useMutation(actOnFriendCandidateRef);
   const [busyCandidateSlug, setBusyCandidateSlug] = useState<string | null>(null);
+  const [hiddenCandidateSlugs, setHiddenCandidateSlugs] = useState<Set<string>>(() => new Set());
+  const topMatches = useMemo(
+    () => dashboard?.topMatches.filter((candidate) => !hiddenCandidateSlugs.has(candidate.travelerSlug)) ?? [],
+    [dashboard?.topMatches, hiddenCandidateSlugs]
+  );
 
   const handleCandidateAction = async (
     candidateSlug: string,
@@ -38,37 +44,35 @@ export default function FriendsScreen() {
     }
 
     setBusyCandidateSlug(candidateSlug);
+    if (action === 'passed') {
+      setHiddenCandidateSlugs((slugs) => {
+        const next = new Set(slugs);
+        next.add(candidateSlug);
+        return next;
+      });
+    }
+
     try {
       await actOnCandidate({
         travelerSlug: traveler.slug,
         candidateSlug,
         action,
       });
+    } catch (error) {
+      if (action === 'passed') {
+        setHiddenCandidateSlugs((slugs) => {
+          const next = new Set(slugs);
+          next.delete(candidateSlug);
+          return next;
+        });
+      }
+      throw error;
     } finally {
       setBusyCandidateSlug(null);
     }
   };
 
   const isLoading = isBootstrapping || traveler === undefined || dashboard === undefined;
-
-  if (isLoading) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            trailingActions: [
-              { kind: 'chat', accessibilityLabel: 'Open chats' },
-              { kind: 'notifications', accessibilityLabel: 'Notifications' },
-            ],
-          }}
-        />
-        <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
 
   return (
     <ThemedView style={styles.root}>
@@ -95,7 +99,7 @@ export default function FriendsScreen() {
 
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
-        {dashboard?.activeCircles.length ? (
+        {isLoading || dashboard?.activeCircles.length ? (
           <View style={styles.groupPreview}>
             <View style={styles.sectionTopRow}>
               <ThemedText style={styles.groupPreviewTitle}>Groups</ThemedText>
@@ -111,15 +115,19 @@ export default function FriendsScreen() {
                   paddingRight: horizontalGutter,
                 },
               ]}>
-              {dashboard.activeCircles.map((circle) => (
-                <FriendCircleBanner
-                  key={circle._id}
-                  circle={circle}
-                  ctaLabel={`Open ${circle.name}`}
-                  onPress={() => router.push(`/friends/group/${circle._id}` as never)}
-                  style={{ width: groupCardWidth }}
-                />
-              ))}
+              {isLoading
+                ? Array.from({ length: 2 }).map((_, index) => (
+                    <SkeletonBlock key={`friend-circle-skeleton-${index}`} style={[styles.circleSkeleton, { width: groupCardWidth }]} />
+                  ))
+                : dashboard?.activeCircles.map((circle) => (
+                    <FriendCircleBanner
+                      key={circle._id}
+                      circle={circle}
+                      ctaLabel={`Open ${circle.name}`}
+                      onPress={() => router.push(`/friends/group/${circle._id}` as never)}
+                      style={{ width: groupCardWidth }}
+                    />
+                  ))}
             </ScrollView>
           </View>
         ) : null}
@@ -139,16 +147,21 @@ export default function FriendsScreen() {
         </View>
 
         <View style={styles.cardStack}>
-          {dashboard?.topMatches.map((candidate) => (
-            <FriendMatchCard
-              key={candidate.travelerSlug}
-              candidate={candidate}
-              disabled={busyCandidateSlug === candidate.travelerSlug}
-              onInvite={() => handleCandidateAction(candidate.travelerSlug, 'invited')}
-              onPass={() => handleCandidateAction(candidate.travelerSlug, 'passed')}
-              onFriend={() => handleCandidateAction(candidate.travelerSlug, 'friended')}
-            />
-          ))}
+          {isLoading
+            ? Array.from({ length: 3 }).map((_, index) => (
+                <SkeletonBlock key={`friend-match-skeleton-${index}`} style={styles.matchSkeleton} />
+              ))
+            : topMatches.map((candidate) => (
+                <FriendMatchCard
+                  key={candidate.travelerSlug}
+                  candidate={candidate}
+                  disabled={busyCandidateSlug === candidate.travelerSlug}
+                  onInvite={() => handleCandidateAction(candidate.travelerSlug, 'invited')}
+                  onOpenProfile={() => router.push(`/friends/profile/${candidate.travelerSlug}` as never)}
+                  onPass={() => handleCandidateAction(candidate.travelerSlug, 'passed')}
+                  onFriend={() => handleCandidateAction(candidate.travelerSlug, 'friended')}
+                />
+              ))}
         </View>
       </ScrollView>
     </ThemedView>
@@ -158,11 +171,6 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
@@ -195,6 +203,10 @@ const styles = StyleSheet.create({
   groupRailScroller: {
     marginHorizontal: -designSystem.spacing.lg,
   },
+  circleSkeleton: {
+    height: 152,
+    borderRadius: 28,
+  },
   sectionHeader: {
     gap: 0,
   },
@@ -223,5 +235,9 @@ const styles = StyleSheet.create({
   },
   cardStack: {
     gap: 14,
+  },
+  matchSkeleton: {
+    height: 232,
+    borderRadius: 28,
   },
 });

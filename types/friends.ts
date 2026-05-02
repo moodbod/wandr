@@ -5,6 +5,7 @@ export type FriendCandidate = {
   name: string;
   avatarUri: string | null;
   countryLabel: string;
+  sameCountry: boolean;
   baseLabel: string;
   destinationLabel: string;
   headline: string;
@@ -17,6 +18,34 @@ export type FriendCandidate = {
   matchScore: number;
   actionState: 'invited' | 'passed' | 'friended' | null;
 };
+
+export type FriendViewerProfile = {
+  traveler: {
+    slug: string;
+    name: string;
+    countryLabel: string;
+    baseLabel: string;
+    avatarUri: string | null;
+  };
+  profile: {
+    headline: string;
+    bio: string;
+    destinationLabel: string;
+    vibe: FriendCandidate['vibe'];
+    travelPace: FriendCandidate['travelPace'];
+    arrivalWindowLabel: string;
+    interests: string[];
+    sharedInterests: string[];
+    matchScore: number | null;
+  } | null;
+  relationship: {
+    state: 'self' | 'friend' | 'invited' | 'available';
+    directThreadId: Id<'friendDirectThreads'> | null;
+  };
+  stats: {
+    friendCount: number;
+  };
+} | null;
 
 export type FriendCircleMember = {
   travelerSlug: string;
@@ -44,7 +73,7 @@ export type FriendCircleSummary = {
 
 export type FriendChatMessage = {
   _id: Id<'friendMessages'>;
-  kind: 'text' | 'route' | 'system';
+  kind: 'text' | 'route' | 'system' | 'call' | 'scheduled_call';
   body: string | null;
   createdAt: number;
   senderSlug: string;
@@ -57,7 +86,44 @@ export type FriendChatMessage = {
     distanceLabel: string;
     stopCount: number;
     stopsPreview: string[];
+    centerCoordinate: readonly [number, number] | null;
+    heroImageUri: string | null;
+    mapMarkers: {
+      id: string;
+      coordinate: readonly [number, number];
+      imageUri?: string;
+      label?: string;
+      status?: 'completed' | 'active' | 'upcoming';
+    }[];
   } | null;
+  callCard: {
+    callId: Id<'friendCalls'> | null;
+    mode: 'voice' | 'video';
+    status: 'active' | 'scheduled' | 'ended' | 'cancelled';
+    scheduledFor: number | null;
+    endsAt: number | null;
+    reminderMinutesBefore: number | null;
+    title: string;
+    description: string | null;
+  } | null;
+};
+
+export type FriendCallDetail = {
+  _id: Id<'friendCalls'>;
+  circleId: Id<'friendCircles'>;
+  circleName: string;
+  roomName: string;
+  createdBySlug: string;
+  createdByName: string;
+  mode: 'voice' | 'video';
+  status: 'active' | 'scheduled' | 'ended' | 'cancelled';
+  title: string;
+  description: string | null;
+  scheduledFor: number | null;
+  endsAt: number | null;
+  reminderMinutesBefore: number | null;
+  startedAt: number | null;
+  members: FriendCircleMember[];
 };
 
 export type FriendRouteShare = {
@@ -66,6 +132,15 @@ export type FriendRouteShare = {
   routeDistanceLabel: string;
   routeStopCount: number;
   routeStopsPreview: string[];
+  routeCenterCoordinate: readonly [number, number] | null;
+  routeHeroImageUri: string | null;
+  routeMapMarkers: {
+    id: string;
+    coordinate: readonly [number, number];
+    imageUri?: string;
+    label?: string;
+    status?: 'completed' | 'active' | 'upcoming';
+  }[];
 };
 
 export type FriendsDashboard = {
@@ -82,6 +157,7 @@ export type FriendsDashboard = {
     interests: string[];
   } | null;
   activeCircle: FriendCircleSummary | null;
+  activeCircles: FriendCircleSummary[];
   topMatches: FriendCandidate[];
   stats: {
     invitedCount: number;
@@ -90,18 +166,75 @@ export type FriendsDashboard = {
   };
 };
 
+export type DirectChatMessage = {
+  _id: Id<'friendDirectMessages'>;
+  body: string;
+  createdAt: number;
+  senderSlug: string;
+  senderName: string;
+  senderAvatarUri: string | null;
+  isOwnMessage: boolean;
+};
+
 export type FriendDiscoveryPayload = {
   intro: {
     title: string;
+    countryLabel: string;
     destinationLabel: string;
     vibe: string | null;
     matchCount: number;
+    showIntro: boolean;
   };
-  activeCircle: FriendCircleSummary | null;
   filters: {
     vibes: string[];
   };
   candidates: FriendCandidate[];
+};
+
+export type FriendChatListItem = {
+  id: string;
+  kind: 'group' | 'direct';
+  title: string;
+  subtitle: string;
+  preview: string | null;
+  updatedAt: number;
+  travelerSlug?: string;
+  avatarUri?: string | null;
+  avatarUris?: string[];
+  href: string;
+};
+
+export type JoinableFriendGroup = {
+  id: Id<'friendCircles'>;
+  title: string;
+  subtitle: string;
+  preview: string | null;
+  avatarUris: string[];
+  memberCount: number;
+  href: string;
+};
+
+export type PhoneContactMatch = {
+  travelerSlug: string;
+  name: string;
+  avatarUri: string | null;
+  baseLabel: string;
+  phoneNumber: string;
+  isFriend: boolean;
+};
+
+export type FriendPickerItem = {
+  travelerSlug: string;
+  name: string;
+  avatarUri: string | null;
+  baseLabel: string;
+};
+
+export type FriendChatListPayload = {
+  groups: FriendChatListItem[];
+  directs: FriendChatListItem[];
+  joinableGroups: JoinableFriendGroup[];
+  friends: FriendPickerItem[];
 };
 
 export type FriendChatPayload = {
@@ -110,7 +243,22 @@ export type FriendChatPayload = {
   messages: FriendChatMessage[];
   composer: {
     placeholder: string;
-    quickActions: { key: string; label: string }[];
+    quickActions: { key: string; label: string; description: string }[];
     routeShare: FriendRouteShare;
+  };
+} | null;
+
+export type DirectChatPayload = {
+  threadId: Id<'friendDirectThreads'>;
+  title: string;
+  participant: {
+    slug: string;
+    name: string;
+    avatarUri: string | null;
+    baseLabel: string;
+  };
+  messages: DirectChatMessage[];
+  composer: {
+    placeholder: string;
   };
 } | null;

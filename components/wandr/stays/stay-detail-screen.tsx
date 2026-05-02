@@ -1,7 +1,9 @@
 import { useMutation, useQuery } from 'convex/react';
+import { GlassView } from 'expo-glass-effect';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,27 +12,36 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
-import { CalendarBlank, ClockCountdown, MapPin, Moon, Star } from 'phosphor-react-native';
+import { ClockCountdown, MapPin, Star } from 'phosphor-react-native';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
+import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
 import { WandrHeader } from '@/components/wandr/header';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { getStayBookingProfile } from '@/constants/stays-content';
 import { designSystem } from '@/constants/design-system';
+import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import {
   createStayBookingRef,
+  generateLocationPhotoUploadUrlRef,
   getStayAvailabilityRef,
   getStayBySlugRef,
+  getTravelerStayBookingRef,
+  listLocationPhotosRef,
   listStayRatingsRef,
   listUserTripsRef,
+  submitLocationPhotoRef,
   submitStayRatingRef,
 } from '@/lib/convex';
 import type {
@@ -47,11 +58,11 @@ const dayOffsets = [0, 1, 3, 7] as const;
 const nightOptions = [1, 2, 3, 5] as const;
 
 const darkSheetPalette = {
-  background: '#10120f',
-  surface: '#151814',
-  border: 'rgba(243, 244, 239, 0.08)',
-  text: '#f3f4ef',
-  mutedText: '#adb3aa',
+  background: designSystem.colors.darkPage,
+  surface: designSystem.colors.darkCard,
+  border: designSystem.colors.darkBorderWarm,
+  text: designSystem.colors.darkTextWarm,
+  mutedText: designSystem.colors.mutedWarm,
   accent: designSystem.colors.lime,
   accentText: designSystem.colors.darkGreen,
 };
@@ -78,12 +89,26 @@ function getNightsBetween(checkIn: number, checkOut: number) {
   return Math.max(1, Math.round((checkOut - checkIn) / 86_400_000));
 }
 
+function getDayOffsetFromToday(value: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(value);
+  target.setHours(0, 0, 0, 0);
+
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+
 function formatReviewDate(value: number) {
   return new Date(value).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+function formatReviewCount(count: number) {
+  return `${count} review${count === 1 ? '' : 's'}`;
 }
 
 function buildGuestSummary(guestCounts: StayGuestCounts) {
@@ -112,18 +137,28 @@ export function StayDetailScreen() {
 
   const currentLocation = useCurrentLocation();
   const createBooking = useMutation(createStayBookingRef);
+  const generatePhotoUploadUrl = useMutation(generateLocationPhotoUploadUrlRef);
+  const submitLocationPhoto = useMutation(submitLocationPhotoRef);
   const submitStayRating = useMutation(submitStayRatingRef);
   const trips = useQuery(listUserTripsRef, { travelerSlug });
   const selectedTripId = trips?.[0]?._id;
 
   const stay = useQuery(getStayBySlugRef, { slug: slug ?? '' });
   const availability = useQuery(getStayAvailabilityRef, { staySlug: slug ?? '' });
+  const existingStayBooking = useQuery(
+    getTravelerStayBookingRef,
+    slug && travelerSlug ? { staySlug: slug, travelerSlug } : 'skip'
+  );
+  const communityPhotos = useQuery(
+    listLocationPhotosRef,
+    slug ? { locationKind: 'stay', locationSlug: slug } : 'skip'
+  );
   const stayRatings = useQuery(listStayRatingsRef, { staySlug: slug ?? '' });
 
   const [isBooking, setIsBooking] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [dayOffset, setDayOffset] = useState<(typeof dayOffsets)[number]>(dayOffsets[0]);
-  const [nightCount, setNightCount] = useState<(typeof nightOptions)[number]>(nightOptions[2]);
+  const [dayOffset, setDayOffset] = useState<number>(dayOffsets[0]);
+  const [nightCount, setNightCount] = useState<number>(nightOptions[2]);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [roomCount, setRoomCount] = useState(1);
@@ -131,14 +166,22 @@ export function StayDetailScreen() {
   const [selectedBedOptionId, setSelectedBedOptionId] = useState('');
   const [selectedArrivalWindowId, setSelectedArrivalWindowId] = useState('');
   const [specialRequest, setSpecialRequest] = useState('');
+  const [bookingDateOverride, setBookingDateOverride] = useState<{ checkIn: number; checkOut: number } | null>(null);
+  const [bookingTotalOverride, setBookingTotalOverride] = useState<number | null>(null);
   const bookingSheetRef = useRef<BottomSheet>(null);
+  const bookingSheetSnapPoints = useMemo(() => ['50%', '100%'], []);
+  const bookingSheetAnimatedIndex = useSharedValue(-1);
   const reviewSheetRef = useRef<BottomSheet>(null);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewNote, setReviewNote] = useState('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  const bookingProfile: StayBookingProfile | null = stay
-    ? stay.bookingProfile ?? getStayBookingProfile(stay.slug)
-    : null;
+  const staySlugForProfile = stay?.slug;
+  const explicitBookingProfile = stay?.bookingProfile;
+  const bookingProfile: StayBookingProfile | null = useMemo(
+    () => (staySlugForProfile ? explicitBookingProfile ?? getStayBookingProfile(staySlugForProfile) : null),
+    [explicitBookingProfile, staySlugForProfile]
+  );
   const roomOptions = bookingProfile?.roomOptions ?? [];
   const selectedRoomOption =
     roomOptions.find((option) => option.id === selectedRoomTypeId) ?? roomOptions[0];
@@ -151,9 +194,14 @@ export function StayDetailScreen() {
   const maxAdults = selectedRoomOption?.maxAdults ?? 2;
   const maxChildren = selectedRoomOption?.maxChildren ?? 0;
   const maxRooms = selectedRoomOption?.maxRooms ?? 1;
+  const bookingSheetHeaderAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      paddingTop: interpolate(bookingSheetAnimatedIndex.value, [0, 1], [0, insets.top], 'clamp'),
+    };
+  });
 
   useEffect(() => {
-    if (!bookingProfile) {
+    if (!bookingProfile || existingStayBooking) {
       return;
     }
 
@@ -171,7 +219,7 @@ export function StayDetailScreen() {
     setRoomCount(1);
     setAdults(Math.min(2, initialRoomOption?.maxAdults ?? 2));
     setChildren(0);
-  }, [bookingProfile, stay?.slug]);
+  }, [bookingProfile, existingStayBooking]);
 
   useEffect(() => {
     if (!selectedRoomOption) {
@@ -194,31 +242,51 @@ export function StayDetailScreen() {
   }, [selectedRoomOption, selectedBedOptionId, roomCount, adults, children]);
 
   if (stay === undefined) {
-    return (
-      <ThemedView style={[styles.root, styles.centered]}>
-        <ActivityIndicator size="large" color={designSystem.colors.lime} />
-      </ThemedView>
-    );
+    return <StayDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
   }
 
   if (!stay) {
     return null;
   }
 
-  const galleryImages = stay.galleryImages?.length ? stay.galleryImages : [stay.imageUri];
-  const checkIn = Date.now() + dayOffset * 86_400_000;
-  const checkOut = checkIn + nightCount * 86_400_000;
+  const hostGalleryImages: readonly string[] = stay.galleryImages?.length ? stay.galleryImages : [stay.imageUri];
+  const galleryImages: GalleryImageItem[] = [
+    ...hostGalleryImages.map((uri) => ({ uri, source: 'host' as const })),
+    ...(communityPhotos ?? [])
+      .filter((photo) => !hostGalleryImages.includes(photo.imageUri))
+      .map((photo) => ({ uri: photo.imageUri, source: 'visitor' as const })),
+  ];
+  const computedCheckIn = Date.now() + dayOffset * 86_400_000;
+  const computedCheckOut = computedCheckIn + nightCount * 86_400_000;
+  const checkIn = bookingDateOverride?.checkIn ?? computedCheckIn;
+  const checkOut = bookingDateOverride?.checkOut ?? computedCheckOut;
   const nights = getNightsBetween(checkIn, checkOut);
+  const selectedDayOffset = getDayOffsetFromToday(checkIn);
   const guestSummary = buildGuestSummary({ adults, children });
   const roomSummary =
     selectedRoomOption && selectedBedOption
       ? buildRoomSummary(roomCount, selectedRoomOption, selectedBedOption)
       : `${roomCount} room`;
-  const totalPrice = stay.pricePerNight * nights * roomCount;
+  const totalPrice = bookingTotalOverride ?? stay.pricePerNight * nights * roomCount;
+  const hasExistingStayBooking = !!existingStayBooking;
+  const bookingBarTotalPrice = existingStayBooking?.totalPrice ?? totalPrice;
+  const bookingBarNights = existingStayBooking
+    ? getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut)
+    : nights;
   const confirmedAvailabilityCount = availability?.length ?? 0;
-  const realReviewCount = stayRatings?.length ?? 0;
-  const combinedReviewCount = Math.max(stay.reviewCount, realReviewCount);
   const reviewItems = stayRatings ?? [];
+  const reviewsAreLoading = stayRatings === undefined;
+  const realReviewCount = reviewItems.length;
+  const realRating =
+    realReviewCount > 0
+      ? reviewItems.reduce((total, review) => total + review.rating, 0) / realReviewCount
+      : null;
+  const reviewCountLabel =
+    reviewsAreLoading
+      ? 'Loading reviews'
+      : realReviewCount > 0
+        ? formatReviewCount(realReviewCount)
+        : 'No reviews yet';
   const availabilityLabel =
     confirmedAvailabilityCount === 0
       ? 'Open this week'
@@ -237,12 +305,44 @@ export function StayDetailScreen() {
     roomSummary,
   };
 
+  const clearBookingSnapshot = () => {
+    setBookingDateOverride(null);
+    setBookingTotalOverride(null);
+  };
+
   const handleBookPress = () => {
+    clearBookingSnapshot();
     bookingSheetRef.current?.snapToIndex(0);
   };
 
   const handleOpenReviewSheet = () => {
     reviewSheetRef.current?.snapToIndex(0);
+  };
+
+  const handleExistingBookingPress = () => {
+    if (!existingStayBooking) {
+      return;
+    }
+
+    const details = existingStayBooking.stayBookingDetails;
+    setBookingDateOverride({
+      checkIn: existingStayBooking.checkIn,
+      checkOut: existingStayBooking.checkOut,
+    });
+    setBookingTotalOverride(existingStayBooking.totalPrice);
+    setNightCount(getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut));
+
+    if (details) {
+      setAdults(details.guestCounts.adults);
+      setChildren(details.guestCounts.children);
+      setRoomCount(details.roomCount);
+      setSelectedRoomTypeId(details.roomTypeId);
+      setSelectedBedOptionId(details.bedOptionId);
+      setSelectedArrivalWindowId(details.arrivalWindowId);
+      setSpecialRequest(details.specialRequest ?? '');
+    }
+
+    bookingSheetRef.current?.snapToIndex(0);
   };
 
   const handleSubmitReview = async () => {
@@ -265,6 +365,58 @@ export function StayDetailScreen() {
       Alert.alert('Review Failed', error.message || 'Could not save your review.');
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleSharePhoto = async () => {
+    if (!travelerSlug || isUploadingPhoto) {
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photos permission needed', 'Allow photo access to share a picture for this stay.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      allowsMultipleSelection: false,
+      mediaTypes: ['images'],
+      quality: 0.88,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const asset = result.assets[0];
+      const uploadUrl = await generatePhotoUploadUrl({});
+      const photoResponse = await fetch(asset.uri);
+      const blob = await photoResponse.blob();
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': asset.mimeType ?? blob.type ?? 'image/jpeg' },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const { storageId } = (await uploadResponse.json()) as { storageId: Id<'_storage'> };
+      await submitLocationPhoto({
+        locationKind: 'stay',
+        locationSlug: stay.slug,
+        travelerSlug,
+        storageId,
+      });
+    } catch {
+      Alert.alert('Photo upload failed', 'Could not share that picture. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -299,13 +451,23 @@ export function StayDetailScreen() {
         config={{
           overlay: true,
           leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          trailingActions: [
+            {
+              kind: 'plus',
+              accessibilityLabel: isUploadingPhoto ? 'Uploading photo' : 'Share photo',
+              isLoading: isUploadingPhoto,
+              onPress: () => {
+                void handleSharePhoto();
+              },
+            },
+          ],
         }}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 156 },
+          { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 132 },
         ]}>
         <View style={styles.carouselContainer}>
           <ExperienceGalleryCarousel images={galleryImages} />
@@ -334,7 +496,7 @@ export function StayDetailScreen() {
               <MapPin size={16} color={designSystem.colors.gray} weight="fill" />
               <ThemedText style={[styles.subtitle, isDark && styles.subtitleDark]}>{stay.locationLabel}</ThemedText>
               <ThemedText style={[styles.dotText, isDark && styles.dotTextDark]}>•</ThemedText>
-              <ThemedText style={[styles.subtitle, isDark && styles.subtitleDark]}>{combinedReviewCount} reviews</ThemedText>
+              <ThemedText style={[styles.subtitle, isDark && styles.subtitleDark]}>{reviewCountLabel}</ThemedText>
             </View>
             <ThemedText style={[styles.summary, isDark && styles.summaryDark]}>{stay.summary}</ThemedText>
           </View>
@@ -369,10 +531,10 @@ export function StayDetailScreen() {
                 <View style={styles.reviewsRatingRow}>
                   <Star size={16} color={designSystem.colors.lime} weight="fill" />
                   <ThemedText style={[styles.reviewsRatingValue, isDark && styles.reviewsRatingValueDark]}>
-                    {stay.rating.toFixed(1)}
+                    {realRating === null ? 'New' : realRating.toFixed(1)}
                   </ThemedText>
                   <ThemedText style={[styles.reviewsCount, isDark && styles.reviewsCountDark]}>
-                    {combinedReviewCount} reviews
+                    {reviewCountLabel}
                   </ThemedText>
                 </View>
               </View>
@@ -381,7 +543,13 @@ export function StayDetailScreen() {
               </Pressable>
             </View>
             <View style={styles.reviewList}>
-              {reviewItems.length > 0
+              {reviewsAreLoading
+                ? (
+                    <View style={styles.reviewsLoadingRow}>
+                      <ActivityIndicator size="small" color={designSystem.colors.lime} />
+                    </View>
+                  )
+                : reviewItems.length > 0
                 ? reviewItems.map((review) => (
                     <ReviewCard
                       isDark={isDark}
@@ -394,16 +562,16 @@ export function StayDetailScreen() {
                       regionLabel={review.travelerRegionName ?? undefined}
                     />
                   ))
-                : (stay.guestJournals ?? []).map((journal: { name: string; avatarUri: string; visitedAtLabel: string; quote: string }) => (
-                    <ReviewCard
-                      isDark={isDark}
-                      key={`${journal.name}-${journal.visitedAtLabel}`}
-                      avatarUri={journal.avatarUri}
-                      name={journal.name}
-                      visitedAt={journal.visitedAtLabel}
-                      quote={journal.quote}
-                    />
-                  ))}
+                : (
+                    <View style={[styles.emptyReviewsCard, isDark && styles.emptyReviewsCardDark]}>
+                      <ThemedText style={[styles.emptyReviewsTitle, isDark && styles.emptyReviewsTitleDark]}>
+                        No real reviews yet
+                      </ThemedText>
+                      <ThemedText style={[styles.emptyReviewsText, isDark && styles.emptyReviewsTextDark]}>
+                        Reviews will appear here after travelers submit them.
+                      </ThemedText>
+                    </View>
+                  )}
             </View>
           </View>
 
@@ -420,8 +588,10 @@ export function StayDetailScreen() {
                   {
                     id: stay.id,
                     coordinate: stay.coordinate,
+                    experienceSlug: stay.slug,
+                    imageUri: stay.imageUri,
+                    itemKind: 'stay',
                     label: stay.name,
-                    priceLabel: stay.priceLabel,
                     tone: 'accent',
                     status: 'active',
                   },
@@ -431,33 +601,25 @@ export function StayDetailScreen() {
               />
             </View>
           </View>
-
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomBar, isDark && styles.bottomBarDark, { paddingBottom: insets.bottom + 16 }]}>
-        <View>
-          <ThemedText style={[styles.bottomBarLabel, isDark && styles.bottomBarLabelDark]}>Estimated total</ThemedText>
-          <ThemedText style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
-            ${totalPrice}
-            <ThemedText style={[styles.bottomBarSuffix, isDark && styles.bottomBarSuffixDark]}>
-              {' '}for {nights} night{nights === 1 ? '' : 's'}
-            </ThemedText>
-          </ThemedText>
-        </View>
-        <Pressable style={styles.bookNearbyButton} onPress={handleBookPress} disabled={isBooking}>
-          {isBooking ? (
-            <ActivityIndicator color={designSystem.colors.darkGreen} />
-          ) : (
-            <ThemedText style={styles.bookNearbyText}>Start booking</ThemedText>
-          )}
-        </Pressable>
-      </View>
+      <BookingGlassBar
+        buttonLabel={hasExistingStayBooking ? 'View trip' : 'Start booking'}
+        containerStyle={[styles.bottomBar, { bottom: Math.max(insets.bottom, 12) }]}
+        isDark={isDark}
+        isLoading={!hasExistingStayBooking && isBooking}
+        nights={bookingBarNights}
+        onPress={hasExistingStayBooking ? handleExistingBookingPress : handleBookPress}
+        totalPrice={bookingBarTotalPrice}
+      />
 
       <GlassBottomSheet
-        ref={bookingSheetRef}
         index={-1}
-        snapPoints={['50%', '100%']}
+        ref={bookingSheetRef}
+        snapPoints={bookingSheetSnapPoints}
+        animatedIndex={bookingSheetAnimatedIndex}
+        containerStyle={styles.sheetLayer}
         enablePanDownToClose>
         <BottomSheetScrollView
           style={styles.sheetRoot}
@@ -465,10 +627,16 @@ export function StayDetailScreen() {
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled">
-          <ThemedText style={styles.sheetTitle}>Build the stay request</ThemedText>
-          <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
-            Pick dates, guests, room setup, and any note for the host.
-          </ThemedText>
+          <Animated.View style={[styles.sheetPaddedBlock, bookingSheetHeaderAnimatedStyle]}>
+            <ThemedText style={styles.sheetTitle}>
+              {hasExistingStayBooking ? 'Your stay request' : 'Build the stay request'}
+            </ThemedText>
+            <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
+              {hasExistingStayBooking
+                ? 'Review the dates, guests, room setup, and host note you booked.'
+                : 'Pick dates, guests, room setup, and any note for the host.'}
+            </ThemedText>
+          </Animated.View>
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
             <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Trip timing</ThemedText>
@@ -477,9 +645,12 @@ export function StayDetailScreen() {
                 <SelectionPill
                   key={option}
                   isDark={isDark}
-                  active={dayOffset === option}
+                  active={selectedDayOffset === option}
                   label={formatDayOffsetLabel(option)}
-                  onPress={() => setDayOffset(option)}
+                  onPress={() => {
+                    clearBookingSnapshot();
+                    setDayOffset(option);
+                  }}
                 />
               ))}
             </View>
@@ -488,22 +659,41 @@ export function StayDetailScreen() {
                 <SelectionPill
                   key={option}
                   isDark={isDark}
-                  active={nightCount === option}
+                  active={nights === option}
                   label={`${option} night${option === 1 ? '' : 's'}`}
-                  onPress={() => setNightCount(option)}
+                  onPress={() => {
+                    clearBookingSnapshot();
+                    setNightCount(option);
+                  }}
                 />
               ))}
-            </View>
-            <View style={styles.summaryRow}>
-              <PreviewPill isDark={isDark} icon={<CalendarBlank size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />} label={formatDateLabel(checkIn)} />
-              <PreviewPill isDark={isDark} icon={<Moon size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />} label={formatDateLabel(checkOut)} />
             </View>
           </View>
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
             <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Who is staying</ThemedText>
-              <CounterField isDark={isDark} label="Adults" value={adults} min={1} max={maxAdults} onChange={setAdults} />
-              <CounterField isDark={isDark} label="Children" value={children} min={0} max={maxChildren} onChange={setChildren} />
+              <CounterField
+                isDark={isDark}
+                label="Adults"
+                value={adults}
+                min={1}
+                max={maxAdults}
+                onChange={(value) => {
+                  clearBookingSnapshot();
+                  setAdults(value);
+                }}
+              />
+              <CounterField
+                isDark={isDark}
+                label="Children"
+                value={children}
+                min={0}
+                max={maxChildren}
+                onChange={(value) => {
+                  clearBookingSnapshot();
+                  setChildren(value);
+                }}
+              />
           </View>
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
@@ -516,11 +706,24 @@ export function StayDetailScreen() {
                   active={selectedRoomOption?.id === option.id}
                   label={option.label}
                   detail={option.detail}
-                  onPress={() => setSelectedRoomTypeId(option.id)}
+                  onPress={() => {
+                    clearBookingSnapshot();
+                    setSelectedRoomTypeId(option.id);
+                  }}
                 />
               ))}
             </View>
-            <CounterField isDark={isDark} label="Rooms" value={roomCount} min={1} max={maxRooms} onChange={setRoomCount} />
+            <CounterField
+              isDark={isDark}
+              label="Rooms"
+              value={roomCount}
+              min={1}
+              max={maxRooms}
+              onChange={(value) => {
+                clearBookingSnapshot();
+                setRoomCount(value);
+              }}
+            />
             <View style={styles.optionRow}>
               {bedOptions.map((option) => (
                 <SelectionPill
@@ -528,7 +731,10 @@ export function StayDetailScreen() {
                   isDark={isDark}
                   active={selectedBedOption?.id === option.id}
                   label={option.label}
-                  onPress={() => setSelectedBedOptionId(option.id)}
+                  onPress={() => {
+                    clearBookingSnapshot();
+                    setSelectedBedOptionId(option.id);
+                  }}
                 />
               ))}
             </View>
@@ -543,7 +749,10 @@ export function StayDetailScreen() {
                   isDark={isDark}
                   active={selectedArrivalOption?.id === option.id}
                   label={option.label}
-                  onPress={() => setSelectedArrivalWindowId(option.id)}
+                  onPress={() => {
+                    clearBookingSnapshot();
+                    setSelectedArrivalWindowId(option.id);
+                  }}
                 />
               ))}
             </View>
@@ -553,19 +762,32 @@ export function StayDetailScreen() {
               placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
               style={[styles.notesInput, isDark && styles.notesInputDark]}
               value={specialRequest}
-              onChangeText={setSpecialRequest}
+              onChangeText={(value) => {
+                clearBookingSnapshot();
+                setSpecialRequest(value);
+              }}
             />
           </View>
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
             <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Price summary</ThemedText>
-            <View style={styles.priceRow}>
-              <ThemedText style={[styles.priceLabel, isDark && styles.priceLabelDark]}>{stay.priceLabel} x {nights} night{nights === 1 ? '' : 's'} x {roomCount} room{roomCount === 1 ? '' : 's'}</ThemedText>
+            <View style={[styles.pricePreviewCard, isDark && styles.pricePreviewCardDark]}>
+              <View style={styles.priceRow}>
+                <View style={styles.priceCopy}>
+                  <ThemedText style={[styles.priceLabel, isDark && styles.priceLabelDark]}>
+                    {nights} night{nights === 1 ? '' : 's'} · {roomCount} room{roomCount === 1 ? '' : 's'}
+                  </ThemedText>
+                  <ThemedText style={[styles.priceRate, isDark && styles.priceRateDark]}>
+                    {stay.priceLabel}
+                  </ThemedText>
+                </View>
                 <ThemedText style={[styles.priceValue, isDark && styles.priceValueDark]}>${totalPrice}</ThemedText>
-            </View>
-            <View style={styles.priceRow}>
+              </View>
               <ThemedText style={[styles.priceMeta, isDark && styles.priceMetaDark]}>
-                {formatDateLabel(checkIn)} - {formatDateLabel(checkOut)} · {guestSummary} · {roomSummary}
+                {formatDateLabel(checkIn)} - {formatDateLabel(checkOut)}
+              </ThemedText>
+              <ThemedText style={[styles.priceMeta, isDark && styles.priceMetaDark]}>
+                {guestSummary} · {roomSummary}
               </ThemedText>
             </View>
           </View>
@@ -579,10 +801,10 @@ export function StayDetailScreen() {
             onPress={confirmBooking}
             disabled={isBooking}>
             {isBooking ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={designSystem.colors.white} />
             ) : (
               <ThemedText style={[styles.confirmButtonText, isDark && styles.confirmButtonTextDark]}>
-                Request this stay
+                {hasExistingStayBooking ? 'Update stay request' : 'Request this stay'}
               </ThemedText>
             )}
           </Pressable>
@@ -590,6 +812,7 @@ export function StayDetailScreen() {
       </GlassBottomSheet>
 
       <GlassBottomSheet
+        containerStyle={styles.sheetLayer}
         ref={reviewSheetRef}
         index={-1}
         snapPoints={['48%']}
@@ -616,7 +839,7 @@ export function StayDetailScreen() {
                         ? designSystem.colors.lime
                         : isDark
                           ? designSystem.colors.darkMutedText
-                          : 'rgba(69,71,69,0.42)'
+                          : designSystem.colors.subtleText
                     }
                   />
                 </Pressable>
@@ -644,7 +867,7 @@ export function StayDetailScreen() {
             onPress={handleSubmitReview}
             disabled={isSubmittingReview || reviewRating < 1}>
             {isSubmittingReview ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={designSystem.colors.white} />
             ) : (
               <ThemedText style={[styles.confirmButtonText, isDark && styles.confirmButtonTextDark]}>
                 Save review
@@ -653,6 +876,95 @@ export function StayDetailScreen() {
           </Pressable>
         </BottomSheetView>
       </GlassBottomSheet>
+    </ThemedView>
+  );
+}
+
+function BookingGlassBar({
+  buttonLabel,
+  containerStyle,
+  isDark,
+  isLoading = false,
+  nights,
+  onPress,
+  totalPrice,
+}: {
+  buttonLabel: string;
+  containerStyle?: StyleProp<ViewStyle>;
+  isDark: boolean;
+  isLoading?: boolean;
+  nights: number;
+  onPress: () => void;
+  totalPrice: number;
+}) {
+  return (
+    <View style={containerStyle}>
+      <View style={[styles.bottomBarGlassClip, isDark && styles.bottomBarGlassClipDark]}>
+        <GlassView
+          colorScheme={isDark ? 'dark' : 'light'}
+          glassEffectStyle="regular"
+          isInteractive
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.bottomBarGlassView]}
+        />
+        <View pointerEvents="none" style={[styles.bottomBarHighlight, isDark && styles.bottomBarHighlightDark]} />
+        <View style={styles.bottomBarContent}>
+          <View style={styles.bottomBarPriceBlock}>
+            <ThemedText style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
+              ${totalPrice}
+              <ThemedText style={[styles.bottomBarSuffix, isDark && styles.bottomBarSuffixDark]}>
+                {' '}for {nights} night{nights === 1 ? '' : 's'}
+              </ThemedText>
+            </ThemedText>
+          </View>
+          <Pressable
+            style={[styles.bookNearbyButton, isLoading && styles.bookNearbyButtonDisabled]}
+            onPress={onPress}
+            disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator color={designSystem.colors.darkGreen} />
+            ) : (
+              <ThemedText style={styles.bookNearbyText}>{buttonLabel}</ThemedText>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function StayDetailLoadingScreen({
+  insetsBottom,
+  insetsTop,
+  isDark,
+}: {
+  insetsBottom: number;
+  insetsTop: number;
+  isDark: boolean;
+}) {
+  return (
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
+      <WandrHeader
+        config={{
+          overlay: true,
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+        }}
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + 156 },
+        ]}>
+        <SkeletonBlock style={styles.stayHeroSkeleton} />
+        <View style={styles.paddedContent}>
+          <SkeletonBlock style={styles.stayBadgeSkeleton} />
+          <SkeletonBlock style={styles.stayTitleSkeleton} />
+          <SkeletonBlock style={styles.staySubtitleSkeleton} />
+          <SkeletonBlock style={styles.stayPanelSkeleton} />
+          <SkeletonBlock style={styles.stayPanelSkeleton} />
+        </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -673,23 +985,6 @@ function DetailBlock({ label, value, isDark }: { label: string; value: string; i
     <View style={[styles.detailBlock, isDark && styles.detailBlockDark]}>
       <ThemedText style={styles.detailLabel}>{label}</ThemedText>
       <ThemedText style={[styles.detailValue, isDark && styles.detailValueDark]}>{value}</ThemedText>
-    </View>
-  );
-}
-
-function PreviewPill({
-  isDark,
-  icon,
-  label,
-}: {
-  isDark: boolean;
-  icon: ReactNode;
-  label: string;
-}) {
-  return (
-    <View style={[styles.previewPill, isDark && styles.previewPillDark]}>
-      {icon}
-      <ThemedText style={[styles.previewPillText, isDark && styles.previewPillTextDark]}>{label}</ThemedText>
     </View>
   );
 }
@@ -832,7 +1127,7 @@ function ReviewCard({
           ) : (
             <View style={[styles.avatarFallback, isDark && styles.avatarFallbackDark]}>
               <ThemedText style={[styles.avatarFallbackText, isDark && styles.avatarFallbackTextDark]}>
-                {name.slice(0, 1).toUpperCase()}
+                {name.slice(0, 1)}
               </ThemedText>
             </View>
           )}
@@ -909,14 +1204,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: designSystem.radii.pill,
-    backgroundColor: '#eff3ea',
+    backgroundColor: designSystem.colors.lightSurfaceAlt,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   availabilityText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   availabilityBadgeDark: {
@@ -966,36 +1261,6 @@ const styles = StyleSheet.create({
   summaryDark: {
     color: darkSheetPalette.mutedText,
   },
-  previewChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  previewPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: designSystem.colors.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
-    borderRadius: designSystem.radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  previewPillDark: {
-    backgroundColor: darkSheetPalette.surface,
-    borderWidth: 1,
-    borderColor: darkSheetPalette.border,
-  },
-  previewPillText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: designSystem.colors.ink,
-  },
-  previewPillTextDark: {
-    color: darkSheetPalette.text,
-  },
   section: {
     gap: 18,
   },
@@ -1005,8 +1270,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     lineHeight: 26,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   sectionTitleDark: {
@@ -1031,12 +1295,14 @@ const styles = StyleSheet.create({
     color: darkSheetPalette.mutedText,
   },
   detailGrid: {
+    marginHorizontal: -designSystem.spacing.lg,
     gap: 12,
   },
   detailBlock: {
+    paddingHorizontal: designSystem.spacing.lg,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(14,15,12,0.08)',
+    borderBottomColor: designSystem.colors.borderSoft,
   },
   detailBlockDark: {
     borderBottomColor: darkSheetPalette.border,
@@ -1049,7 +1315,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 17,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   detailValueDark: {
@@ -1062,7 +1328,7 @@ const styles = StyleSheet.create({
   },
   amenityChip: {
     borderRadius: 999,
-    backgroundColor: '#f4f4f1',
+    backgroundColor: designSystem.colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -1074,8 +1340,8 @@ const styles = StyleSheet.create({
   amenityText: {
     fontSize: 12,
     lineHeight: 14,
-    fontWeight: '700',
-    color: '#161713',
+    fontWeight: '600',
+    color: designSystem.colors.lightText,
   },
   amenityTextDark: {
     color: darkSheetPalette.text,
@@ -1097,7 +1363,7 @@ const styles = StyleSheet.create({
   reviewsRatingValue: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   reviewsRatingValueDark: {
@@ -1120,7 +1386,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    borderColor: designSystem.colors.borderSoft,
   },
   reviewActionDark: {
     backgroundColor: darkSheetPalette.surface,
@@ -1129,7 +1395,7 @@ const styles = StyleSheet.create({
   reviewActionText: {
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   neighborhoodMap: {
@@ -1140,11 +1406,42 @@ const styles = StyleSheet.create({
   reviewList: {
     gap: 0,
   },
+  reviewsLoadingRow: {
+    paddingVertical: 24,
+    alignItems: 'flex-start',
+  },
+  emptyReviewsCard: {
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: designSystem.colors.borderHairline,
+    gap: 6,
+  },
+  emptyReviewsCardDark: {
+    borderBottomColor: darkSheetPalette.border,
+  },
+  emptyReviewsTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  emptyReviewsTitleDark: {
+    color: darkSheetPalette.text,
+  },
+  emptyReviewsText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+    color: designSystem.colors.gray,
+  },
+  emptyReviewsTextDark: {
+    color: darkSheetPalette.mutedText,
+  },
   reviewCard: {
     paddingVertical: 20,
     gap: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: designSystem.colors.borderHairline,
   },
   reviewCardDark: {
     borderBottomColor: darkSheetPalette.border,
@@ -1176,7 +1473,7 @@ const styles = StyleSheet.create({
   avatarFallbackText: {
     fontSize: 16,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   avatarFallbackTextDark: {
@@ -1185,8 +1482,8 @@ const styles = StyleSheet.create({
   reviewName: {
     fontSize: 16,
     lineHeight: 18,
-    fontWeight: '700',
-    color: '#11120d',
+    fontWeight: '600',
+    color: designSystem.colors.lightTextStrong,
   },
   reviewNameDark: {
     color: darkSheetPalette.text,
@@ -1194,10 +1491,8 @@ const styles = StyleSheet.create({
   reviewVisited: {
     fontSize: 10,
     lineHeight: 12,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: '#8b8e87',
+    fontWeight: '600',
+    color: designSystem.colors.lightMutedWarm,
   },
   reviewMetaRow: {
     marginTop: 4,
@@ -1214,34 +1509,66 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 28,
     fontWeight: '600',
-    color: '#161713',
+    color: designSystem.colors.lightText,
   },
   reviewQuoteDark: {
     color: darkSheetPalette.mutedText,
   },
   bottomBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(249,249,246,0.96)',
+    left: 16,
+    right: 16,
+    borderRadius: 40,
+    shadowColor: designSystem.colors.black,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.16,
+    shadowRadius: 28,
+    elevation: 18,
+  },
+  bottomBarGlassClip: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: designSystem.colors.whiteOverlayBorder,
+    borderRadius: 40,
+    backgroundColor: designSystem.colors.transparentWhite,
+  },
+  bottomBarGlassClipDark: {
+    borderColor: designSystem.colors.whiteOverlayBarely,
+    backgroundColor: designSystem.colors.transparentWhite,
+  },
+  bottomBarGlassView: {
+    borderRadius: 40,
+  },
+  bottomBarHighlight: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 40,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: designSystem.colors.whiteBorder,
+    backgroundColor: designSystem.colors.whiteWashSubtle,
+  },
+  bottomBarHighlightDark: {
+    borderColor: designSystem.colors.whiteOverlayBarely,
+    backgroundColor: designSystem.colors.nativeDarkWash,
+  },
+  bottomBarContent: {
+    minHeight: 78,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    gap: 12,
+    alignItems: 'stretch',
+    padding: 8,
+    paddingLeft: 22,
+    gap: 10,
   },
-  bottomBarDark: {
-    backgroundColor: 'rgba(16,18,15,0.96)',
+  bottomBarPriceBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
   },
   bottomBarLabel: {
     fontSize: 10,
     lineHeight: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: '#8b8e87',
+    fontWeight: '600',
+    color: designSystem.colors.lightMutedWarm,
   },
   bottomBarLabelDark: {
     color: darkSheetPalette.mutedText,
@@ -1250,9 +1577,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 24,
     lineHeight: 26,
-    fontWeight: '900',
-    letterSpacing: -0.8,
-    color: '#10110d',
+    fontWeight: '600',
+    color: designSystem.colors.lightTextDeep,
   },
   bottomBarPriceDark: {
     color: darkSheetPalette.text,
@@ -1260,29 +1586,36 @@ const styles = StyleSheet.create({
   bottomBarSuffix: {
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '700',
-    color: '#8b8e87',
+    fontWeight: '600',
+    color: designSystem.colors.lightMutedWarm,
   },
   bottomBarSuffixDark: {
     color: darkSheetPalette.mutedText,
   },
   bookNearbyButton: {
-    minWidth: 166,
-    height: 54,
-    borderRadius: 999,
+    minWidth: 160,
+    borderRadius: 32,
     backgroundColor: designSystem.colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
+    alignSelf: 'stretch',
+  },
+  bookNearbyButtonDisabled: {
+    opacity: 0.72,
   },
   bookNearbyText: {
     fontSize: 15,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   sheetRoot: {
     flex: 1,
+  },
+  sheetLayer: {
+    zIndex: 80,
+    elevation: 80,
   },
   reviewSheetContent: {
     paddingHorizontal: 24,
@@ -1290,9 +1623,12 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   sheetContent: {
-    padding: 24,
+    paddingTop: 24,
     paddingBottom: 40,
     gap: 18,
+  },
+  sheetPaddedBlock: {
+    paddingHorizontal: 24,
   },
   sheetTitle: {
     ...designSystem.type.subtitle,
@@ -1319,9 +1655,10 @@ const styles = StyleSheet.create({
   },
   sheetSection: {
     gap: 14,
+    paddingHorizontal: 24,
     paddingBottom: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(14,15,12,0.08)',
+    borderBottomColor: designSystem.colors.borderSoft,
   },
   sheetSectionDark: {
     borderBottomColor: darkSheetPalette.border,
@@ -1329,7 +1666,7 @@ const styles = StyleSheet.create({
   sheetSectionTitle: {
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   sheetSectionTitleDark: {
@@ -1356,7 +1693,7 @@ const styles = StyleSheet.create({
     borderRadius: designSystem.radii.pill,
     backgroundColor: designSystem.colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    borderColor: designSystem.colors.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -1376,7 +1713,7 @@ const styles = StyleSheet.create({
   selectionPillText: {
     fontSize: 13,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   selectionPillTextDark: {
@@ -1395,7 +1732,7 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(14,15,12,0.08)',
+    borderBottomColor: designSystem.colors.borderSoft,
   },
   selectionRowDark: {
     borderBottomColor: darkSheetPalette.border,
@@ -1410,7 +1747,7 @@ const styles = StyleSheet.create({
   selectionRowLabel: {
     fontSize: 15,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   selectionRowLabelDark: {
@@ -1442,7 +1779,7 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: 'rgba(14,15,12,0.16)',
+    borderColor: designSystem.colors.border,
   },
   selectionRowDotDark: {
     borderColor: darkSheetPalette.border,
@@ -1450,11 +1787,6 @@ const styles = StyleSheet.create({
   selectionRowDotActive: {
     backgroundColor: darkSheetPalette.accent,
     borderColor: darkSheetPalette.accent,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
   },
   counterRow: {
     flexDirection: 'row',
@@ -1465,7 +1797,7 @@ const styles = StyleSheet.create({
   counterLabel: {
     fontSize: 15,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   counterLabelDark: {
@@ -1484,7 +1816,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: designSystem.colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    borderColor: designSystem.colors.borderSoft,
   },
   counterButtonDark: {
     backgroundColor: darkSheetPalette.surface,
@@ -1494,7 +1826,7 @@ const styles = StyleSheet.create({
   counterButtonText: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   counterButtonTextDark: {
@@ -1505,7 +1837,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   counterValueDark: {
@@ -1522,7 +1854,7 @@ const styles = StyleSheet.create({
   inlineSummaryValue: {
     fontSize: 14,
     lineHeight: 21,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   inlineSummaryValueDark: {
@@ -1531,9 +1863,9 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 110,
     borderRadius: 22,
-    backgroundColor: designSystem.colors.surfaceMuted,
+    backgroundColor: designSystem.colors.whiteWashSubtle,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    borderColor: designSystem.colors.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 14,
@@ -1551,38 +1883,62 @@ const styles = StyleSheet.create({
   reviewNoteInput: {
     minHeight: 100,
   },
+  pricePreviewCard: {
+    gap: 12,
+    borderRadius: 24,
+    backgroundColor: designSystem.colors.whiteWashSubtle,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  pricePreviewCardDark: {
+    backgroundColor: darkSheetPalette.surface,
+    borderColor: darkSheetPalette.border,
+  },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 16,
+  },
+  priceCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   priceLabel: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '700',
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   priceLabelDark: {
     color: darkSheetPalette.text,
   },
+  priceRate: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: designSystem.colors.lightMutedWarm,
+  },
+  priceRateDark: {
+    color: darkSheetPalette.mutedText,
+  },
   priceValue: {
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: '900',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   priceValueDark: {
     color: darkSheetPalette.text,
   },
   priceMeta: {
-    flex: 1,
     fontSize: 13,
     lineHeight: 19,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
-    textAlign: 'right',
   },
   priceMetaDark: {
     color: darkSheetPalette.mutedText,
@@ -1603,10 +1959,35 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   confirmButtonTextDark: {
     color: darkSheetPalette.accentText,
+  },
+  stayHeroSkeleton: {
+    height: 340,
+    borderRadius: 34,
+    marginHorizontal: designSystem.spacing.lg,
+  },
+  stayBadgeSkeleton: {
+    width: 118,
+    height: 30,
+    borderRadius: 15,
+  },
+  stayTitleSkeleton: {
+    width: '88%',
+    height: 74,
+    borderRadius: 24,
+  },
+  staySubtitleSkeleton: {
+    width: '64%',
+    height: 22,
+    borderRadius: 11,
+  },
+  stayPanelSkeleton: {
+    width: '100%',
+    height: 148,
+    borderRadius: 28,
   },
 });

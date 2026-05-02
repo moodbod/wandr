@@ -1,12 +1,14 @@
-import { NavigationArrow } from 'phosphor-react-native';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { GlobeHemisphereWest, NavigationArrow } from 'phosphor-react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
+import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { TripListItem } from '@/types/trip';
 
 type DiscoveryMode = 'route' | 'nearby';
 type SortMode = 'best' | 'price';
@@ -14,20 +16,28 @@ type SortMode = 'best' | 'price';
 type StaysDiscoveryControlsProps = {
   discoveryMode: DiscoveryMode;
   searchQuery: string;
+  selectedTripId?: string;
   sortMode: SortMode;
+  trips?: readonly TripListItem[];
   onChangeDiscoveryMode: (mode: DiscoveryMode) => void;
   onChangeSearchQuery: (value: string) => void;
+  onOpenLocationSheet: () => void;
   onResetMap: () => void;
+  onSelectTrip?: (tripId: string) => void;
   onTogglePriceSort: () => void;
 };
 
 export function StaysDiscoveryControls({
   discoveryMode,
   searchQuery,
+  selectedTripId,
   sortMode,
+  trips = [],
   onChangeDiscoveryMode,
   onChangeSearchQuery,
+  onOpenLocationSheet,
   onResetMap,
+  onSelectTrip,
   onTogglePriceSort,
 }: StaysDiscoveryControlsProps) {
   const isDark = useColorScheme() === 'dark';
@@ -36,12 +46,21 @@ export function StaysDiscoveryControls({
   return (
     <View style={styles.discoveryBar}>
       <View style={styles.searchRow}>
+        <GlassButton
+          accessibilityLabel="Change planning location"
+          height={52}
+          onPress={onOpenLocationSheet}
+          style={styles.locationButton}
+          width={52}
+          radius={designSystem.radii.pill}
+        >
+          <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
+        </GlassButton>
         <GlassInput
           containerStyle={styles.searchGlass}
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
           placeholder="Search stays or towns"
-          style={styles.searchInput}
           intensity={70}
         />
         <GlassButton
@@ -56,55 +75,39 @@ export function StaysDiscoveryControls({
         </GlassButton>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        <FilterChip
-          active={discoveryMode === 'route'}
-          isDark={isDark}
-          label="Near route"
-          onPress={() => onChangeDiscoveryMode('route')}
-        />
-        <FilterChip
-          active={discoveryMode === 'nearby'}
-          isDark={isDark}
-          label="Near me"
-          onPress={() => onChangeDiscoveryMode('nearby')}
-        />
-        <FilterChip
-          active={sortMode === 'price'}
-          isDark={isDark}
-          label="Lowest price"
-          onPress={onTogglePriceSort}
-        />
-      </ScrollView>
+      {onSelectTrip && trips.length > 0 ? (
+        <TripFilterTabs trips={trips} selectedTripId={selectedTripId} onSelectTrip={onSelectTrip}>
+          <FilterPill active={discoveryMode === 'nearby'} label="Near me" onPress={() => onChangeDiscoveryMode('nearby')} />
+          <FilterPill active={sortMode === 'price'} label="Lowest price" onPress={onTogglePriceSort} />
+        </TripFilterTabs>
+      ) : null}
     </View>
   );
 }
 
-function FilterChip({
-  active,
-  isDark,
-  label,
-  onPress,
-}: {
-  active: boolean;
-  isDark: boolean;
-  label: string;
-  onPress: () => void;
-}) {
+function FilterPill({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  const isDark = useColorScheme() === 'dark';
+
   return (
-    <Pressable onPress={onPress} style={styles.pressable}>
+    <Pressable onPress={onPress} style={styles.filterPressable}>
       <ThemedView
         lightColor={active ? designSystem.colors.lime : designSystem.colors.surface}
         darkColor={active ? designSystem.colors.lime : designSystem.colors.darkSurface}
         style={[
-          styles.chip,
-          { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border },
+          styles.filterPill,
+          {
+            borderColor: active
+              ? designSystem.colors.lime
+              : isDark
+                ? designSystem.colors.darkBorderSoft
+                : designSystem.colors.borderSoft,
+          },
         ]}
       >
         <ThemedText
-          style={styles.chipLabel}
           lightColor={active ? designSystem.colors.darkGreen : designSystem.colors.ink}
           darkColor={active ? designSystem.colors.darkGreen : designSystem.colors.darkText}
+          style={styles.filterLabel}
         >
           {label}
         </ThemedText>
@@ -123,35 +126,26 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchGlass: {
-    minHeight: 52,
     flex: 1,
   },
-  searchInput: {
-    fontSize: 15,
-    lineHeight: 18,
-    fontWeight: '600',
+  locationButton: {
+    flexShrink: 0,
   },
   resetButton: {
     flexShrink: 0,
   },
-  filterRow: {
-    gap: 10,
-    paddingRight: 4,
-  },
-  pressable: {
+  filterPressable: {
     borderRadius: designSystem.radii.pill,
   },
-  chip: {
-    minHeight: 42,
+  filterPill: {
+    minHeight: 44,
     borderRadius: designSystem.radii.pill,
     borderWidth: 1,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipLabel: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '700',
+  filterLabel: {
+    ...designSystem.type.bodySmallStrong,
   },
 });

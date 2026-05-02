@@ -1,125 +1,133 @@
-import { ChatCircleDots, Compass, UsersThree } from 'phosphor-react-native';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ChatCircleDots } from 'phosphor-react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendCircleSummary } from '@/types/friends';
+
+const CARD_PADDING = designSystem.layout.cardPadding;
+const ROW_GAP = designSystem.spacing.sm;
+const COLUMN_GAP = designSystem.spacing.sm;
+const STATUS_ICON_SIZE = 22;
+const ACTION_HEIGHT = 32;
 
 export function FriendCircleBanner({
   circle,
   ctaLabel = 'Open chat',
   onPress,
+  secondaryLabel,
+  onSecondaryPress,
+  style,
 }: {
   circle: FriendCircleSummary;
   ctaLabel?: string;
   onPress?: () => void;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
+  const isDark = useColorScheme() === 'dark';
+  const shellStyle = {
+    backgroundColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised,
+    borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
+  };
+
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={styles.badge}>
-          <Compass color={designSystem.colors.darkGreen} size={16} weight="bold" />
-          <ThemedText style={styles.badgeText}>{circle.heroLabel}</ThemedText>
+    <Pressable accessibilityLabel={ctaLabel} onPress={onPress} style={[styles.wrap, shellStyle, style]}>
+      <View style={styles.head}>
+        <View style={styles.copy}>
+          <ThemedText style={styles.title} numberOfLines={1}>
+            {circle.name}
+          </ThemedText>
         </View>
         <TravelerAvatarStack avatars={circle.avatarUris} totalCount={circle.memberCount} />
       </View>
 
-      <View style={styles.copy}>
-        <ThemedText style={styles.title}>{circle.name}</ThemedText>
-        <ThemedText style={styles.subtitle}>{circle.destinationLabel}</ThemedText>
-      </View>
-
-      <View style={styles.metrics}>
-        <View style={styles.metric}>
-          <UsersThree color={designSystem.colors.warmDark} size={16} weight="bold" />
-          <ThemedText style={styles.metricText}>{circle.memberCount} active</ThemedText>
-        </View>
-        <View style={styles.metric}>
-          <ChatCircleDots color={designSystem.colors.warmDark} size={16} weight="bold" />
-          <ThemedText style={styles.metricText} numberOfLines={1}>
+      <View style={styles.inlineRow}>
+        <View style={styles.update}>
+          <View style={[styles.iconWrap, isDark ? styles.iconWrapDark : null]}>
+            <ChatCircleDots
+              color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen}
+              size={14}
+              weight="bold"
+            />
+          </View>
+          <ThemedText style={styles.updateText} numberOfLines={2}>
             {circle.latestMessagePreview ?? 'Fresh updates waiting'}
           </ThemedText>
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <ThemedText style={styles.ctaText}>{ctaLabel}</ThemedText>
+        {secondaryLabel ? (
+          <Pressable onPress={onSecondaryPress} hitSlop={8} style={styles.secondaryAction}>
+            <ThemedText style={styles.secondaryCta}>{secondaryLabel}</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    gap: designSystem.spacing.md,
-    borderRadius: designSystem.radii.section,
-    padding: designSystem.spacing.xl,
-    backgroundColor: designSystem.colors.mint,
-    shadowColor: 'rgba(14,15,12,0.12)',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.14,
-    shadowRadius: 30,
-    elevation: 8,
+  wrap: {
+    gap: ROW_GAP,
+    paddingHorizontal: CARD_PADDING,
+    paddingVertical: designSystem.spacing.md,
+    borderRadius: designSystem.radii.panel,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  topRow: {
+  head: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: designSystem.spacing.md,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: designSystem.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-  },
-  badgeText: {
-    ...designSystem.type.eyebrow,
-    color: designSystem.colors.darkGreen,
+    gap: COLUMN_GAP,
   },
   copy: {
-    gap: 4,
+    flex: 1,
+    minWidth: 0,
   },
   title: {
-    fontSize: 30,
-    lineHeight: 30,
-    fontWeight: '800',
-    letterSpacing: -1.1,
+    ...designSystem.type.subtitle,
     color: designSystem.colors.ink,
-    textTransform: 'uppercase',
   },
-  subtitle: {
-    ...designSystem.type.bodyStrong,
-    color: designSystem.colors.warmDark,
-  },
-  metrics: {
-    gap: 10,
-  },
-  metric: {
+  inlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: COLUMN_GAP,
   },
-  metricText: {
+  update: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.spacing.xs,
     flex: 1,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '600',
+    minWidth: 0,
+  },
+  iconWrap: {
+    width: STATUS_ICON_SIZE,
+    height: STATUS_ICON_SIZE,
+    borderRadius: STATUS_ICON_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  iconWrapDark: {
+    backgroundColor: designSystem.colors.whiteOverlayBarely,
+  },
+  updateText: {
+    flex: 1,
+    ...designSystem.type.bodySmall,
     color: designSystem.colors.warmDark,
   },
-  footer: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: designSystem.radii.pill,
-    backgroundColor: designSystem.colors.ink,
+  secondaryAction: {
+    height: ACTION_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: designSystem.spacing.xxs,
+    flexShrink: 0,
   },
-  ctaText: {
-    ...designSystem.type.eyebrow,
-    color: designSystem.colors.background,
+  secondaryCta: {
+    ...designSystem.type.label,
+    color: designSystem.colors.gray,
   },
 });

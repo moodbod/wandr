@@ -1,5 +1,5 @@
-import { WandrScreen } from '@/components/wandr-screen';
+import { ProfileOverviewScreen } from '@/components/wandr/profile/profile-overview-screen';
 
-export default function ProfileOverviewScreen() {
-  return <WandrScreen screen="profileOverview" />;
+export default function ProfileOverviewRoute() {
+  return <ProfileOverviewScreen showBackButton />;
 }

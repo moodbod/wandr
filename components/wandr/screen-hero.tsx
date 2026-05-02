@@ -31,14 +31,14 @@ const styles = StyleSheet.create({
   hero: {
     padding: designSystem.spacing.xl,
     borderRadius: designSystem.radii.hero,
-    gap: 10,
+    gap: designSystem.spacing.sm,
   },
   eyebrow: {
     ...designSystem.type.eyebrow,
-    color: '#47672d',
+    color: designSystem.colors.darkGreen,
   },
   copy: {
-    gap: 10,
+    gap: designSystem.spacing.sm,
   },
   title: designSystem.type.title,
   description: designSystem.type.body,

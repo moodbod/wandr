@@ -62,7 +62,7 @@ export function TripTimelineSkeleton() {
               {index < 2 ? <SkeletonBlock style={styles.connector} /> : null}
             </View>
             <ThemedView
-              lightColor="#ffffff"
+              lightColor={designSystem.colors.white}
               darkColor={designSystem.colors.darkSurface}
               style={[
                 styles.timelineCard,
@@ -210,15 +210,15 @@ const styles = StyleSheet.create({
     width: 2,
     flex: 1,
     minHeight: 100,
-    backgroundColor: 'rgba(14,15,12,0.08)',
+    backgroundColor: designSystem.colors.borderSoft,
   },
   timelineCard: {
     flex: 1,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    borderColor: designSystem.colors.borderSoft,
     padding: 16,
-    shadowColor: '#000', 
+    shadowColor: designSystem.colors.black, 
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 12,
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     minHeight: 320,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.12)',
+    borderColor: designSystem.colors.border,
     padding: 20,
     gap: 8,
   },

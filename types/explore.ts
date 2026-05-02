@@ -53,3 +53,53 @@ export type ExplorePageContent = {
   experiences: readonly ExploreExperience[];
   updatedAt: number;
 };
+
+export type ExploreJoinableTrip = {
+  circleId: string;
+  tripId: string;
+  tripName: string;
+  groupName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+};
+
+export type ExploreJoinableTripCard = {
+  circleId: string;
+  experienceSlug: string;
+  experienceTitle: string;
+  experienceImageUri: string;
+  locationLabel: string;
+  countryCode?: string;
+  countryLabel?: string;
+  planningLocationId?: string;
+  tripName: string;
+  groupName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+};
+
+export type ExploreGroupTripDetail = {
+  circleId: string;
+  groupName: string;
+  tripName: string;
+  hostName: string;
+  destinationLabel: string;
+  memberCount: number;
+  avatarUris: string[];
+  heroImageUri: string;
+  locationLabel: string;
+  summary: string;
+  isMember: boolean;
+  itinerary: {
+    bookingId: string;
+    experienceSlug: string;
+    title: string;
+    locationLabel: string;
+    imageUri: string;
+    bookedAt: number;
+  }[];
+};

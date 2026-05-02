@@ -1,19 +1,22 @@
 import { useMutation, useQuery } from 'convex/react';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Plus } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
-import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
+import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
 import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
+import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
@@ -22,14 +25,19 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import {
   bookExperienceRef,
   createTripRef,
-  ensureExploreCommunitySeedRef,
+  generateLocationPhotoUploadUrlRef,
+  getExploreJoinableTripsRef,
   getExplorePageContentRef,
   getLocationLikeStateRef,
   getTripDashboardRef,
   getUserItineraryRef,
+  listLocationPhotosRef,
   listUserTripsRef,
+  requestJoinExploreTripRef,
+  submitLocationPhotoRef,
   toggleLocationLikeRef,
 } from '@/lib/convex';
+import type { ExploreJoinableTrip } from '@/types/explore';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 
 export default function ExploreExperienceScreen() {
@@ -45,27 +53,36 @@ function ConnectedExploreExperienceScreen() {
   const travelerSlug = traveler?.slug ?? '';
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
   const trips = useQuery(listUserTripsRef, { travelerSlug });
+  const joinableTrips = useQuery(
+    getExploreJoinableTripsRef,
+    travelerSlug && typeof slug === 'string' ? { experienceSlug: slug, travelerSlug } : 'skip'
+  );
   const primaryTripId = trips?.[0]?._id;
   const trip = useQuery(getTripDashboardRef, { travelerSlug, tripId: primaryTripId });
-  const ensureCommunitySeed = useMutation(ensureExploreCommunitySeedRef);
   const bookExperience = useMutation(bookExperienceRef);
   const createTrip = useMutation(createTripRef);
+  const requestJoinTrip = useMutation(requestJoinExploreTripRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
+  const generatePhotoUploadUrl = useMutation(generateLocationPhotoUploadUrlRef);
+  const submitLocationPhoto = useMutation(submitLocationPhotoRef);
   const itinerary = useQuery(getUserItineraryRef, { travelerSlug });
+  const communityPhotos = useQuery(
+    listLocationPhotosRef,
+    typeof slug === 'string' ? { locationKind: 'experience', locationSlug: slug } : 'skip'
+  );
   const likeState = useQuery(getLocationLikeStateRef, {
     travelerSlug,
     locationKind: 'experience',
     locationSlug: typeof slug === 'string' ? slug : '',
   });
   const [bookingAction, setBookingAction] = useState<'primary' | 'secondary' | null>(null);
+  const [requestingCircleId, setRequestingCircleId] = useState<string | null>(null);
+  const [requestedCircleIds, setRequestedCircleIds] = useState<string[]>([]);
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const tripSheetRef = useRef<BottomSheet>(null);
-
-  useEffect(() => {
-    void ensureCommunitySeed({});
-  }, [ensureCommunitySeed]);
 
   useEffect(() => {
     setOptimisticBookedSlug(null);
@@ -73,18 +90,18 @@ function ConnectedExploreExperienceScreen() {
   }, [slug]);
 
   if (page === undefined || itinerary === undefined || trip === undefined) {
-    return null;
+    return <ExperienceDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
   }
 
   if (page === null || !slug) {
-    return null;
+    return <ExperienceDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
   }
 
   const experience = page.experiences.find((item) => item.slug === slug);
   const activityCard = page.home.activities.find((item) => item.experienceSlug === slug);
 
   if (!experience) {
-    return null;
+    return <ExperienceDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
   }
 
   const bookedTrips = (itinerary || []).filter((item) => item.experienceSlug === slug);
@@ -92,7 +109,13 @@ function ConnectedExploreExperienceScreen() {
 
   const isLiked = optimisticLiked ?? likeState?.liked ?? false;
   const locationLabel = experience.locationLabel ?? page.home.hero.locationLabel;
-  const galleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
+  const hostGalleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
+  const galleryImages: GalleryImageItem[] = [
+    ...hostGalleryImages.map((uri) => ({ uri, source: 'host' as const })),
+    ...(communityPhotos ?? [])
+      .filter((photo) => !hostGalleryImages.includes(photo.imageUri))
+      .map((photo) => ({ uri: photo.imageUri, source: 'visitor' as const })),
+  ];
   const bookingMapCenter = experience.coordinate ?? trip.centerCoordinate ?? page.home.hero.centerCoordinate;
   const bookingMapMarkers = experience.coordinate
     ? [
@@ -113,21 +136,21 @@ function ConnectedExploreExperienceScreen() {
           experience.category
             ? {
                 label: 'Category',
-                value: experience.category.toUpperCase(),
+                value: experience.category,
                 detail: 'A strong fit if this is the energy you want the day to hold.',
               }
             : null,
           experience.durationLabel
             ? {
                 label: 'Duration',
-                value: experience.durationLabel.toUpperCase(),
+                value: experience.durationLabel,
                 detail: 'Useful when you are balancing this booking with the rest of the trip.',
               }
             : null,
           experience.groupSizeLabel
             ? {
                 label: 'Group Size',
-                value: experience.groupSizeLabel.toUpperCase(),
+                value: experience.groupSizeLabel,
                 detail: 'Helps you judge whether this works better solo, as a pair, or with friends.',
               }
             : null,
@@ -159,6 +182,27 @@ function ConnectedExploreExperienceScreen() {
   const handleSelectTripForBooking = async (tripId: Id<'trips'>) => {
     tripSheetRef.current?.close();
     await saveExperienceToTrip('primary', tripId);
+  };
+
+  const handleRequestJoinTrip = async (joinableTrip: ExploreJoinableTrip) => {
+    if (!travelerSlug || requestingCircleId || requestedCircleIds.includes(joinableTrip.circleId)) {
+      return;
+    }
+
+    setRequestingCircleId(joinableTrip.circleId);
+    try {
+      const requested = await requestJoinTrip({
+        travelerSlug,
+        circleId: joinableTrip.circleId as Id<'friendCircles'>,
+        experienceSlug: experience.slug,
+      });
+
+      if (requested) {
+        setRequestedCircleIds((current) => [...current, joinableTrip.circleId]);
+      }
+    } finally {
+      setRequestingCircleId(null);
+    }
   };
 
   const handleStartJourney = async () => {
@@ -198,6 +242,58 @@ function ConnectedExploreExperienceScreen() {
     }
   };
 
+  const handleSharePhoto = async () => {
+    if (!travelerSlug || isUploadingPhoto) {
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photos permission needed', 'Allow photo access to share a picture for this place.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      allowsMultipleSelection: false,
+      mediaTypes: ['images'],
+      quality: 0.88,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const asset = result.assets[0];
+      const uploadUrl = await generatePhotoUploadUrl({});
+      const photoResponse = await fetch(asset.uri);
+      const blob = await photoResponse.blob();
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': asset.mimeType ?? blob.type ?? 'image/jpeg' },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const { storageId } = (await uploadResponse.json()) as { storageId: Id<'_storage'> };
+      await submitLocationPhoto({
+        locationKind: 'experience',
+        locationSlug: experience.slug,
+        travelerSlug,
+        storageId,
+      });
+    } catch {
+      Alert.alert('Photo upload failed', 'Could not share that picture. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   return (
     <ThemedView style={[styles.root, isDark && styles.rootDark]}>
       <WandrHeader
@@ -205,6 +301,14 @@ function ConnectedExploreExperienceScreen() {
           overlay: true,
           leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
           trailingActions: [
+            {
+              kind: 'plus',
+              accessibilityLabel: isUploadingPhoto ? 'Uploading photo' : 'Share photo',
+              isLoading: isUploadingPhoto,
+              onPress: () => {
+                void handleSharePhoto();
+              },
+            },
             {
               kind: 'favorite',
               accessibilityLabel: isLiked ? 'Remove saved experience' : 'Save experience',
@@ -224,7 +328,9 @@ function ConnectedExploreExperienceScreen() {
         ]}>
         
         <View style={styles.carouselContainer}>
-          <ExperienceGalleryCarousel images={galleryImages} />
+          <ExperienceGalleryCarousel
+            images={galleryImages}
+          />
         </View>
 
         <View style={styles.paddedContent}>
@@ -238,7 +344,7 @@ function ConnectedExploreExperienceScreen() {
               minimumFontScale={0.4}
               numberOfLines={2}
               style={[styles.title, isDark && styles.titleDark]}>
-              {experience.title.toUpperCase()}
+              {experience.title}
             </ThemedText>
           </View>
           <View style={styles.subtitleRow}>
@@ -253,11 +359,13 @@ function ConnectedExploreExperienceScreen() {
         ) : null}
 
         {experience.travelerMomentum && (
-          <TravelerMomentum
-            regionName={activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel}
-            visitorCount={activityCard?.visitorCount ?? experience.travelerMomentum.visitorCount}
-            avatarUris={activityCard?.avatarUris ?? experience.travelerMomentum.avatarUris ?? []}
-          />
+          <View style={styles.socialProof}>
+            <TravelerMomentum
+              regionName={activityCard?.countryLabel ?? experience.travelerMomentum.countryLabel}
+              visitorCount={activityCard?.visitorCount ?? experience.travelerMomentum.visitorCount}
+              avatarUris={activityCard?.avatarUris ?? experience.travelerMomentum.avatarUris ?? []}
+            />
+          </View>
         )}
 
         {tripFitItems.length > 0 ? (
@@ -303,6 +411,50 @@ function ConnectedExploreExperienceScreen() {
           </ThemedText>
 
           <ScrollView contentContainerStyle={styles.tripList}>
+            {(joinableTrips?.length ?? 0) > 0 ? (
+              <View style={styles.publicTripSection}>
+                <View style={styles.publicTripHeader}>
+                  <ThemedText style={[styles.publicTripTitle, isDark && styles.sheetTitleDark]}>
+                    Public trips for this experience
+                  </ThemedText>
+                  <ThemedText style={[styles.publicTripSubtitle, isDark && styles.sheetSubtitleDark]}>
+                    Join someone else’s plan if this route already fits your trip.
+                  </ThemedText>
+                </View>
+
+                {joinableTrips?.map((joinableTrip) => {
+                  const hasRequested = requestedCircleIds.includes(joinableTrip.circleId);
+                  const isRequesting = requestingCircleId === joinableTrip.circleId;
+
+                  return (
+                    <View key={joinableTrip.circleId} style={styles.publicTripOption}>
+                      <View style={styles.publicTripCopy}>
+                        <ThemedText style={styles.publicTripName}>{joinableTrip.groupName}</ThemedText>
+                        <ThemedText style={[styles.publicTripMeta, isDark && styles.sheetSubtitleDark]}>
+                          {joinableTrip.hostName} • {joinableTrip.memberCount} travelers • {joinableTrip.destinationLabel}
+                        </ThemedText>
+                        <TravelerAvatarStack avatars={joinableTrip.avatarUris} totalCount={joinableTrip.memberCount} />
+                      </View>
+                      <Pressable
+                        accessibilityLabel={hasRequested ? 'Join request sent' : `Join ${joinableTrip.groupName}`}
+                        disabled={hasRequested || isRequesting}
+                        onPress={() => {
+                          void handleRequestJoinTrip(joinableTrip);
+                        }}
+                        style={[
+                          styles.publicTripJoinButton,
+                          hasRequested || isRequesting ? styles.publicTripJoinButtonDisabled : null,
+                        ]}>
+                        <ThemedText style={styles.publicTripJoinText}>
+                          {hasRequested ? 'Requested' : isRequesting ? 'Joining' : 'Join'}
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
             {(trips?.length ?? 0) === 0 ? (
               <Pressable
                 style={[styles.tripOption, styles.tripOptionDefault]}
@@ -330,6 +482,44 @@ function ConnectedExploreExperienceScreen() {
           </ScrollView>
         </BottomSheetView>
       </GlassBottomSheet>
+
+    </ThemedView>
+  );
+}
+
+function ExperienceDetailLoadingScreen({
+  insetsBottom,
+  insetsTop,
+  isDark,
+}: {
+  insetsBottom: number;
+  insetsTop: number;
+  isDark: boolean;
+}) {
+  return (
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
+      <WandrHeader
+        config={{
+          overlay: true,
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save experience' }],
+        }}
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + designSystem.spacing.xxxl },
+        ]}>
+        <SkeletonBlock style={styles.detailHeroSkeleton} />
+        <View style={styles.paddedContent}>
+          <SkeletonBlock style={styles.detailBadgeSkeleton} />
+          <SkeletonBlock style={styles.detailTitleSkeleton} />
+          <SkeletonBlock style={styles.detailSubtitleSkeleton} />
+          <SkeletonBlock style={styles.detailBodySkeleton} />
+          <SkeletonBlock style={styles.detailPanelSkeleton} />
+        </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -403,7 +593,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   socialProofText: {
     fontSize: 14,
@@ -418,9 +608,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 30,
     lineHeight: 28,
-    fontWeight: '700',
-    letterSpacing: -1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   sectionTitleDark: {
@@ -462,6 +650,64 @@ const styles = StyleSheet.create({
   tripList: {
     gap: 12,
   },
+  publicTripSection: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  publicTripHeader: {
+    gap: 4,
+  },
+  publicTripTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: designSystem.colors.ink,
+  },
+  publicTripSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: designSystem.colors.warmDark,
+  },
+  publicTripOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: designSystem.colors.surface,
+    borderWidth: 1,
+    borderColor: designSystem.colors.border,
+  },
+  publicTripCopy: {
+    flex: 1,
+    gap: 8,
+  },
+  publicTripName: {
+    ...designSystem.type.bodyStrong,
+  },
+  publicTripMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: designSystem.colors.warmDark,
+  },
+  publicTripJoinButton: {
+    minWidth: 82,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.lime,
+    paddingHorizontal: 14,
+  },
+  publicTripJoinButtonDisabled: {
+    opacity: 0.7,
+  },
+  publicTripJoinText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: designSystem.colors.darkGreen,
+  },
   tripOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,7 +726,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: designSystem.colors.whiteOverlayStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -498,5 +744,35 @@ const styles = StyleSheet.create({
   tripOptionName: {
     ...designSystem.type.bodyStrong,
     flex: 1,
+  },
+  detailHeroSkeleton: {
+    height: 340,
+    borderRadius: 34,
+    marginHorizontal: designSystem.spacing.lg,
+  },
+  detailBadgeSkeleton: {
+    width: 104,
+    height: 30,
+    borderRadius: 15,
+  },
+  detailTitleSkeleton: {
+    width: '86%',
+    height: 74,
+    borderRadius: 24,
+  },
+  detailSubtitleSkeleton: {
+    width: '62%',
+    height: 20,
+    borderRadius: 10,
+  },
+  detailBodySkeleton: {
+    width: '100%',
+    height: 92,
+    borderRadius: 24,
+  },
+  detailPanelSkeleton: {
+    width: '100%',
+    height: 156,
+    borderRadius: 28,
   },
 });

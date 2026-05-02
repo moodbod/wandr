@@ -6,4 +6,7 @@ export const appUsersTable = defineTable({
   name: v.string(),
   countryCode: v.string(),
   countryLabel: v.string(),
-}).index('by_slug', ['slug']);
+  phoneNumber: v.optional(v.string()),
+})
+  .index('by_slug', ['slug'])
+  .index('by_phoneNumber', ['phoneNumber']);

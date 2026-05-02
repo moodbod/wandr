@@ -1,13 +1,27 @@
 import { v } from 'convex/values';
 
+import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
-import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
+import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { demoExploreTravelers } from './seeds/demoExploreTravelers';
 import { seedFriendProfiles } from './seeds/seedFriends';
 
 type FriendProfileDoc = Doc<'friendProfiles'>;
 type FriendCircleDoc = Doc<'friendCircles'>;
 type FriendMemberDoc = Doc<'friendCircleMembers'>;
+type FriendDirectThreadDoc = Doc<'friendDirectThreads'>;
+type PhoneContactMatch = {
+  travelerSlug: string;
+  name: string;
+  avatarUri: string | null;
+  baseLabel: string;
+  phoneNumber: string;
+  isFriend: boolean;
+};
+
+function normalizeThreadPair(firstSlug: string, secondSlug: string) {
+  return [firstSlug, secondSlug].sort((a, b) => a.localeCompare(b)) as [string, string];
+}
 
 function buildRegionFromCountry(countryCode: string, countryLabel: string) {
   if (countryCode === 'NA') {
@@ -80,6 +94,20 @@ async function getActiveCircleForTraveler(
   return await ctx.db.get(firstMembership.circleId);
 }
 
+async function getActiveCirclesForTraveler(
+  ctx: QueryCtx | MutationCtx,
+  travelerSlug: string
+): Promise<FriendCircleDoc[]> {
+  const memberships = await getActiveCircleMemberships(ctx, travelerSlug);
+  const circles = await Promise.all(
+    memberships
+      .sort((a, b) => b.joinedAt - a.joinedAt)
+      .map((membership) => ctx.db.get(membership.circleId))
+  );
+
+  return circles.filter((circle): circle is FriendCircleDoc => circle !== null);
+}
+
 async function getCircleMembers(
   ctx: QueryCtx | MutationCtx,
   circleId: Id<'friendCircles'>
@@ -118,12 +146,158 @@ async function getFriendConnectionSet(ctx: QueryCtx | MutationCtx, travelerSlug:
   return new Set(connections.map((connection) => connection.friendSlug));
 }
 
+async function getFriendPickerItems(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
+  const connections = await ctx.db
+    .query('friendConnections')
+    .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
+    .collect();
+
+  const friends = await Promise.all(
+    connections.map(async (connection) => {
+      const [user, profile] = await Promise.all([
+        getAppUser(ctx, connection.friendSlug),
+        getTravelerProfile(ctx, connection.friendSlug),
+      ]);
+
+      if (!user) {
+        return null;
+      }
+
+      return {
+        travelerSlug: user.slug,
+        name: user.name,
+        avatarUri: profile?.avatarUri ?? null,
+        baseLabel: profile?.regionName ?? user.countryLabel,
+      };
+    })
+  );
+
+  return friends
+    .filter((friend): friend is NonNullable<typeof friend> => friend !== null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function getDirectThreadsForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
+  const [asA, asB] = await Promise.all([
+    ctx.db
+      .query('friendDirectThreads')
+      .withIndex('by_participantA_and_updatedAt', (q) => q.eq('participantA', travelerSlug))
+      .collect(),
+    ctx.db
+      .query('friendDirectThreads')
+      .withIndex('by_participantB_and_updatedAt', (q) => q.eq('participantB', travelerSlug))
+      .collect(),
+  ]);
+
+  const seen = new Set<string>();
+  const merged: FriendDirectThreadDoc[] = [];
+
+  for (const thread of [...asA, ...asB]) {
+    if (seen.has(thread._id)) {
+      continue;
+    }
+    seen.add(thread._id);
+    merged.push(thread);
+  }
+
+  return merged.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function getOrCreateDirectThread(ctx: MutationCtx, travelerSlug: string, otherSlug: string) {
+  const [participantA, participantB] = normalizeThreadPair(travelerSlug, otherSlug);
+  const existing = await ctx.db
+    .query('friendDirectThreads')
+    .withIndex('by_participantA_and_participantB', (q) =>
+      q.eq('participantA', participantA).eq('participantB', participantB)
+    )
+    .unique();
+
+  if (existing) {
+    return existing;
+  }
+
+  const now = Date.now();
+  const threadId = await ctx.db.insert('friendDirectThreads', {
+    participantA,
+    participantB,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return await ctx.db.get(threadId);
+}
+
+async function deleteFriendCircleDocuments(ctx: MutationCtx, circleId: Id<'friendCircles'>) {
+  const [messages, members, readStates, trips] = await Promise.all([
+    ctx.db
+      .query('friendMessages')
+      .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circleId))
+      .take(200),
+    ctx.db
+      .query('friendCircleMembers')
+      .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
+      .take(100),
+    ctx.db
+      .query('friendCircleReadStates')
+      .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
+      .take(100),
+    ctx.db
+      .query('trips')
+      .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
+      .take(100),
+  ]);
+
+  for (const message of messages) {
+    await ctx.db.delete(message._id);
+  }
+  for (const member of members) {
+    await ctx.db.delete(member._id);
+  }
+  for (const readState of readStates) {
+    await ctx.db.delete(readState._id);
+  }
+  for (const trip of trips) {
+    await ctx.db.delete(trip._id);
+  }
+
+  await ctx.db.delete(circleId);
+}
+
+async function deleteDirectThreadDocuments(ctx: MutationCtx, threadId: Id<'friendDirectThreads'>) {
+  const [messages, readStates] = await Promise.all([
+    ctx.db
+      .query('friendDirectMessages')
+      .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', threadId))
+      .take(200),
+    ctx.db
+      .query('friendDirectReadStates')
+      .withIndex('by_threadId', (q) => q.eq('threadId', threadId))
+      .take(100),
+  ]);
+
+  for (const message of messages) {
+    await ctx.db.delete(message._id);
+  }
+  for (const readState of readStates) {
+    await ctx.db.delete(readState._id);
+  }
+
+  await ctx.db.delete(threadId);
+}
+
 async function insertAppNotification(
   ctx: MutationCtx,
   args: {
     recipientSlug: string;
     actorSlug?: string;
-    kind: 'friend_invite' | 'friend_added' | 'trip_arrival' | 'trip_rating';
+    kind:
+      | 'friend_invite'
+      | 'friend_added'
+      | 'trip_join_request'
+      | 'trip_arrival'
+      | 'trip_rating'
+      | 'friend_call'
+      | 'friend_call_reminder';
     title: string;
     body: string;
     href?: string;
@@ -142,6 +316,66 @@ async function insertAppNotification(
     entityLabel: args.entityLabel,
     createdAt: Date.now(),
   });
+}
+
+function buildCallRoomName(circleId: Id<'friendCircles'>, createdAt: number) {
+  return `wandr-${circleId}-${createdAt}`;
+}
+
+function formatCallMode(mode: 'voice' | 'video') {
+  return mode === 'voice' ? 'voice call' : 'video call';
+}
+
+async function requireActiveCircleMember(
+  ctx: QueryCtx | MutationCtx,
+  circleId: Id<'friendCircles'>,
+  travelerSlug: string
+) {
+  const circle = await ctx.db.get(circleId);
+  if (!circle) {
+    return null;
+  }
+
+  const membership = await ctx.db
+    .query('friendCircleMembers')
+    .withIndex('by_circleId_and_travelerSlug', (q) => q.eq('circleId', circleId).eq('travelerSlug', travelerSlug))
+    .unique();
+
+  if (!membership || membership.status !== 'active') {
+    return null;
+  }
+
+  return { circle, membership };
+}
+
+async function notifyCircleMembersAboutCall(
+  ctx: MutationCtx,
+  args: {
+    circleId: Id<'friendCircles'>;
+    actorSlug: string;
+    callId: Id<'friendCalls'>;
+    title: string;
+    body: string;
+    kind: 'friend_call' | 'friend_call_reminder';
+  }
+) {
+  const members = await getCircleMembers(ctx, args.circleId);
+  for (const member of members) {
+    if (member.travelerSlug === args.actorSlug || member.status !== 'active') {
+      continue;
+    }
+
+    await insertAppNotification(ctx, {
+      recipientSlug: member.travelerSlug,
+      actorSlug: args.actorSlug,
+      kind: args.kind,
+      title: args.title,
+      body: args.body,
+      href: `/friends/call/${args.callId}`,
+      entityId: args.callId,
+      entityLabel: args.title,
+    });
+  }
 }
 
 function computeMatchScore(current: FriendProfileDoc, candidate: FriendProfileDoc) {
@@ -219,13 +453,54 @@ async function buildCircleSummary(
   };
 }
 
+function slugifyGroupName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function normalizePhoneNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (digits.length < 7) {
+    return null;
+  }
+
+  return `${hasPlus ? '+' : ''}${digits}`;
+}
+
+async function getJoinableCirclesForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
+  const memberships = await ctx.db
+    .query('friendCircleMembers')
+    .withIndex('by_travelerSlug_and_status', (q) => q.eq('travelerSlug', travelerSlug).eq('status', 'active'))
+    .collect();
+
+  const joinedCircleIds = new Set(memberships.map((membership) => membership.circleId));
+  const openCircles = (await ctx.db.query('friendCircles').collect()).filter(
+    (circle) => circle.visibility === 'open' && !joinedCircleIds.has(circle._id) && circle.createdBySlug !== travelerSlug
+  );
+
+  const summaries = await Promise.all(openCircles.map((circle) => buildCircleSummary(ctx, circle)));
+  return summaries.sort((a, b) => b.latestActivityAt - a.latestActivityAt);
+}
+
 async function buildCandidates(
   ctx: QueryCtx | MutationCtx,
   travelerSlug: string,
   limit?: number
 ) {
-  const currentProfile = await getFriendProfile(ctx, travelerSlug);
-  if (!currentProfile) {
+  const [currentProfile, currentUser] = await Promise.all([
+    getFriendProfile(ctx, travelerSlug),
+    getAppUser(ctx, travelerSlug),
+  ]);
+  if (!currentProfile || !currentUser) {
     return [];
   }
 
@@ -257,6 +532,7 @@ async function buildCandidates(
           name: user.name,
           avatarUri: travelerProfile?.avatarUri ?? null,
           countryLabel: user.countryLabel,
+          sameCountry: user.countryCode === currentUser.countryCode,
           baseLabel: candidate.baseLabel,
           destinationLabel: candidate.destinationLabel,
           headline: candidate.headline,
@@ -274,12 +550,20 @@ async function buildCandidates(
 
   const sorted = candidates
     .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+    .filter((candidate) => candidate.actionState !== 'passed')
+    .filter((candidate, _index, all) => {
+      const hasSameCountryTravelers = all.some((item) => item?.sameCountry);
+      return hasSameCountryTravelers ? candidate.sameCountry : true;
+    })
     .sort((a, b) => {
       if (a.actionState === 'invited' && b.actionState !== 'invited') {
         return -1;
       }
       if (a.actionState !== 'invited' && b.actionState === 'invited') {
         return 1;
+      }
+      if (a.sameCountry !== b.sameCountry) {
+        return a.sameCountry ? -1 : 1;
       }
       return b.matchScore - a.matchScore;
     });
@@ -296,6 +580,11 @@ async function ensureBaseTravelers(ctx: MutationCtx) {
         name: traveler.name,
         countryCode: traveler.countryCode,
         countryLabel: traveler.countryLabel,
+        phoneNumber: traveler.phoneNumber,
+      });
+    } else if (!existingUser.phoneNumber && traveler.phoneNumber) {
+      await ctx.db.patch(existingUser._id, {
+        phoneNumber: traveler.phoneNumber,
       });
     }
 
@@ -323,7 +612,93 @@ async function ensureBaseTravelers(ctx: MutationCtx) {
   }
 }
 
-async function buildRouteShare(ctx: MutationCtx, travelerSlug: string) {
+async function ensureSeedDirectChats(ctx: MutationCtx, travelerSlug: string) {
+  const defaultFriendSlugs = seedFriendProfiles
+    .map((profile) => profile.travelerSlug)
+    .filter((slug) => slug !== travelerSlug)
+    .slice(0, 2);
+
+  for (const friendSlug of defaultFriendSlugs) {
+    const existingConnection = await ctx.db
+      .query('friendConnections')
+      .withIndex('by_travelerSlug_and_friendSlug', (q) =>
+        q.eq('travelerSlug', travelerSlug).eq('friendSlug', friendSlug)
+      )
+      .unique();
+
+    if (!existingConnection) {
+      await ctx.db.insert('friendConnections', {
+        travelerSlug,
+        friendSlug,
+        createdAt: Date.now(),
+        source: 'manual',
+      });
+    }
+
+    const existingReverseConnection = await ctx.db
+      .query('friendConnections')
+      .withIndex('by_travelerSlug_and_friendSlug', (q) =>
+        q.eq('travelerSlug', friendSlug).eq('friendSlug', travelerSlug)
+      )
+      .unique();
+
+    if (!existingReverseConnection) {
+      await ctx.db.insert('friendConnections', {
+        travelerSlug: friendSlug,
+        friendSlug: travelerSlug,
+        createdAt: Date.now(),
+        source: 'manual',
+      });
+    }
+
+    const thread = await getOrCreateDirectThread(ctx, travelerSlug, friendSlug);
+    if (!thread) {
+      continue;
+    }
+
+    const messages = await ctx.db
+      .query('friendDirectMessages')
+      .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
+      .take(1);
+
+    if (messages.length > 0) {
+      continue;
+    }
+
+    const now = Date.now();
+    const seededMessages = [
+      {
+        senderSlug: friendSlug,
+        body: 'Landing later. Send me the meeting point once your route firms up.',
+        createdAt: now - 1000 * 60 * 33,
+      },
+      {
+        senderSlug: travelerSlug,
+        body: 'Perfect. I will ping you after the coast stop so we sync cleanly.',
+        createdAt: now - 1000 * 60 * 18,
+      },
+    ];
+
+    for (const message of seededMessages) {
+      await ctx.db.insert('friendDirectMessages', {
+        threadId: thread._id,
+        senderSlug: message.senderSlug,
+        body: message.body,
+        createdAt: message.createdAt,
+      });
+    }
+
+    await ctx.db.patch(thread._id, {
+      updatedAt: seededMessages[seededMessages.length - 1].createdAt,
+    });
+  }
+}
+
+function isCoordinate(value: readonly number[] | undefined): value is readonly [number, number] {
+  return Array.isArray(value) && value.length === 2;
+}
+
+async function buildRouteShare(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const trips = await ctx.db
     .query('trips')
     .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
@@ -338,6 +713,9 @@ async function buildRouteShare(ctx: MutationCtx, travelerSlug: string) {
       routeDistanceLabel: 'Planning update',
       routeStopCount: 0,
       routeStopsPreview: [],
+      routeCenterCoordinate: null,
+      routeHeroImageUri: null,
+      routeMapMarkers: [],
     };
   }
 
@@ -361,6 +739,37 @@ async function buildRouteShare(ctx: MutationCtx, travelerSlug: string) {
     .filter((value): value is string => Boolean(value))
     .slice(0, 3);
 
+  const routeMapMarkers = bookings
+    .map((booking, index) => {
+      const experience = experiences.find((item) => item.slug === booking.experienceSlug);
+      const stay = stays.find((item) => item.slug === booking.experienceSlug);
+      const coordinate = experience?.coordinate ?? stay?.coordinate;
+
+      if (!isCoordinate(coordinate)) {
+        return null;
+      }
+
+      return {
+        id: `${booking._id}-${index}`,
+        coordinate,
+        imageUri: experience?.imageUri ?? stay?.imageUri,
+        label: experience?.title ?? stay?.name ?? 'Trip stop',
+        status: index === 0 ? ('active' as const) : ('upcoming' as const),
+      };
+    })
+    .filter((marker): marker is NonNullable<typeof marker> => marker !== null);
+
+  const routeHeroImageUri =
+    bookings
+      .map((booking) => {
+        const experience = experiences.find((item) => item.slug === booking.experienceSlug);
+        const stay = stays.find((item) => item.slug === booking.experienceSlug);
+        return experience?.imageUri ?? stay?.imageUri ?? null;
+      })
+      .find((imageUri): imageUri is string => Boolean(imageUri)) ?? null;
+
+  const routeCenterCoordinate = routeMapMarkers[0]?.coordinate ?? null;
+
   return {
     routeTitle: activeTrip.name.toLowerCase() === 'default' ? 'My Trip Route' : activeTrip.name,
     routeSummary:
@@ -370,7 +779,71 @@ async function buildRouteShare(ctx: MutationCtx, travelerSlug: string) {
     routeDistanceLabel: bookings.length > 0 ? `${bookings.length} planned stops` : 'Route draft',
     routeStopCount: bookings.length,
     routeStopsPreview: previewStops,
+    routeCenterCoordinate,
+    routeHeroImageUri,
+    routeMapMarkers,
   };
+}
+
+async function cloneTripBookingsToTrip(
+  ctx: MutationCtx,
+  sourceTripId: Id<'trips'>,
+  targetTripId: Id<'trips'>,
+  travelerSlug: string
+) {
+  const sourceBookings = await ctx.db
+    .query('experienceBookings')
+    .withIndex('by_tripId', (q) => q.eq('tripId', sourceTripId))
+    .collect();
+
+  for (const booking of sourceBookings) {
+    await ctx.db.insert('experienceBookings', {
+      experienceSlug: booking.experienceSlug,
+      travelerSlug,
+      tripId: targetTripId,
+      bookedAt: booking.bookedAt,
+      bookingType: booking.bookingType,
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      totalPrice: booking.totalPrice,
+      stayBookingDetails: booking.stayBookingDetails,
+    });
+  }
+}
+
+async function createGroupTripCopy(
+  ctx: MutationCtx,
+  args: {
+    travelerSlug: string;
+    circleId: Id<'friendCircles'>;
+    name: string;
+    role: 'host' | 'member';
+    sourceTripId: Id<'trips'>;
+  }
+) {
+  const existingTrip = await ctx.db
+    .query('trips')
+    .withIndex('by_travelerSlug_and_circleId', (q) =>
+      q.eq('travelerSlug', args.travelerSlug).eq('circleId', args.circleId)
+    )
+    .unique();
+
+  if (existingTrip) {
+    return existingTrip._id;
+  }
+
+  const tripId = await ctx.db.insert('trips', {
+    name: args.name,
+    travelerSlug: args.travelerSlug,
+    circleId: args.circleId,
+    groupRole: args.role,
+    sourceTripId: args.sourceTripId,
+    createdAt: Date.now(),
+    status: 'active',
+  });
+
+  await cloneTripBookingsToTrip(ctx, args.sourceTripId, tripId, args.travelerSlug);
+  return tripId;
 }
 
 export const ensureFriendsSeed = mutation({
@@ -384,6 +857,8 @@ export const ensureFriendsSeed = mutation({
     if (!resolvedTravelerSlug) {
       return false;
     }
+
+    await ensureSeedDirectChats(ctx, resolvedTravelerSlug);
 
     const existingCircle = await getActiveCircleForTraveler(ctx, resolvedTravelerSlug);
     if (existingCircle) {
@@ -409,6 +884,7 @@ export const ensureFriendsSeed = mutation({
       destinationLabel: 'Namibia loop',
       heroLabel: 'Road-plan crew',
       status: 'active',
+      visibility: 'open',
       createdBySlug: resolvedTravelerSlug,
       tripId: trips[0]?._id,
       createdAt: now - 1000 * 60 * 30,
@@ -484,13 +960,15 @@ export const getFriendsDashboard = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
-    const [traveler, travelerProfile, friendProfile, circle, allCandidates] = await Promise.all([
+    const [traveler, travelerProfile, friendProfile, circles, allCandidates] = await Promise.all([
       getAppUser(ctx, args.travelerSlug),
       getTravelerProfile(ctx, args.travelerSlug),
       getFriendProfile(ctx, args.travelerSlug),
-      getActiveCircleForTraveler(ctx, args.travelerSlug),
+      getActiveCirclesForTraveler(ctx, args.travelerSlug),
       buildCandidates(ctx, args.travelerSlug),
     ]);
+    const circleSummaries = await Promise.all(circles.map((circle) => buildCircleSummary(ctx, circle)));
+    const activeCircles = circleSummaries.sort((a, b) => b.latestActivityAt - a.latestActivityAt);
 
     return {
       traveler: traveler
@@ -509,7 +987,8 @@ export const getFriendsDashboard = query({
             interests: friendProfile.interests,
           }
         : null,
-      activeCircle: circle ? await buildCircleSummary(ctx, circle) : null,
+      activeCircle: activeCircles[0] ?? null,
+      activeCircles,
       topMatches: allCandidates.slice(0, 3),
       stats: {
         invitedCount: allCandidates.filter((candidate) => candidate.actionState === 'invited').length,
@@ -525,27 +1004,819 @@ export const getFriendDiscovery = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
-    const [friendProfile, activeCircle, candidates] = await Promise.all([
+    const [traveler, friendProfile, candidates] = await Promise.all([
+      getAppUser(ctx, args.travelerSlug),
       getFriendProfile(ctx, args.travelerSlug),
-      getActiveCircleForTraveler(ctx, args.travelerSlug),
       buildCandidates(ctx, args.travelerSlug),
     ]);
 
     const vibes = [...new Set(candidates.map((candidate) => candidate.vibe))];
+    const discoverViewCount = friendProfile?.discoverViewCount ?? 0;
 
     return {
       intro: {
-        title: 'Friends discovery',
+        title: 'Friends nearby',
+        countryLabel: traveler?.countryLabel ?? 'your country',
         destinationLabel: friendProfile?.destinationLabel ?? 'Travel together',
         vibe: friendProfile?.vibe ?? null,
         matchCount: candidates.filter((candidate) => candidate.actionState === null).length,
+        showIntro: discoverViewCount < 4,
       },
-      activeCircle: activeCircle ? await buildCircleSummary(ctx, activeCircle) : null,
       filters: {
         vibes,
       },
       candidates,
     };
+  },
+});
+
+export const getFriendViewerProfile = query({
+  args: {
+    travelerSlug: v.string(),
+    profileSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const [participantA, participantB] = normalizeThreadPair(args.travelerSlug, args.profileSlug);
+    const [
+      viewerProfile,
+      viewedUser,
+      viewedTravelerProfile,
+      viewedFriendProfile,
+      connection,
+      action,
+      directThread,
+      friendConnections,
+    ] =
+      await Promise.all([
+        getFriendProfile(ctx, args.travelerSlug),
+        getAppUser(ctx, args.profileSlug),
+        getTravelerProfile(ctx, args.profileSlug),
+        getFriendProfile(ctx, args.profileSlug),
+        ctx.db
+          .query('friendConnections')
+          .withIndex('by_travelerSlug_and_friendSlug', (q) =>
+            q.eq('travelerSlug', args.travelerSlug).eq('friendSlug', args.profileSlug)
+          )
+          .unique(),
+        ctx.db
+          .query('friendMatchActions')
+          .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
+            q.eq('travelerSlug', args.travelerSlug).eq('candidateSlug', args.profileSlug)
+          )
+          .unique(),
+        ctx.db
+          .query('friendDirectThreads')
+          .withIndex('by_participantA_and_participantB', (q) =>
+            q.eq('participantA', participantA).eq('participantB', participantB)
+          )
+          .unique(),
+        ctx.db
+          .query('friendConnections')
+          .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.profileSlug))
+          .collect(),
+      ]);
+
+    if (!viewedUser) {
+      return null;
+    }
+
+    const match = viewerProfile && viewedFriendProfile ? computeMatchScore(viewerProfile, viewedFriendProfile) : null;
+    const relationshipState =
+      args.travelerSlug === args.profileSlug
+        ? 'self'
+        : connection
+          ? 'friend'
+          : action?.state === 'invited'
+            ? 'invited'
+            : 'available';
+
+    return {
+      traveler: {
+        slug: viewedUser.slug,
+        name: viewedUser.name,
+        countryLabel: viewedUser.countryLabel,
+        baseLabel: viewedTravelerProfile?.regionName ?? viewedFriendProfile?.baseLabel ?? viewedUser.countryLabel,
+        avatarUri: viewedTravelerProfile?.avatarUri ?? null,
+      },
+      profile: viewedFriendProfile
+        ? {
+            headline: viewedFriendProfile.headline,
+            bio: viewedFriendProfile.bio,
+            destinationLabel: viewedFriendProfile.destinationLabel,
+            vibe: viewedFriendProfile.vibe,
+            travelPace: viewedFriendProfile.travelPace,
+            arrivalWindowLabel: viewedFriendProfile.arrivalWindowLabel,
+            interests: viewedFriendProfile.interests,
+            sharedInterests: match?.sharedInterests ?? [],
+            matchScore: match?.score ?? null,
+          }
+        : null,
+      relationship: {
+        state: relationshipState,
+        directThreadId: directThread?._id ?? null,
+      },
+      stats: {
+        friendCount: friendConnections.length,
+      },
+    };
+  },
+});
+
+export const trackFriendDiscoveryView = mutation({
+  args: {
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const profile = await getFriendProfile(ctx, args.travelerSlug);
+    if (!profile) {
+      return false;
+    }
+
+    await ctx.db.patch(profile._id, {
+      discoverViewCount: (profile.discoverViewCount ?? 0) + 1,
+    });
+
+    return true;
+  },
+});
+
+export const getFriendChatList = query({
+  args: {
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const [memberships, directThreads, joinableCircles, friends] = await Promise.all([
+      getActiveCircleMemberships(ctx, args.travelerSlug),
+      getDirectThreadsForTraveler(ctx, args.travelerSlug),
+      getJoinableCirclesForTraveler(ctx, args.travelerSlug),
+      getFriendPickerItems(ctx, args.travelerSlug),
+    ]);
+
+    const groups = await Promise.all(
+      memberships.map(async (membership) => {
+        const circle = await ctx.db.get(membership.circleId);
+        if (!circle) {
+          return null;
+        }
+        const summary = await buildCircleSummary(ctx, circle);
+        return {
+          id: summary._id,
+          kind: 'group' as const,
+          title: summary.name,
+          subtitle: `${summary.memberCount} active in ${summary.destinationLabel}`,
+          preview: summary.latestMessagePreview,
+          updatedAt: summary.latestActivityAt,
+          avatarUris: summary.avatarUris,
+          href: `/friends/group/${summary._id}`,
+        };
+      })
+    );
+
+    const directs = await Promise.all(
+      directThreads.map(async (thread) => {
+        const otherSlug = thread.participantA === args.travelerSlug ? thread.participantB : thread.participantA;
+        const [otherUser, otherProfile, latestMessages] = await Promise.all([
+          getAppUser(ctx, otherSlug),
+          getTravelerProfile(ctx, otherSlug),
+          ctx.db
+            .query('friendDirectMessages')
+            .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
+            .order('desc')
+            .take(1),
+        ]);
+
+        if (!otherUser) {
+          return null;
+        }
+
+        return {
+          id: thread._id,
+          kind: 'direct' as const,
+          title: thread.title ?? otherUser.name,
+          subtitle: otherProfile?.regionName ?? otherUser.countryLabel,
+          preview: latestMessages[0]?.body ?? null,
+          updatedAt: latestMessages[0]?.createdAt ?? thread.updatedAt,
+          travelerSlug: otherUser.slug,
+          avatarUri: otherProfile?.avatarUri ?? null,
+          href: `/friends/direct/${thread._id}`,
+        };
+      })
+    );
+
+    return {
+      groups: groups
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+      directs: directs
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+      joinableGroups: joinableCircles.map((circle) => ({
+        id: circle._id,
+        title: circle.name,
+        subtitle: `${circle.memberCount} active in ${circle.destinationLabel}`,
+        preview: circle.latestMessagePreview,
+        avatarUris: circle.avatarUris,
+        memberCount: circle.memberCount,
+        href: `/friends/group/${circle._id}`,
+      })),
+      friends,
+    };
+  },
+});
+
+export const getHeaderBadgeCounts = query({
+  args: {
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const [activeMemberships, participantAThreads, participantBThreads, unreadNotifications] = await Promise.all([
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_travelerSlug_and_status', (q) => q.eq('travelerSlug', args.travelerSlug).eq('status', 'active'))
+        .collect(),
+      ctx.db
+        .query('friendDirectThreads')
+        .withIndex('by_participantA_and_updatedAt', (q) => q.eq('participantA', args.travelerSlug))
+        .collect(),
+      ctx.db
+        .query('friendDirectThreads')
+        .withIndex('by_participantB_and_updatedAt', (q) => q.eq('participantB', args.travelerSlug))
+        .collect(),
+      ctx.db
+        .query('appNotifications')
+        .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', args.travelerSlug))
+        .collect(),
+    ]);
+
+    let groupUnreadCount = 0;
+    for (const membership of activeMemberships) {
+      const [readState, latestMessage] = await Promise.all([
+        ctx.db
+          .query('friendCircleReadStates')
+          .withIndex('by_circleId_and_travelerSlug', (q) =>
+            q.eq('circleId', membership.circleId).eq('travelerSlug', args.travelerSlug)
+          )
+          .unique(),
+        ctx.db
+          .query('friendMessages')
+          .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', membership.circleId))
+          .order('desc')
+          .take(1),
+      ]);
+
+      const latest = latestMessage[0];
+      if (!latest || latest.senderSlug === args.travelerSlug) {
+        continue;
+      }
+
+      if (latest.createdAt > (readState?.lastReadAt ?? 0)) {
+        groupUnreadCount += 1;
+      }
+    }
+
+    let directUnreadCount = 0;
+    for (const thread of [...participantAThreads, ...participantBThreads]) {
+      const [readState, latestMessage] = await Promise.all([
+        ctx.db
+          .query('friendDirectReadStates')
+          .withIndex('by_threadId_and_travelerSlug', (q) =>
+            q.eq('threadId', thread._id).eq('travelerSlug', args.travelerSlug)
+          )
+          .unique(),
+        ctx.db
+          .query('friendDirectMessages')
+          .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
+          .order('desc')
+          .take(1),
+      ]);
+
+      const latest = latestMessage[0];
+      if (!latest || latest.senderSlug === args.travelerSlug) {
+        continue;
+      }
+
+      if (latest.createdAt > (readState?.lastReadAt ?? 0)) {
+        directUnreadCount += 1;
+      }
+    }
+
+    return {
+      chatUnreadCount: groupUnreadCount + directUnreadCount,
+      notificationUnreadCount: unreadNotifications.filter((notification) => !notification.readAt).length,
+    };
+  },
+});
+
+export const matchFriendContacts = query({
+  args: {
+    travelerSlug: v.string(),
+    phoneNumbers: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const normalizedNumbers = [...new Set(args.phoneNumbers.map(normalizePhoneNumber).filter(Boolean) as string[])];
+    const friendSet = await getFriendConnectionSet(ctx, args.travelerSlug);
+    const matched: PhoneContactMatch[] = [];
+    const unmatched = new Set(normalizedNumbers);
+
+    for (const phoneNumber of normalizedNumbers) {
+      const user = await ctx.db
+        .query('appUsers')
+        .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', phoneNumber))
+        .unique();
+
+      if (!user || user.slug === args.travelerSlug) {
+        continue;
+      }
+
+      const profile = await getTravelerProfile(ctx, user.slug);
+      matched.push({
+        travelerSlug: user.slug,
+        name: user.name,
+        avatarUri: profile?.avatarUri ?? null,
+        baseLabel: profile?.regionName ?? user.countryLabel,
+        phoneNumber,
+        isFriend: friendSet.has(user.slug),
+      });
+      unmatched.delete(phoneNumber);
+    }
+
+    return {
+      matched,
+      unmatched: [...unmatched],
+    };
+  },
+});
+
+export const createOpenFriendGroup = mutation({
+  args: {
+    travelerSlug: v.string(),
+    name: v.optional(v.string()),
+    tripId: v.optional(v.id('trips')),
+    inviteeSlugs: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const [hostUser, hostProfile] = await Promise.all([
+      getAppUser(ctx, args.travelerSlug),
+      getFriendProfile(ctx, args.travelerSlug),
+    ]);
+
+    if (!hostUser) {
+      return null;
+    }
+
+    const now = Date.now();
+    const firstName = hostUser.name.split(' ')[0] ?? hostUser.name;
+    const destinationLabel = hostProfile?.destinationLabel ?? 'Travel group';
+    const trimmedName = args.name?.trim();
+    const sourceTrip =
+      args.tripId ? await ctx.db.get(args.tripId) : null;
+
+    if (sourceTrip && sourceTrip.travelerSlug !== args.travelerSlug) {
+      return null;
+    }
+
+    const circleId = await ctx.db.insert('friendCircles', {
+      slug: `${slugifyGroupName(`${firstName}-${destinationLabel}`)}-${now.toString().slice(-5)}`,
+      name: trimmedName || `${firstName}'s ${destinationLabel}`,
+      destinationLabel,
+      heroLabel: 'Open join group',
+      status: 'active',
+      visibility: 'open',
+      createdBySlug: args.travelerSlug,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert('friendCircleMembers', {
+      circleId,
+      travelerSlug: args.travelerSlug,
+      role: 'host',
+      status: 'active',
+      joinedAt: now,
+      note: 'Created as an open joinable group',
+    });
+
+    await ctx.db.insert('friendMessages', {
+      circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'system',
+      body: `${firstName} opened this group for new travelers to join.`,
+      createdAt: now,
+    });
+
+    const inviteeSlugs = [...new Set(args.inviteeSlugs ?? [])].filter((slug) => slug !== args.travelerSlug);
+    for (const inviteeSlug of inviteeSlugs) {
+      const existingMembership = await ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', circleId).eq('travelerSlug', inviteeSlug)
+        )
+        .unique();
+
+      if (!existingMembership) {
+        await ctx.db.insert('friendCircleMembers', {
+          circleId,
+          travelerSlug: inviteeSlug,
+          role: 'member',
+          status: 'invited',
+          joinedAt: now,
+          note: 'Selected while creating group',
+        });
+      }
+
+      await insertAppNotification(ctx, {
+        recipientSlug: inviteeSlug,
+        actorSlug: args.travelerSlug,
+        kind: 'friend_invite',
+        title: `${hostUser.name} added you to a group`,
+        body: `Join ${trimmedName || `${firstName}'s ${destinationLabel}`} to plan together.`,
+        href: `/friends/group/${circleId}`,
+        entityId: circleId,
+        entityLabel: trimmedName || `${firstName}'s ${destinationLabel}`,
+      });
+    }
+
+    if (inviteeSlugs.length > 0) {
+      await ctx.db.insert('friendMessages', {
+        circleId,
+        senderSlug: args.travelerSlug,
+        kind: 'system',
+        body: `${hostUser.name} invited ${inviteeSlugs.length} friend${inviteeSlugs.length === 1 ? '' : 's'} to the group.`,
+        createdAt: now + 1,
+      });
+    }
+
+    if (sourceTrip) {
+      const hostGroupTripId = await createGroupTripCopy(ctx, {
+        travelerSlug: args.travelerSlug,
+        circleId,
+        name: trimmedName || `${sourceTrip.name} Group`,
+        role: 'host',
+        sourceTripId: sourceTrip._id,
+      });
+
+      await ctx.db.patch(circleId, {
+        tripId: hostGroupTripId,
+      });
+    }
+
+    return circleId;
+  },
+});
+
+export const joinFriendCircle = mutation({
+  args: {
+    travelerSlug: v.string(),
+    circleId: v.id('friendCircles'),
+  },
+  handler: async (ctx, args) => {
+    const circle = await ctx.db.get(args.circleId);
+    if (!circle || circle.visibility !== 'open') {
+      return false;
+    }
+
+    const [existingMembership, joiningUser] = await Promise.all([
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+        )
+        .unique(),
+      getAppUser(ctx, args.travelerSlug),
+    ]);
+
+    const now = Date.now();
+
+    if (!existingMembership) {
+      await ctx.db.insert('friendCircleMembers', {
+        circleId: args.circleId,
+        travelerSlug: args.travelerSlug,
+        role: 'member',
+        status: 'active',
+        joinedAt: now,
+        note: 'Joined open group',
+      });
+    } else if (existingMembership.status !== 'active') {
+      await ctx.db.patch(existingMembership._id, {
+        status: 'active',
+        joinedAt: now,
+      });
+    } else {
+      return true;
+    }
+
+    await ctx.db.insert('friendMessages', {
+      circleId: args.circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'system',
+      body: joiningUser ? `${joiningUser.name} joined the group.` : 'A traveler joined the group.',
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.circleId, {
+      updatedAt: now,
+    });
+
+    if (circle.tripId) {
+      await createGroupTripCopy(ctx, {
+        travelerSlug: args.travelerSlug,
+        circleId: args.circleId,
+        name: circle.name,
+        role: 'member',
+        sourceTripId: circle.tripId,
+      });
+    }
+
+    return true;
+  },
+});
+
+export const renameFriendCircle = mutation({
+  args: {
+    travelerSlug: v.string(),
+    circleId: v.id('friendCircles'),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const nextName = args.name.trim().slice(0, 80);
+    if (!nextName) {
+      return false;
+    }
+
+    const [circle, membership, user] = await Promise.all([
+      ctx.db.get(args.circleId),
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+        )
+        .unique(),
+      getAppUser(ctx, args.travelerSlug),
+    ]);
+
+    if (!circle || !membership || membership.status !== 'active') {
+      return false;
+    }
+
+    if (circle.name === nextName) {
+      return true;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.circleId, {
+      name: nextName,
+      updatedAt: now,
+    });
+
+    const travelerTrips = await ctx.db
+      .query('trips')
+      .withIndex('by_travelerSlug_and_circleId', (q) =>
+        q.eq('travelerSlug', args.travelerSlug).eq('circleId', args.circleId)
+      )
+      .take(5);
+
+    for (const trip of travelerTrips) {
+      await ctx.db.patch(trip._id, { name: nextName });
+    }
+
+    await ctx.db.insert('friendMessages', {
+      circleId: args.circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'system',
+      body: user ? `${user.name} renamed the group to ${nextName}.` : `The group was renamed to ${nextName}.`,
+      createdAt: now,
+    });
+
+    return true;
+  },
+});
+
+export const leaveFriendCircle = mutation({
+  args: {
+    travelerSlug: v.string(),
+    circleId: v.id('friendCircles'),
+  },
+  handler: async (ctx, args) => {
+    const [circle, membership, user] = await Promise.all([
+      ctx.db.get(args.circleId),
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+        )
+        .unique(),
+      getAppUser(ctx, args.travelerSlug),
+    ]);
+
+    if (!circle || !membership || membership.status !== 'active') {
+      return false;
+    }
+
+    const now = Date.now();
+    const activeMembers = (await getCircleMembers(ctx, args.circleId)).filter((member) => member.status === 'active');
+    const remainingMembers = activeMembers.filter((member) => member.travelerSlug !== args.travelerSlug);
+
+    if (remainingMembers.length === 0) {
+      await deleteFriendCircleDocuments(ctx, args.circleId);
+      return true;
+    }
+
+    if (membership.role === 'host' && !remainingMembers.some((member) => member.role === 'host')) {
+      await ctx.db.patch(remainingMembers[0]._id, { role: 'host' });
+    }
+
+    await ctx.db.delete(membership._id);
+
+    const readState = await ctx.db
+      .query('friendCircleReadStates')
+      .withIndex('by_circleId_and_travelerSlug', (q) =>
+        q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+      )
+      .unique();
+    if (readState) {
+      await ctx.db.delete(readState._id);
+    }
+
+    const travelerTrips = await ctx.db
+      .query('trips')
+      .withIndex('by_travelerSlug_and_circleId', (q) =>
+        q.eq('travelerSlug', args.travelerSlug).eq('circleId', args.circleId)
+      )
+      .take(20);
+    for (const trip of travelerTrips) {
+      await ctx.db.delete(trip._id);
+    }
+
+    await ctx.db.insert('friendMessages', {
+      circleId: args.circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'system',
+      body: user ? `${user.name} left the group.` : 'A traveler left the group.',
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.circleId, { updatedAt: now });
+
+    return true;
+  },
+});
+
+export const deleteFriendCircle = mutation({
+  args: {
+    travelerSlug: v.string(),
+    circleId: v.id('friendCircles'),
+  },
+  handler: async (ctx, args) => {
+    const [circle, membership] = await Promise.all([
+      ctx.db.get(args.circleId),
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+        )
+        .unique(),
+    ]);
+
+    if (!circle || !membership || membership.status !== 'active') {
+      return false;
+    }
+
+    if (circle.createdBySlug !== args.travelerSlug && membership.role !== 'host') {
+      return false;
+    }
+
+    await deleteFriendCircleDocuments(ctx, args.circleId);
+    return true;
+  },
+});
+
+export const approveTripJoinRequest = mutation({
+  args: {
+    travelerSlug: v.string(),
+    notificationId: v.id('appNotifications'),
+  },
+  handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.notificationId);
+    if (
+      !notification ||
+      notification.recipientSlug !== args.travelerSlug ||
+      notification.kind !== 'trip_join_request' ||
+      !notification.actorSlug ||
+      !notification.entityId ||
+      notification.actionStatus === 'approved' ||
+      notification.actionStatus === 'declined'
+    ) {
+      return false;
+    }
+
+    const circle = await ctx.db.get(notification.entityId as Id<'friendCircles'>);
+    if (!circle || circle.createdBySlug !== args.travelerSlug) {
+      return false;
+    }
+
+    const now = Date.now();
+    const requesterSlug = notification.actorSlug;
+    const [existingMembership, joiningUser] = await Promise.all([
+      ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', circle._id).eq('travelerSlug', requesterSlug)
+        )
+        .unique(),
+      getAppUser(ctx, requesterSlug),
+    ]);
+
+    if (!existingMembership) {
+      await ctx.db.insert('friendCircleMembers', {
+        circleId: circle._id,
+        travelerSlug: requesterSlug,
+        role: 'member',
+        status: 'active',
+        joinedAt: now,
+        note: 'Approved from trip join request',
+      });
+    } else if (existingMembership.status !== 'active') {
+      await ctx.db.patch(existingMembership._id, {
+        status: 'active',
+        joinedAt: now,
+        note: 'Approved from trip join request',
+      });
+    }
+
+    await ctx.db.insert('friendMessages', {
+      circleId: circle._id,
+      senderSlug: requesterSlug,
+      kind: 'system',
+      body: joiningUser ? `${joiningUser.name} joined the group.` : 'A traveler joined the group.',
+      createdAt: now,
+    });
+
+    await ctx.db.patch(circle._id, {
+      updatedAt: now,
+    });
+
+    if (circle.tripId) {
+      await createGroupTripCopy(ctx, {
+        travelerSlug: requesterSlug,
+        circleId: circle._id,
+        name: circle.name,
+        role: 'member',
+        sourceTripId: circle.tripId,
+      });
+    }
+
+    await ctx.db.patch(args.notificationId, {
+      actionStatus: 'approved',
+      readAt: notification.readAt ?? now,
+      viewedAt: notification.viewedAt ?? now,
+    });
+
+    await insertAppNotification(ctx, {
+      recipientSlug: requesterSlug,
+      actorSlug: args.travelerSlug,
+      kind: 'friend_added',
+      title: `You're in ${circle.name}`,
+      body: 'The trip now appears in your trip list, and the group chat is ready.',
+      href: '/trip',
+      entityId: circle._id,
+      entityLabel: circle.name,
+    });
+
+    return true;
+  },
+});
+
+export const declineTripJoinRequest = mutation({
+  args: {
+    travelerSlug: v.string(),
+    notificationId: v.id('appNotifications'),
+  },
+  handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.notificationId);
+    if (
+      !notification ||
+      notification.recipientSlug !== args.travelerSlug ||
+      notification.kind !== 'trip_join_request' ||
+      !notification.entityId ||
+      notification.actionStatus === 'approved' ||
+      notification.actionStatus === 'declined'
+    ) {
+      return false;
+    }
+
+    const circle = await ctx.db.get(notification.entityId as Id<'friendCircles'>);
+    if (!circle || circle.createdBySlug !== args.travelerSlug) {
+      return false;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.notificationId, {
+      actionStatus: 'declined',
+      readAt: notification.readAt ?? now,
+      viewedAt: notification.viewedAt ?? now,
+    });
+
+    return true;
   },
 });
 
@@ -573,12 +1844,23 @@ export const getFriendChat = query({
         .take(80),
     ]);
 
+    const routeShareBySender = new Map<string, Awaited<ReturnType<typeof buildRouteShare>>>();
+
     const messageViews = await Promise.all(
       messages.map(async (message) => {
         const [sender, senderProfile] = await Promise.all([
           getAppUser(ctx, message.senderSlug),
           getTravelerProfile(ctx, message.senderSlug),
         ]);
+
+        let routeShare: Awaited<ReturnType<typeof buildRouteShare>> | null = null;
+        if (message.kind === 'route') {
+          routeShare = routeShareBySender.get(message.senderSlug) ?? null;
+          if (!routeShare) {
+            routeShare = await buildRouteShare(ctx, message.senderSlug);
+            routeShareBySender.set(message.senderSlug, routeShare);
+          }
+        }
 
         return {
           _id: message._id,
@@ -597,6 +1879,26 @@ export const getFriendChat = query({
                   distanceLabel: message.routeDistanceLabel ?? '',
                   stopCount: message.routeStopCount ?? 0,
                   stopsPreview: message.routeStopsPreview ?? [],
+                  centerCoordinate: routeShare?.routeCenterCoordinate ?? null,
+                  heroImageUri: routeShare?.routeHeroImageUri ?? null,
+                  mapMarkers: routeShare?.routeMapMarkers ?? [],
+                }
+              : null,
+          callCard:
+            message.kind === 'call' || message.kind === 'scheduled_call'
+              ? {
+                  callId: message.callId ?? null,
+                  mode: message.callMode ?? 'voice',
+                  status: message.callStatus ?? (message.kind === 'scheduled_call' ? 'scheduled' : 'active'),
+                  scheduledFor: message.callScheduledFor ?? null,
+                  endsAt: message.callEndsAt ?? null,
+                  reminderMinutesBefore: message.callReminderMinutesBefore ?? null,
+                  title:
+                    message.callTitle ??
+                    (message.kind === 'scheduled_call'
+                      ? `Scheduled ${formatCallMode(message.callMode ?? 'voice')}`
+                      : `${formatCallMode(message.callMode ?? 'voice')} started`),
+                  description: message.callDescription ?? null,
                 }
               : null,
         };
@@ -612,11 +1914,76 @@ export const getFriendChat = query({
       composer: {
         placeholder: `Message ${summary.name}`,
         quickActions: [
-          { key: 'route', label: 'Share route' },
-          { key: 'sunrise', label: 'Sunrise plan' },
-          { key: 'checkin', label: 'Quick check-in' },
+          { key: 'route', label: 'Share route', description: 'Send the current itinerary as a trip card.' },
         ],
         routeShare,
+      },
+    };
+  },
+});
+
+export const getDirectChat = query({
+  args: {
+    travelerSlug: v.string(),
+    threadId: v.id('friendDirectThreads'),
+  },
+  handler: async (ctx, args) => {
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread) {
+      return null;
+    }
+
+    const participants = [thread.participantA, thread.participantB];
+    if (!participants.includes(args.travelerSlug)) {
+      return null;
+    }
+
+    const otherSlug = thread.participantA === args.travelerSlug ? thread.participantB : thread.participantA;
+    const [otherUser, otherProfile, messages] = await Promise.all([
+      getAppUser(ctx, otherSlug),
+      getTravelerProfile(ctx, otherSlug),
+      ctx.db
+        .query('friendDirectMessages')
+        .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
+        .order('asc')
+        .take(100),
+    ]);
+
+    if (!otherUser) {
+      return null;
+    }
+
+    const messageViews = await Promise.all(
+      messages.map(async (message) => {
+        const [sender, senderProfile] = await Promise.all([
+          getAppUser(ctx, message.senderSlug),
+          getTravelerProfile(ctx, message.senderSlug),
+        ]);
+
+        return {
+          _id: message._id,
+          body: message.body,
+          createdAt: message.createdAt,
+          senderSlug: message.senderSlug,
+          senderName: sender?.name ?? message.senderSlug,
+          senderAvatarUri: senderProfile?.avatarUri ?? null,
+          isOwnMessage: message.senderSlug === args.travelerSlug,
+        };
+      })
+    );
+
+    return {
+      threadId: thread._id,
+      title: thread.title ?? otherUser.name,
+      participant: {
+        slug: otherSlug,
+        name: otherUser.name,
+        avatarUri: otherProfile?.avatarUri ?? null,
+        baseLabel: otherProfile?.regionName ?? otherUser.countryLabel,
+      },
+      messages: messageViews,
+      composer: {
+        placeholder: `Message ${otherUser.name}`,
       },
     };
   },
@@ -659,6 +2026,8 @@ export const actOnFriendCandidate = mutation({
       if (matchAction) {
         await ctx.db.delete(matchAction._id);
       }
+
+      await getOrCreateDirectThread(ctx, args.travelerSlug, args.candidateSlug);
 
       if (candidate && actor) {
         await insertAppNotification(ctx, {
@@ -731,7 +2100,7 @@ export const actOnFriendCandidate = mutation({
           kind: 'friend_invite',
           title: `${actor.name} invited you to a friends circle`,
           body: `Join ${circle.name} to plan the next stretch together.`,
-          href: '/friends/chat',
+          href: `/friends/group/${circle._id}`,
           entityId: circle._id,
           entityLabel: circle.name,
         });
@@ -773,6 +2142,224 @@ export const sendFriendMessage = mutation({
   },
 });
 
+export const sendDirectFriendMessage = mutation({
+  args: {
+    threadId: v.id('friendDirectThreads'),
+    travelerSlug: v.string(),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const trimmedBody = args.body.trim();
+    if (!trimmedBody) {
+      return null;
+    }
+
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread) {
+      return null;
+    }
+
+    if (thread.participantA !== args.travelerSlug && thread.participantB !== args.travelerSlug) {
+      return null;
+    }
+
+    const messageId = await ctx.db.insert('friendDirectMessages', {
+      threadId: args.threadId,
+      senderSlug: args.travelerSlug,
+      body: trimmedBody,
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.patch(args.threadId, {
+      updatedAt: Date.now(),
+    });
+
+    return messageId;
+  },
+});
+
+export const renameDirectFriendThread = mutation({
+  args: {
+    travelerSlug: v.string(),
+    threadId: v.id('friendDirectThreads'),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const nextTitle = args.title.trim().slice(0, 80);
+    if (!nextTitle) {
+      return false;
+    }
+
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread || (thread.participantA !== args.travelerSlug && thread.participantB !== args.travelerSlug)) {
+      return false;
+    }
+
+    await ctx.db.patch(args.threadId, {
+      title: nextTitle,
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+export const deleteDirectFriendThread = mutation({
+  args: {
+    travelerSlug: v.string(),
+    threadId: v.id('friendDirectThreads'),
+  },
+  handler: async (ctx, args) => {
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread || (thread.participantA !== args.travelerSlug && thread.participantB !== args.travelerSlug)) {
+      return false;
+    }
+
+    await deleteDirectThreadDocuments(ctx, args.threadId);
+    return true;
+  },
+});
+
+export const deleteFriendMessage = mutation({
+  args: {
+    messageId: v.id('friendMessages'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(args.messageId);
+    if (!message || message.senderSlug !== args.travelerSlug || message.kind === 'system') {
+      return false;
+    }
+
+    await ctx.db.delete(args.messageId);
+    await ctx.db.patch(message.circleId, {
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+export const deleteDirectFriendMessage = mutation({
+  args: {
+    messageId: v.id('friendDirectMessages'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(args.messageId);
+    if (!message || message.senderSlug !== args.travelerSlug) {
+      return false;
+    }
+
+    await ctx.db.delete(args.messageId);
+
+    const thread = await ctx.db.get(message.threadId);
+    if (thread) {
+      await ctx.db.patch(thread._id, {
+        updatedAt: Date.now(),
+      });
+    }
+
+    return true;
+  },
+});
+
+export const markFriendChatRead = mutation({
+  args: {
+    circleId: v.id('friendCircles'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const membership = await ctx.db
+      .query('friendCircleMembers')
+      .withIndex('by_circleId_and_travelerSlug', (q) =>
+        q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+      )
+      .unique();
+
+    if (!membership || membership.status !== 'active') {
+      return false;
+    }
+
+    const latestMessage = await ctx.db
+      .query('friendMessages')
+      .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', args.circleId))
+      .order('desc')
+      .take(1);
+
+    const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
+    const existing = await ctx.db
+      .query('friendCircleReadStates')
+      .withIndex('by_circleId_and_travelerSlug', (q) =>
+        q.eq('circleId', args.circleId).eq('travelerSlug', args.travelerSlug)
+      )
+      .unique();
+
+    if (existing) {
+      if (existing.lastReadAt >= lastReadAt) {
+        return true;
+      }
+      await ctx.db.patch(existing._id, { lastReadAt });
+      return true;
+    }
+
+    await ctx.db.insert('friendCircleReadStates', {
+      circleId: args.circleId,
+      travelerSlug: args.travelerSlug,
+      lastReadAt,
+    });
+
+    return true;
+  },
+});
+
+export const markDirectChatRead = mutation({
+  args: {
+    threadId: v.id('friendDirectThreads'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread) {
+      return false;
+    }
+
+    if (thread.participantA !== args.travelerSlug && thread.participantB !== args.travelerSlug) {
+      return false;
+    }
+
+    const latestMessage = await ctx.db
+      .query('friendDirectMessages')
+      .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', args.threadId))
+      .order('desc')
+      .take(1);
+
+    const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
+    const existing = await ctx.db
+      .query('friendDirectReadStates')
+      .withIndex('by_threadId_and_travelerSlug', (q) =>
+        q.eq('threadId', args.threadId).eq('travelerSlug', args.travelerSlug)
+      )
+      .unique();
+
+    if (existing) {
+      if (existing.lastReadAt >= lastReadAt) {
+        return true;
+      }
+      await ctx.db.patch(existing._id, { lastReadAt });
+      return true;
+    }
+
+    await ctx.db.insert('friendDirectReadStates', {
+      threadId: args.threadId,
+      travelerSlug: args.travelerSlug,
+      lastReadAt,
+    });
+
+    return true;
+  },
+});
+
 export const shareTripRouteInFriendChat = mutation({
   args: {
     circleId: v.id('friendCircles'),
@@ -798,5 +2385,286 @@ export const shareTripRouteInFriendChat = mutation({
     });
 
     return messageId;
+  },
+});
+
+export const startFriendCall = mutation({
+  args: {
+    circleId: v.id('friendCircles'),
+    travelerSlug: v.string(),
+    mode: v.union(v.literal('voice'), v.literal('video')),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireActiveCircleMember(ctx, args.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const now = Date.now();
+    const callId = await ctx.db.insert('friendCalls', {
+      circleId: args.circleId,
+      roomName: buildCallRoomName(args.circleId, now),
+      createdBySlug: args.travelerSlug,
+      mode: args.mode,
+      status: 'active',
+      startedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const callLabel = formatCallMode(args.mode);
+    await ctx.db.insert('friendMessages', {
+      circleId: args.circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'call',
+      body: `Started a ${callLabel}.`,
+      callId,
+      callMode: args.mode,
+      callStatus: 'active',
+      callTitle: `${access.circle.name} ${callLabel}`,
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.circleId, { updatedAt: now });
+    await notifyCircleMembersAboutCall(ctx, {
+      circleId: args.circleId,
+      actorSlug: args.travelerSlug,
+      callId,
+      kind: 'friend_call',
+      title: `${access.circle.name} ${callLabel}`,
+      body: `Join the ${callLabel} now.`,
+    });
+
+    const call = await ctx.db.get(callId);
+    return call;
+  },
+});
+
+export const scheduleFriendCall = mutation({
+  args: {
+    circleId: v.id('friendCircles'),
+    travelerSlug: v.string(),
+    mode: v.union(v.literal('voice'), v.literal('video')),
+    scheduledFor: v.number(),
+    endsAt: v.optional(v.number()),
+    reminderMinutesBefore: v.optional(v.number()),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireActiveCircleMember(ctx, args.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const now = Date.now();
+    const scheduledFor = Math.max(args.scheduledFor, now + 60_000);
+    const endsAt = args.endsAt && args.endsAt > scheduledFor ? args.endsAt : undefined;
+    const reminderMinutesBefore = args.reminderMinutesBefore ?? 15;
+    const callLabel = formatCallMode(args.mode);
+    const title = args.title?.trim() || `${access.circle.name} ${callLabel}`;
+    const description = args.description?.trim() || undefined;
+    const callId = await ctx.db.insert('friendCalls', {
+      circleId: args.circleId,
+      roomName: buildCallRoomName(args.circleId, now),
+      createdBySlug: args.travelerSlug,
+      mode: args.mode,
+      status: 'scheduled',
+      title,
+      description,
+      scheduledFor,
+      endsAt,
+      reminderMinutesBefore,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert('friendMessages', {
+      circleId: args.circleId,
+      senderSlug: args.travelerSlug,
+      kind: 'scheduled_call',
+      body: `Scheduled a ${callLabel}.`,
+      callId,
+      callMode: args.mode,
+      callStatus: 'scheduled',
+      callScheduledFor: scheduledFor,
+      callEndsAt: endsAt,
+      callReminderMinutesBefore: reminderMinutesBefore,
+      callTitle: title,
+      callDescription: description,
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.circleId, { updatedAt: now });
+    await notifyCircleMembersAboutCall(ctx, {
+      circleId: args.circleId,
+      actorSlug: args.travelerSlug,
+      callId,
+      kind: 'friend_call',
+      title,
+      body: `A ${callLabel} was scheduled for this group.`,
+    });
+
+    if (reminderMinutesBefore > 0) {
+      await ctx.scheduler.runAt(
+        Math.max(now + 1_000, scheduledFor - reminderMinutesBefore * 60_000),
+        internal.friends.sendScheduledCallReminder,
+        {
+          callId,
+        }
+      );
+    }
+
+    const call = await ctx.db.get(callId);
+    return call;
+  },
+});
+
+export const joinScheduledFriendCall = mutation({
+  args: {
+    callId: v.id('friendCalls'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const call = await ctx.db.get(args.callId);
+    if (!call) {
+      return null;
+    }
+
+    const access = await requireActiveCircleMember(ctx, call.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    if (call.status === 'scheduled') {
+      const now = Date.now();
+      await ctx.db.patch(call._id, {
+        status: 'active',
+        startedAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.patch(call.circleId, { updatedAt: now });
+    }
+
+    return await ctx.db.get(call._id);
+  },
+});
+
+export const endFriendCall = mutation({
+  args: {
+    callId: v.id('friendCalls'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const call = await ctx.db.get(args.callId);
+    if (!call) {
+      return null;
+    }
+
+    const access = await requireActiveCircleMember(ctx, call.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(call._id, {
+      status: 'ended',
+      endedAt: now,
+      updatedAt: now,
+    });
+    return await ctx.db.get(call._id);
+  },
+});
+
+export const getFriendCall = query({
+  args: {
+    callId: v.id('friendCalls'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const call = await ctx.db.get(args.callId);
+    if (!call) {
+      return null;
+    }
+
+    const access = await requireActiveCircleMember(ctx, call.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const [creator, members] = await Promise.all([getAppUser(ctx, call.createdBySlug), getCircleMembers(ctx, call.circleId)]);
+    const memberViews = await Promise.all(members.map((member) => buildMemberView(ctx, member)));
+
+    return {
+      _id: call._id,
+      circleId: call.circleId,
+      circleName: access.circle.name,
+      roomName: call.roomName,
+      createdBySlug: call.createdBySlug,
+      createdByName: creator?.name ?? call.createdBySlug,
+      mode: call.mode,
+      status: call.status,
+      title: call.title ?? `${access.circle.name} ${formatCallMode(call.mode)}`,
+      description: call.description ?? null,
+      scheduledFor: call.scheduledFor ?? null,
+      endsAt: call.endsAt ?? null,
+      reminderMinutesBefore: call.reminderMinutesBefore ?? null,
+      startedAt: call.startedAt ?? null,
+      members: memberViews,
+    };
+  },
+});
+
+export const getFriendCallTokenContext = internalQuery({
+  args: {
+    callId: v.id('friendCalls'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const call = await ctx.db.get(args.callId);
+    if (!call) {
+      return null;
+    }
+
+    const access = await requireActiveCircleMember(ctx, call.circleId, args.travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const user = await getAppUser(ctx, args.travelerSlug);
+    return {
+      roomName: call.roomName,
+      identity: args.travelerSlug,
+      name: user?.name ?? args.travelerSlug,
+      canPublishSources: call.mode === 'voice' ? ['microphone'] : ['camera', 'microphone'],
+    };
+  },
+});
+
+export const sendScheduledCallReminder = internalMutation({
+  args: {
+    callId: v.id('friendCalls'),
+  },
+  handler: async (ctx, args) => {
+    const call = await ctx.db.get(args.callId);
+    if (!call || call.status !== 'scheduled') {
+      return false;
+    }
+
+    const circle = await ctx.db.get(call.circleId);
+    if (!circle) {
+      return false;
+    }
+
+    const title = call.title ?? `${circle.name} ${formatCallMode(call.mode)}`;
+    await notifyCircleMembersAboutCall(ctx, {
+      circleId: call.circleId,
+      actorSlug: call.createdBySlug,
+      callId: call._id,
+      kind: 'friend_call_reminder',
+      title,
+      body: `Reminder: ${formatCallMode(call.mode)} starts soon.`,
+    });
+    return true;
   },
 });

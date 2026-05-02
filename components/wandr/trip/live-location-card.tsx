@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.surface,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.12)',
+    borderColor: designSystem.colors.border,
     overflow: 'hidden',
     position: 'relative',
     minHeight: 320,
@@ -85,13 +85,11 @@ const styles = StyleSheet.create({
   },
   bentoMapTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
+    fontWeight: '600',
   },
   bentoMapSubtitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   bentoMapSubtitleDark: {
@@ -106,14 +104,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.12)',
+    borderColor: designSystem.colors.border,
   },
   bentoMapBgContainerDark: {
     opacity: 0.92,
-    borderColor: 'rgba(249,249,246,0.12)',
+    borderColor: designSystem.colors.darkBorderSoft,
   },
   mapShade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14,15,12,0.28)',
+    backgroundColor: designSystem.colors.scrimSoft,
   },
 });

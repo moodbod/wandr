@@ -8,7 +8,7 @@ import { designSystem } from '@/constants/design-system';
 type TravelerMomentumProps = {
   regionName: string;
   visitorCount: number;
-  avatarUris: string[];
+  avatarUris: readonly string[];
   rating?: number;
   reviewCount?: number;
   emptyLabel?: string;

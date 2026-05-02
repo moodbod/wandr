@@ -1,10 +1,14 @@
+import { useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
-import { MapTrifold, Signpost } from 'phosphor-react-native';
-import { StyleSheet, View } from 'react-native';
+import { CalendarBlank, ChatsCircle, Phone, Sun, VideoCamera } from 'phosphor-react-native';
+import { useRef, type ReactNode } from 'react';
+import { Animated, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { RouteMapWidget } from '@/components/wandr/friends/chat-widgets';
+import type { MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { designSystem } from '@/constants/design-system';
-import type { FriendChatMessage } from '@/types/friends';
+import type { DirectChatMessage, FriendChatMessage } from '@/types/friends';
 
 function formatTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
@@ -13,7 +17,150 @@ function formatTime(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
-export function FriendChatMessageBubble({ message }: { message: FriendChatMessage }) {
+function formatCallTime(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+function formatReminder(minutes: number | null) {
+  if (minutes === null) {
+    return null;
+  }
+  if (minutes === 0) {
+    return 'Reminder at start';
+  }
+  if (minutes === 1440) {
+    return 'Reminder 1 day before';
+  }
+  if (minutes >= 60) {
+    return `Reminder ${minutes / 60} hour${minutes === 60 ? '' : 's'} before`;
+  }
+  return `Reminder ${minutes} minutes before`;
+}
+
+function getWidgetMessage(body: string | null) {
+  if (!body) {
+    return null;
+  }
+
+  if (body === 'We should lock the sunrise departure now so everyone packs for the same timing.') {
+    return {
+      icon: Sun,
+      title: 'Sunrise plan',
+      description: 'Departure timing is ready for the group to follow.',
+      body,
+    };
+  }
+
+  if (body === 'Quick check-in: what does everyone need before we lock the next leg?') {
+    return {
+      icon: ChatsCircle,
+      title: 'Quick check-in',
+      description: 'A group check-in is open before the next leg.',
+      body,
+    };
+  }
+
+  return null;
+}
+
+function SpringPressable({
+  children,
+  style,
+  onPressIn,
+  onPressOut,
+  onMeasuredLongPress,
+  ...props
+}: PressableProps & {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  onMeasuredLongPress?: (anchor: MessageActionAnchor) => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const containerRef = useRef<View>(null);
+
+  const animateTo = (toValue: number) => {
+    Animated.spring(scale, {
+      toValue,
+      useNativeDriver: true,
+      speed: 24,
+      bounciness: 7,
+    }).start();
+  };
+
+  return (
+    <Animated.View ref={containerRef} style={[style, { transform: [{ scale }] }]}>
+      <Pressable
+        {...props}
+        onLongPress={(event) => {
+          containerRef.current?.measureInWindow((x, y, width, height) => {
+            onMeasuredLongPress?.({ x, y, width, height });
+          });
+          props.onLongPress?.(event);
+        }}
+        onPressIn={(event) => {
+          animateTo(0.975);
+          onPressIn?.(event);
+        }}
+        onPressOut={(event) => {
+          animateTo(1);
+          onPressOut?.(event);
+        }}>
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+export function FriendChatMessageBubble({
+  message,
+  onLongPressMessage,
+}: {
+  message: FriendChatMessage;
+  onLongPressMessage?: (message: FriendChatMessage, anchor: MessageActionAnchor) => void;
+}) {
+  const router = useRouter();
+  const widgetMessage = getWidgetMessage(message.body);
+  const WidgetIcon = widgetMessage?.icon;
+  const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
+  const lastNavigateAtRef = useRef(0);
+  const longPressLockUntilRef = useRef(0);
+
+  const handleOpenTripMap = () => {
+    const now = Date.now();
+    if (now < longPressLockUntilRef.current) {
+      return;
+    }
+    if (now - lastNavigateAtRef.current < 900) {
+      return;
+    }
+    lastNavigateAtRef.current = now;
+    router.push('/trip/map');
+  };
+
+  const handleOpenCall = () => {
+    if (!message.callCard?.callId) {
+      return;
+    }
+    const now = Date.now();
+    if (now < longPressLockUntilRef.current) {
+      return;
+    }
+    if (now - lastNavigateAtRef.current < 900) {
+      return;
+    }
+    lastNavigateAtRef.current = now;
+    router.push(`/friends/call/${message.callCard.callId}`);
+  };
+
+  const handleLongPress = (anchor: MessageActionAnchor) => {
+    longPressLockUntilRef.current = Date.now() + 700;
+    onLongPressMessage?.(message, anchor);
+  };
+
   if (message.kind === 'system') {
     return (
       <View style={styles.systemRow}>
@@ -32,33 +179,115 @@ export function FriendChatMessageBubble({ message }: { message: FriendChatMessag
       ) : null}
 
       {message.routeCard ? (
-        <View style={[styles.routeCard, message.isOwnMessage ? styles.routeCardOwn : null]}>
-          <View style={styles.routeIconWrap}>
-            <MapTrifold color={designSystem.colors.darkGreen} size={22} weight="bold" />
+        <SpringPressable
+          onPress={handleOpenTripMap}
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.routeCard, message.isOwnMessage ? styles.routeCardOwn : null]}>
+          <RouteMapWidget routeCard={message.routeCard} createdAt={message.createdAt} />
+        </SpringPressable>
+      ) : message.callCard ? (
+        <SpringPressable
+          onPress={handleOpenCall}
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.callWidget, message.isOwnMessage ? styles.callWidgetOwn : null]}>
+          <View style={styles.widgetMessageIcon}>
+            <CallIcon color={designSystem.colors.darkGreen} size={18} weight="bold" />
           </View>
-          <View style={styles.routeCopy}>
-            <ThemedText style={styles.routeTitle}>{message.routeCard.title}</ThemedText>
-            <ThemedText style={styles.routeSummary}>{message.routeCard.summary}</ThemedText>
-            <View style={styles.routeMeta}>
-              <Signpost color={designSystem.colors.gray} size={14} weight="bold" />
-              <ThemedText style={styles.routeMetaText}>
-                {message.routeCard.distanceLabel}
-              </ThemedText>
+          <View style={styles.widgetMessageCopy}>
+            <View style={styles.callTitleRow}>
+              <ThemedText style={styles.widgetMessageTitle}>{message.callCard.title}</ThemedText>
+              {message.callCard.status === 'scheduled' ? (
+                <View style={styles.callStatusPill}>
+                  <CalendarBlank color={designSystem.colors.darkGreen} size={12} weight="bold" />
+                  <ThemedText style={styles.callStatusText}>Scheduled</ThemedText>
+                </View>
+              ) : null}
             </View>
-            {message.routeCard.stopsPreview.length > 0 ? (
-              <ThemedText style={styles.routeStops}>
-                {message.routeCard.stopsPreview.join(' • ')}
+            <ThemedText style={styles.widgetMessageDescription}>
+              {message.callCard.status === 'scheduled' && message.callCard.scheduledFor
+                ? `Starts ${formatCallTime(message.callCard.scheduledFor)}${
+                    message.callCard.endsAt ? ` - ${formatCallTime(message.callCard.endsAt)}` : ''
+                  }`
+                : message.callCard.status === 'active'
+                  ? 'Tap to join the live call.'
+                  : 'Call ended.'}
+            </ThemedText>
+            {message.callCard.description ? (
+              <ThemedText style={styles.callDescription} numberOfLines={2}>
+                {message.callCard.description}
               </ThemedText>
             ) : null}
+            <ThemedText style={styles.widgetMessageBody}>
+              {[message.callCard.mode === 'voice' ? 'Voice call' : 'Video call', formatReminder(message.callCard.reminderMinutesBefore)]
+                .filter(Boolean)
+                .join(' | ')}
+            </ThemedText>
           </View>
-        </View>
+        </SpringPressable>
+      ) : widgetMessage ? (
+        <SpringPressable
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.widgetMessage, message.isOwnMessage ? styles.widgetMessageOwn : null]}>
+          <View style={styles.widgetMessageIcon}>
+            {WidgetIcon ? <WidgetIcon color={designSystem.colors.darkGreen} size={18} weight="bold" /> : null}
+          </View>
+          <View style={styles.widgetMessageCopy}>
+            <ThemedText style={styles.widgetMessageTitle}>{widgetMessage.title}</ThemedText>
+            <ThemedText style={styles.widgetMessageDescription}>{widgetMessage.description}</ThemedText>
+            <ThemedText style={styles.widgetMessageBody}>{widgetMessage.body}</ThemedText>
+          </View>
+        </SpringPressable>
       ) : (
-        <View style={[styles.bubble, message.isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
+        <SpringPressable
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.bubble, message.isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
           <ThemedText style={[styles.bubbleText, message.isOwnMessage ? styles.bubbleTextOwn : null]}>
             {message.body}
           </ThemedText>
-        </View>
+        </SpringPressable>
       )}
+
+      <ThemedText style={[styles.timeText, message.isOwnMessage ? styles.timeTextOwn : null]}>
+        {formatTime(message.createdAt)}
+      </ThemedText>
+    </View>
+  );
+}
+
+export function DirectChatMessageBubble({
+  message,
+  onLongPressMessage,
+}: {
+  message: DirectChatMessage;
+  onLongPressMessage?: (message: DirectChatMessage, anchor: MessageActionAnchor) => void;
+}) {
+  const handleLongPress = (anchor: MessageActionAnchor) => {
+    onLongPressMessage?.(message, anchor);
+  };
+
+  return (
+    <View style={[styles.messageWrap, message.isOwnMessage ? styles.messageWrapOwn : null]}>
+      {!message.isOwnMessage ? (
+        <View style={styles.senderRow}>
+          {message.senderAvatarUri ? (
+            <ExpoImage source={message.senderAvatarUri} style={styles.senderAvatar} contentFit="cover" />
+          ) : null}
+          <ThemedText style={styles.senderName}>{message.senderName}</ThemedText>
+        </View>
+      ) : null}
+
+      <SpringPressable
+        delayLongPress={420}
+        onMeasuredLongPress={handleLongPress}
+        style={[styles.bubble, message.isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
+        <ThemedText style={[styles.bubbleText, message.isOwnMessage ? styles.bubbleTextOwn : null]}>
+          {message.body}
+        </ThemedText>
+      </SpringPressable>
 
       <ThemedText style={[styles.timeText, message.isOwnMessage ? styles.timeTextOwn : null]}>
         {formatTime(message.createdAt)}
@@ -75,13 +304,11 @@ const styles = StyleSheet.create({
   systemText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.gray,
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
   },
   messageWrap: {
-    maxWidth: '84%',
+    maxWidth: '86%',
     gap: 6,
   },
   messageWrapOwn: {
@@ -101,10 +328,8 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 12,
     lineHeight: 14,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.gray,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
   bubble: {
     borderRadius: 28,
@@ -129,64 +354,104 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   routeCard: {
-    flexDirection: 'row',
-    gap: 14,
-    padding: 16,
+    width: 286,
     borderRadius: 28,
-    borderTopRightRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.08)',
+    overflow: 'hidden',
+    backgroundColor: designSystem.colors.charcoal,
   },
   routeCardOwn: {
-    borderTopRightRadius: 8,
+    alignSelf: 'flex-end',
   },
-  routeIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  widgetMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: designSystem.colors.whiteGlassMax,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  widgetMessageOwn: {
+    alignSelf: 'flex-end',
+  },
+  callWidget: {
+    maxWidth: 330,
+    minWidth: 260,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: designSystem.colors.whiteGlassMax,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  callWidgetOwn: {
+    alignSelf: 'flex-end',
+  },
+  widgetMessageIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(159,232,112,0.18)',
+    backgroundColor: designSystem.colors.limeSoft,
   },
-  routeCopy: {
+  widgetMessageCopy: {
     flex: 1,
-    gap: 6,
+    gap: 3,
   },
-  routeTitle: {
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: '800',
+  widgetMessageTitle: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
     color: designSystem.colors.ink,
-    textTransform: 'uppercase',
   },
-  routeSummary: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: designSystem.colors.warmDark,
-  },
-  routeMeta: {
+  callTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  routeMetaText: {
-    fontSize: 13,
-    lineHeight: 16,
+  callStatusPill: {
+    minHeight: 22,
+    borderRadius: 11,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  callStatusText: {
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '700',
+    color: designSystem.colors.darkGreen,
+  },
+  widgetMessageDescription: {
+    fontSize: 14,
+    lineHeight: 18,
     color: designSystem.colors.gray,
   },
-  routeStops: {
+  callDescription: {
     fontSize: 13,
     lineHeight: 18,
+    color: designSystem.colors.ink,
+  },
+  widgetMessageBody: {
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   timeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    color: 'rgba(14,15,12,0.35)',
+    fontWeight: '600',
+    color: designSystem.colors.placeholderText,
     marginLeft: 8,
   },
   timeTextOwn: {

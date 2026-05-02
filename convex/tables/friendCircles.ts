@@ -7,6 +7,7 @@ export const friendCirclesTable = defineTable({
   destinationLabel: v.string(),
   heroLabel: v.string(),
   status: v.union(v.literal('active'), v.literal('planning')),
+  visibility: v.optional(v.union(v.literal('private'), v.literal('open'))),
   createdBySlug: v.string(),
   tripId: v.optional(v.id('trips')),
   createdAt: v.number(),

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, type StyleProp, View, type ViewStyle } from 'react-native';
+import { Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
+import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type SkeletonBlockProps = {
@@ -38,7 +39,7 @@ export function SkeletonBlock({ style }: SkeletonBlockProps) {
     <Animated.View
       style={[
         styles.block,
-        { backgroundColor: isDark ? 'rgba(249,249,246,0.12)' : 'rgba(14,15,12,0.08)', opacity },
+        { backgroundColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft, opacity },
         style,
       ]}
     />
@@ -50,4 +51,3 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
 });
-

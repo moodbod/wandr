@@ -35,7 +35,7 @@ export function WandrActionCard({ title, description, style, ...pressableProps }
 const styles = StyleSheet.create({
   card: {
     borderRadius: designSystem.radii.panel,
-    padding: 18,
+    padding: designSystem.layout.cardPadding,
   },
   title: {
     ...designSystem.type.cardTitle,

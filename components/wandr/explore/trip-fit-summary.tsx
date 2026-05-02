@@ -32,11 +32,13 @@ export function TripFitSummary({ items }: TripFitSummaryProps) {
 
 const styles = StyleSheet.create({
   stack: {
+    marginHorizontal: -designSystem.spacing.lg,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: designSystem.colors.border,
   },
   row: {
+    paddingHorizontal: designSystem.spacing.lg,
     paddingVertical: 18,
     gap: 6,
   },
@@ -48,7 +50,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '600',
-    letterSpacing: 0,
     color: designSystem.colors.warmDark,
   },
   detail: {

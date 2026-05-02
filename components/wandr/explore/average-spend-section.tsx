@@ -65,8 +65,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 40,
     lineHeight: 42,
-    fontWeight: '700',
-    letterSpacing: -1.2,
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   note: {

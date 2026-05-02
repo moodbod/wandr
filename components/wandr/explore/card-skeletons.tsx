@@ -31,12 +31,34 @@ export function ExploreActivityCardSkeleton() {
   );
 }
 
+export function ExploreSheetHeaderSkeleton() {
+  return (
+    <View style={styles.sheetHeaderShell}>
+      <View style={styles.sheetHeaderCopy}>
+        <SkeletonBlock style={styles.sheetTitleLine} />
+        <SkeletonBlock style={styles.sheetTitleShortLine} />
+      </View>
+      <SkeletonBlock style={styles.sheetSearchButton} />
+    </View>
+  );
+}
+
+export function ExploreTripFilterSkeleton() {
+  return (
+    <View style={styles.filterRow}>
+      <SkeletonBlock style={styles.filterChipWide} />
+      <SkeletonBlock style={styles.filterChip} />
+      <SkeletonBlock style={styles.filterChipShort} />
+    </View>
+  );
+}
+
 export function ExploreHiddenGemCardSkeleton() {
   const isDark = useColorScheme() === 'dark';
 
   return (
     <ThemedView
-      lightColor="#ffffff"
+      lightColor={designSystem.colors.white}
       darkColor={designSystem.colors.darkSurface}
       style={[
         styles.hiddenGemShell,
@@ -103,6 +125,52 @@ const styles = StyleSheet.create({
   ctaButton: {
     width: '100%',
     height: 54,
+    borderRadius: designSystem.radii.pill,
+  },
+  sheetHeaderShell: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  sheetHeaderCopy: {
+    flex: 1,
+    gap: 8,
+    paddingTop: 2,
+  },
+  sheetTitleLine: {
+    width: '88%',
+    height: 28,
+    borderRadius: 14,
+  },
+  sheetTitleShortLine: {
+    width: '58%',
+    height: 28,
+    borderRadius: 14,
+  },
+  sheetSearchButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    overflow: 'hidden',
+  },
+  filterChipWide: {
+    width: 132,
+    height: 42,
+    borderRadius: designSystem.radii.pill,
+  },
+  filterChip: {
+    width: 108,
+    height: 42,
+    borderRadius: designSystem.radii.pill,
+  },
+  filterChipShort: {
+    width: 88,
+    height: 42,
     borderRadius: designSystem.radii.pill,
   },
   hiddenGemShell: {

@@ -37,15 +37,15 @@ export function JourneyCtaCard({
       </ThemedText>
       {description ? (
         <ThemedText
-          lightColor="rgba(22,51,0,0.72)"
-          darkColor="rgba(22,51,0,0.72)"
+          lightColor={designSystem.colors.darkGreen}
+          darkColor={designSystem.colors.darkGreen}
           style={styles.description}>
           {description}
         </ThemedText>
       ) : null}
       <View style={styles.actions}>
         <Pressable disabled={isDisabled} onPress={onPrimaryPress} style={styles.primaryAction}>
-          <ThemedText lightColor="#f9f9f6" darkColor="#f9f9f6" style={styles.primaryActionLabel}>
+          <ThemedText lightColor={designSystem.colors.background} darkColor={designSystem.colors.background} style={styles.primaryActionLabel}>
             {isPrimaryLoading ? 'Saving...' : primaryLabel}
           </ThemedText>
         </Pressable>
@@ -75,23 +75,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 54,
     lineHeight: 52,
-    fontWeight: '700',
-    letterSpacing: -2.4,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   titleWithDescription: {
     fontSize: 42,
     lineHeight: 42,
-    letterSpacing: -1.8,
   },
   description: {
     marginTop: -10,
     textAlign: 'center',
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '700',
-    color: 'rgba(22,51,0,0.72)',
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
     maxWidth: 320,
   },
   actions: {
@@ -111,14 +108,12 @@ const styles = StyleSheet.create({
   primaryActionLabel: {
     fontSize: 15,
     lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: '#f9f9f6',
+    fontWeight: '600',
+    color: designSystem.colors.background,
   },
   secondaryAction: {
     borderRadius: designSystem.radii.pill,
-    backgroundColor: 'rgba(23, 25, 21, 0.14)',
+    backgroundColor: designSystem.colors.charcoalGlassStrong,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 232,
@@ -128,9 +123,7 @@ const styles = StyleSheet.create({
   secondaryActionLabel: {
     fontSize: 15,
     lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
 });

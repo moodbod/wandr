@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceFeatureCard } from '@/components/wandr/explore/experience-feature-card';
 import { JourneyCtaCard } from '@/components/wandr/explore/journey-cta-card';
 import { WandrHeader } from '@/components/wandr/header';
@@ -39,14 +40,14 @@ function ConnectedHiddenGemDetailScreen() {
   }, [slug]);
 
   if (!slug || page === undefined || page === null) {
-    return null;
+    return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
 
   const detail = hiddenGemDetails[slug];
   const card = page.search.hiddenGems.items.find((item) => getHiddenGemSlug(item.title) === slug);
 
   if (!detail || !card) {
-    return null;
+    return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
   const isLiked = optimisticLiked ?? likeState?.liked ?? false;
 
@@ -97,7 +98,7 @@ function ConnectedHiddenGemDetailScreen() {
           ) : null}
           <View style={styles.titleStack}>
             <ThemedText style={styles.title} adjustsFontSizeToFit numberOfLines={1}>
-              {detail.title.toUpperCase()}
+              {detail.title}
             </ThemedText>
           </View>
           <ThemedText style={styles.subtitle}>{detail.locationLabel}</ThemedText>
@@ -154,6 +155,40 @@ function ConnectedHiddenGemDetailScreen() {
   );
 }
 
+function HiddenGemDetailLoadingScreen({
+  insetsBottom,
+  insetsTop,
+}: {
+  insetsBottom: number;
+  insetsTop: number;
+}) {
+  return (
+    <ThemedView style={styles.root}>
+      <WandrHeader
+        config={{
+          overlay: true,
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save hidden gem' }],
+        }}
+      />
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + designSystem.spacing.xxxl },
+        ]}>
+        <View style={styles.titleBlock}>
+          <SkeletonBlock style={styles.detailBadgeSkeleton} />
+          <SkeletonBlock style={styles.detailTitleSkeleton} />
+          <SkeletonBlock style={styles.detailSubtitleSkeleton} />
+        </View>
+        <SkeletonBlock style={styles.heroSkeleton} />
+        <SkeletonBlock style={styles.summarySkeleton} />
+        <SkeletonBlock style={styles.sectionSkeleton} />
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -176,9 +211,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   titleStack: {
@@ -187,14 +220,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 54,
     lineHeight: 54,
-    fontWeight: '700',
-    letterSpacing: -1.8,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   heroCard: {
@@ -209,8 +240,7 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: 22,
     lineHeight: 31,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   section: {
@@ -219,9 +249,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 30,
     lineHeight: 32,
-    fontWeight: '700',
-    letterSpacing: -0.8,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   tripFitColumn: {
     gap: 16,
@@ -235,8 +263,7 @@ const styles = StyleSheet.create({
   storyTitle: {
     fontSize: 18,
     lineHeight: 20,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   storyBody: {
     fontSize: 15,
@@ -264,6 +291,33 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  detailBadgeSkeleton: {
+    width: 112,
+    height: 30,
+    borderRadius: 15,
+  },
+  detailTitleSkeleton: {
+    width: '82%',
+    height: 52,
+    borderRadius: 20,
+  },
+  detailSubtitleSkeleton: {
+    width: '58%',
+    height: 20,
+    borderRadius: 10,
+  },
+  heroSkeleton: {
+    height: 420,
+    borderRadius: designSystem.radii.feature,
+  },
+  summarySkeleton: {
+    height: 96,
+    borderRadius: 24,
+  },
+  sectionSkeleton: {
+    height: 220,
+    borderRadius: 28,
   },
 });

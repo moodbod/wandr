@@ -57,6 +57,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
     const icon = leftIcon === undefined ? <MagnifyingGlass color={placeholderTextColor} size={20} weight="regular" /> : leftIcon;
     const resolvedTint = tint ?? (isDark ? 'dark' : 'light');
     const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+    const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
+    const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
 
     if (plain) {
       return (
@@ -90,8 +92,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
                 styles.nativeGlassOverlay,
                 {
                   borderRadius: radius,
-                  borderColor: isDark ? designSystem.colors.whiteOverlay : designSystem.colors.whiteOverlaySoft,
-                  backgroundColor: designSystem.colors.transparentWhite,
+                  borderColor,
+                  backgroundColor: surfaceColor,
                 },
               ]}
             />
@@ -115,7 +117,12 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       return (
         <View style={[styles.container, { borderRadius: radius }, containerStyle]}>
           <BlurView intensity={intensity} tint={resolvedTint} style={[styles.blur, { borderRadius: radius }]}>
-            <View style={[styles.innerHighlight, { borderRadius: radius }, contentStyle]}>
+            <View
+              style={[
+                styles.innerHighlight,
+                { borderRadius: radius, backgroundColor: surfaceColor, borderColor },
+                contentStyle,
+              ]}>
               {icon ? <View style={styles.leftIcon}>{icon}</View> : null}
               <TextInput
                 ref={ref}
@@ -138,8 +145,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
           styles.androidFill,
           {
             borderRadius: radius,
-            backgroundColor: designSystem.colors.transparentWhite,
-            borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft,
+            backgroundColor: surfaceColor,
+            borderColor,
           },
           contentStyle,
           containerStyle,
@@ -163,11 +170,11 @@ GlassInput.displayName = 'GlassInput';
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: designSystem.layout.inputHeight,
+    height: designSystem.layout.inputHeight,
     overflow: 'hidden',
   },
   plainContainer: {
-    minHeight: designSystem.layout.inputHeight,
+    height: designSystem.layout.inputHeight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: designSystem.layout.inputGap,
@@ -177,7 +184,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   nativeGlassShell: {
-    minHeight: designSystem.layout.inputHeight,
+    height: designSystem.layout.inputHeight,
     overflow: 'hidden',
   },
   nativeGlassOverlay: {
@@ -185,7 +192,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   nativeGlassContent: {
-    minHeight: designSystem.layout.inputHeight,
+    height: designSystem.layout.inputHeight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: designSystem.layout.inputGap,
@@ -197,6 +204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: designSystem.layout.inputGap,
     paddingHorizontal: designSystem.layout.inputPaddingHorizontal,
+    borderWidth: 1,
   },
   androidFill: {
     borderWidth: 1,
@@ -207,12 +215,17 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    height: designSystem.type.bodyStrong.lineHeight,
     ...designSystem.type.bodyStrong,
     paddingVertical: 0,
     includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   leftIcon: {
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
 });

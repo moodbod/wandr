@@ -34,21 +34,21 @@ export const hiddenGemDetails: Record<string, HiddenGemDetailContent> = {
     tripFit: [
       {
         label: 'Best vibe',
-        value: 'SUNSET DRIFT',
+        value: 'Sunset drift',
         detail: 'Works when the plan needs a softer landing instead of another packed activity block.',
         icon: 'compass',
         tone: 'dark',
       },
       {
         label: 'Time ask',
-        value: '45 MIN',
+        value: '45 min',
         detail: 'Easy to layer onto dinner, a coastal walk, or one last scenic stop before turning in.',
         icon: 'clock',
         tone: 'accent',
       },
       {
         label: 'Who it suits',
-        value: 'PAIRS OR SOLO',
+        value: 'Pairs or solo',
         detail: 'Best when you want atmosphere, conversation, and a low-friction detour.',
         icon: 'users',
         tone: 'light',
@@ -86,21 +86,21 @@ export const hiddenGemDetails: Record<string, HiddenGemDetailContent> = {
     tripFit: [
       {
         label: 'Best vibe',
-        value: 'WILD VISUALS',
+        value: 'Wild visuals',
         detail: 'A stronger fit for travelers who want something surreal, sparse, and a little out of the ordinary.',
         icon: 'compass',
         tone: 'dark',
       },
       {
         label: 'Time ask',
-        value: '90 MIN',
+        value: '90 min',
         detail: 'Better as a committed side run than a quick in-town filler stop.',
         icon: 'clock',
         tone: 'accent',
       },
       {
         label: 'Who it suits',
-        value: 'SMALL GROUP',
+        value: 'Small group',
         detail: 'Works well with a couple of friends when everyone is happy to chase a weirder landscape moment.',
         icon: 'users',
         tone: 'light',
@@ -138,21 +138,21 @@ export const hiddenGemDetails: Record<string, HiddenGemDetailContent> = {
     tripFit: [
       {
         label: 'Best vibe',
-        value: 'LOCAL TEXTURE',
+        value: 'Local texture',
         detail: 'Great when the trip needs something intimate and less obviously tourist-led.',
         icon: 'compass',
         tone: 'dark',
       },
       {
         label: 'Time ask',
-        value: '30 MIN',
+        value: '30 min',
         detail: 'An easy add-on between coffee, shopping, or an unhurried lunch.',
         icon: 'clock',
         tone: 'accent',
       },
       {
         label: 'Who it suits',
-        value: 'ANY PACE',
+        value: 'Any pace',
         detail: 'Works whether you are solo, in a pair, or just filling a small gap in the day.',
         icon: 'users',
         tone: 'light',

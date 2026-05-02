@@ -4,13 +4,14 @@ import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bott
 import { Image as ExpoImage } from 'expo-image';
 import { Check, FadersHorizontal } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented-tabs';
 import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
 import { WandrHeader } from '@/components/wandr/header';
@@ -111,22 +112,6 @@ export default function FriendsChatListScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          }}
-        />
-        <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
-
   return (
     <ThemedView style={styles.root}>
       <WandrHeader
@@ -171,29 +156,46 @@ export default function FriendsChatListScreen() {
           }
         />
 
-        {showGroups && filteredGroups.length ? (
+        {showGroups && (isLoading || filteredGroups.length) ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
             <View style={styles.rowList}>
-              {filteredGroups.map((item) => (
-                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
-              ))}
+              {isLoading
+                ? Array.from({ length: 2 }).map((_, index) => (
+                    <SkeletonBlock key={`chat-group-skeleton-${index}`} style={styles.rowSkeleton} />
+                  ))
+                : filteredGroups.map((item) => (
+                    <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
+                  ))}
             </View>
           </View>
         ) : null}
 
-        {showDirects && filteredDirects.length ? (
+        {showDirects && (isLoading || filteredDirects.length) ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Chats</ThemedText>
             <View style={styles.rowList}>
-              {filteredDirects.map((item) => (
-                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
-              ))}
+              {isLoading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <SkeletonBlock key={`chat-direct-skeleton-${index}`} style={styles.rowSkeleton} />
+                  ))
+                : filteredDirects.map((item) => (
+                    <FriendChatListRow
+                      key={item.id}
+                      item={item}
+                      onAvatarPress={
+                        item.travelerSlug
+                          ? () => router.push(`/friends/profile/${item.travelerSlug}` as never)
+                          : undefined
+                      }
+                      onPress={() => router.push(item.href as never)}
+                    />
+                  ))}
             </View>
           </View>
         ) : null}
 
-        {(showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
+        {!isLoading && (showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyTitle}>No chats yet</ThemedText>
             <ThemedText style={styles.emptyDescription}>
@@ -312,11 +314,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.xl,
@@ -346,6 +343,10 @@ const styles = StyleSheet.create({
   },
   rowList: {
     gap: 18,
+  },
+  rowSkeleton: {
+    height: 76,
+    borderRadius: 24,
   },
   sheetContent: {
     flex: 1,

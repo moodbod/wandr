@@ -1,16 +1,25 @@
 import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import { Bell, ChatCircleDots, CheckCircle, Compass, UsersThree } from 'phosphor-react-native';
-import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Bell, CaretRight, ChatCircleDots, CheckCircle, Compass, UsersThree } from 'phosphor-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SegmentedTabs } from '@/components/ui/segmented-tabs';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { listNotificationsRef, markNotificationsReadRef } from '@/lib/convex';
+import {
+  approveTripJoinRequestRef,
+  declineTripJoinRequestRef,
+  listNotificationsRef,
+  markNotificationsReadRef,
+  markNotificationsViewedRef,
+} from '@/lib/convex';
 import type { AppNotification } from '@/types/notifications';
 
 function formatRelativeTime(timestamp: number) {
@@ -26,57 +35,146 @@ function formatRelativeTime(timestamp: number) {
   return `${days}d ago`;
 }
 
-function NotificationIcon({ kind }: { kind: AppNotification['kind'] }) {
+function isRecentNotification(notification: AppNotification) {
+  return Date.now() - notification.createdAt <= 7 * 24 * 60 * 60 * 1000;
+}
+
+function NotificationIcon({ kind, unread }: { kind: AppNotification['kind']; unread: boolean }) {
+  const isDark = useColorScheme() === 'dark';
+  const color = unread
+    ? designSystem.colors.darkGreen
+    : isDark
+      ? designSystem.colors.darkMutedText
+      : designSystem.colors.gray;
+
   switch (kind) {
     case 'friend_invite':
-      return <UsersThree color={designSystem.colors.darkGreen} size={18} weight="bold" />;
+      return <UsersThree color={color} size={20} weight="bold" />;
     case 'friend_added':
-      return <CheckCircle color={designSystem.colors.darkGreen} size={18} weight="fill" />;
+      return <CheckCircle color={color} size={20} weight="fill" />;
+    case 'trip_invite':
+      return <UsersThree color={color} size={20} weight="bold" />;
+    case 'trip_join_request':
+      return <UsersThree color={color} size={20} weight="fill" />;
     case 'trip_arrival':
-      return <Compass color={designSystem.colors.darkGreen} size={18} weight="bold" />;
+      return <Compass color={color} size={20} weight="bold" />;
     case 'trip_rating':
-      return <ChatCircleDots color={designSystem.colors.darkGreen} size={18} weight="bold" />;
+      return <ChatCircleDots color={color} size={20} weight="bold" />;
   }
 }
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
-  const notifications = useQuery(listNotificationsRef, { travelerSlug: traveler?.slug ?? '' });
+  const travelerSlug = traveler?.slug;
+  const notifications = useQuery(listNotificationsRef, travelerSlug ? { travelerSlug } : 'skip');
+  const approveTripJoinRequest = useMutation(approveTripJoinRequestRef);
+  const declineTripJoinRequest = useMutation(declineTripJoinRequestRef);
   const markRead = useMutation(markNotificationsReadRef);
+  const markViewed = useMutation(markNotificationsViewedRef);
+  const viewedRequestsRef = useRef(new Set<string>());
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+
+  const unreadNotifications = useMemo(
+    () => notifications?.filter((notification) => !notification.isRead) ?? [],
+    [notifications]
+  );
+  const isLoading = traveler === undefined || notifications === undefined;
+  const visibleNotifications = filter === 'unread' ? unreadNotifications : (notifications ?? []);
+  const recentNotifications = visibleNotifications.filter(isRecentNotification);
+  const olderNotifications = visibleNotifications.filter((notification) => !isRecentNotification(notification));
+  const hasNotifications = Boolean(notifications && notifications.length > 0);
+  const emptyTitle = filter === 'unread' && hasNotifications ? 'All caught up' : 'Nothing new yet';
+  const emptyBody =
+    filter === 'unread' && hasNotifications
+      ? 'Every notification has been read. Switch back to all to revisit older trip updates and friend activity.'
+      : 'Friend invites, trip prompts, and join requests will collect here when they need your attention.';
 
   useEffect(() => {
-    if (!traveler?.slug || !notifications || notifications.length === 0) {
+    if (!travelerSlug || !notifications || notifications.length === 0) {
       return;
     }
 
-    const unreadIds = notifications.filter((notification) => !notification.isRead).map((notification) => notification._id);
-    if (unreadIds.length === 0) {
+    const unviewedIds = notifications
+      .filter((notification) => !notification.isViewed && !viewedRequestsRef.current.has(notification._id))
+      .map((notification) => notification._id);
+
+    if (unviewedIds.length === 0) {
+      return;
+    }
+
+    for (const notificationId of unviewedIds) {
+      viewedRequestsRef.current.add(notificationId);
+    }
+
+    void markViewed({
+      travelerSlug,
+      notificationIds: unviewedIds,
+    });
+  }, [markViewed, notifications, travelerSlug]);
+
+  const handleMarkAllRead = () => {
+    if (!travelerSlug || unreadNotifications.length === 0) {
       return;
     }
 
     void markRead({
-      travelerSlug: traveler.slug,
-      notificationIds: unreadIds,
+      travelerSlug,
+      notificationIds: unreadNotifications.map((notification) => notification._id),
     });
-  }, [markRead, notifications, traveler?.slug]);
+  };
 
-  if (traveler === undefined || notifications === undefined) {
-    return (
-      <ThemedView style={styles.root}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          }}
-        />
-        <View style={[styles.loadingWrap, { paddingTop: insets.top + 96 }]}>
-          <ActivityIndicator size="large" />
-        </View>
-      </ThemedView>
-    );
-  }
+  const handleNotificationPress = (notification: AppNotification) => {
+    if (!travelerSlug) {
+      return;
+    }
+
+    if (!notification.isRead) {
+      void markRead({
+        travelerSlug,
+        notificationIds: [notification._id],
+      });
+    }
+
+    if (notification.href) {
+      router.push(notification.href as never);
+    }
+  };
+
+  const handleApproveRequest = async (notification: AppNotification) => {
+    if (!travelerSlug || busyRequestId) {
+      return;
+    }
+
+    setBusyRequestId(notification._id);
+    try {
+      await approveTripJoinRequest({
+        travelerSlug,
+        notificationId: notification._id,
+      });
+    } finally {
+      setBusyRequestId(null);
+    }
+  };
+
+  const handleDeclineRequest = async (notification: AppNotification) => {
+    if (!travelerSlug || busyRequestId) {
+      return;
+    }
+
+    setBusyRequestId(notification._id);
+    try {
+      await declineTripJoinRequest({
+        travelerSlug,
+        notificationId: notification._id,
+      });
+    } finally {
+      setBusyRequestId(null);
+    }
+  };
 
   return (
     <ThemedView style={styles.root}>
@@ -95,45 +193,60 @@ export default function NotificationsScreen() {
             paddingBottom: insets.bottom + 64,
           },
         ]}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.eyebrow}>Inbox</ThemedText>
+        <View style={styles.header}>
           <ThemedText style={styles.title}>Notifications</ThemedText>
-          <ThemedText style={styles.description}>
-            Friend invites, friend-list adds, and trip prompts all land here.
-          </ThemedText>
+          {unreadNotifications.length > 0 ? (
+            <Pressable accessibilityRole="button" onPress={handleMarkAllRead} hitSlop={8}>
+              <ThemedText style={[styles.markReadText, isDark ? styles.markReadTextDark : null]}>
+                Mark all read
+              </ThemedText>
+            </Pressable>
+          ) : null}
         </View>
 
-        {notifications.length === 0 ? (
+        <SegmentedTabs
+          value={filter}
+          options={[
+            { key: 'all', label: 'All' },
+            { key: 'unread', label: unreadNotifications.length > 0 ? `Unread ${unreadNotifications.length}` : 'Unread' },
+          ]}
+          onChange={setFilter}
+        />
+
+        {isLoading ? (
+          <View style={styles.list}>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <SkeletonBlock key={`notification-skeleton-${index}`} style={styles.notificationSkeleton} />
+            ))}
+          </View>
+        ) : visibleNotifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <Bell color={designSystem.colors.gray} size={24} weight="bold" />
-            <ThemedText style={styles.emptyTitle}>Nothing new yet</ThemedText>
-            <ThemedText style={styles.emptyBody}>
-              As soon as someone invites you, adds you to their friend list, or a trip update needs attention, it will show up here.
-            </ThemedText>
+            <Bell color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} size={24} weight="bold" />
+            <ThemedText style={styles.emptyTitle}>{emptyTitle}</ThemedText>
+            <ThemedText style={styles.emptyBody}>{emptyBody}</ThemedText>
           </View>
         ) : (
           <View style={styles.list}>
-            {notifications.map((notification) => (
-              <Pressable
-                key={notification._id}
-                onPress={() => {
-                  if (notification.href) {
-                    router.push(notification.href as never);
-                  }
-                }}
-                style={[styles.card, !notification.isRead ? styles.cardUnread : null]}>
-                <View style={styles.cardIcon}>
-                  <NotificationIcon kind={notification.kind} />
-                </View>
-                <View style={styles.cardCopy}>
-                  <View style={styles.cardHeader}>
-                    <ThemedText style={styles.cardTitle}>{notification.title}</ThemedText>
-                    <ThemedText style={styles.cardTime}>{formatRelativeTime(notification.createdAt)}</ThemedText>
-                  </View>
-                  <ThemedText style={styles.cardBody}>{notification.body}</ThemedText>
-                </View>
-              </Pressable>
-            ))}
+            {recentNotifications.length > 0 ? (
+              <NotificationSection
+                title="Last 7 days"
+                notifications={recentNotifications}
+                busyRequestId={busyRequestId}
+                onApproveRequest={handleApproveRequest}
+                onDeclineRequest={handleDeclineRequest}
+                onPressNotification={handleNotificationPress}
+              />
+            ) : null}
+            {olderNotifications.length > 0 ? (
+              <NotificationSection
+                title="Earlier"
+                notifications={olderNotifications}
+                busyRequestId={busyRequestId}
+                onApproveRequest={handleApproveRequest}
+                onDeclineRequest={handleDeclineRequest}
+                onPressNotification={handleNotificationPress}
+              />
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -141,51 +254,163 @@ export default function NotificationsScreen() {
   );
 }
 
+function NotificationSection({
+  title,
+  notifications,
+  busyRequestId,
+  onApproveRequest,
+  onDeclineRequest,
+  onPressNotification,
+}: {
+  title: string;
+  notifications: AppNotification[];
+  busyRequestId: string | null;
+  onApproveRequest: (notification: AppNotification) => void;
+  onDeclineRequest: (notification: AppNotification) => void;
+  onPressNotification: (notification: AppNotification) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
+      <View style={styles.rows}>
+        {notifications.map((notification) => (
+          <NotificationRow
+            key={notification._id}
+            notification={notification}
+            isBusy={busyRequestId === notification._id}
+            onApprove={() => onApproveRequest(notification)}
+            onDecline={() => onDeclineRequest(notification)}
+            onPress={() => onPressNotification(notification)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function NotificationRow({
+  notification,
+  isBusy,
+  onApprove,
+  onDecline,
+  onPress,
+}: {
+  notification: AppNotification;
+  isBusy: boolean;
+  onApprove: () => void;
+  onDecline: () => void;
+  onPress: () => void;
+}) {
+  const isDark = useColorScheme() === 'dark';
+  const unread = !notification.isRead;
+  const iconBackground = unread
+    ? designSystem.colors.limeSoft
+    : isDark
+      ? designSystem.colors.darkSurface
+      : designSystem.colors.surface;
+  const requestStatus =
+    notification.kind === 'trip_join_request'
+      ? notification.actionStatus ?? 'pending'
+      : null;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !notification.href }}
+      disabled={!notification.href && notification.isRead}
+      onPress={onPress}
+      style={styles.row}
+    >
+      <View style={[styles.iconWrap, { backgroundColor: iconBackground }]}>
+        <NotificationIcon kind={notification.kind} unread={unread} />
+      </View>
+
+      <View style={styles.rowCopy}>
+        <View style={styles.titleLine}>
+          <ThemedText style={styles.rowTitle} numberOfLines={2}>
+            {notification.title}
+          </ThemedText>
+          <ThemedText style={styles.rowTime}>{formatRelativeTime(notification.createdAt)}</ThemedText>
+        </View>
+        <ThemedText style={styles.rowBody} numberOfLines={2}>{notification.body}</ThemedText>
+        {requestStatus === 'pending' ? (
+          <View style={styles.requestActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Approve trip join request"
+              disabled={isBusy}
+              onPress={(event) => {
+                event.stopPropagation();
+                onApprove();
+              }}
+              style={[styles.requestButton, styles.approveButton, isBusy ? styles.requestButtonDisabled : null]}>
+              <ThemedText style={styles.approveButtonText}>{isBusy ? 'Working' : 'Approve'}</ThemedText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Decline trip join request"
+              disabled={isBusy}
+              onPress={(event) => {
+                event.stopPropagation();
+                onDecline();
+              }}
+              style={[styles.requestButton, styles.declineButton, isBusy ? styles.requestButtonDisabled : null]}>
+              <ThemedText style={styles.declineButtonText}>Decline</ThemedText>
+            </Pressable>
+          </View>
+        ) : requestStatus ? (
+          <View style={styles.requestStatusPill}>
+            <ThemedText style={styles.requestStatusText}>
+              {requestStatus === 'approved' ? 'Approved' : 'Declined'}
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
+
+      {unread ? <View style={styles.unreadDot} /> : null}
+      {notification.href ? (
+        <CaretRight color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} size={18} weight="bold" />
+      ) : null}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
-    gap: designSystem.spacing.xl,
+    gap: designSystem.spacing.lg,
   },
-  hero: {
-    gap: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: designSystem.spacing.md,
   },
-  eyebrow: {
-    ...designSystem.type.eyebrow,
+  markReadText: {
+    ...designSystem.type.bodySmallStrong,
     color: designSystem.colors.darkGreen,
   },
-  title: {
-    fontSize: 42,
-    lineHeight: 40,
-    fontWeight: '800',
-    letterSpacing: -1.5,
-    textTransform: 'uppercase',
-    color: designSystem.colors.ink,
+  markReadTextDark: {
+    color: designSystem.colors.lime,
   },
-  description: {
-    fontSize: 16,
-    lineHeight: 22,
-    maxWidth: 320,
-    color: designSystem.colors.warmDark,
+  title: {
+    ...designSystem.type.pageTitle,
+    color: designSystem.colors.ink,
   },
   emptyState: {
     alignItems: 'center',
     gap: 12,
     padding: designSystem.spacing.xl,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: designSystem.colors.whiteGlass,
   },
   emptyTitle: {
     fontSize: 20,
     lineHeight: 22,
-    fontWeight: '800',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   emptyBody: {
@@ -195,53 +420,110 @@ const styles = StyleSheet.create({
     color: designSystem.colors.gray,
   },
   list: {
-    gap: 12,
+    gap: designSystem.spacing.xl,
   },
-  card: {
-    flexDirection: 'row',
-    gap: 14,
-    padding: designSystem.spacing.lg,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(14,15,12,0.06)',
+  notificationSkeleton: {
+    height: 76,
+    borderRadius: 24,
   },
-  cardUnread: {
-    backgroundColor: 'rgba(159,232,112,0.14)',
+  section: {
+    gap: designSystem.spacing.md,
   },
-  cardIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.75)',
-  },
-  cardCopy: {
-    flex: 1,
-    gap: 6,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '700',
+  sectionTitle: {
+    ...designSystem.type.subtitle,
     color: designSystem.colors.ink,
   },
-  cardTime: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
+  rows: {
+    gap: designSystem.spacing.lg,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.spacing.md,
+    minHeight: 66,
+  },
+  iconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  titleLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: designSystem.spacing.xs,
+  },
+  rowTitle: {
+    flex: 1,
+    ...designSystem.type.cardTitle,
+    color: designSystem.colors.ink,
+  },
+  rowTime: {
+    ...designSystem.type.bodySmall,
     color: designSystem.colors.gray,
   },
-  cardBody: {
-    fontSize: 14,
-    lineHeight: 20,
+  rowBody: {
+    ...designSystem.type.cardBody,
     color: designSystem.colors.warmDark,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.spacing.xs,
+    paddingTop: designSystem.spacing.xs,
+  },
+  requestButton: {
+    minHeight: 34,
+    minWidth: 82,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  approveButton: {
+    backgroundColor: designSystem.colors.lime,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: designSystem.colors.borderAccent,
+  },
+  declineButton: {
+    backgroundColor: designSystem.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  requestButtonDisabled: {
+    opacity: 0.6,
+  },
+  approveButtonText: {
+    ...designSystem.type.label,
+    color: designSystem.colors.darkGreen,
+  },
+  declineButtonText: {
+    ...designSystem.type.label,
+    color: designSystem.colors.warmDark,
+  },
+  requestStatusPill: {
+    alignSelf: 'flex-start',
+    marginTop: designSystem.spacing.xs,
+    minHeight: 30,
+    justifyContent: 'center',
+    borderRadius: 15,
+    paddingHorizontal: designSystem.spacing.md,
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  requestStatusText: {
+    ...designSystem.type.label,
+    color: designSystem.colors.gray,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: designSystem.colors.lime,
   },
 });

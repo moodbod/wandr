@@ -38,9 +38,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 34,
     lineHeight: 32,
-    fontWeight: '700',
-    letterSpacing: -1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   action: {
     flexDirection: 'row',
@@ -50,9 +48,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 12,
     lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: designSystem.colors.lime,
   },
 });
