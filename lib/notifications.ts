@@ -8,6 +8,7 @@ export const RATING_DELAY_SECONDS = 60 * 45;
 
 const ARRIVAL_CHANNEL_ID = 'trip-arrivals';
 const RATING_CHANNEL_ID = 'trip-ratings';
+export const CHAT_CHANNEL_ID = 'friend-chat-messages';
 export const VOICE_CALL_CHANNEL_ID = 'friend-voice-calls';
 export const VIDEO_CALL_CHANNEL_ID = 'friend-video-calls';
 export const VOICE_CALL_SOUND = 'voice_call_ring.wav';
@@ -41,10 +42,11 @@ if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
       const isIncomingCall = notification.request.content.data?.kind === 'friend_call_ring';
+      const isChatMessage = notification.request.content.data?.kind === 'friend_chat_message';
       return {
         shouldShowBanner: true,
         shouldShowList: true,
-        shouldPlaySound: isIncomingCall,
+        shouldPlaySound: isIncomingCall || isChatMessage,
         shouldSetBadge: false,
       };
     },
@@ -142,6 +144,14 @@ export async function ensureNotificationSetupAsync() {
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 180, 120, 180],
       lightColor: '#9fe870',
+    });
+
+    await Notifications.setNotificationChannelAsync(CHAT_CHANNEL_ID, {
+      name: 'Chat messages',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 180, 100, 180],
+      lightColor: '#9fe870',
+      sound: 'default',
     });
   }
 

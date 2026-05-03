@@ -281,3 +281,61 @@ export const sendIncomingCallPush = internalAction({
     return { sent: messages.length };
   },
 });
+
+export const sendChatPush = internalAction({
+  args: {
+    recipientSlugs: v.array(v.string()),
+    senderName: v.string(),
+    title: v.string(),
+    body: v.string(),
+    href: v.string(),
+    threadKind: v.union(v.literal('group'), v.literal('direct')),
+    entityId: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ sent: number }> => {
+    const recipientSlugs = [...new Set(args.recipientSlugs)];
+    const tokenGroups = await Promise.all(
+      recipientSlugs.map((travelerSlug) =>
+        ctx.runQuery(internal.notifications.listDevicePushTokensForTraveler, { travelerSlug })
+      )
+    );
+    const tokens: Doc<'devicePushTokens'>[] = tokenGroups.flat();
+    if (tokens.length === 0) {
+      return { sent: 0 };
+    }
+
+    const messages: Array<Record<string, unknown>> = tokens.map((token) => ({
+      to: token.expoPushToken,
+      title: args.title,
+      body: args.body,
+      sound: 'default',
+      priority: 'high',
+      channelId: 'friend-chat-messages',
+      data: {
+        kind: 'friend_chat_message',
+        senderName: args.senderName,
+        threadKind: args.threadKind,
+        entityId: args.entityId,
+        href: args.href,
+      },
+    }));
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn('Chat push failed', response.status, body);
+      return { sent: 0 };
+    }
+
+    return { sent: messages.length };
+  },
+});

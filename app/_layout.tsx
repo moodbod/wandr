@@ -33,19 +33,17 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor }}>
       <PlanningLocationProvider>
-        <ActiveFriendCallProvider>
-          <AuthSessionProvider>
-            <ThemeProvider value={navigationTheme}>
-              {convexClient ? (
-                <ConvexProvider client={convexClient}>
-                  <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-                </ConvexProvider>
-              ) : (
+        <AuthSessionProvider>
+          <ThemeProvider value={navigationTheme}>
+            {convexClient ? (
+              <ConvexProvider client={convexClient}>
                 <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-              )}
-            </ThemeProvider>
-          </AuthSessionProvider>
-        </ActiveFriendCallProvider>
+              </ConvexProvider>
+            ) : (
+              <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
+            )}
+          </ThemeProvider>
+        </AuthSessionProvider>
       </PlanningLocationProvider>
     </GestureHandlerRootView>
   );
@@ -74,7 +72,7 @@ function AppShell({
   }
 
   return (
-    <>
+    <ActiveFriendCallProvider>
       <Stack screenOptions={stackScreenOptions}>
         <Stack.Protected guard={!isSignedIn}>
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -100,7 +98,7 @@ function AppShell({
         </Suspense>
       ) : null}
       <StatusBar style="auto" />
-    </>
+    </ActiveFriendCallProvider>
   );
 }
 

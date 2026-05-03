@@ -1,7 +1,6 @@
 import { AudioSession, LiveKitRoom, useConnectionState, useRemoteParticipants, useRoomContext } from '@livekit/react-native';
 import { ConnectionState, VideoPresets, type RoomOptions } from 'livekit-client';
 import { useAction, useMutation, useQuery } from 'convex/react';
-import { useAudioPlayer } from 'expo-audio';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { endNativeCall, markNativeCallConnected } from '@/lib/native-calls';
+import type { FriendCircleMember } from '@/types/friends';
 import {
   createFriendCallTokenRef,
   endFriendCallRef,
@@ -40,8 +40,6 @@ const FRIEND_CALL_ROOM_OPTIONS: RoomOptions = {
     videoSimulcastLayers: [VideoPresets.h180],
   },
 };
-const VOICE_RINGBACK_SOUND = require('../../../assets/sounds/voice_call_ring.wav');
-const VIDEO_RINGBACK_SOUND = require('../../../assets/sounds/video_call_ring.wav');
 
 export default function ActiveFriendCallOverlay() {
   const insets = useSafeAreaInsets();
@@ -153,13 +151,13 @@ export default function ActiveFriendCallOverlay() {
     call?.status === 'active' &&
     remoteParticipantCount === 0 &&
     !isLeaving;
-  const memberAvatars = call?.members.flatMap((member: any) => (member.avatarUri ? [member.avatarUri] : [])) ?? [];
+  const callMembers = (call?.members ?? []) as FriendCircleMember[];
   const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
   const callMode = call?.mode ?? 'voice';
   const fullRoomContent = shouldSendVideo ? (
     <CallVideoGrid />
   ) : (
-    <VoiceCallStage memberAvatars={memberAvatars} title={callTitle} />
+    <VoiceCallStage members={callMembers} title={callTitle} />
   );
   const callSurface = isMinimized ? (
     <DraggableMiniCall
@@ -234,31 +232,7 @@ export default function ActiveFriendCallOverlay() {
   );
 }
 
-function CallerRingbackTone({ isPlaying, mode }: { isPlaying: boolean; mode: 'voice' | 'video' }) {
-  const player = useAudioPlayer(mode === 'video' ? VIDEO_RINGBACK_SOUND : VOICE_RINGBACK_SOUND, {
-    keepAudioSessionActive: true,
-  });
-
-  useEffect(() => {
-    player.loop = true;
-    player.volume = 0.42;
-
-    if (isPlaying) {
-      player.play();
-      return;
-    }
-
-    player.pause();
-    void player.seekTo(0);
-  }, [isPlaying, player]);
-
-  useEffect(() => {
-    return () => {
-      player.pause();
-      void player.seekTo(0);
-    };
-  }, [player]);
-
+function CallerRingbackTone(_props: { isPlaying: boolean; mode: 'voice' | 'video' }) {
   return null;
 }
 

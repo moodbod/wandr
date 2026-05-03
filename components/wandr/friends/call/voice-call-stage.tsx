@@ -3,18 +3,19 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { designSystem } from '@/constants/design-system';
+import type { FriendCircleMember } from '@/types/friends';
 
-export function VoiceCallStage({ memberAvatars, title }: { memberAvatars: string[]; title: string }) {
-  const visibleAvatars = memberAvatars.slice(0, 3);
-  const remainingCount = Math.max(0, memberAvatars.length - visibleAvatars.length);
+export function VoiceCallStage({ members, title }: { members: FriendCircleMember[]; title: string }) {
+  const visibleMembers = members.slice(0, 3);
+  const remainingCount = Math.max(0, members.length - visibleMembers.length);
 
   return (
     <View style={styles.voiceStage}>
       <View style={styles.avatarCluster}>
-        {visibleAvatars.length > 0 ? (
-          visibleAvatars.map((uri, index) => (
+        {visibleMembers.length > 0 ? (
+          visibleMembers.map((member, index) => (
             <View
-              key={`call-avatar-${index}`}
+              key={member.travelerSlug}
               style={[
                 styles.avatarShell,
                 {
@@ -22,7 +23,7 @@ export function VoiceCallStage({ memberAvatars, title }: { memberAvatars: string
                   zIndex: 10 - index,
                 },
               ]}>
-              <FaceHashAvatar name={uri} size={48} uri={uri} style={styles.avatarImage} />
+              <FaceHashAvatar name={member.name || member.travelerSlug} size={48} uri={member.avatarUri} style={styles.avatarImage} />
             </View>
           ))
         ) : (

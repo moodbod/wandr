@@ -5,17 +5,12 @@
     "version": "1.0.0",
     "description": "Wandr helps travelers plan trips, coordinate with friends, and keep useful trip details close.",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/ios/iOS-Dark-1024x1024@1x.png",
     "scheme": "wandr",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "icon": {
-        "light": "./assets/ios/Icon-iOS-Default-1024x1024@1x.png",
-        "dark": "./assets/ios/Icon-iOS-Dark-1024x1024@1x.png",
-        "tinted": "./assets/ios/Icon-iOS-TintedLight-1024x1024@1x.png"
-      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions even when the app is in the background.",

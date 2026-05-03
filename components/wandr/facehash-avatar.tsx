@@ -1,4 +1,4 @@
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Avatar } from 'react-native-elements';
 
 import { designSystem } from '@/constants/design-system';
@@ -13,16 +13,28 @@ type FaceHashAvatarProps = {
 
 export function FaceHashAvatar({ name, size, uri, style }: FaceHashAvatarProps) {
   const usePlaceholder = shouldUseFaceHashAvatar(uri);
+  const avatarStyle = [styles.avatar, { width: size, height: size, borderRadius: size / 2 }, style];
+  const fontSize = Math.max(12, size * 0.38);
+
+  if (usePlaceholder) {
+    return (
+      <View style={[avatarStyle, styles.placeholder]}>
+        <Text
+          allowFontScaling={false}
+          numberOfLines={1}
+          style={[styles.title, { fontSize, lineHeight: fontSize }]}>
+          {getInitials(name)}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <Avatar
       rounded
       size={size}
-      source={usePlaceholder ? undefined : { uri: uri ?? '' }}
-      title={getInitials(name)}
-      containerStyle={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }, style]}
-      overlayContainerStyle={styles.overlay}
-      titleStyle={[styles.title, { fontSize: Math.max(12, size * 0.38), lineHeight: Math.max(14, size * 0.44) }]}
+      source={{ uri: uri ?? '' }}
+      containerStyle={avatarStyle}
     />
   );
 }
@@ -46,11 +58,14 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.surfaceMuted,
     overflow: 'hidden',
   },
-  overlay: {
-    backgroundColor: designSystem.colors.surfaceMuted,
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: designSystem.colors.darkGreen,
     fontWeight: '600',
+    includeFontPadding: false,
+    textAlign: 'center',
   },
 });

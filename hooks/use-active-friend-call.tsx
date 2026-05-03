@@ -14,6 +14,15 @@ type ActiveFriendCallContextValue = {
 
 const ActiveFriendCallContext = createContext<ActiveFriendCallContextValue | null>(null);
 
+const missingActiveFriendCallContext: ActiveFriendCallContextValue = {
+  activeCallId: null,
+  isMinimized: false,
+  openCall: () => {},
+  minimizeCall: () => {},
+  expandCall: () => {},
+  clearCall: () => {},
+};
+
 export function ActiveFriendCallProvider({ children }: { children: ReactNode }) {
   const [activeCallId, setActiveCallId] = useState<Id<'friendCalls'> | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -57,7 +66,8 @@ export function ActiveFriendCallProvider({ children }: { children: ReactNode }) 
 export function useActiveFriendCall() {
   const context = useContext(ActiveFriendCallContext);
   if (!context) {
-    throw new Error('useActiveFriendCall must be used inside ActiveFriendCallProvider.');
+    console.warn('useActiveFriendCall used outside ActiveFriendCallProvider; native call UI is disabled for this render.');
+    return missingActiveFriendCallContext;
   }
   return context;
 }

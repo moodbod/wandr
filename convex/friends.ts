@@ -2493,6 +2493,25 @@ export const sendFriendMessage = mutation({
     await ctx.db.patch(args.circleId, {
       updatedAt: Date.now(),
     });
+    const [circle, sender, members] = await Promise.all([
+      ctx.db.get(args.circleId),
+      getAppUser(ctx, args.travelerSlug),
+      getCircleMembers(ctx, args.circleId),
+    ]);
+    const recipientSlugs = members
+      .filter((member) => member.status === 'active' && member.travelerSlug !== args.travelerSlug)
+      .map((member) => member.travelerSlug);
+    if (circle && recipientSlugs.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendChatPush, {
+        recipientSlugs,
+        senderName: sender?.name ?? args.travelerSlug,
+        title: circle.name,
+        body: `${sender?.name ?? args.travelerSlug}: ${trimmedBody}`,
+        href: `/friends/group/${args.circleId}`,
+        threadKind: 'group',
+        entityId: args.circleId,
+      });
+    }
 
     return messageId;
   },
@@ -2528,6 +2547,17 @@ export const sendDirectFriendMessage = mutation({
 
     await ctx.db.patch(args.threadId, {
       updatedAt: Date.now(),
+    });
+    const recipientSlug = thread.participantA === args.travelerSlug ? thread.participantB : thread.participantA;
+    const sender = await getAppUser(ctx, args.travelerSlug);
+    await ctx.scheduler.runAfter(0, internal.notifications.sendChatPush, {
+      recipientSlugs: [recipientSlug],
+      senderName: sender?.name ?? args.travelerSlug,
+      title: sender?.name ?? 'Wandr chat',
+      body: trimmedBody,
+      href: `/friends/direct/${args.threadId}`,
+      threadKind: 'direct',
+      entityId: args.threadId,
     });
 
     return messageId;

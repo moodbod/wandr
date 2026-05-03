@@ -25,7 +25,7 @@ type NativeCallKeepModule = {
   setup: (options: Record<string, unknown>) => Promise<boolean>;
   setAvailable: (available: boolean) => void;
   addEventListener: (
-    eventName: 'answerCall' | 'endCall' | 'showIncomingCallUi' | 'createIncomingConnectionFailed',
+    eventName: 'answerCall' | 'endCall' | 'showIncomingCallUi' | 'createIncomingConnectionFailed' | 'didDisplayIncomingCall',
     listener: (event: { callUUID: string; handle?: string; name?: string }) => void
   ) => { remove: () => void };
   backToForeground: () => void;
@@ -52,11 +52,7 @@ let unsupportedModuleWarningShown = false;
 let nativeCallKeep: NativeCallKeepModule | null | undefined;
 
 export function canUseNativeCallSystem() {
-  if (Platform.OS === 'web') {
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
 function getNativeCallKeep() {
@@ -221,28 +217,38 @@ export function registerNativeCallHandlers({ onAnswer, onEnd }: NativeCallHandle
     }
     incomingCallsByUuid.delete(callUUID);
   });
-  const showIncomingCallSubscription = RNCallKeep.addEventListener('showIncomingCallUi', ({ callUUID }) => {
-    const incomingCall = incomingCallsByUuid.get(callUUID);
-    if (!incomingCall) {
-      return;
+  const didDisplayIncomingCallSubscription = RNCallKeep.addEventListener('didDisplayIncomingCall', ({ callUUID }) => {
+    if (callUUID) {
+      incomingCallsByUuid.delete(callUUID);
     }
-    void presentIncomingFriendCallNotification({
-      callId: incomingCall.callId,
-      callerName: incomingCall.callerName,
-      circleName: incomingCall.groupName,
-      mode: incomingCall.mode,
-    });
   });
-  const failedIncomingCallSubscription = RNCallKeep.addEventListener('createIncomingConnectionFailed', ({ callUUID }) => {
-    incomingCallsByUuid.delete(callUUID);
-  });
+  const androidSubscriptions =
+    Platform.OS === 'android'
+      ? [
+          RNCallKeep.addEventListener('showIncomingCallUi', ({ callUUID }) => {
+            const incomingCall = incomingCallsByUuid.get(callUUID);
+            if (!incomingCall) {
+              return;
+            }
+            void presentIncomingFriendCallNotification({
+              callId: incomingCall.callId,
+              callerName: incomingCall.callerName,
+              circleName: incomingCall.groupName,
+              mode: incomingCall.mode,
+            });
+          }),
+          RNCallKeep.addEventListener('createIncomingConnectionFailed', ({ callUUID }) => {
+            incomingCallsByUuid.delete(callUUID);
+          }),
+        ]
+      : [];
 
   return () => {
     listenersRegistered = false;
     answerSubscription.remove();
     endSubscription.remove();
-    showIncomingCallSubscription.remove();
-    failedIncomingCallSubscription.remove();
+    didDisplayIncomingCallSubscription.remove();
+    androidSubscriptions.forEach((subscription) => subscription.remove());
   };
 }
 
@@ -281,10 +287,7 @@ export function markNativeCallConnected(callId: Id<'friendCalls'>) {
   if (!canUseNativeCallSystem()) {
     return;
   }
-  const RNCallKeep = getNativeCallKeep();
-  if (RNCallKeep) {
-    RNCallKeep.setCurrentCallActive(getNativeCallUuid(callId));
-  }
+  getNativeCallUuid(callId);
 }
 
 export function endNativeCall(callId: Id<'friendCalls'>) {
