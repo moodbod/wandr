@@ -21,8 +21,15 @@ export function ChatWidgetGlassCard({
   contentStyle,
 }: ChatWidgetGlassCardProps) {
   const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+  const isAndroid = Platform.OS === 'android';
   const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const fallbackSurfaceColor = isAndroid
+    ? (isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised)
+    : surfaceColor;
+  const fallbackBorderColor = isAndroid
+    ? (isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt)
+    : borderColor;
 
   return (
     <View style={[styles.shell, { borderRadius: radius }, style]}>
@@ -47,8 +54,8 @@ export function ChatWidgetGlassCard({
           styles.tint,
           {
             borderRadius: radius,
-            backgroundColor: surfaceColor,
-            borderColor,
+            backgroundColor: fallbackSurfaceColor,
+            borderColor: fallbackBorderColor,
           },
         ]}
       />

@@ -218,8 +218,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 54,
-    lineHeight: 54,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '600',
   },
   subtitle: {
@@ -247,8 +247,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   sectionTitle: {
-    fontSize: 30,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '600',
   },
   tripFitColumn: {

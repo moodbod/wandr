@@ -23,7 +23,6 @@ import {
 } from '@/lib/convex';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
-import { fallbackAvatar } from './profile-data';
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
 import { ProfileSettingsSidebar } from './profile-settings-sidebar';
@@ -39,6 +38,7 @@ const profileTabs = [
   { key: 'gallery', label: 'Gallery' },
   { key: 'bookings', label: 'Bookings' },
 ] as const;
+const generatedPlanningLabels = new Set(['Open to the next good route']);
 
 export function ProfileOverviewScreen({ showBackButton = false }: ProfileOverviewScreenProps) {
   const insets = useSafeAreaInsets();
@@ -69,9 +69,10 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const bookingCount = bookings?.length ?? 0;
   const friendCount = friendsDashboard?.stats.friendCount ?? 0;
   const displayName = traveler?.name ?? '';
-  const avatarUri = traveler?.avatarUri ?? fallbackAvatar;
+  const avatarUri = traveler?.avatarUri ?? null;
   const baseLabel = traveler?.countryLabel ?? traveler?.regionName ?? '';
-  const planningLabel = friendsDashboard?.profile?.destinationLabel ?? null;
+  const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
+  const planningLabel = rawPlanningLabel && !generatedPlanningLabels.has(rawPlanningLabel) ? rawPlanningLabel : null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
 
   return (
@@ -531,13 +532,13 @@ const styles = StyleSheet.create({
   bookingGroupTitle: {
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   bookingGroupCount: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.subtleText,
   },
   bookingList: {
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     lineHeight: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
     textTransform: 'capitalize',
   },

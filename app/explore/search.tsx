@@ -214,7 +214,6 @@ function ConnectedExploreSearchScreen() {
       onRegionChange={setActiveRegion}
       onSearchQueryChange={setSearchQuery}
       page={page}
-      planningLocationLabel={planningLocation.label}
       filteredJoinableTripCards={filteredJoinableTripCards}
       hasResults={hasResults}
       previewCards={previewCards}
@@ -236,7 +235,6 @@ function ExploreSearchScreenView({
   onRegionChange,
   onSearchQueryChange,
   page,
-  planningLocationLabel,
   filteredJoinableTripCards,
   hasResults,
   previewCards,
@@ -254,7 +252,6 @@ function ExploreSearchScreenView({
   onRegionChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
   page: any | null | undefined;
-  planningLocationLabel: string;
   filteredJoinableTripCards: ExploreJoinableTripCard[];
   hasResults: boolean;
   previewCards: readonly ExploreActivityCardContent[];
@@ -272,16 +269,9 @@ function ExploreSearchScreenView({
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insetsTop + 88, paddingBottom: designSystem.spacing.xxxl * 2 },
+          { paddingTop: insetsTop + 72, paddingBottom: designSystem.spacing.xxxl * 2 },
         ]}
       >
-        <View style={styles.hero}>
-          <ThemedText style={styles.title}>Search {planningLocationLabel}</ThemedText>
-          <ThemedText style={styles.description}>
-            Filter by real region data first, then layer mood and search on top.
-          </ThemedText>
-        </View>
-
         <DiscoveryFilters
           regions={regionOptions}
           intents={activeIntentOptions}
@@ -373,21 +363,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.xxl,
-  },
-  hero: {
-    gap: 10,
-  },
-  title: {
-    fontSize: 40,
-    lineHeight: 38,
-    fontWeight: '600',
-  },
-  description: {
-    maxWidth: '94%',
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-    color: designSystem.colors.warmDark,
   },
   section: {
     gap: 16,

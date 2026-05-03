@@ -80,15 +80,15 @@ function resolveThemeTextTypography(
     return undefined;
   }
 
-  if (fontSize >= 38) {
+  if (fontSize >= 34) {
     return designSystem.type.display;
   }
 
-  if (fontSize >= 30) {
+  if (fontSize >= 28) {
     return designSystem.type.pageTitle;
   }
 
-  if (fontSize >= 22) {
+  if (fontSize >= 21) {
     return designSystem.type.title;
   }
 

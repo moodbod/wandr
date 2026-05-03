@@ -156,14 +156,14 @@ export const designSystem = {
   },
   type: {
     display: {
-      fontSize: 38,
-      lineHeight: 42,
-      fontWeight: '700' as const,
-    },
-    pageTitle: {
       fontSize: 32,
       lineHeight: 36,
-      fontWeight: '700' as const,
+      fontWeight: '600' as const,
+    },
+    pageTitle: {
+      fontSize: 28,
+      lineHeight: 32,
+      fontWeight: '600' as const,
     },
     body: {
       fontSize: 15,
@@ -186,8 +186,8 @@ export const designSystem = {
       fontWeight: '500' as const,
     },
     title: {
-      fontSize: 24,
-      lineHeight: 30,
+      fontSize: 22,
+      lineHeight: 28,
       fontWeight: '600' as const,
     },
     subtitle: {

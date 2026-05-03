@@ -9,7 +9,7 @@ import type { ExploreActivityCard as ExploreActivityCardContent } from '@/consta
 
 const CARD_RADIUS = 28;
 
-type ExploreActivityCardProps = {
+export type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
   href?: Href;
 };

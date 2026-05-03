@@ -2,12 +2,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
 import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
-import {
-  TripSwitcherSkeleton,
-  TripTimelineSkeleton,
-} from '@/components/wandr/trip/trip-skeletons';
 import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
@@ -20,7 +17,6 @@ import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { TripDashboard, TripListItem } from '@/types/trip';
 import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
-import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { GlobeHemisphereWest, LockSimple, PencilSimple, UsersThree } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -39,7 +35,6 @@ export default function TripScreen() {
         <WandrHeader
           config={{
             overlay: true,
-            title: 'Trip',
             trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
           }}
         />
@@ -48,8 +43,14 @@ export default function TripScreen() {
             styles.content,
             { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 120 },
           ]}>
-          <TripSwitcherSkeleton />
-          <TripTimelineSkeleton />
+          <TripSwitcher
+            isLoading
+            trips={[]}
+            onDeleteTrip={() => {}}
+            onSelectTrip={() => {}}
+            onNewTrip={() => {}}
+          />
+          <TripTimelineSection isLoading />
         </ScrollView>
       </ThemedView>
     );
@@ -92,10 +93,10 @@ function ConnectedTripScreen({
     getTripSettingsRef,
     selectedTripId ? { travelerSlug, tripId: selectedTripId } : 'skip'
   );
-  const trip = useQuery(getTripDashboardRef, { 
-    travelerSlug,
-    tripId: selectedTripId
-  });
+  const trip = useQuery(
+    getTripDashboardRef,
+    selectedTripId ? { travelerSlug, tripId: selectedTripId } : { travelerSlug }
+  );
 
   const createTripMutation = useMutation(createTripRef);
   const deleteTripMutation = useMutation(deleteTripRef);
@@ -266,7 +267,6 @@ function ConnectedTripScreen({
         <WandrHeader
           config={{
             overlay: true,
-            title: 'Trip',
             trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
           }}
         />
@@ -275,8 +275,14 @@ function ConnectedTripScreen({
             styles.content,
             { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + 120 },
           ]}>
-          <TripSwitcherSkeleton />
-          <TripTimelineSkeleton />
+          <TripSwitcher
+            isLoading
+            trips={[]}
+            onDeleteTrip={() => {}}
+            onSelectTrip={() => {}}
+            onNewTrip={() => {}}
+          />
+          <TripTimelineSection isLoading />
         </ScrollView>
       </ThemedView>
     );
@@ -430,7 +436,7 @@ function ConnectedTripScreen({
                     </View>
                   ) : (
                     <View style={styles.friendList}>
-                      {tripSettings.friends.map((friend) => {
+                      {tripSettings.friends.map((friend: any) => {
                         const isInvited = tripSettings.invitedFriendSlugs.includes(friend.slug);
                         const isBusy = invitingFriendSlug === friend.slug;
 
@@ -438,15 +444,7 @@ function ConnectedTripScreen({
                           <View key={friend.slug} style={styles.friendRow}>
                             <View style={styles.friendIdentity}>
                               <View style={styles.avatarWrap}>
-                                {friend.avatarUri ? (
-                                  <ExpoImage source={friend.avatarUri} style={styles.avatarImage} contentFit="cover" />
-                                ) : (
-                                  <View style={styles.avatarFallback}>
-                                    <ThemedText style={styles.avatarFallbackText}>
-                                      {friend.name.charAt(0)}
-                                    </ThemedText>
-                                  </View>
-                                )}
+                                <FaceHashAvatar name={friend.slug ?? friend.name} size={38} uri={friend.avatarUri} style={styles.avatarImage} />
                               </View>
                               <View style={styles.friendCopy}>
                                 <ThemedText style={styles.friendName}>{friend.name}</ThemedText>
@@ -573,7 +571,6 @@ function TripScreenView({
       <WandrHeader
         config={{
           overlay: true,
-          title: 'Trip',
           trailingActions,
         }}
       />
@@ -601,11 +598,10 @@ function TripScreenView({
           />
         ) : null}
 
-        {useSkeletons ? (
-          <TripTimelineSkeleton />
-        ) : items.length > 0 ? (
+        {useSkeletons || items.length > 0 ? (
           <TripTimelineSection
             items={items}
+            isLoading={useSkeletons}
             isEditing={isEditing}
             onRemoveItem={onRemoveItem}
             removingItemId={removingItemId}

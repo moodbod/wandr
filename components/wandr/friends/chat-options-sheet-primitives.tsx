@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
@@ -175,9 +175,9 @@ export const optionsSheetStyles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: designSystem.colors.whiteGlassStrong,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassStrong,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
   },
   actionIcon: {
     width: 42,
@@ -188,7 +188,7 @@ export const optionsSheetStyles = StyleSheet.create({
     backgroundColor: designSystem.colors.limeSoft,
   },
   actionIconDanger: {
-    backgroundColor: 'rgba(161,75,26,0.12)',
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surface : 'rgba(161,75,26,0.12)',
   },
   actionCopy: {
     flex: 1,

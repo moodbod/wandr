@@ -94,10 +94,10 @@ export default function FriendsDiscoverScreen() {
       : 'skip'
   );
 
-  const matchedPhoneNumbers = useMemo(() => new Set(contactMatches?.matched.map((match) => match.phoneNumber) ?? []), [contactMatches?.matched]);
+  const matchedPhoneNumbers = useMemo(() => new Set(contactMatches?.matched.map((match: any) => match.phoneNumber) ?? []), [contactMatches?.matched]);
   const unmatchedContacts = useMemo(() => {
     const unmatchedNumbers = contactMatches?.unmatched ?? [];
-    return unmatchedNumbers.map((phoneNumber) => contactsByPhoneNumber.get(phoneNumber) ?? {
+    return unmatchedNumbers.map((phoneNumber: string) => contactsByPhoneNumber.get(phoneNumber) ?? {
       id: phoneNumber,
       name: phoneNumber,
       phoneNumber,
@@ -117,7 +117,7 @@ export default function FriendsDiscoverScreen() {
     const candidates = discovery?.candidates ?? [];
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
-    return candidates.filter((candidate) => {
+    return candidates.filter((candidate: any) => {
       if (hiddenCandidateSlugs.has(candidate.travelerSlug)) {
         return false;
       }
@@ -258,24 +258,10 @@ export default function FriendsDiscoverScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: insets.top + 72,
             paddingBottom: insets.bottom + 120,
           },
         ]}>
-        {discovery?.intro.showIntro ? (
-          <View style={styles.hero}>
-            <ThemedText style={styles.eyebrow}>People</ThemedText>
-            <ThemedText style={styles.title}>Meet people</ThemedText>
-            <ThemedText style={styles.description}>
-              {discovery?.intro.countryLabel ?? 'Your country'} travelers for your list and next group.
-            </ThemedText>
-          </View>
-        ) : (
-          <View style={styles.compactHeader}>
-            <ThemedText style={styles.compactTitle}>Meet people</ThemedText>
-          </View>
-        )}
-
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
         <GlassInput
@@ -289,7 +275,7 @@ export default function FriendsDiscoverScreen() {
           value={activeVibe}
           options={[
             { key: 'all', label: 'All' },
-            ...(discovery?.filters.vibes.map((vibe) => ({ key: vibe, label: formatFilterLabel(vibe) })) ?? []),
+            ...(discovery?.filters.vibes.map((vibe: string) => ({ key: vibe, label: formatFilterLabel(vibe) })) ?? []),
           ]}
           onChange={setActiveVibe}
         />
@@ -299,7 +285,7 @@ export default function FriendsDiscoverScreen() {
             ? Array.from({ length: 3 }).map((_, index) => (
                 <SkeletonBlock key={`discover-match-skeleton-${index}`} style={styles.matchSkeleton} />
               ))
-            : filteredCandidates.map((candidate) => (
+            : filteredCandidates.map((candidate: any) => (
                 <FriendMatchCard
                   key={candidate.travelerSlug}
                   candidate={candidate}
@@ -356,7 +342,7 @@ export default function FriendsDiscoverScreen() {
             <View style={styles.sheetSection}>
               <ThemedText style={styles.sheetSectionTitle}>Already on Wandr</ThemedText>
               <View style={styles.sheetList}>
-                {contactMatches.matched.map((match) => (
+                {contactMatches.matched.map((match: any) => (
                   <View key={match.travelerSlug} style={styles.contactRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -372,7 +358,7 @@ export default function FriendsDiscoverScreen() {
                       </ThemedText>
                     </Pressable>
                     <GlassButton
-                      accessibilityLabel={match.isFriend ? `${match.name} already on friends list` : `Add ${match.name} to friends`}
+                      accessibilityLabel={match.isFriend ? `${match.name} already on friends list` : `Send ${match.name} a friend request`}
                       onPress={match.isFriend || busyCandidateSlug === match.travelerSlug ? undefined : () => handleCandidateAction(match.travelerSlug, 'friended')}
                       width={92}
                       height={34}
@@ -380,7 +366,7 @@ export default function FriendsDiscoverScreen() {
                       variant="primary"
                       style={match.isFriend || busyCandidateSlug === match.travelerSlug ? styles.contactActionDisabled : null}>
                       <ThemedText style={styles.contactAction}>
-                        {match.isFriend ? 'Friends' : 'Friend'}
+                        {match.isFriend ? 'Friends' : 'Request'}
                       </ThemedText>
                     </GlassButton>
                   </View>
@@ -393,7 +379,7 @@ export default function FriendsDiscoverScreen() {
             <View style={styles.sheetSection}>
               <ThemedText style={styles.sheetSectionTitle}>Invite to app</ThemedText>
               <View style={styles.sheetList}>
-                {unmatchedContacts.map((contact) => (
+                {unmatchedContacts.map((contact: any) => (
                   <View key={contact.id} style={styles.contactRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -444,29 +430,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.lg,
-  },
-  hero: {
-    gap: 8,
-  },
-  eyebrow: {
-    ...designSystem.type.label,
-    color: designSystem.colors.darkGreen,
-  },
-  title: {
-    ...designSystem.type.display,
-    color: designSystem.colors.ink,
-  },
-  description: {
-    ...designSystem.type.body,
-    color: designSystem.colors.warmDark,
-    maxWidth: 320,
-  },
-  compactHeader: {
-    paddingTop: 4,
-  },
-  compactTitle: {
-    ...designSystem.type.title,
-    color: designSystem.colors.ink,
   },
   notice: {
     ...designSystem.type.cardBody,

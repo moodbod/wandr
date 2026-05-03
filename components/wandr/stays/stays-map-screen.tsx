@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -186,6 +187,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     [filteredStays, snapInterval]
   );
   const discoveryControlsHeight = 188;
+  const carouselBottomOffset = 18;
+  const carouselContentBottomPadding = Platform.OS === 'android' ? 24 : insets.bottom + 54;
 
   const scrollToCard = useCallback((index: number, animated = true) => {
     scrollRef.current?.scrollTo({
@@ -307,27 +310,27 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         }}
       />
 
-      <View pointerEvents="box-none" style={styles.carouselWrap}>
+      <View pointerEvents="box-none" style={[styles.carouselWrap, { bottom: carouselBottomOffset }]}>
         <Animated.ScrollView
-        ref={scrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToOffsets={snapOffsets}
-        snapToAlignment="center"
-        decelerationRate="fast"
-        disableIntervalMomentum
-        scrollEventThrottle={16}
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToOffsets={snapOffsets}
+          snapToAlignment="center"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          scrollEventThrottle={16}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
             { useNativeDriver: true }
           )}
           onMomentumScrollEnd={handleSnap}
-        contentContainerStyle={[
-          styles.carouselContent,
-          {
-            paddingLeft: railPadding,
-            paddingRight: railPadding,
-              paddingBottom: insets.bottom + 54,
+          contentContainerStyle={[
+            styles.carouselContent,
+            {
+              paddingLeft: railPadding,
+              paddingRight: railPadding,
+              paddingBottom: carouselContentBottomPadding,
             },
           ]}
           style={styles.carousel}
@@ -378,20 +381,20 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
             });
 
             return (
-            <Pressable
-              key={stayKey}
-              accessibilityRole="button"
-              style={[
-                styles.cardShell,
-                { width: cardWidth },
-                index !== filteredStays.length - 1 ? { marginRight: cardGap } : null,
-              ]}
-              onPress={() =>
-                router.push({
-                  pathname: '/stays/details',
-                  params: { slug: stay.slug },
-                })
-              }
+              <Pressable
+                key={stayKey}
+                accessibilityRole="button"
+                style={[
+                  styles.cardShell,
+                  { width: cardWidth },
+                  index !== filteredStays.length - 1 ? { marginRight: cardGap } : null,
+                ]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/stays/details',
+                    params: { slug: stay.slug },
+                  })
+                }
               >
                 <Animated.View
                   style={[
@@ -584,7 +587,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   emptyText: {
     ...designSystem.type.body,

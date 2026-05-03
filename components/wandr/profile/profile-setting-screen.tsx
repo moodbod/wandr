@@ -91,8 +91,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },

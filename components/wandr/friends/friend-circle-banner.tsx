@@ -2,6 +2,7 @@ import { ChatCircleDots } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -69,6 +70,32 @@ export function FriendCircleBanner({
   );
 }
 
+export function FriendCircleBannerSkeleton({ style }: { style?: StyleProp<ViewStyle> }) {
+  const isDark = useColorScheme() === 'dark';
+  const shellStyle = {
+    backgroundColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised,
+    borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
+  };
+
+  return (
+    <View style={[styles.wrap, shellStyle, style]}>
+      <View style={styles.head}>
+        <View style={styles.copy}>
+          <SkeletonBlock style={styles.titleSkeleton} />
+        </View>
+        <SkeletonBlock style={styles.avatarStackSkeleton} />
+      </View>
+
+      <View style={styles.inlineRow}>
+        <View style={styles.update}>
+          <SkeletonBlock style={styles.iconWrapSkeleton} />
+          <SkeletonBlock style={styles.updateTextSkeleton} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   wrap: {
     gap: ROW_GAP,
@@ -91,6 +118,16 @@ const styles = StyleSheet.create({
     ...designSystem.type.subtitle,
     color: designSystem.colors.ink,
   },
+  titleSkeleton: {
+    width: '72%',
+    height: 28,
+    borderRadius: 10,
+  },
+  avatarStackSkeleton: {
+    width: 76,
+    height: 34,
+    borderRadius: 17,
+  },
   inlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -112,6 +149,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: designSystem.colors.limeSoft,
   },
+  iconWrapSkeleton: {
+    width: STATUS_ICON_SIZE,
+    height: STATUS_ICON_SIZE,
+    borderRadius: STATUS_ICON_SIZE / 2,
+  },
   iconWrapDark: {
     backgroundColor: designSystem.colors.whiteOverlayBarely,
   },
@@ -119,6 +161,11 @@ const styles = StyleSheet.create({
     flex: 1,
     ...designSystem.type.bodySmall,
     color: designSystem.colors.warmDark,
+  },
+  updateTextSkeleton: {
+    flex: 1,
+    height: 18,
+    borderRadius: 8,
   },
   secondaryAction: {
     height: ACTION_HEIGHT,

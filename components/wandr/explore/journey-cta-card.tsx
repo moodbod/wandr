@@ -73,14 +73,14 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    fontSize: 54,
-    lineHeight: 52,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   titleWithDescription: {
-    fontSize: 42,
-    lineHeight: 42,
+    fontSize: 28,
+    lineHeight: 32,
   },
   description: {
     marginTop: -10,

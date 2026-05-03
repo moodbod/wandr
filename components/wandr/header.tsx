@@ -317,9 +317,16 @@ function HeaderActionGroup({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+  const isAndroid = Platform.OS === 'android';
   const groupRadius = 24;
   const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const fallbackSurfaceColor = isAndroid
+    ? (isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised)
+    : surfaceColor;
+  const fallbackBorderColor = isAndroid
+    ? (isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt)
+    : borderColor;
 
   return (
     <View style={[styles.actionGroup, { borderRadius: groupRadius }]}>
@@ -348,10 +355,10 @@ function HeaderActionGroup({
             styles.actionGroupFallback,
             {
               borderRadius: groupRadius,
-              backgroundColor: surfaceColor,
-              borderColor,
+              backgroundColor: fallbackSurfaceColor,
+              borderColor: fallbackBorderColor,
             },
-            Platform.OS === 'android' ? styles.androidGroupFill : null,
+            isAndroid ? styles.androidGroupFill : null,
           ]}
         />
       )}
@@ -361,7 +368,7 @@ function HeaderActionGroup({
         const customRender = typeof action.render === 'function' ? action.render({ iconColor }) : action.render;
 
         return (
-          <View key={`${action.kind}-${index}`} style={styles.groupActionWrap}>
+          <View key={`${action.kind}-${index}`} style={[styles.groupActionWrap, customRender ? styles.groupActionWrapCustom : null]}>
             {index > 0 ? (
               <View
                 pointerEvents="none"
@@ -381,7 +388,11 @@ function HeaderActionGroup({
                 onPress={() => performHeaderAction(action, onBack, onNavigate)}
                 style={({ pressed }) => [
                   styles.groupAction,
-                  pressed ? styles.groupActionPressed : null,
+                  pressed
+                    ? (isAndroid
+                        ? { backgroundColor: isDark ? designSystem.colors.darkCard : designSystem.colors.lightSurfaceAlt }
+                        : styles.groupActionPressed)
+                    : null,
                 ]}
               >
                 {action.isLoading ? <ActivityIndicator color={iconColor} /> : renderHeaderIcon(action, iconColor)}
@@ -557,7 +568,7 @@ const styles = StyleSheet.create({
   actionGroup: {
     flexDirection: 'row',
     height: 48,
-    overflow: 'hidden',
+    overflow: 'visible',
     position: 'relative',
   },
   actionGroupOverlay: {
@@ -575,11 +586,16 @@ const styles = StyleSheet.create({
     height: 48,
     position: 'relative',
     width: 48,
+    zIndex: 1,
+  },
+  groupActionWrapCustom: {
+    zIndex: 2,
   },
   groupAction: {
     alignItems: 'center',
     height: 48,
     justifyContent: 'center',
+    overflow: 'visible',
     width: 48,
   },
   groupActionPressed: {
@@ -618,7 +634,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     lineHeight: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
     includeFontPadding: false,
   },

@@ -28,7 +28,14 @@ export function TravelerMomentum({
   return (
     <View style={styles.container}>
       <View style={styles.left}>
-        <TravelerAvatarStack avatars={avatarUris} totalCount={visitorCount} />
+        {visitorCount > 0 ? (
+          <TravelerAvatarStack
+            avatars={avatarUris}
+            fallbackName={regionName || 'Traveler'}
+            maxVisible={5}
+            totalCount={visitorCount}
+          />
+        ) : null}
 
         {visitorCount > 0 ? (
           <ThemedText style={styles.summary}>

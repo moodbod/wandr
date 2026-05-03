@@ -1,9 +1,12 @@
-import BottomSheet from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { SignOut, Trash, UsersThree } from 'phosphor-react-native';
-import { type RefObject } from 'react';
-import { View } from 'react-native';
+import { type RefObject, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { ChatOptionsSheet } from '@/components/wandr/friends/chat-options-sheet';
 import {
   OptionsSheetAction,
@@ -11,7 +14,10 @@ import {
 } from '@/components/wandr/friends/chat-options-sheet-primitives';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
-import type { FriendChatPayload } from '@/types/friends';
+import type { FriendChatPayload, FriendCircleMember } from '@/types/friends';
+
+const INLINE_MEMBER_LIMIT = 5;
+const EXPANDED_MEMBER_LIMIT = 20;
 
 type GroupChatOptionsSheetProps = {
   chat: NonNullable<FriendChatPayload>;
@@ -32,69 +38,201 @@ export function GroupChatOptionsSheet({
   onRenameGroup,
   sheetRef,
 }: GroupChatOptionsSheetProps) {
+  const memberSheetRef = useRef<BottomSheet>(null);
+  const insets = useSafeAreaInsets();
+  const inlineMembers = chat.members.slice(0, INLINE_MEMBER_LIMIT);
+  const expandedMembers = chat.members.slice(0, EXPANDED_MEMBER_LIMIT);
+  const hiddenMemberCount = Math.max(0, chat.members.length - inlineMembers.length);
+  const overflowMemberCount = Math.max(0, chat.members.length - expandedMembers.length);
   const activeMemberLabel = `${chat.circle.memberCount} active ${
     chat.circle.memberCount === 1 ? 'member' : 'members'
   } in ${chat.circle.destinationLabel}`;
 
   return (
-    <ChatOptionsSheet
-      avatar={
-        chat.circle.avatarUris.length > 0 ? (
-          <TravelerAvatarStack avatars={chat.circle.avatarUris} totalCount={chat.circle.memberCount} />
-        ) : (
-          <UsersThree color={designSystem.colors.darkGreen} size={22} weight="bold" />
-        )
-      }
-      editPlaceholder="Group name"
-      isBusy={isBusy}
-      meta={activeMemberLabel}
-      onChange={onChange}
-      onRename={onRenameGroup}
-      sheetRef={sheetRef}
-      snapPoints={['66%', '92%']}
-      title={chat.circle.name}>
-      <View style={styles.sheetSection}>
-        <View style={styles.sectionHeadingRow}>
-          <ThemedText style={styles.panelTitle}>Members</ThemedText>
-          <ThemedText style={styles.memberCountPill}>{chat.circle.invitedCount} invited</ThemedText>
+    <>
+      <ChatOptionsSheet
+        avatar={
+          chat.circle.avatarUris.length > 0 ? (
+            <TravelerAvatarStack avatars={chat.circle.avatarUris} totalCount={chat.circle.memberCount} />
+          ) : (
+            <UsersThree color={designSystem.colors.darkGreen} size={22} weight="bold" />
+          )
+        }
+        editPlaceholder="Group name"
+        isBusy={isBusy}
+        meta={activeMemberLabel}
+        onChange={onChange}
+        onRename={onRenameGroup}
+        sheetRef={sheetRef}
+        snapPoints={['66%', '92%']}
+        title={chat.circle.name}>
+        <View style={styles.sheetSection}>
+          <View style={styles.sectionHeadingRow}>
+            <ThemedText style={styles.panelTitle}>Members</ThemedText>
+            <ThemedText style={styles.memberCountPill}>{chat.circle.invitedCount} invited</ThemedText>
+          </View>
+          <View style={styles.sheetMembers}>
+            {inlineMembers.map((member) => (
+              <MemberRow key={member.travelerSlug} member={member} />
+            ))}
+            {hiddenMemberCount > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => memberSheetRef.current?.expand()}
+                style={({ pressed }) => [localStyles.moreRow, pressed ? localStyles.moreRowPressed : null]}>
+                <View style={localStyles.moreAvatar}>
+                  <UsersThree color={designSystem.colors.darkGreen} size={22} weight="bold" />
+                </View>
+                <View style={styles.memberCopy}>
+                  <ThemedText style={localStyles.moreTitle}>More members</ThemedText>
+                  <ThemedText style={styles.memberMeta}>
+                    View {hiddenMemberCount} more {hiddenMemberCount === 1 ? 'person' : 'people'}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
-        <View style={styles.sheetMembers}>
-          {chat.members.slice(0, 8).map((member) => (
-            <View key={member.travelerSlug} style={styles.memberRow}>
-              <View style={styles.memberAvatarWrap}>
-                {member.avatarUri ? (
-                  <TravelerAvatarStack avatars={[member.avatarUri]} totalCount={1} size="compact" />
-                ) : (
-                  <View style={styles.emptyAvatar} />
-                )}
-              </View>
-              <View style={styles.memberCopy}>
-                <ThemedText style={styles.memberName}>{member.name}</ThemedText>
-                <ThemedText style={styles.memberMeta}>
-                  {member.role === 'host' ? 'Host' : member.status === 'invited' ? 'Invited' : 'Member'}
-                </ThemedText>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
 
-      <View style={styles.actionList}>
-        <OptionsSheetAction
-          icon={<SignOut color={designSystem.colors.copper} size={20} weight="bold" />}
-          title="Leave group"
-          description="Remove yourself from this circle and its shared trip."
-          tone="danger"
-          onPress={onLeaveGroup}
-        />
-        <OptionsSheetAction
-          icon={<Trash color={designSystem.colors.copper} size={20} weight="bold" />}
-          title="Delete group"
-          description="For hosts. Delete the circle, chat history, and group trips."
-          tone="danger"
-          onPress={onDeleteGroup}
-        />
-      </View>
-    </ChatOptionsSheet>
+        <View style={styles.actionList}>
+          <OptionsSheetAction
+            icon={<SignOut color={designSystem.colors.copper} size={20} weight="bold" />}
+            title="Leave group"
+            description="Remove yourself from this circle and its shared trip."
+            tone="danger"
+            onPress={onLeaveGroup}
+          />
+          <OptionsSheetAction
+            icon={<Trash color={designSystem.colors.copper} size={20} weight="bold" />}
+            title="Delete group"
+            description="For hosts. Delete the circle, chat history, and group trips."
+            tone="danger"
+            onPress={onDeleteGroup}
+          />
+        </View>
+      </ChatOptionsSheet>
+
+      <GlassBottomSheet ref={memberSheetRef} index={-1} snapPoints={['72%', '92%']} enablePanDownToClose>
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            localStyles.expandedSheetContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 20 },
+          ]}
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.sheetGrabber} />
+          <View style={localStyles.expandedHeader}>
+            <View>
+              <ThemedText style={localStyles.expandedTitle}>Members</ThemedText>
+              <ThemedText style={styles.sheetMeta}>
+                {expandedMembers.length} shown{overflowMemberCount > 0 ? `, ${overflowMemberCount} not shown` : ''}
+              </ThemedText>
+            </View>
+            <ThemedText style={styles.memberCountPill}>{chat.circle.invitedCount} invited</ThemedText>
+          </View>
+          <View style={styles.sheetMembers}>
+            {expandedMembers.map((member) => (
+              <MemberRow key={member.travelerSlug} member={member} expanded />
+            ))}
+          </View>
+        </BottomSheetScrollView>
+      </GlassBottomSheet>
+    </>
   );
 }
+
+function MemberRow({ expanded = false, member }: { expanded?: boolean; member: FriendCircleMember }) {
+  return (
+    <View style={[styles.memberRow, expanded ? localStyles.expandedMemberRow : null]}>
+      <MemberAvatar member={member} size={expanded ? 52 : 44} />
+      <View style={styles.memberCopy}>
+        <ThemedText style={[styles.memberName, expanded ? localStyles.expandedMemberName : null]}>{member.name}</ThemedText>
+        <ThemedText style={styles.memberMeta}>
+          {member.role === 'host' ? 'Host' : member.status === 'invited' ? 'Invited' : 'Member'}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+function MemberAvatar({ member, size }: { member: FriendCircleMember; size: number }) {
+  const radius = size / 2;
+
+  return (
+    <View
+      style={[
+        localStyles.memberAvatar,
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+        },
+      ]}>
+      <FaceHashAvatar name={member.travelerSlug ?? member.name} size={size} uri={member.avatarUri} style={StyleSheet.absoluteFill} />
+    </View>
+  );
+}
+
+const localStyles = StyleSheet.create({
+  memberAvatar: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.surfaceMuted,
+  },
+  avatarInitial: {
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
+  },
+  moreRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    paddingVertical: 4,
+  },
+  moreRowPressed: {
+    backgroundColor: designSystem.colors.lightSurfaceAlt,
+  },
+  moreAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  moreTitle: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
+  },
+  expandedSheetContent: {
+    paddingTop: designSystem.spacing.lg,
+    paddingHorizontal: designSystem.spacing.lg,
+    gap: 18,
+  },
+  expandedHeader: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  expandedTitle: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  expandedMemberRow: {
+    minHeight: 60,
+  },
+  expandedMemberName: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+});

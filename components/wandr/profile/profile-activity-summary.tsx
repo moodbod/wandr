@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 21,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   metricLabel: {

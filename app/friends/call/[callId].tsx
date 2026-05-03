@@ -1,12 +1,13 @@
 import { isRunningInExpoGo } from 'expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { PhoneDisconnect, VideoCamera } from 'phosphor-react-native';
-import { useEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import ActiveFriendCallOverlay from '@/components/wandr/friends/active-friend-call-overlay';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
@@ -20,36 +21,40 @@ export default function FriendCallScreen() {
 }
 
 function ActiveCallRouteBridge() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ callId?: string | string[] }>();
   const callIdParam = Array.isArray(params.callId) ? params.callId[0] : params.callId;
   const callId = callIdParam as Id<'friendCalls'> | undefined;
-  const { expandCall, openCall } = useActiveFriendCall();
+  const { activeCallId, isMinimized, openCall } = useActiveFriendCall();
+  const didOpenCall = useRef(false);
+  const didSeeActiveCall = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!callId) {
       return;
     }
+    didOpenCall.current = true;
     openCall(callId);
   }, [callId, openCall]);
 
+  useLayoutEffect(() => {
+    if (!didOpenCall.current) {
+      return;
+    }
+
+    if (activeCallId) {
+      didSeeActiveCall.current = true;
+    }
+
+    if (didSeeActiveCall.current && (isMinimized || !activeCallId)) {
+      router.back();
+    }
+  }, [activeCallId, isMinimized, router]);
+
   return (
-    <ThemedView style={[styles.root, { paddingTop: insets.top + 18, paddingBottom: Math.max(insets.bottom, 18) }]}>
+    <ThemedView style={styles.routeHost}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.panel}>
-        <View style={styles.iconWrap}>
-          <VideoCamera color={designSystem.colors.darkGreen} size={28} weight="bold" />
-        </View>
-        <ThemedText style={styles.title}>Call is active</ThemedText>
-        <ThemedText style={styles.body}>Use the minimize button to keep it as a movable floating widget while you browse Wandr.</ThemedText>
-        <Pressable accessibilityRole="button" onPress={expandCall} style={styles.button}>
-          <ThemedText style={styles.buttonText}>Open call</ThemedText>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
-          <ThemedText style={styles.secondaryButtonText}>Back to chat</ThemedText>
-        </Pressable>
-      </View>
+      <ActiveFriendCallOverlay />
     </ThemedView>
   );
 }
@@ -88,6 +93,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     backgroundColor: designSystem.colors.charcoal,
   },
+  routeHost: {
+    flex: 1,
+    backgroundColor: '#050704',
+  },
   panel: {
     width: '100%',
     maxWidth: 420,
@@ -105,7 +114,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     lineHeight: 31,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.white,
     textAlign: 'center',
   },
@@ -128,7 +137,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 15,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.white,
   },
   secondaryButton: {
@@ -142,7 +151,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 14,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.white,
   },
 });

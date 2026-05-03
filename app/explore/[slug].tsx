@@ -58,7 +58,14 @@ function ConnectedExploreExperienceScreen() {
     travelerSlug && typeof slug === 'string' ? { experienceSlug: slug, travelerSlug } : 'skip'
   );
   const primaryTripId = trips?.[0]?._id;
-  const trip = useQuery(getTripDashboardRef, { travelerSlug, tripId: primaryTripId });
+  const trip = useQuery(
+    getTripDashboardRef,
+    travelerSlug
+      ? primaryTripId
+        ? { travelerSlug, tripId: primaryTripId }
+        : { travelerSlug }
+      : 'skip'
+  );
   const bookExperience = useMutation(bookExperienceRef);
   const createTrip = useMutation(createTripRef);
   const requestJoinTrip = useMutation(requestJoinExploreTripRef);
@@ -370,7 +377,11 @@ function ConnectedExploreExperienceScreen() {
 
         {tripFitItems.length > 0 ? (
           <View style={styles.section}>
-            <ThemedText style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Trip Fit</ThemedText>
+            <SectionHeading
+              isDark={isDark}
+              title="Trip fit"
+              subtitle="A quick read before you book."
+            />
             <TripFitSummary items={tripFitItems} />
           </View>
         ) : null}
@@ -524,6 +535,17 @@ function ExperienceDetailLoadingScreen({
   );
 }
 
+function SectionHeading({ title, subtitle, isDark }: { title: string; subtitle?: string; isDark: boolean }) {
+  return (
+    <View style={styles.sectionHeading}>
+      <ThemedText style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>{title}</ThemedText>
+      {subtitle ? (
+        <ThemedText style={[styles.sectionSubtitle, isDark && styles.sectionSubtitleDark]}>{subtitle}</ThemedText>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -561,9 +583,9 @@ const styles = StyleSheet.create({
   },
   title: {
     ...designSystem.type.title,
-    fontSize: 44,
+    fontSize: 32,
     color: designSystem.colors.ink,
-    lineHeight: 44,
+    lineHeight: 36,
   },
   titleDark: {
     color: designSystem.colors.darkText,
@@ -605,14 +627,26 @@ const styles = StyleSheet.create({
     gap: 18,
     marginTop: 14,
   },
+  sectionHeading: {
+    gap: 8,
+  },
   sectionTitle: {
-    fontSize: 30,
-    lineHeight: 28,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },
   sectionTitleDark: {
     color: designSystem.colors.darkText,
+  },
+  sectionSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+    color: designSystem.colors.warmDark,
+  },
+  sectionSubtitleDark: {
+    color: designSystem.colors.darkMutedText,
   },
   summary: {
     fontSize: 16,
@@ -660,7 +694,7 @@ const styles = StyleSheet.create({
   publicTripTitle: {
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   publicTripSubtitle: {
@@ -705,7 +739,7 @@ const styles = StyleSheet.create({
   publicTripJoinText: {
     fontSize: 12,
     lineHeight: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   tripOption: {

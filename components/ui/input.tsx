@@ -61,14 +61,14 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   leftIcon: {
-    width: 24,
+    minWidth: 24,
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
   rightIcon: {
-    width: 24,
+    minWidth: 24,
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',

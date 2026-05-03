@@ -63,8 +63,8 @@ const styles = StyleSheet.create({
     color: designSystem.colors.warmDark,
   },
   amount: {
-    fontSize: 40,
-    lineHeight: 42,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },

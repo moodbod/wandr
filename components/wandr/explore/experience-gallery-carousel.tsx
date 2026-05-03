@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   photoCountText: {
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.white,
   },
   visitorTag: {
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   visitorTagText: {
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   morePhotosOverlay: {
@@ -260,9 +260,9 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.scrimSoft,
   },
   morePhotosText: {
-    fontSize: 34,
-    lineHeight: 38,
-    fontWeight: '700',
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '600',
     color: designSystem.colors.white,
   },
   galleryRoot: {
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   fullscreenCountText: {
     fontSize: 13,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.white,
   },
 });

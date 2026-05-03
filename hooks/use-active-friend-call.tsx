@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { Id } from '@/convex/_generated/dataModel';
+import { registerNativeCallHandlers, setupNativeCallSystem } from '@/lib/native-calls';
 
 type ActiveFriendCallContextValue = {
   activeCallId: Id<'friendCalls'> | null;
@@ -26,6 +27,17 @@ export function ActiveFriendCallProvider({ children }: { children: ReactNode }) 
     setActiveCallId(null);
     setIsMinimized(false);
   }, []);
+
+  useEffect(() => {
+    void setupNativeCallSystem();
+    return registerNativeCallHandlers({
+      onAnswer: (callId) => openCall(callId),
+      onEnd: (callId) => {
+        setActiveCallId((currentCallId) => (currentCallId === callId ? null : currentCallId));
+        setIsMinimized(false);
+      },
+    });
+  }, [openCall]);
 
   const value = useMemo<ActiveFriendCallContextValue>(
     () => ({

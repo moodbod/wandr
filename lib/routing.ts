@@ -10,9 +10,14 @@ export async function fetchRoutePath(
     return [];
   }
 
-  // Prefer Mapbox if token is available, otherwise fall back to public OSRM
+  const osrmServers = [
+    'https://routing.openstreetmap.de/routed-car',
+    'https://router.project-osrm.org',
+  ];
+
+  // Prefer Mapbox if token is available, then fall back to public OSRM
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
-  
+
   if (mapboxToken) {
     const orderedRoute = await fetchMapboxRoute(validCoords, mapboxToken);
     if (orderedRoute.length > 0) {
@@ -20,34 +25,43 @@ export async function fetchRoutePath(
     }
 
     if (validCoords.length > 2) {
-      return await fetchPairwiseRoute(validCoords, (segment) => fetchMapboxRoute(segment, mapboxToken));
+      const pairwiseMapboxRoute = await fetchPairwiseRoute(validCoords, (segment) =>
+        fetchMapboxRoute(segment, mapboxToken)
+      );
+      if (pairwiseMapboxRoute.length > 0) {
+        return pairwiseMapboxRoute;
+      }
     }
-    
-    // If Mapbox fails completely, return empty array to prevent straight lines
+
+    const osrmRoute = await fetchFirstOsrmRoute(validCoords, osrmServers);
+    if (osrmRoute.length > 0) {
+      return osrmRoute;
+    }
+
     return [];
   }
 
-  // List of public OSRM servers to try (if Mapbox token is missing)
-  const osrmServers = [
-    'https://routing.openstreetmap.de/routed-car',
-    'https://router.project-osrm.org',
-  ];
+  return await fetchFirstOsrmRoute(validCoords, osrmServers);
+}
 
+async function fetchFirstOsrmRoute(
+  coordinates: readonly (readonly [number, number])[],
+  osrmServers: readonly string[]
+) {
   for (const server of osrmServers) {
-    const orderedRoute = await fetchOsrmRoute(validCoords, server);
+    const orderedRoute = await fetchOsrmRoute(coordinates, server);
     if (orderedRoute.length > 0) {
       return orderedRoute;
     }
 
-    if (validCoords.length > 2) {
-      const pairwiseRoute = await fetchPairwiseRoute(validCoords, (segment) => fetchOsrmRoute(segment, server));
+    if (coordinates.length > 2) {
+      const pairwiseRoute = await fetchPairwiseRoute(coordinates, (segment) => fetchOsrmRoute(segment, server));
       if (pairwiseRoute.length > 0) {
         return pairwiseRoute;
       }
     }
   }
 
-  // No fallback to straight lines as requested by user. Return empty array if all APIs fail.
   return [];
 }
 

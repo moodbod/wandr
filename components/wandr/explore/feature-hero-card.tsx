@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   title: {
-    fontSize: 40,
-    lineHeight: 40,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '600',
     color: designSystem.colors.white,
   },

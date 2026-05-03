@@ -8,6 +8,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import {
   ARRIVAL_RADIUS_METERS,
   ensureNotificationSetupAsync,
+  getDevicePushRegistrationAsync,
   parseTripNotificationPayload,
   presentArrivalNotification,
   scheduleRatingNotification,
@@ -17,6 +18,7 @@ import {
   createTripNotificationRef,
   getTripDashboardRef,
   recordTripArrivalRef,
+  registerDevicePushTokenRef,
   submitExperienceRatingRef,
 } from '@/lib/convex';
 import { useCurrentLocation } from '@/hooks/use-current-location';
@@ -52,6 +54,7 @@ export function TripNotificationCenter() {
   });
   const recordArrival = useMutation(recordTripArrivalRef);
   const createTripNotification = useMutation(createTripNotificationRef);
+  const registerDevicePushToken = useMutation(registerDevicePushTokenRef);
   const submitExperienceRating = useMutation(submitExperienceRatingRef);
   const { coordinate: currentLocation } = useCurrentLocation();
 
@@ -65,6 +68,27 @@ export function TripNotificationCenter() {
   useEffect(() => {
     void ensureNotificationSetupAsync();
   }, []);
+
+  useEffect(() => {
+    if (!travelerSlug || Platform.OS === 'web') {
+      return;
+    }
+
+    let cancelled = false;
+    void getDevicePushRegistrationAsync().then((registration) => {
+      if (!registration || cancelled) {
+        return;
+      }
+      void registerDevicePushToken({
+        travelerSlug,
+        ...registration,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [registerDevicePushToken, travelerSlug]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {

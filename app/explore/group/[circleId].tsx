@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   title: {
-    fontSize: 34,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },

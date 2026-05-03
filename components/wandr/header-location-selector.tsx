@@ -1,8 +1,9 @@
-import { CaretDown, GlobeHemisphereWest } from 'phosphor-react-native';
+import { CaretDown } from 'phosphor-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassButton } from '@/components/ui/glass-button';
+import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { designSystem } from '@/constants/design-system';
 import { type PlanningLocation } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -26,7 +27,9 @@ export function HeaderLocationSelector({ location, onPress }: HeaderLocationSele
       width={undefined}
     >
       <View style={styles.content}>
-        <GlobeHemisphereWest color={textColor} size={18} weight="bold" />
+        {location.countryCode ? (
+          <CountryFlagAvatar countryCode={location.countryCode} size={34} />
+        ) : null}
         <View style={styles.copy}>
           <ThemedText numberOfLines={1} style={[styles.label, { color: textColor }]}>
             {location.label}
@@ -51,7 +54,7 @@ const styles = StyleSheet.create({
   },
   content: {
     height: '100%',
-    paddingLeft: 14,
+    paddingLeft: 8,
     paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -64,6 +67,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     lineHeight: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });

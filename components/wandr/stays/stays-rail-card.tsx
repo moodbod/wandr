@@ -81,11 +81,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 10,
-    shadowColor: designSystem.colors.ink,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 4,
   },
   propertyCardDark: {
     backgroundColor: designSystem.colors.darkSurface,

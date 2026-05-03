@@ -1,13 +1,23 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
 
 export const ARRIVAL_RADIUS_METERS = 180;
 export const RATING_DELAY_SECONDS = 60 * 45;
 
 const ARRIVAL_CHANNEL_ID = 'trip-arrivals';
 const RATING_CHANNEL_ID = 'trip-ratings';
+export const VOICE_CALL_CHANNEL_ID = 'friend-voice-calls';
+export const VIDEO_CALL_CHANNEL_ID = 'friend-video-calls';
+export const VOICE_CALL_SOUND = 'voice_call_ring.wav';
+export const VIDEO_CALL_SOUND = 'video_call_ring.wav';
 const ARRIVAL_CATEGORY_ID = 'tripArrival';
 const RATING_CATEGORY_ID = 'tripRating';
+export const FRIEND_CALL_CATEGORY_ID = 'friendCall';
+export const FRIEND_CALL_ANSWER_ACTION_ID = 'answerFriendCall';
+export const FRIEND_CALL_DECLINE_ACTION_ID = 'declineFriendCall';
+const PUSH_INSTALLATION_ID_KEY = 'wandr.pushInstallationId';
 
 export type TripNotificationPayload =
   | {
@@ -29,12 +39,15 @@ export type TripNotificationPayload =
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      const isIncomingCall = notification.request.content.data?.kind === 'friend_call_ring';
+      return {
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: isIncomingCall,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 
@@ -101,6 +114,22 @@ export async function ensureNotificationSetupAsync() {
   }
 
   if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(VOICE_CALL_CHANNEL_ID, {
+      name: 'Voice calls',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 420, 160, 420, 900],
+      lightColor: '#9fe870',
+      sound: VOICE_CALL_SOUND,
+    });
+
+    await Notifications.setNotificationChannelAsync(VIDEO_CALL_CHANNEL_ID, {
+      name: 'Video calls',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 220, 120, 220, 120, 520, 900],
+      lightColor: '#9fe870',
+      sound: VIDEO_CALL_SOUND,
+    });
+
     await Notifications.setNotificationChannelAsync(ARRIVAL_CHANNEL_ID, {
       name: 'Trip arrivals',
       importance: Notifications.AndroidImportance.HIGH,
@@ -141,6 +170,19 @@ export async function ensureNotificationSetupAsync() {
     },
   ]);
 
+  await Notifications.setNotificationCategoryAsync(FRIEND_CALL_CATEGORY_ID, [
+    {
+      identifier: FRIEND_CALL_ANSWER_ACTION_ID,
+      buttonTitle: 'Answer',
+      options: { opensAppToForeground: true },
+    },
+    {
+      identifier: FRIEND_CALL_DECLINE_ACTION_ID,
+      buttonTitle: 'Decline',
+      options: { opensAppToForeground: false },
+    },
+  ]);
+
   const existingPermissions = await Notifications.getPermissionsAsync();
   if (existingPermissions.status === 'granted') {
     return true;
@@ -148,6 +190,48 @@ export async function ensureNotificationSetupAsync() {
 
   const requestedPermissions = await Notifications.requestPermissionsAsync();
   return requestedPermissions.status === 'granted';
+}
+
+async function getPushInstallationId() {
+  const existing = await SecureStore.getItemAsync(PUSH_INSTALLATION_ID_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const nextId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  await SecureStore.setItemAsync(PUSH_INSTALLATION_ID_KEY, nextId);
+  return nextId;
+}
+
+function getExpoProjectId() {
+  return Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
+}
+
+export async function getDevicePushRegistrationAsync() {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return null;
+  }
+
+  const hasPermission = await ensureNotificationSetupAsync();
+  if (!hasPermission) {
+    return null;
+  }
+
+  try {
+    const [installationId, expoPushToken] = await Promise.all([
+      getPushInstallationId(),
+      Notifications.getExpoPushTokenAsync({ projectId: getExpoProjectId() }),
+    ]);
+
+    return {
+      installationId,
+      expoPushToken: expoPushToken.data,
+      platform: Platform.OS,
+    };
+  } catch (error) {
+    console.warn('Unable to register this device for push notifications', error);
+    return null;
+  }
 }
 
 export async function presentArrivalNotification(payload: Extract<TripNotificationPayload, { kind: 'arrival' }>) {
@@ -163,6 +247,41 @@ export async function presentArrivalNotification(payload: Extract<TripNotificati
       attachments: getIosAttachments(payload.imageUri),
       categoryIdentifier: ARRIVAL_CATEGORY_ID,
       ...(Platform.OS === 'android' ? { channelId: ARRIVAL_CHANNEL_ID } : null),
+    },
+    trigger: null,
+  });
+}
+
+export async function presentIncomingFriendCallNotification({
+  callId,
+  callerName,
+  circleName,
+  mode,
+}: {
+  callId: string;
+  callerName: string;
+  circleName: string;
+  mode: 'voice' | 'video';
+}) {
+  if (Platform.OS === 'web') {
+    return null;
+  }
+
+  const sound = mode === 'video' ? VIDEO_CALL_SOUND : VOICE_CALL_SOUND;
+  return await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `${callerName} is calling`,
+      body: `${circleName} ${mode === 'video' ? 'video call' : 'voice call'}`,
+      sound,
+      data: {
+        kind: 'friend_call_ring',
+        callId,
+        mode,
+      },
+      categoryIdentifier: FRIEND_CALL_CATEGORY_ID,
+      ...(Platform.OS === 'android'
+        ? { channelId: mode === 'video' ? VIDEO_CALL_CHANNEL_ID : VOICE_CALL_CHANNEL_ID }
+        : null),
     },
     trigger: null,
   });

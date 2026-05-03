@@ -2,12 +2,13 @@ import { useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { CalendarBlank, ChatsCircle, Phone, Sun, VideoCamera } from 'phosphor-react-native';
 import { useRef, type ReactNode } from 'react';
-import { Animated, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { RouteMapWidget } from '@/components/wandr/friends/chat-widgets';
 import type { MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { DirectChatMessage, FriendChatMessage } from '@/types/friends';
 
 function formatTime(timestamp: number) {
@@ -123,6 +124,7 @@ export function FriendChatMessageBubble({
   onLongPressMessage?: (message: FriendChatMessage, anchor: MessageActionAnchor) => void;
 }) {
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
   const widgetMessage = getWidgetMessage(message.body);
   const WidgetIcon = widgetMessage?.icon;
   const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
@@ -191,21 +193,27 @@ export function FriendChatMessageBubble({
           onPress={handleOpenCall}
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
-          style={[styles.callWidget, message.isOwnMessage ? styles.callWidgetOwn : null]}>
-          <View style={styles.widgetMessageIcon}>
-            <CallIcon color={designSystem.colors.darkGreen} size={18} weight="bold" />
+          style={[
+            styles.callWidget,
+            getWidgetSurfaceStyle(isDark),
+            message.isOwnMessage ? styles.callWidgetOwn : null,
+          ]}>
+          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
+            <CallIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
           </View>
           <View style={styles.widgetMessageCopy}>
             <View style={styles.callTitleRow}>
-              <ThemedText style={styles.widgetMessageTitle}>{message.callCard.title}</ThemedText>
+              <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>
+                {message.callCard.title}
+              </ThemedText>
               {message.callCard.status === 'scheduled' ? (
-                <View style={styles.callStatusPill}>
-                  <CalendarBlank color={designSystem.colors.darkGreen} size={12} weight="bold" />
-                  <ThemedText style={styles.callStatusText}>Scheduled</ThemedText>
+                <View style={[styles.callStatusPill, getWidgetIconStyle(isDark)]}>
+                  <CalendarBlank color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={12} weight="bold" />
+                  <ThemedText style={[styles.callStatusText, getWidgetAccentTextStyle(isDark)]}>Scheduled</ThemedText>
                 </View>
               ) : null}
             </View>
-            <ThemedText style={styles.widgetMessageDescription}>
+            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
               {message.callCard.status === 'scheduled' && message.callCard.scheduledFor
                 ? `Starts ${formatCallTime(message.callCard.scheduledFor)}${
                     message.callCard.endsAt ? ` - ${formatCallTime(message.callCard.endsAt)}` : ''
@@ -215,11 +223,11 @@ export function FriendChatMessageBubble({
                   : 'Call ended.'}
             </ThemedText>
             {message.callCard.description ? (
-              <ThemedText style={styles.callDescription} numberOfLines={2}>
+              <ThemedText style={[styles.callDescription, getWidgetTitleStyle(isDark)]} numberOfLines={2}>
                 {message.callCard.description}
               </ThemedText>
             ) : null}
-            <ThemedText style={styles.widgetMessageBody}>
+            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
               {[message.callCard.mode === 'voice' ? 'Voice call' : 'Video call', formatReminder(message.callCard.reminderMinutesBefore)]
                 .filter(Boolean)
                 .join(' | ')}
@@ -230,22 +238,30 @@ export function FriendChatMessageBubble({
         <SpringPressable
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
-          style={[styles.widgetMessage, message.isOwnMessage ? styles.widgetMessageOwn : null]}>
-          <View style={styles.widgetMessageIcon}>
-            {WidgetIcon ? <WidgetIcon color={designSystem.colors.darkGreen} size={18} weight="bold" /> : null}
+          style={[
+            styles.widgetMessage,
+            getWidgetSurfaceStyle(isDark),
+            message.isOwnMessage ? styles.widgetMessageOwn : null,
+          ]}>
+          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
+            {WidgetIcon ? (
+              <WidgetIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
+            ) : null}
           </View>
           <View style={styles.widgetMessageCopy}>
-            <ThemedText style={styles.widgetMessageTitle}>{widgetMessage.title}</ThemedText>
-            <ThemedText style={styles.widgetMessageDescription}>{widgetMessage.description}</ThemedText>
-            <ThemedText style={styles.widgetMessageBody}>{widgetMessage.body}</ThemedText>
+            <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>{widgetMessage.title}</ThemedText>
+            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
+              {widgetMessage.description}
+            </ThemedText>
+            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>{widgetMessage.body}</ThemedText>
           </View>
         </SpringPressable>
       ) : (
         <SpringPressable
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
-          style={[styles.bubble, message.isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
-          <ThemedText style={[styles.bubbleText, message.isOwnMessage ? styles.bubbleTextOwn : null]}>
+          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : styles.plainOtherMessage}>
+          <ThemedText style={message.isOwnMessage ? [styles.bubbleText, styles.bubbleTextOwn] : [styles.plainOtherText, getPlainOtherTextStyle(isDark)]}>
             {message.body}
           </ThemedText>
         </SpringPressable>
@@ -258,6 +274,57 @@ export function FriendChatMessageBubble({
   );
 }
 
+function getWidgetSurfaceStyle(isDark: boolean) {
+  return {
+    backgroundColor: isDark
+      ? designSystem.colors.darkSurface
+      : Platform.OS === 'android'
+        ? designSystem.colors.surfaceRaised
+        : designSystem.colors.whiteGlassMax,
+    borderColor: isDark
+      ? designSystem.colors.darkSurfaceBorder
+      : Platform.OS === 'android'
+        ? designSystem.colors.lightSurfaceAlt
+        : designSystem.colors.borderSoft,
+  };
+}
+
+function getWidgetIconStyle(isDark: boolean) {
+  return {
+    backgroundColor: isDark ? 'rgba(159,232,112,0.14)' : designSystem.colors.limeSoft,
+  };
+}
+
+function getWidgetTitleStyle(isDark: boolean) {
+  return {
+    color: isDark ? designSystem.colors.darkText : designSystem.colors.ink,
+  };
+}
+
+function getWidgetDescriptionStyle(isDark: boolean) {
+  return {
+    color: isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray,
+  };
+}
+
+function getWidgetBodyStyle(isDark: boolean) {
+  return {
+    color: isDark ? designSystem.colors.darkTextMuted : designSystem.colors.warmDark,
+  };
+}
+
+function getWidgetAccentTextStyle(isDark: boolean) {
+  return {
+    color: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen,
+  };
+}
+
+function getPlainOtherTextStyle(isDark: boolean) {
+  return {
+    color: isDark ? designSystem.colors.darkText : designSystem.colors.ink,
+  };
+}
+
 export function DirectChatMessageBubble({
   message,
   onLongPressMessage,
@@ -265,7 +332,29 @@ export function DirectChatMessageBubble({
   message: DirectChatMessage;
   onLongPressMessage?: (message: DirectChatMessage, anchor: MessageActionAnchor) => void;
 }) {
+  const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
+  const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
+  const lastNavigateAtRef = useRef(0);
+  const longPressLockUntilRef = useRef(0);
+
+  const handleOpenCall = () => {
+    if (!message.callCard?.callId) {
+      return;
+    }
+    const now = Date.now();
+    if (now < longPressLockUntilRef.current) {
+      return;
+    }
+    if (now - lastNavigateAtRef.current < 900) {
+      return;
+    }
+    lastNavigateAtRef.current = now;
+    router.push(`/friends/call/${message.callCard.callId}`);
+  };
+
   const handleLongPress = (anchor: MessageActionAnchor) => {
+    longPressLockUntilRef.current = Date.now() + 700;
     onLongPressMessage?.(message, anchor);
   };
 
@@ -280,14 +369,39 @@ export function DirectChatMessageBubble({
         </View>
       ) : null}
 
-      <SpringPressable
-        delayLongPress={420}
-        onMeasuredLongPress={handleLongPress}
-        style={[styles.bubble, message.isOwnMessage ? styles.bubbleOwn : styles.bubbleOther]}>
-        <ThemedText style={[styles.bubbleText, message.isOwnMessage ? styles.bubbleTextOwn : null]}>
-          {message.body}
-        </ThemedText>
-      </SpringPressable>
+      {message.callCard ? (
+        <SpringPressable
+          onPress={handleOpenCall}
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[
+            styles.callWidget,
+            getWidgetSurfaceStyle(isDark),
+            message.isOwnMessage ? styles.callWidgetOwn : null,
+          ]}>
+          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
+            <CallIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
+          </View>
+          <View style={styles.widgetMessageCopy}>
+            <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>{message.callCard.title}</ThemedText>
+            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
+              {message.callCard.status === 'active' ? 'Tap to join the live call.' : 'Call ended.'}
+            </ThemedText>
+            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
+              {message.callCard.mode === 'voice' ? 'Voice call' : 'Video call'}
+            </ThemedText>
+          </View>
+        </SpringPressable>
+      ) : (
+        <SpringPressable
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : styles.plainOtherMessage}>
+          <ThemedText style={message.isOwnMessage ? [styles.bubbleText, styles.bubbleTextOwn] : [styles.plainOtherText, getPlainOtherTextStyle(isDark)]}>
+            {message.body}
+          </ThemedText>
+        </SpringPressable>
+      )}
 
       <ThemedText style={[styles.timeText, message.isOwnMessage ? styles.timeTextOwn : null]}>
         {formatTime(message.createdAt)}
@@ -340,10 +454,6 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
     borderTopRightRadius: 8,
   },
-  bubbleOther: {
-    backgroundColor: designSystem.colors.ink,
-    borderTopLeftRadius: 8,
-  },
   bubbleText: {
     fontSize: 16,
     lineHeight: 22,
@@ -353,9 +463,18 @@ const styles = StyleSheet.create({
   bubbleTextOwn: {
     color: designSystem.colors.darkGreen,
   },
+  plainOtherMessage: {
+    maxWidth: '100%',
+    paddingVertical: 2,
+  },
+  plainOtherText: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
   routeCard: {
-    width: 286,
-    borderRadius: 28,
+    width: 236,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: designSystem.colors.charcoal,
   },
@@ -369,9 +488,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: designSystem.colors.whiteGlassMax,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassMax,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
   },
   widgetMessageOwn: {
     alignSelf: 'flex-end',
@@ -385,9 +504,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: designSystem.colors.whiteGlassMax,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassMax,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
   },
   callWidgetOwn: {
     alignSelf: 'flex-end',
@@ -428,7 +547,7 @@ const styles = StyleSheet.create({
   callStatusText: {
     fontSize: 11,
     lineHeight: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   widgetMessageDescription: {

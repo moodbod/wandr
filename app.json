@@ -8,8 +8,14 @@
     "icon": "./assets/images/icon.png",
     "scheme": "wandr",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "icon": {
+        "light": "./assets/ios/Icon-iOS-Default-1024x1024@1x.png",
+        "dark": "./assets/ios/Icon-iOS-Dark-1024x1024@1x.png",
+        "tinted": "./assets/ios/Icon-iOS-TintedLight-1024x1024@1x.png"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Wandr uses your location to show accurate live weather, maps, and nearby regions even when the app is in the background.",
@@ -18,7 +24,8 @@
         "NSMicrophoneUsageDescription": "Wandr uses your microphone for voice and video calls.",
         "UIBackgroundModes": [
           "audio",
-          "audio"
+          "voip",
+          "remote-notification"
         ]
       },
       "bitcode": false,
@@ -36,9 +43,15 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.MANAGE_OWN_CALLS",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
@@ -54,7 +67,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/voice_call_ring.wav",
+            "./assets/sounds/video_call_ring.wav"
+          ]
+        }
+      ],
       "expo-location",
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
@@ -77,7 +98,9 @@
         }
       ],
       "expo-web-browser",
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      "expo-maps",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

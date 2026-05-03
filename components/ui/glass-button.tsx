@@ -54,9 +54,15 @@ export function GlassButton({
 
   const isPrimary = variant === 'primary';
   const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+  const isAndroid = Platform.OS === 'android';
   const tintColor = isPrimary ? designSystem.colors.limeSoft : designSystem.colors.transparentWhite;
   const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const androidSurfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
+  const androidDisabledSurfaceColor = isDark ? designSystem.colors.darkCard : designSystem.colors.surface;
+  const androidBorderColor = isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;
+  const fallbackSurfaceColor = isAndroid ? androidSurfaceColor : surfaceColor;
+  const fallbackBorderColor = isAndroid ? androidBorderColor : borderColor;
 
   return (
     <AnimatedPressable
@@ -69,7 +75,6 @@ export function GlassButton({
       style={[
         styles.container, 
         { borderRadius: radius, width, height }, 
-        disabled ? styles.disabled : null,
         style, 
         animatedStyle
       ]}
@@ -101,13 +106,13 @@ export function GlassButton({
               {
                 borderRadius: radius,
                 backgroundColor: isPrimary
-                  ? designSystem.colors.lime
-                  : surfaceColor,
+                  ? (disabled && isAndroid ? androidDisabledSurfaceColor : designSystem.colors.lime)
+                  : (disabled && isAndroid ? androidDisabledSurfaceColor : fallbackSurfaceColor),
                 borderColor: isPrimary
-                  ? designSystem.colors.border
-                  : borderColor,
+                  ? (isAndroid ? designSystem.colors.darkGreen : designSystem.colors.border)
+                  : fallbackBorderColor,
               },
-              Platform.OS === 'android' ? styles.androidFill : null,
+              isAndroid ? styles.androidFill : null,
             ]}
           />
         )}
@@ -125,9 +130,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     flexShrink: 0,
-  },
-  disabled: {
-    opacity: 0.45,
   },
   fill: {
     width: '100%',

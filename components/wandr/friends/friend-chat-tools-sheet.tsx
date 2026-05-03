@@ -1,7 +1,7 @@
 import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { ChatsCircle, Gif, MagnifyingGlass, MapTrifold, SmileySticker, Sun } from 'phosphor-react-native';
 import { type ReactNode, type RefObject, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
@@ -38,7 +38,10 @@ export function FriendChatToolsSheet({
   const sheetSnapPoints = useMemo(() => ['58%'], []);
   const [widgetSearch, setWidgetSearch] = useState('');
   const isDark = useColorScheme() === 'dark';
+  const isAndroid = Platform.OS === 'android';
   const iconColor = isDark ? designSystem.colors.white : designSystem.colors.darkGreen;
+  const androidSurfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
+  const androidBorderColor = isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;
 
   const actionCards = useMemo(
     () =>
@@ -111,8 +114,12 @@ export function FriendChatToolsSheet({
           style={[
             styles.sheetSearch,
             {
-              backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint,
-              borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft,
+              backgroundColor: isAndroid
+                ? androidSurfaceColor
+                : (isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint),
+              borderColor: isAndroid
+                ? androidBorderColor
+                : (isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft),
             },
           ]}>
           <MagnifyingGlass
@@ -227,7 +234,12 @@ function WidgetSheetButton({
       style={[
         styles.sheetButton,
         {
-          borderColor: isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft,
+          backgroundColor: Platform.OS === 'android'
+            ? (isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised)
+            : designSystem.colors.transparentWhite,
+          borderColor: Platform.OS === 'android'
+            ? (isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt)
+            : (isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft),
         },
       ]}>
       <View style={[styles.widgetIconWrap, isDark ? styles.widgetIconWrapDark : null]}>{icon}</View>
@@ -246,7 +258,7 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.limeSoft,
   },
   widgetIconWrapDark: {
-    backgroundColor: designSystem.colors.whiteOverlayBarely,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.darkCard : designSystem.colors.whiteOverlayBarely,
   },
   widgetTitle: {
     fontSize: 14,
@@ -305,6 +317,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    backgroundColor: designSystem.colors.transparentWhite,
   },
 });

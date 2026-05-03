@@ -1,8 +1,7 @@
 import {
-  DotsThree,
+  Microphone,
   MicrophoneSlash,
   PhoneDisconnect,
-  SpeakerHigh,
   VideoCamera,
   VideoCameraSlash,
 } from 'phosphor-react-native';
@@ -12,42 +11,57 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import { designSystem } from '@/constants/design-system';
 
 export function CallControls({
+  isMicEnabled,
   isLeaving,
   mode,
   onEnd,
+  onToggleMic,
   onToggleVideo,
   shouldSendVideo,
   style,
 }: {
+  isMicEnabled: boolean;
   isLeaving: boolean;
   mode: 'voice' | 'video' | undefined;
   onEnd: () => void;
+  onToggleMic: () => void;
   onToggleVideo: () => void;
   shouldSendVideo: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const isVideoCall = mode === 'video';
+
   return (
     <View style={[styles.callControls, style]}>
-      <CallControlButton icon={<DotsThree color={designSystem.colors.white} size={30} weight="bold" />} />
-      {mode === 'video' ? (
+      {isVideoCall ? (
         <CallControlButton
+          accessibilityLabel={shouldSendVideo ? 'Turn camera off' : 'Turn camera on'}
           icon={
             shouldSendVideo ? (
-              <VideoCameraSlash color={designSystem.colors.white} size={30} weight="fill" />
+              <VideoCameraSlash color={designSystem.colors.white} size={25} weight="fill" />
             ) : (
-              <VideoCamera color={designSystem.colors.white} size={30} weight="fill" />
+              <VideoCamera color={designSystem.colors.white} size={25} weight="fill" />
             )
           }
           onPress={onToggleVideo}
         />
-      ) : (
-        <CallControlButton icon={<VideoCamera color={designSystem.colors.white} size={30} weight="fill" />} disabled />
-      )}
-      <CallControlButton icon={<SpeakerHigh color={designSystem.colors.black} size={30} weight="fill" />} tone="light" />
-      <CallControlButton icon={<MicrophoneSlash color={designSystem.colors.white} size={30} weight="bold" />} />
+      ) : null}
       <CallControlButton
+        accessibilityLabel={isMicEnabled ? 'Mute microphone' : 'Unmute microphone'}
+        icon={
+          isMicEnabled ? (
+            <Microphone color={designSystem.colors.darkGreen} size={25} weight="fill" />
+          ) : (
+            <MicrophoneSlash color={designSystem.colors.white} size={25} weight="bold" />
+          )
+        }
+        tone={isMicEnabled ? 'light' : 'default'}
+        onPress={onToggleMic}
+      />
+      <CallControlButton
+        accessibilityLabel="End call"
         disabled={isLeaving}
-        icon={<PhoneDisconnect color={designSystem.colors.white} size={30} weight="fill" />}
+        icon={<PhoneDisconnect color={designSystem.colors.white} size={26} weight="fill" />}
         tone="danger"
         onPress={onEnd}
       />
@@ -56,11 +70,13 @@ export function CallControls({
 }
 
 function CallControlButton({
+  accessibilityLabel,
   disabled = false,
   icon,
   onPress,
   tone = 'default',
 }: {
+  accessibilityLabel?: string;
   disabled?: boolean;
   icon: ReactNode;
   onPress?: () => void;
@@ -68,6 +84,7 @@ function CallControlButton({
 }) {
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
@@ -84,30 +101,29 @@ function CallControlButton({
 
 const styles = StyleSheet.create({
   callControls: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 16,
-    paddingHorizontal: 32,
+    paddingTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'center',
+    gap: 16,
   },
   controlButton: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#252525',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   controlButtonLight: {
-    backgroundColor: designSystem.colors.white,
+    backgroundColor: 'rgba(249,249,246,0.94)',
+    borderColor: 'rgba(249,249,246,0.72)',
   },
   controlButtonDanger: {
     backgroundColor: '#f3063d',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   controlButtonDisabled: {
     opacity: 0.42,

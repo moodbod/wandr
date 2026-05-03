@@ -1,8 +1,8 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { Link } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,31 +10,33 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
-import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
+import { ExploreActivityCardList } from '@/components/wandr/explore/activity-card-list';
 import {
-  ExploreActivityCardSkeleton,
   ExploreSheetHeaderSkeleton,
   ExploreTripFilterSkeleton,
 } from '@/components/wandr/explore/card-skeletons';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
-import { PlanningLocationSheet } from '@/components/wandr/planning-country-sheet';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
 import {
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
 } from '@/constants/planning-countries';
+import type { PlanningLocation } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
-import { ensureExploreCommunitySeedRef, getExploreJoinableTripCardsRef, getExplorePageContentRef, getTripDashboardRef, listUserTripsRef, seedDefaultPageContentRef } from '@/lib/convex';
+import { getExploreJoinableTripCardsRef, getExplorePageContentRef, getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import type { ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
 import type { TripDashboard, TripListItem } from '@/types/trip';
-import { MagnifyingGlass } from 'phosphor-react-native';
+import { MagnifyingGlass, Plus } from 'phosphor-react-native';
+
+const EMPTY_TRIPS: readonly TripListItem[] = [];
+const EMPTY_JOINABLE_TRIP_CARDS: readonly ExploreJoinableTripCard[] = [];
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
@@ -66,19 +68,28 @@ function ConnectedExploreScreen({
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const traveler = useCurrentTraveler();
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
+  const pageQuery = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
+  const page = useRetainedQueryValue(pageQuery);
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(undefined);
-  const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
-  const trip = useQuery(getTripDashboardRef, { travelerSlug: traveler?.slug ?? '', tripId: selectedTripId });
-  const joinableTripCards = useQuery(
+  const tripsQuery = useQuery(
+    listUserTripsRef,
+    traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
+  );
+  const trips = useRetainedQueryValue(tripsQuery) ?? EMPTY_TRIPS;
+  const tripQuery = useQuery(
+    getTripDashboardRef,
+    traveler?.slug
+      ? selectedTripId
+        ? { travelerSlug: traveler.slug, tripId: selectedTripId }
+        : { travelerSlug: traveler.slug }
+      : 'skip'
+  );
+  const trip = useRetainedQueryValue(tripQuery);
+  const joinableTripCardsQuery = useQuery(
     getExploreJoinableTripCardsRef,
     traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
   );
-  const seedExplorePageContent = useMutation(seedDefaultPageContentRef);
-  const ensureExploreCommunitySeed = useMutation(ensureExploreCommunitySeedRef);
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [didEnsureCommunitySeed, setDidEnsureCommunitySeed] = useState(false);
-  const [seedError, setSeedError] = useState<string | null>(null);
+  const joinableTripCards = useRetainedQueryValue(joinableTripCardsQuery) ?? EMPTY_JOINABLE_TRIP_CARDS;
   const [loadingMapResetKey, setLoadingMapResetKey] = useState(0);
   const { planningLocation } = usePlanningLocation();
   const animatedIndex = useSharedValue(0);
@@ -90,66 +101,7 @@ function ConnectedExploreScreen({
   });
 
   useEffect(() => {
-    if (page !== null || isSeeding) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const seed = async () => {
-      setIsSeeding(true);
-      setSeedError(null);
-
-      try {
-        await seedExplorePageContent({});
-      } catch (error) {
-        if (isMounted) {
-          setSeedError(error instanceof Error ? error.message : 'Unable to load Explore content from Convex.');
-        }
-      } finally {
-        if (isMounted) {
-          setIsSeeding(false);
-        }
-      }
-    };
-
-    void seed();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isSeeding, page, seedExplorePageContent]);
-
-  useEffect(() => {
-    if (!page || didEnsureCommunitySeed) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const ensureCommunity = async () => {
-      try {
-        await ensureExploreCommunitySeed({});
-      } catch (error) {
-        if (isMounted) {
-          setSeedError(error instanceof Error ? error.message : 'Unable to load public trips from Convex.');
-        }
-      } finally {
-        if (isMounted) {
-          setDidEnsureCommunitySeed(true);
-        }
-      }
-    };
-
-    void ensureCommunity();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [didEnsureCommunitySeed, ensureExploreCommunitySeed, page]);
-
-  useEffect(() => {
-    if (!trips || trips.length === 0) {
+    if (trips.length === 0) {
       return;
     }
 
@@ -195,7 +147,11 @@ function ConnectedExploreScreen({
               <ExploreSheetHeaderSkeleton />
               <ExploreTripFilterSkeleton />
               <View style={styles.cardList}>
-                {Array.from({ length: 3 }).map((_, index) => <ExploreActivityCardSkeleton key={`activity-skeleton-${index}`} />)}
+                <ExploreActivityCardList
+                  activities={[]}
+                  getHref={() => '/explore/search'}
+                  isLoading
+                />
               </View>
             </BottomSheetScrollView>
           </GlassBottomSheet>
@@ -212,18 +168,30 @@ function ConnectedExploreScreen({
       isCardLoading={false}
       isDark={isDark}
       mapTopInset={mapTopInset}
-      notice={seedError}
+      notice={null}
       pageContent={page}
-      joinableTripCards={joinableTripCards ?? []}
+      joinableTripCards={joinableTripCards}
       sheetRef={sheetRef}
       snapPoints={snapPoints}
       trip={trip ?? null}
-      trips={trips ?? []}
+      trips={trips}
       selectedTripId={selectedTripId}
       onSelectTrip={setSelectedTripId}
       animatedIndex={animatedIndex}
     />
   );
+}
+
+function useRetainedQueryValue<T>(value: T | null | undefined) {
+  const [retainedValue, setRetainedValue] = useState<T | null>(null);
+
+  useEffect(() => {
+    if (value !== undefined && value !== null) {
+      setRetainedValue(value);
+    }
+  }, [value]);
+
+  return value ?? retainedValue;
 }
 
 function ExploreScreenView({
@@ -262,66 +230,113 @@ function ExploreScreenView({
   onSelectTrip: (tripId: string) => void;
 }) {
   const [mapResetKey, setMapResetKey] = useState(0);
-  const [locationSheetVisible, setLocationSheetVisible] = useState(false);
-  const { planningLocation, setPlanningLocation } = usePlanningLocation();
+  const { openPlanningLocationSheet, planningLocation } = usePlanningLocation();
   const content = pageContent.home;
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
-  const planningCopy = getPlanningLocationCopy(planningLocation.id);
+  const planningCopy = useMemo(() => getPlanningLocationCopy(planningLocation.id), [planningLocation.id]);
   const locationTrips = useMemo(
     () => trips.filter((candidate) => coordinateIsInPlanningLocation(candidate.centerCoordinate, planningLocation)),
     [planningLocation, trips]
   );
-  const tripMarkers = trip ? buildTripMapMarkers(trip.items, 10) : [];
-  const tripRouteCoordinates = buildTripRouteCoordinates(trip, {
-    currentCoordinate: currentLocation,
-    onlyRemaining: true,
-  });
-  const locationRouteCoordinates = tripRouteCoordinates.filter((coordinate) =>
-    coordinateIsInPlanningLocation(coordinate, planningLocation)
+  const currentLocationInPlanningLocation = coordinateIsInPlanningLocation(currentLocation, planningLocation)
+    ? currentLocation
+    : null;
+  const fallbackRouteStart = useMemo(
+    () => (currentLocationInPlanningLocation ? null : getPlanningLocationRouteStart(planningLocation)),
+    [currentLocationInPlanningLocation, planningLocation]
+  );
+  const tripMarkers = useMemo(() => (trip ? buildTripMapMarkers(trip.items, 10) : []), [trip]);
+  const tripRouteCoordinates = useMemo(
+    () =>
+      buildTripRouteCoordinates(trip, {
+        currentCoordinate: currentLocationInPlanningLocation ?? fallbackRouteStart?.coordinate,
+        onlyRemaining: true,
+      }),
+    [currentLocationInPlanningLocation, fallbackRouteStart, trip]
+  );
+  const locationRouteCoordinates = useMemo(
+    () => tripRouteCoordinates.filter((coordinate) => coordinateIsInPlanningLocation(coordinate, planningLocation)),
+    [planningLocation, tripRouteCoordinates]
   );
   const exploreMarkers = content.hero.markers;
   const experienceBySlug = useMemo(() => {
     return new Map(pageContent.experiences.map((experience) => [experience.slug, experience]));
   }, [pageContent.experiences]);
-  const locationTripMarkers = tripMarkers.filter((marker) =>
-    destinationMatchesPlanningLocation({
-      coordinate: marker.coordinate,
-      location: planningLocation,
-      labels: [marker.label],
-    })
+  const locationTripMarkers = useMemo(
+    () =>
+      tripMarkers.filter((marker) =>
+        destinationMatchesPlanningLocation({
+          coordinate: marker.coordinate,
+          location: planningLocation,
+          labels: [marker.label],
+        })
+      ),
+    [planningLocation, tripMarkers]
   );
-  const locationExploreMarkers = exploreMarkers.filter((marker) => {
-    const experience = marker.experienceSlug ? experienceBySlug.get(marker.experienceSlug) : undefined;
+  const locationExploreMarkers = useMemo(
+    () =>
+      exploreMarkers.filter((marker) => {
+        const experience = marker.experienceSlug ? experienceBySlug.get(marker.experienceSlug) : undefined;
 
-    return destinationMatchesPlanningLocation({
-      coordinate: marker.coordinate,
-      countryCode: experience?.countryCode,
-      countryLabel: experience?.countryLabel,
-      location: planningLocation,
-      planningLocationId: experience?.planningLocationId,
-      labels: [marker.label, marker.experienceSlug],
-    });
-  });
-  const mapMarkers = [...locationTripMarkers, ...locationExploreMarkers];
-  const locationActivities = content.activities.filter((activity) => {
-    const experience = experienceBySlug.get(activity.experienceSlug);
+        return destinationMatchesPlanningLocation({
+          coordinate: marker.coordinate,
+          countryCode: experience?.countryCode,
+          countryLabel: experience?.countryLabel,
+          location: planningLocation,
+          planningLocationId: experience?.planningLocationId,
+          labels: [marker.label, marker.experienceSlug],
+        });
+      }),
+    [experienceBySlug, exploreMarkers, planningLocation]
+  );
+  const mapMarkers = useMemo(() => {
+    const markers = [...locationTripMarkers, ...locationExploreMarkers];
+    if (!fallbackRouteStart) {
+      return markers;
+    }
 
-    return destinationMatchesPlanningLocation({
-      coordinate: experience?.coordinate,
-      countryCode: experience?.countryCode,
-      countryLabel: experience?.countryLabel,
-      location: planningLocation,
-      planningLocationId: experience?.planningLocationId,
-      labels: [
-        experience?.locationLabel,
-        experience?.geography?.region,
-        experience?.geography?.town,
-        experience?.title,
-        activity.title,
-        activity.subtitle,
-      ],
-    });
-  });
+    const alreadyHasStartMarker = markers.some((marker) =>
+      coordinatesAreClose(marker.coordinate, fallbackRouteStart.coordinate)
+    );
+
+    if (alreadyHasStartMarker) {
+      return markers;
+    }
+
+    return [
+      {
+        id: `${planningLocation.id}-route-start`,
+        coordinate: fallbackRouteStart.coordinate,
+        label: fallbackRouteStart.label,
+        popularityScore: Number.MAX_SAFE_INTEGER,
+        tone: 'accent' as const,
+      },
+      ...markers,
+    ];
+  }, [fallbackRouteStart, locationExploreMarkers, locationTripMarkers, planningLocation.id]);
+  const locationActivities = useMemo(
+    () =>
+      content.activities.filter((activity) => {
+        const experience = experienceBySlug.get(activity.experienceSlug);
+
+        return destinationMatchesPlanningLocation({
+          coordinate: experience?.coordinate,
+          countryCode: experience?.countryCode,
+          countryLabel: experience?.countryLabel,
+          location: planningLocation,
+          planningLocationId: experience?.planningLocationId,
+          labels: [
+            experience?.locationLabel,
+            experience?.geography?.region,
+            experience?.geography?.town,
+            experience?.title,
+            activity.title,
+            activity.subtitle,
+          ],
+        });
+      }),
+    [content.activities, experienceBySlug, planningLocation]
+  );
   const locationExperienceBySlug = useMemo(() => {
     const locationExperiences = pageContent.experiences.filter((experience) =>
       destinationMatchesPlanningLocation({
@@ -360,9 +375,6 @@ function ExploreScreenView({
       }),
     [joinableTripCards, locationExperienceBySlug, planningLocation]
   );
-  const currentLocationInPlanningLocation = coordinateIsInPlanningLocation(currentLocation, planningLocation)
-    ? currentLocation
-    : null;
   const tripCenterInPlanningLocation = coordinateIsInPlanningLocation(trip?.centerCoordinate, planningLocation)
     ? trip?.centerCoordinate
     : null;
@@ -374,6 +386,7 @@ function ExploreScreenView({
     tripCenterInPlanningLocation ??
     mapMarkers[0]?.coordinate ??
     heroCenterInPlanningLocation ??
+    fallbackRouteStart?.coordinate ??
     planningLocation.centerCoordinate ??
     content.hero.centerCoordinate;
   const mapLocationLabel = currentLocationInPlanningLocation
@@ -391,9 +404,27 @@ function ExploreScreenView({
     }
   }, [locationTrips, onSelectTrip, selectedTripId]);
 
-  const handleMapInteract = () => {
+  const handleMapInteract = useCallback(() => {
     sheetRef?.current?.snapToIndex(0);
-  };
+  }, [sheetRef]);
+  const handleSelectTrip = useCallback(
+    (tripId: string) => {
+      onSelectTrip(tripId);
+      setMapResetKey((current) => current + 1);
+    },
+    [onSelectTrip]
+  );
+  const handleLocateMe = useCallback(() => {
+    setMapResetKey((current) => current + 1);
+  }, []);
+  const handleOpenLocationSheet = useCallback(() => {
+    openPlanningLocationSheet({
+      currentCoordinate: currentLocation,
+      onSelectLocation: () => {
+        setMapResetKey((current) => current + 1);
+      },
+    });
+  }, [currentLocation, openPlanningLocationSheet]);
 
   return (
     <ThemedView style={styles.root}>
@@ -410,109 +441,167 @@ function ExploreScreenView({
             showRoutes={locationRouteCoordinates.length > 1}
             topInset={mapTopInset}
             onInteract={handleMapInteract}
-            onLocateMe={() => setMapResetKey((current) => current + 1)}
-            onOpenLocationSheet={() => setLocationSheetVisible(true)}
+            onLocateMe={handleLocateMe}
+            onOpenLocationSheet={handleOpenLocationSheet}
             planningLocation={planningLocation}
           />
         </View>
 
-        <GlassBottomSheet
-          index={0}
-          ref={sheetRef}
-          snapPoints={snapPoints ?? ['34%', '64%', '100%']}
-          animatedIndex={animatedIndex}>
-          <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-            <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
-              <View style={styles.sectionCopy}>
-                <ThemedText style={styles.sectionTitle}>{planningCopy.exploreTitle}</ThemedText>
-              </View>
-              <Link href="/explore/search" asChild>
-                <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
-                  <MagnifyingGlass color={isDark ? designSystem.colors.white : designSystem.colors.warmDark} size={20} weight="bold" />
-                </GlassButton>
-              </Link>
-            </Animated.View>
-
-            <View style={styles.tripFilterRail}>
-              {locationTrips.length > 0 ? (
-                <TripFilterTabs
-                  trips={locationTrips}
-                  selectedTripId={selectedTripId}
-                  onSelectTrip={(tripId) => {
-                    onSelectTrip(tripId);
-                    setMapResetKey((current) => current + 1);
-                  }}
-                />
-              ) : null}
-            </View>
-
-            <View style={styles.cardList}>
-              {locationJoinableTripCards.length > 0 ? (
-                <View style={styles.openTripsSection}>
-                  <View style={styles.openTripsHeader}>
-                    <ThemedText style={styles.openTripsTitle}>Public trips people are planning</ThemedText>
-                    <ThemedText
-                      style={[
-                        styles.openTripsSubtitle,
-                        { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
-                      ]}
-                    >
-                      Join a route someone opened up, or make your own trip public for others to request in.
-                    </ThemedText>
-                  </View>
-                  {locationJoinableTripCards.map((card) => (
-                    <ExploreGroupTripCard
-                      key={card.circleId}
-                      card={card}
-                      href={{ pathname: '/explore/group/[circleId]', params: { circleId: card.circleId } }}
-                    />
-                  ))}
-                </View>
-              ) : null}
-              {isCardLoading
-                ? Array.from({ length: 3 }).map((_, index) => <ExploreActivityCardSkeleton key={`activity-skeleton-${index}`} />)
-                : locationActivities.map((activity, index) => (
-                    <ExploreActivityCard
-                      card={activity}
-                      href={{ pathname: '/explore/[slug]', params: { slug: activity.experienceSlug } }}
-                      key={`activity-${activity.experienceSlug}-${index}`}
-                    />
-                  ))}
-              {!isCardLoading && locationActivities.length === 0 ? (
-                <View
-                  style={[
-                    styles.emptyLocationCard,
-                    { borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft },
-                  ]}
-                >
-                  <ThemedText style={styles.emptyLocationTitle}>No {planningLocation.label} picks yet</ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.emptyLocationText,
-                      { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
-                    ]}
-                  >
-                    Keep this location selected while you plan ahead. New stays and experiences will appear here when they are added.
-                  </ThemedText>
-                </View>
-              ) : null}
-            </View>
-          </BottomSheetScrollView>
-        </GlassBottomSheet>
-        <PlanningLocationSheet
-          currentCoordinate={currentLocation}
-          selectedLocation={planningLocation}
-          visible={locationSheetVisible}
-          onClose={() => setLocationSheetVisible(false)}
-          onSelectLocation={(location) => {
-            setPlanningLocation(location, { manual: true });
-            setMapResetKey((current) => current + 1);
-          }}
+        <ExploreLoadedSheet
+          animatedIndex={animatedIndex}
+          headerAnimatedStyle={headerAnimatedStyle}
+          isCardLoading={isCardLoading}
+          isDark={isDark}
+          locationActivities={locationActivities}
+          locationJoinableTripCards={locationJoinableTripCards}
+          locationLabel={planningLocation.label}
+          locationTrips={locationTrips}
+          planningCopy={planningCopy}
+          selectedTripId={selectedTripId}
+          sheetRef={sheetRef}
+          snapPoints={snapPoints}
+          onSelectTrip={handleSelectTrip}
         />
       </View>
     </ThemedView>
   );
 }
+
+const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
+  animatedIndex,
+  headerAnimatedStyle,
+  isCardLoading,
+  isDark,
+  locationActivities,
+  locationJoinableTripCards,
+  locationLabel,
+  locationTrips,
+  planningCopy,
+  selectedTripId,
+  sheetRef,
+  snapPoints,
+  onSelectTrip,
+}: {
+  animatedIndex?: ReturnType<typeof useSharedValue<number>>;
+  headerAnimatedStyle?: object;
+  isCardLoading: boolean;
+  isDark: boolean;
+  locationActivities: ExplorePageContent['home']['activities'];
+  locationJoinableTripCards: readonly ExploreJoinableTripCard[];
+  locationLabel: string;
+  locationTrips: readonly TripListItem[];
+  planningCopy: ReturnType<typeof getPlanningLocationCopy>;
+  selectedTripId?: string;
+  sheetRef?: React.RefObject<BottomSheet | null>;
+  snapPoints?: (string | number)[];
+  onSelectTrip: (tripId: string) => void;
+}) {
+  const getActivityHref = useCallback(
+    (activity: ExplorePageContent['home']['activities'][number]) => ({
+      pathname: '/explore/[slug]' as const,
+      params: { slug: activity.experienceSlug },
+    }),
+    []
+  );
+
+  return (
+    <GlassBottomSheet
+      index={0}
+      ref={sheetRef}
+      snapPoints={snapPoints ?? ['34%', '64%', '100%']}
+      animatedIndex={animatedIndex}>
+      <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
+          <View style={styles.sectionCopy}>
+            <ThemedText style={styles.sectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+          </View>
+          <Link href="/explore/search" asChild>
+            <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
+              <MagnifyingGlass color={isDark ? designSystem.colors.white : designSystem.colors.warmDark} size={20} weight="bold" />
+            </GlassButton>
+          </Link>
+        </Animated.View>
+
+        <View style={styles.tripFilterRail}>
+          {locationTrips.length > 0 ? (
+            <TripFilterTabs
+              trips={locationTrips}
+              selectedTripId={selectedTripId}
+              onSelectTrip={onSelectTrip}
+            />
+          ) : (
+            <Link href="/explore/search" asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Create new trip"
+                style={styles.tripFilterEmptyAction}
+              >
+                <View style={styles.createTripButtonContent}>
+                  <Plus
+                    color={isDark ? designSystem.colors.darkText : designSystem.colors.warmDark}
+                    size={16}
+                    weight="bold"
+                  />
+                  <ThemedText style={[styles.createTripButtonText, isDark && styles.createTripButtonTextDark]}>
+                    Create new trip
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </Link>
+          )}
+        </View>
+
+        <View style={styles.cardList}>
+          {locationJoinableTripCards.length > 0 ? (
+            <View style={styles.openTripsSection}>
+              <View style={styles.openTripsHeader}>
+                <ThemedText style={styles.openTripsTitle}>Public trips people are planning</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.openTripsSubtitle,
+                    { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+                  ]}
+                >
+                  Join a route someone opened up, or make your own trip public for others to request in.
+                </ThemedText>
+              </View>
+              {locationJoinableTripCards.map((card) => (
+                <ExploreGroupTripCard
+                  key={card.circleId}
+                  card={card}
+                  href={{ pathname: '/explore/group/[circleId]', params: { circleId: card.circleId } }}
+                />
+              ))}
+            </View>
+          ) : null}
+          <ExploreActivityCardList
+            activities={locationActivities}
+            getHref={getActivityHref}
+            isLoading={isCardLoading}
+          />
+          {!isCardLoading && locationActivities.length === 0 ? (
+            <View
+              style={[
+                styles.emptyLocationCard,
+                { borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft },
+              ]}
+            >
+              <ThemedText style={styles.emptyLocationTitle}>No {locationLabel} picks yet</ThemedText>
+              <ThemedText
+                style={[
+                  styles.emptyLocationText,
+                  { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+                ]}
+              >
+                Keep this location selected while you plan ahead. New stays and experiences will appear here when they are added.
+              </ThemedText>
+            </View>
+          ) : null}
+        </View>
+      </BottomSheetScrollView>
+    </GlassBottomSheet>
+  );
+});
 
 const styles = StyleSheet.create({
   root: {
@@ -550,9 +639,30 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontWeight: '600',
   },
+  createTripButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  createTripButtonText: {
+    ...designSystem.type.label,
+    color: designSystem.colors.warmDark,
+  },
+  createTripButtonTextDark: {
+    color: designSystem.colors.darkText,
+  },
   tripFilterRail: {
     minHeight: 44,
     justifyContent: 'center',
+  },
+  tripFilterEmptyAction: {
+    alignSelf: 'flex-start',
+    minHeight: 42,
+    justifyContent: 'center',
+    borderRadius: designSystem.radii.pill,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
   },
   cardList: {
     gap: 16,
@@ -566,7 +676,7 @@ const styles = StyleSheet.create({
   openTripsTitle: {
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   openTripsSubtitle: {
     fontSize: 13,
@@ -583,7 +693,7 @@ const styles = StyleSheet.create({
   emptyLocationTitle: {
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   emptyLocationText: {
     ...designSystem.type.body,
@@ -612,4 +722,39 @@ function getPlanningLocationCopy(locationId: string) {
   return {
     exploreTitle: 'Start with a popular place, then branch out',
   };
+}
+
+function getPlanningLocationRouteStart(location: PlanningLocation) {
+  if (location.id === 'namibia') {
+    return {
+      label: 'Windhoek Craft Walk',
+      coordinate: [17.0832, -22.57] as const,
+    };
+  }
+
+  if (location.id === 'south-africa') {
+    return {
+      label: 'Cape Town Waterfront',
+      coordinate: [18.4213, -33.9036] as const,
+    };
+  }
+
+  if (location.centerCoordinate) {
+    return {
+      label: location.label,
+      coordinate: location.centerCoordinate,
+    };
+  }
+
+  return null;
+}
+
+function coordinatesAreClose(
+  first: readonly [number, number],
+  second: readonly [number, number]
+) {
+  const [firstLng, firstLat] = first;
+  const [secondLng, secondLat] = second;
+
+  return Math.abs(firstLng - secondLng) < 0.005 && Math.abs(firstLat - secondLat) < 0.005;
 }

@@ -110,7 +110,8 @@ export type FriendChatMessage = {
 
 export type FriendCallDetail = {
   _id: Id<'friendCalls'>;
-  circleId: Id<'friendCircles'>;
+  circleId: Id<'friendCircles'> | null;
+  directThreadId?: Id<'friendDirectThreads'> | null;
   circleName: string;
   roomName: string;
   createdBySlug: string;
@@ -168,12 +169,23 @@ export type FriendsDashboard = {
 
 export type DirectChatMessage = {
   _id: Id<'friendDirectMessages'>;
+  kind: 'text' | 'call' | 'scheduled_call';
   body: string;
   createdAt: number;
   senderSlug: string;
   senderName: string;
   senderAvatarUri: string | null;
   isOwnMessage: boolean;
+  callCard: {
+    callId: Id<'friendCalls'> | null;
+    mode: 'voice' | 'video';
+    status: 'active' | 'scheduled' | 'ended' | 'cancelled';
+    scheduledFor: number | null;
+    endsAt: number | null;
+    reminderMinutesBefore: number | null;
+    title: string;
+    description: string | null;
+  } | null;
 };
 
 export type FriendDiscoveryPayload = {
@@ -201,6 +213,7 @@ export type FriendChatListItem = {
   travelerSlug?: string;
   avatarUri?: string | null;
   avatarUris?: string[];
+  memberCount?: number;
   href: string;
 };
 

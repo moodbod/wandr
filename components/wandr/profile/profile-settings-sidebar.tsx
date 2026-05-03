@@ -1,4 +1,3 @@
-import { Image as ExpoImage } from 'expo-image';
 import { type Href, useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -12,15 +11,23 @@ import {
 } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getAppMetadata } from '@/lib/app-metadata';
 
 const SIDEBAR_WIDTH = 360;
+const APP_ICON_OPTIONS = [
+  { label: 'Default', value: null, backgroundColor: '#eaf6df', foregroundColor: '#174900' },
+  { label: 'Forest', value: 'Forest', backgroundColor: '#0f1f12', foregroundColor: '#9fe870' },
+  { label: 'Sky', value: 'Sky', backgroundColor: '#edf8ff', foregroundColor: '#103246' },
+] as const;
+
+type AppIconValue = (typeof APP_ICON_OPTIONS)[number]['value'];
 type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designSystem.semantic];
 
 type ProfileSettingsSidebarProps = {
-  avatarUri: string;
+  avatarUri?: string | null;
   baseLabel: string;
   isOpen: boolean;
   name: string;
@@ -42,6 +49,7 @@ export function ProfileSettingsSidebar({
   const slideProgress = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
   const dragX = useRef(new Animated.Value(0)).current;
   const [isRendered, setIsRendered] = useState(isOpen);
+  const [selectedAppIcon, setSelectedAppIcon] = useState<AppIconValue>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -126,7 +134,7 @@ export function ProfileSettingsSidebar({
           <Animated.View style={[styles.sidebar, { backgroundColor: colors.background }, sidebarStyle]}>
             <View style={styles.sidebarHeader}>
               <View style={styles.sidebarIdentity}>
-                <ExpoImage source={{ uri: avatarUri }} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} contentFit="cover" />
+                <FaceHashAvatar name={name} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
                 <View style={styles.sidebarNameWrap}>
                   <ThemedText numberOfLines={1} style={styles.sidebarName}>
                     {name}
@@ -171,6 +179,10 @@ export function ProfileSettingsSidebar({
             </View>
 
             <View style={styles.sidebarFooter}>
+              <AppIconPicker
+                selectedIcon={selectedAppIcon}
+                onSelectIcon={setSelectedAppIcon}
+              />
               {metadata.appDescription ? (
                 <ThemedText style={styles.appDescription}>{metadata.appDescription}</ThemedText>
               ) : null}
@@ -186,6 +198,43 @@ export function ProfileSettingsSidebar({
         </PanGestureHandler>
       </View>
     </Modal>
+  );
+}
+
+function AppIconPicker({
+  selectedIcon,
+  onSelectIcon,
+}: {
+  selectedIcon: AppIconValue;
+  onSelectIcon: (icon: AppIconValue) => void;
+}) {
+  return (
+    <View style={styles.appIconPicker}>
+      <View style={styles.appIconPickerHeader}>
+        <ThemedText style={styles.appIconPickerTitle}>App icon</ThemedText>
+      </View>
+      <View style={styles.appIconOptions}>
+        {APP_ICON_OPTIONS.map((option) => {
+          const isSelected = selectedIcon === option.value;
+
+          return (
+            <Pressable
+              key={option.label}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`Select ${option.label} app icon`}
+              onPress={() => onSelectIcon(option.value)}
+              style={[styles.appIconOption, isSelected && styles.appIconOptionActive]}
+            >
+              <View style={[styles.appIconPreview, { backgroundColor: option.backgroundColor }]}>
+                <ThemedText style={[styles.appIconGlyph, { color: option.foregroundColor }]}>W</ThemedText>
+              </View>
+              <ThemedText style={styles.appIconLabel}>{option.label}</ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -205,7 +254,7 @@ function SidebarAction({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.actionRow, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft }]}>
+      style={[styles.actionRow, { borderColor: colors.borderSoft }]}>
       <View style={[styles.actionIcon, { backgroundColor: colors.surface }]}>{icon}</View>
       <View style={styles.actionTextWrap}>
         <ThemedText style={styles.actionTitle}>{title}</ThemedText>
@@ -270,11 +319,61 @@ const styles = StyleSheet.create({
   },
   sidebarSection: {
     flex: 1,
-    gap: 10,
+    gap: 4,
   },
   sidebarFooter: {
-    gap: 10,
+    gap: 12,
     paddingTop: 12,
+  },
+  appIconPicker: {
+    gap: 10,
+  },
+  appIconPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  appIconPickerTitle: {
+    ...designSystem.type.bodySmallStrong,
+    color: designSystem.colors.ink,
+  },
+  appIconOptions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  appIconOption: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+  },
+  appIconOptionActive: {
+    borderColor: designSystem.colors.borderAccent,
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  appIconPreview: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
+  appIconGlyph: {
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  appIconLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: designSystem.colors.mutedText,
   },
   appDescription: {
     fontSize: 12,
@@ -309,13 +408,12 @@ const styles = StyleSheet.create({
     color: designSystem.colors.ink,
   },
   actionRow: {
-    minHeight: 72,
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
-    padding: 14,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   actionIcon: {
     width: 42,

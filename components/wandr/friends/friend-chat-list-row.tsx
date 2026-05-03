@@ -1,8 +1,7 @@
-import { Image as ExpoImage } from 'expo-image';
-import { ChatCircleDots } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import type { FriendChatListItem } from '@/types/friends';
@@ -34,25 +33,20 @@ export function FriendChatListRow({
   onPress: () => void;
   onAvatarPress?: () => void;
 }) {
+  const groupAvatarUris = item.avatarUris ?? [];
+
   return (
     <Pressable onPress={onPress} style={[styles.row, item.kind === 'group' ? styles.groupRow : null]}>
       <View style={[styles.leading, item.kind === 'group' ? styles.groupLeading : null]}>
         {item.kind === 'group' ? (
           <View style={styles.groupAvatarWrap}>
-            <TravelerAvatarStack avatars={item.avatarUris ?? []} totalCount={(item.avatarUris ?? []).length || 2} />
+            <TravelerAvatarStack
+              avatars={groupAvatarUris}
+              fallbackName={item.title}
+              maxVisible={3}
+              totalCount={item.memberCount ?? groupAvatarUris.length}
+            />
           </View>
-        ) : item.avatarUri ? (
-          <Pressable
-            accessibilityLabel={`View ${item.title}'s profile`}
-            disabled={!onAvatarPress}
-            hitSlop={8}
-            onPress={(event) => {
-              event.stopPropagation();
-              onAvatarPress?.();
-            }}
-            style={styles.avatarButton}>
-            <ExpoImage source={item.avatarUri} style={styles.avatar} contentFit="cover" />
-          </Pressable>
         ) : (
           <Pressable
             accessibilityLabel={`View ${item.title}'s profile`}
@@ -62,28 +56,34 @@ export function FriendChatListRow({
               event.stopPropagation();
               onAvatarPress?.();
             }}
-            style={styles.placeholder}>
-            <ChatCircleDots color={designSystem.colors.gray} size={18} weight="bold" />
+            style={styles.avatarButton}>
+            <FaceHashAvatar name={item.travelerSlug ?? item.title} size={44} uri={item.avatarUri} style={styles.avatar} />
           </Pressable>
         )}
       </View>
 
       <View style={[styles.body, item.kind === 'group' ? styles.groupBody : null]}>
         <View style={styles.head}>
-          <ThemedText
-            style={[styles.title, item.kind === 'group' ? styles.groupTitle : null]}
-            numberOfLines={1}>
-            {item.title}
-          </ThemedText>
+          <View style={styles.identity}>
+            <ThemedText
+              style={[styles.title, item.kind === 'group' ? styles.groupTitle : null]}
+              numberOfLines={1}>
+              {item.title}
+            </ThemedText>
+            {item.subtitle ? (
+              <ThemedText
+                style={[styles.subtitle, item.kind === 'group' ? styles.groupSubtitle : null]}
+                numberOfLines={1}>
+                {item.subtitle}
+              </ThemedText>
+            ) : null}
+          </View>
           <ThemedText style={styles.time}>{formatRelativeTime(item.updatedAt)}</ThemedText>
         </View>
-        <ThemedText
-          style={[styles.subtitle, item.kind === 'group' ? styles.groupSubtitle : null]}
-          numberOfLines={1}>
-          {item.subtitle}
-        </ThemedText>
         {item.preview ? (
-          <ThemedText style={styles.preview} numberOfLines={1}>
+          <ThemedText
+            style={[styles.preview, item.kind === 'group' ? styles.groupPreview : null]}
+            numberOfLines={1}>
             {item.preview}
           </ThemedText>
         ) : null}
@@ -145,8 +145,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  title: {
+  identity: {
     flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  title: {
+    flexShrink: 1,
     fontSize: 17,
     lineHeight: 20,
     fontWeight: '600',
@@ -164,6 +171,7 @@ const styles = StyleSheet.create({
     color: designSystem.colors.gray,
   },
   subtitle: {
+    flexShrink: 1,
     fontSize: 13,
     lineHeight: 16,
     color: designSystem.colors.warmDark,
@@ -174,8 +182,13 @@ const styles = StyleSheet.create({
     color: designSystem.colors.ink,
   },
   preview: {
+    alignSelf: 'flex-start',
+    maxWidth: '82%',
     fontSize: 13,
     lineHeight: 18,
     color: designSystem.colors.gray,
+  },
+  groupPreview: {
+    maxWidth: '88%',
   },
 });

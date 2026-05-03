@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 
 import { appUsersTable } from './tables/appUsers';
 import { appNotificationsTable } from './tables/appNotifications';
+import { devicePushTokensTable } from './tables/devicePushTokens';
 import { experienceBookingsTable } from './tables/experienceBookings';
 import { experiencesTable } from './tables/experiences';
 import { friendCircleMembersTable } from './tables/friendCircleMembers';
@@ -18,6 +19,8 @@ import { friendMessagesTable } from './tables/friendMessages';
 import { friendProfilesTable } from './tables/friendProfiles';
 import { hiddenGemsTable } from './tables/hiddenGems';
 import { locationLikesTable } from './tables/locationLikes';
+import { phoneOtpVerificationsTable } from './tables/phoneOtpVerifications';
+import { phoneOtpsTable } from './tables/phoneOtps';
 import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
 import { tripInvitesTable } from './tables/tripInvites';
@@ -59,6 +62,7 @@ export default defineSchema({
   hiddenGems: hiddenGemsTable,
   stays: staysTable,
   appNotifications: appNotificationsTable,
+  devicePushTokens: devicePushTokensTable,
   friendProfiles: friendProfilesTable,
   friendCircles: friendCirclesTable,
   friendCircleMembers: friendCircleMembersTable,
@@ -72,6 +76,8 @@ export default defineSchema({
   friendCalls: friendCallsTable,
 
   appUsers: appUsersTable,
+  phoneOtps: phoneOtpsTable,
+  phoneOtpVerifications: phoneOtpVerificationsTable,
   experienceBookings: experienceBookingsTable,
   locationLikes: locationLikesTable,
   locationPhotos: defineTable({

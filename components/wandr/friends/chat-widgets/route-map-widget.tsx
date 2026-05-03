@@ -1,10 +1,11 @@
 import { Image as ExpoImage } from 'expo-image';
+import type { CameraPosition } from 'expo-maps';
+import { NativeModulesProxy } from 'expo-modules-core';
 import { ArrowsOutSimple, MapPin, MapTrifold } from 'phosphor-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ChatWidgetGlassCard } from '@/components/wandr/friends/chat-widgets/chat-widget-glass-card';
-import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { FriendChatMessage } from '@/types/friends';
 
@@ -14,6 +15,10 @@ type RouteMapWidgetProps = {
   routeCard: RouteCard;
   createdAt: number;
 };
+
+type ExpoMapsModule = typeof import('expo-maps');
+
+let cachedExpoMaps: ExpoMapsModule | null | undefined;
 
 function formatRouteWidgetTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
@@ -32,17 +37,14 @@ export function RouteMapWidget({ routeCard, createdAt }: RouteMapWidgetProps) {
     routeCard.mapMarkers[0] ??
     null;
   const routeWidgetTitle = routeWidgetMarker?.label ?? routeCard.title;
+  const mapCenter = routeWidgetMarker?.coordinate ?? routeCard.centerCoordinate;
 
   return (
     <View style={styles.routeMapWrap}>
-      {routeWidgetMarker ? (
-        <MapPreview
-          centerCoordinate={routeWidgetMarker.coordinate}
-          markers={[routeWidgetMarker]}
-          zoomLevel={13.5}
-          showRoutes={false}
-          colorSchemeMode="dark"
-          markerVariant="routeWidget"
+      {mapCenter ? (
+        <ExpoRouteMapPreview
+          centerCoordinate={mapCenter}
+          marker={routeWidgetMarker}
         />
       ) : routeCard.heroImageUri ? (
         <ExpoImage source={routeCard.heroImageUri} style={styles.routeHeroImage} contentFit="cover" />
@@ -86,9 +88,147 @@ export function RouteMapWidget({ routeCard, createdAt }: RouteMapWidgetProps) {
   );
 }
 
+function ExpoRouteMapPreview({
+  centerCoordinate,
+  marker,
+}: {
+  centerCoordinate: readonly [number, number];
+  marker: RouteCard['mapMarkers'][number] | null;
+}) {
+  const expoMaps = getExpoMapsModule();
+  const cameraPosition: CameraPosition = {
+    coordinates: toExpoCoordinate(centerCoordinate),
+    zoom: 13,
+  };
+  const markerCoordinates = marker ? toExpoCoordinate(marker.coordinate) : null;
+
+  if (!expoMaps) {
+    return (
+      <View style={styles.routeMapFallback}>
+        <MapTrifold color={designSystem.colors.background} size={22} weight="bold" />
+      </View>
+    );
+  }
+
+  if (Platform.OS === 'ios') {
+    const { AppleMaps } = expoMaps;
+
+    return (
+      <AppleMaps.View
+        style={StyleSheet.absoluteFill}
+        cameraPosition={cameraPosition}
+        markers={
+          markerCoordinates
+            ? [
+                {
+                  id: marker?.id,
+                  coordinates: markerCoordinates,
+                  title: marker?.label,
+                  tintColor: designSystem.colors.lime,
+                  systemImage: 'mappin.circle.fill',
+                },
+              ]
+            : []
+        }
+        properties={{
+          mapType: AppleMaps.MapType.STANDARD,
+          selectionEnabled: false,
+          isTrafficEnabled: false,
+        }}
+        uiSettings={{
+          compassEnabled: false,
+          myLocationButtonEnabled: false,
+          scaleBarEnabled: false,
+          togglePitchEnabled: false,
+        }}
+      />
+    );
+  }
+
+  if (Platform.OS === 'android') {
+    const { GoogleMaps } = expoMaps;
+
+    return (
+      <GoogleMaps.View
+        style={StyleSheet.absoluteFill}
+        cameraPosition={cameraPosition}
+        markers={
+          markerCoordinates
+            ? [
+                {
+                  id: marker?.id,
+                  coordinates: markerCoordinates,
+                  title: marker?.label,
+                  showCallout: false,
+                },
+              ]
+            : []
+        }
+        colorScheme={GoogleMaps.MapColorScheme.DARK}
+        properties={{
+          isBuildingEnabled: false,
+          isIndoorEnabled: false,
+          isMyLocationEnabled: false,
+          isTrafficEnabled: false,
+          mapType: GoogleMaps.MapType.NORMAL,
+          selectionEnabled: false,
+        }}
+        uiSettings={{
+          compassEnabled: false,
+          indoorLevelPickerEnabled: false,
+          mapToolbarEnabled: false,
+          myLocationButtonEnabled: false,
+          rotationGesturesEnabled: false,
+          scrollGesturesEnabled: false,
+          scrollGesturesEnabledDuringRotateOrZoom: false,
+          tiltGesturesEnabled: false,
+          zoomControlsEnabled: false,
+          zoomGesturesEnabled: false,
+          scaleBarEnabled: false,
+          togglePitchEnabled: false,
+        }}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.routeMapFallback}>
+      <MapTrifold color={designSystem.colors.background} size={22} weight="bold" />
+    </View>
+  );
+}
+
+function getExpoMapsModule() {
+  if (cachedExpoMaps !== undefined) {
+    return cachedExpoMaps;
+  }
+
+  if (!NativeModulesProxy.ExpoMaps) {
+    cachedExpoMaps = null;
+    return cachedExpoMaps;
+  }
+
+  try {
+    // expo-maps is native-module backed, so it may be absent until the dev client is rebuilt.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedExpoMaps = require('expo-maps') as ExpoMapsModule;
+  } catch {
+    cachedExpoMaps = null;
+  }
+
+  return cachedExpoMaps;
+}
+
+function toExpoCoordinate(coordinate: readonly [number, number]) {
+  return {
+    longitude: coordinate[0],
+    latitude: coordinate[1],
+  };
+}
+
 const styles = StyleSheet.create({
   routeMapWrap: {
-    height: 286,
+    height: 164,
     backgroundColor: designSystem.colors.charcoal,
   },
   routeHeroImage: {
@@ -104,7 +244,7 @@ const styles = StyleSheet.create({
   routeOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    padding: 14,
+    padding: 10,
   },
   routeOverlayTop: {
     flexDirection: 'row',
@@ -115,16 +255,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   routePillText: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    fontSize: 14,
-    lineHeight: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '600',
     color: designSystem.colors.background,
   },
   routeExpandButton: {
-    width: 38,
-    height: 38,
+    width: 30,
+    height: 30,
   },
   routeExpandContent: {
     flex: 1,
@@ -132,52 +272,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   routeInfoCard: {
-    borderRadius: 22,
+    borderRadius: 18,
     shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
   },
   routeInfoContent: {
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 2,
   },
   routeLocationRow: {
-    minHeight: 28,
+    minHeight: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
   routeLocationCopy: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 7,
   },
   routeTitle: {
     flex: 1,
     minWidth: 0,
-    fontSize: 18,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: '600',
     color: designSystem.colors.background,
   },
   routeDistanceText: {
-    maxWidth: 78,
+    maxWidth: 60,
     textAlign: 'right',
-    fontSize: 15,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 14,
     fontWeight: '600',
     color: designSystem.colors.darkTextMuted,
   },
   routeStopPreview: {
-    marginLeft: 24,
-    fontSize: 13,
-    lineHeight: 16,
+    marginLeft: 22,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '600',
     color: designSystem.colors.darkPlaceholderText,
   },

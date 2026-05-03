@@ -29,24 +29,7 @@ export function TripActionSkeletons() {
   );
 }
 
-export function TripSwitcherSkeleton() {
-  return (
-    <View style={styles.switcherContainer}>
-      <View style={styles.switcherContent}>
-        {Array.from({ length: 3 }).map((_, index) => (
-          <View key={`trip-switcher-skeleton-${index}`} style={styles.switcherCard}>
-            <SkeletonBlock style={styles.switcherImage} />
-            <SkeletonBlock style={styles.switcherLabel} />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 export function TripTimelineSkeleton() {
-  const isDark = useColorScheme() === 'dark';
-
   return (
     <View style={styles.timeline}>
       <View style={styles.sectionHeaderSkeleton}>
@@ -61,26 +44,20 @@ export function TripTimelineSkeleton() {
               <SkeletonBlock style={styles.marker} />
               {index < 2 ? <SkeletonBlock style={styles.connector} /> : null}
             </View>
-            <ThemedView
-              lightColor={designSystem.colors.white}
-              darkColor={designSystem.colors.darkSurface}
-              style={[
-                styles.timelineCard,
-                isDark ? styles.timelineCardDark : null,
-              ]}>
+            <View style={styles.timelineItemSkeleton}>
               <View style={styles.cardContentSkeleton}>
                 <View style={styles.cardLeftSkeleton}>
-                  <SkeletonBlock style={styles.dayBadgeSkeleton} />
                   <SkeletonBlock style={styles.timelineTitle} />
-                  <SkeletonBlock style={styles.timelineBody} />
-                  <View style={styles.timelineTags}>
-                    <SkeletonBlock style={styles.timelineTag} />
-                    <SkeletonBlock style={styles.timelineTag} />
+                  <View style={styles.timelineMetaRow}>
+                    <SkeletonBlock style={styles.timelineMetaIcon} />
+                    <SkeletonBlock style={styles.timelineMetaText} />
+                    <SkeletonBlock style={styles.timelineMetaDot} />
+                    <SkeletonBlock style={styles.timelineMetaTextShort} />
                   </View>
                 </View>
                 <SkeletonBlock style={styles.timelineImageSmall} />
               </View>
-            </ThemedView>
+            </View>
           </View>
         ))}
       </View>
@@ -142,29 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
   },
-  switcherContainer: {
-    marginTop: 12,
-    marginHorizontal: -designSystem.spacing.lg,
-  },
-  switcherContent: {
-    paddingHorizontal: designSystem.spacing.lg,
-    flexDirection: 'row',
-    gap: 16,
-  },
-  switcherCard: {
-    width: 120,
-    gap: 10,
-  },
-  switcherImage: {
-    width: 120,
-    height: 180,
-    borderRadius: 20,
-  },
-  switcherLabel: {
-    width: 84,
-    height: 16,
-    borderRadius: 6,
-  },
   actionButton: {
     flex: 1,
     height: 72,
@@ -212,27 +166,21 @@ const styles = StyleSheet.create({
     minHeight: 100,
     backgroundColor: designSystem.colors.borderSoft,
   },
-  timelineCard: {
+  timelineItemSkeleton: {
     flex: 1,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
-    padding: 16,
-    shadowColor: designSystem.colors.black, 
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  timelineCardDark: {
-    borderColor: designSystem.colors.darkBorder,
+    paddingTop: 6,
+    paddingBottom: 14,
+    paddingLeft: 8,
+    paddingRight: 4,
   },
   cardContentSkeleton: {
     flexDirection: 'row',
     gap: 16,
+    alignItems: 'flex-start',
   },
   cardLeftSkeleton: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
   dayBadgeSkeleton: {
@@ -245,25 +193,35 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
   },
-  timelineBody: {
-    width: '100%',
-    height: 36,
+  timelineMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timelineMetaIcon: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  timelineMetaText: {
+    width: 86,
+    height: 12,
+    borderRadius: 6,
+  },
+  timelineMetaDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  timelineMetaTextShort: {
+    width: 58,
+    height: 12,
     borderRadius: 6,
   },
   timelineImageSmall: {
-    width: 100,
-    height: 100,
-    borderRadius: 16,
-  },
-  timelineTags: {
-    flexDirection: 'row', 
-    gap: 8,
-    marginTop: 4,
-  },
-  timelineTag: {
-    width: 70,
-    height: 24,
-    borderRadius: 12,
+    width: 96,
+    height: 96,
+    borderRadius: 18,
   },
   bentoGrid: {
     flexDirection: 'column',

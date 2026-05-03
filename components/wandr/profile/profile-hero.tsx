@@ -1,12 +1,12 @@
-import { Image as ExpoImage } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ProfileHeroProps = {
-  avatarUri: string;
+  avatarUri?: string | null;
   baseLabel: string;
   displayName: string;
   planningLabel?: string | null;
@@ -18,7 +18,7 @@ export function ProfileHero({ avatarUri, baseLabel, displayName, planningLabel }
 
   return (
     <View style={styles.hero}>
-      <ExpoImage source={{ uri: avatarUri }} style={[styles.avatar, { backgroundColor: colors.surface }]} contentFit="cover" />
+      <FaceHashAvatar name={displayName} size={88} uri={avatarUri} style={[styles.avatar, { backgroundColor: colors.surface }]} />
       <View style={styles.copy}>
         <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.name}>
           {displayName}
@@ -30,7 +30,7 @@ export function ProfileHero({ avatarUri, baseLabel, displayName, planningLabel }
         ) : null}
         {planningLabel ? (
           <ThemedText numberOfLines={1} style={styles.planningLabel}>
-            Planning {planningLabel}
+            {planningLabel}
           </ThemedText>
         ) : null}
       </View>
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 28,
     lineHeight: 32,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   baseLabel: {
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   planningLabel: {
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
 });

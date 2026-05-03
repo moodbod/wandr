@@ -4,9 +4,20 @@ export type AppNotification = {
   _id: Id<'appNotifications'>;
   recipientSlug: string;
   actorSlug?: string;
-  kind: 'friend_invite' | 'friend_added' | 'trip_invite' | 'trip_join_request' | 'trip_arrival' | 'trip_rating';
+  kind:
+    | 'friend_invite'
+    | 'friend_added'
+    | 'trip_invite'
+    | 'trip_join_request'
+    | 'trip_arrival'
+    | 'trip_rating'
+    | 'friend_call'
+    | 'friend_call_reminder';
   title: string;
   body: string;
+  actorName?: string | null;
+  actorAvatarUri?: string | null;
+  actorBaseLabel?: string | null;
   href?: string;
   entityId?: string;
   entityLabel?: string;

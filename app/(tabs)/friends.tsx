@@ -7,9 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { SkeletonBlock } from '@/components/ui/skeleton-block';
-import { FriendCircleBanner } from '@/components/wandr/friends/friend-circle-banner';
-import { FriendMatchCard } from '@/components/wandr/friends/friend-match-card';
+import { FriendCircleBanner, FriendCircleBannerSkeleton } from '@/components/wandr/friends/friend-circle-banner';
+import { FriendMatchCard, FriendMatchCardSkeleton } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -31,7 +30,7 @@ export default function FriendsScreen() {
   const [busyCandidateSlug, setBusyCandidateSlug] = useState<string | null>(null);
   const [hiddenCandidateSlugs, setHiddenCandidateSlugs] = useState<Set<string>>(() => new Set());
   const topMatches = useMemo(
-    () => dashboard?.topMatches.filter((candidate) => !hiddenCandidateSlugs.has(candidate.travelerSlug)) ?? [],
+    () => dashboard?.topMatches.filter((candidate: any) => !hiddenCandidateSlugs.has(candidate.travelerSlug)) ?? [],
     [dashboard?.topMatches, hiddenCandidateSlugs]
   );
 
@@ -93,10 +92,6 @@ export default function FriendsScreen() {
             paddingBottom: insets.bottom + 120,
           },
         ]}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.title}>Friends</ThemedText>
-        </View>
-
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
         {isLoading || dashboard?.activeCircles.length ? (
@@ -117,9 +112,12 @@ export default function FriendsScreen() {
               ]}>
               {isLoading
                 ? Array.from({ length: 2 }).map((_, index) => (
-                    <SkeletonBlock key={`friend-circle-skeleton-${index}`} style={[styles.circleSkeleton, { width: groupCardWidth }]} />
+                    <FriendCircleBannerSkeleton
+                      key={`friend-circle-skeleton-${index}`}
+                      style={{ width: groupCardWidth }}
+                    />
                   ))
-                : dashboard?.activeCircles.map((circle) => (
+                : dashboard?.activeCircles.map((circle: any) => (
                     <FriendCircleBanner
                       key={circle._id}
                       circle={circle}
@@ -149,9 +147,9 @@ export default function FriendsScreen() {
         <View style={styles.cardStack}>
           {isLoading
             ? Array.from({ length: 3 }).map((_, index) => (
-                <SkeletonBlock key={`friend-match-skeleton-${index}`} style={styles.matchSkeleton} />
+                <FriendMatchCardSkeleton key={`friend-match-skeleton-${index}`} />
               ))
-            : topMatches.map((candidate) => (
+            : topMatches.map((candidate: any) => (
                 <FriendMatchCard
                   key={candidate.travelerSlug}
                   candidate={candidate}
@@ -176,14 +174,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.lg,
   },
-  hero: {
-    gap: 2,
-  },
-  title: {
-    ...designSystem.type.display,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
   notice: {
     fontSize: 14,
     lineHeight: 20,
@@ -202,10 +192,6 @@ const styles = StyleSheet.create({
   },
   groupRailScroller: {
     marginHorizontal: -designSystem.spacing.lg,
-  },
-  circleSkeleton: {
-    height: 152,
-    borderRadius: 28,
   },
   sectionHeader: {
     gap: 0,
@@ -235,9 +221,5 @@ const styles = StyleSheet.create({
   },
   cardStack: {
     gap: 14,
-  },
-  matchSkeleton: {
-    height: 232,
-    borderRadius: 28,
   },
 });

@@ -4,52 +4,80 @@ import { mutation } from './_generated/server';
 import { demoExploreBookings } from './seeds/demoExploreBookings';
 import { demoExploreTravelers } from './seeds/demoExploreTravelers';
 import { seedExperiences } from './seeds/seedExperiences';
+import { seedFriendProfiles } from './seeds/seedFriends';
 import { seedHiddenGems } from './seeds/seedHiddenGems';
 import { seedRegions } from './seeds/seedRegions';
 import { seedStays } from './seeds/seedStays';
 
+const TABLES_TO_CLEAR = [
+  'locationPhotos',
+  'tripVisits',
+  'stayBookings',
+  'stayRatings',
+  'experienceRatings',
+  'locationLikes',
+  'appNotifications',
+  'friendCalls',
+  'friendDirectMessages',
+  'friendDirectReadStates',
+  'friendDirectThreads',
+  'friendMessages',
+  'friendCircleReadStates',
+  'friendCircleMembers',
+  'friendConnections',
+  'friendMatchActions',
+  'friendCircles',
+  'tripInvites',
+  'experienceBookings',
+  'trips',
+  'friendProfiles',
+  'travelerProfiles',
+  'appUsers',
+  'stays',
+  'hiddenGems',
+  'experiences',
+  'regions',
+] as const;
+
+function buildRegionFromCountry(countryCode: string, countryLabel: string) {
+  if (countryCode === 'NA') {
+    return { regionCode: 'KH', regionName: 'Khomas' };
+  }
+  if (countryCode === 'ZA') {
+    return { regionCode: 'WC', regionName: 'Western Cape' };
+  }
+  return {
+    regionCode: countryCode,
+    regionName: countryLabel,
+  };
+}
+
+async function clearTable(ctx: MutationCtx, tableName: (typeof TABLES_TO_CLEAR)[number]) {
+  const documents = await ctx.db.query(tableName as any).collect();
+  for (const document of documents) {
+    await ctx.db.delete(document._id);
+  }
+  return documents.length;
+}
+
+async function collectTableCounts(ctx: MutationCtx) {
+  const counts: Record<string, number> = {};
+  for (const tableName of TABLES_TO_CLEAR) {
+    counts[tableName] = (await ctx.db.query(tableName as any).collect()).length;
+  }
+  return counts;
+}
+
+function normalizeThreadPair(firstSlug: string, secondSlug: string) {
+  return [firstSlug, secondSlug].sort((a, b) => a.localeCompare(b)) as [string, string];
+}
+
 export const seed = mutation({
   args: {},
   handler: async (ctx: MutationCtx) => {
-    // 1. Clear existing data
-    const experiences = await ctx.db.query('experiences').collect();
-    for (const experience of experiences) {
-      await ctx.db.delete(experience._id);
-    }
-
-    const gems = await ctx.db.query('hiddenGems').collect();
-    for (const gem of gems) {
-      await ctx.db.delete(gem._id);
-    }
-
-    const regions = await ctx.db.query('regions').collect();
-    for (const region of regions) {
-      await ctx.db.delete(region._id);
-    }
-
-    const travelers = await ctx.db.query('appUsers').collect();
-    for (const traveler of travelers) {
-      await ctx.db.delete(traveler._id);
-    }
-
-    const travelerProfiles = await ctx.db.query('travelerProfiles').collect();
-    for (const travelerProfile of travelerProfiles) {
-      await ctx.db.delete(travelerProfile._id);
-    }
-
-    const bookings = await ctx.db.query('experienceBookings').collect();
-    for (const booking of bookings) {
-      await ctx.db.delete(booking._id);
-    }
-
-    const stays = await ctx.db.query('stays').collect();
-    for (const stay of stays) {
-      await ctx.db.delete(stay._id);
-    }
-
-    const trips = await ctx.db.query('trips').collect();
-    for (const trip of trips) {
-      await ctx.db.delete(trip._id);
+    const deletedCounts: Record<string, number> = {};
+    for (const tableName of TABLES_TO_CLEAR) {
+      deletedCounts[tableName] = await clearTable(ctx, tableName);
     }
 
     // 2. Seed Regions
@@ -124,13 +152,13 @@ export const seed = mutation({
         guestJournals: [
           {
             name: 'Marcus Thorne',
-            avatarUri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop',
+            avatarUri: '',
             visitedAtLabel: 'Visited Oct 2023',
             quote: 'Good first or last night before a long drive. Waking up near Windhoek West changed the pacing of the whole route.',
           },
           {
             name: 'Lena Headey',
-            avatarUri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&h=120&fit=crop',
+            avatarUri: '',
             visitedAtLabel: 'Visited Sep 2023',
             quote: 'Minimal, comfortable, and exactly where we needed it. The route fit mattered more than we expected.',
           },
@@ -360,24 +388,236 @@ export const seed = mutation({
         name: traveler.name,
         countryCode: traveler.countryCode,
         countryLabel: traveler.countryLabel,
+        phoneNumber: traveler.phoneNumber,
       });
+      const region = buildRegionFromCountry(traveler.countryCode, traveler.countryLabel);
       await ctx.db.insert('travelerProfiles', {
         travelerSlug: traveler.slug,
         name: traveler.name,
-        avatarUri: traveler.avatarUri,
-        regionCode: traveler.countryCode,
-        regionName: traveler.countryLabel,
+        regionCode: region.regionCode,
+        regionName: region.regionName,
       });
     }
+
+    for (const profile of seedFriendProfiles) {
+      await ctx.db.insert('friendProfiles', {
+        ...profile,
+        interests: [...profile.interests],
+      });
+    }
+
+    const now = Date.now();
+    const demoTripId = await ctx.db.insert('trips', {
+      name: 'Namibia Road Trip',
+      travelerSlug: 'local-demo-traveler',
+      visibility: 'public',
+      createdAt: now,
+      status: 'active',
+    });
 
     // 7. Seed Bookings
     for (const booking of demoExploreBookings) {
       await ctx.db.insert('experienceBookings', {
         ...booking,
-        bookedAt: Date.now(),
+        tripId: booking.travelerSlug === 'local-demo-traveler' ? demoTripId : undefined,
+        bookedAt: now,
       } as any);
     }
 
-    return { success: true };
+    const likedLocations = [
+      { locationKind: 'experience' as const, locationSlug: 'etosha-game-drive' },
+      { locationKind: 'experience' as const, locationSlug: 'sossusvlei-sunrise-drive' },
+      { locationKind: 'hiddenGem' as const, locationSlug: 'spitzkoppe-sunset-arch' },
+    ];
+    for (const location of likedLocations) {
+      await ctx.db.insert('locationLikes', {
+        travelerSlug: 'local-demo-traveler',
+        ...location,
+        likedAt: now,
+      });
+    }
+
+    const reviewSeed = [
+      {
+        experienceSlug: 'windhoek-craft-market-walk',
+        travelerSlug: 'local-demo-traveler',
+        rating: 5,
+        review: 'A good first-day reset with enough local texture to make the city feel close.',
+      },
+      {
+        experienceSlug: 'sossusvlei-sunrise-drive',
+        travelerSlug: 'anna-berlin',
+        rating: 5,
+        review: 'Worth the early start. The route timing made the whole morning easier.',
+      },
+      {
+        experienceSlug: 'etosha-game-drive',
+        travelerSlug: 'james-toronto',
+        rating: 5,
+        review: 'Excellent waterhole pacing and a guide who understood when to wait.',
+      },
+    ];
+    for (const rating of reviewSeed) {
+      await ctx.db.insert('experienceRatings', {
+        ...rating,
+        createdAt: now,
+      });
+    }
+
+    const stayReviewSeed = [
+      {
+        staySlug: 'olive-grove-lofts',
+        travelerSlug: 'local-demo-traveler',
+        rating: 5,
+        review: 'Clean, calm, and easy for a first night before the road gets bigger.',
+      },
+      {
+        staySlug: 'etosha-waterhole-lodge',
+        travelerSlug: 'james-toronto',
+        rating: 5,
+        review: 'The location made early wildlife starts feel effortless.',
+      },
+    ];
+    for (const rating of stayReviewSeed) {
+      await ctx.db.insert('stayRatings', {
+        ...rating,
+        createdAt: now,
+      });
+    }
+
+    const connectedFriendSlugs = ['noah-london', 'sofia-lisbon'];
+    for (const friendSlug of connectedFriendSlugs) {
+      await ctx.db.insert('friendConnections', {
+        travelerSlug: 'local-demo-traveler',
+        friendSlug,
+        createdAt: now,
+        source: 'manual',
+      });
+      await ctx.db.insert('friendConnections', {
+        travelerSlug: friendSlug,
+        friendSlug: 'local-demo-traveler',
+        createdAt: now,
+        source: 'manual',
+      });
+
+      const [participantA, participantB] = normalizeThreadPair('local-demo-traveler', friendSlug);
+      const threadId = await ctx.db.insert('friendDirectThreads', {
+        participantA,
+        participantB,
+        createdAt: now - 1000 * 60 * 40,
+        updatedAt: now - 1000 * 60 * 18,
+      });
+      const messages = [
+        {
+          senderSlug: friendSlug,
+          body: 'Landing later. Send me the meeting point once your route firms up.',
+          createdAt: now - 1000 * 60 * 33,
+        },
+        {
+          senderSlug: 'local-demo-traveler',
+          body: 'Perfect. I will ping you after the coast stop so we sync cleanly.',
+          createdAt: now - 1000 * 60 * 18,
+        },
+      ];
+      for (const message of messages) {
+        await ctx.db.insert('friendDirectMessages', {
+          threadId,
+          ...message,
+        });
+      }
+      for (const travelerSlug of ['local-demo-traveler', friendSlug]) {
+        await ctx.db.insert('friendDirectReadStates', {
+          threadId,
+          travelerSlug,
+          lastReadAt: now - 1000 * 60 * 15,
+        });
+      }
+    }
+
+    const circleId = await ctx.db.insert('friendCircles', {
+      slug: 'local-demo-traveler-friends',
+      name: "Lea's Namibia Friends",
+      destinationLabel: 'Namibia loop',
+      heroLabel: 'Road-plan crew',
+      status: 'active',
+      visibility: 'open',
+      createdBySlug: 'local-demo-traveler',
+      tripId: demoTripId,
+      createdAt: now - 1000 * 60 * 50,
+      updatedAt: now - 1000 * 60 * 8,
+    });
+    await ctx.db.patch(demoTripId, { circleId });
+
+    const circleMembers = ['local-demo-traveler', 'noah-london', 'sofia-lisbon', 'elias-windhoek'];
+    for (const [index, travelerSlug] of circleMembers.entries()) {
+      await ctx.db.insert('friendCircleMembers', {
+        circleId,
+        travelerSlug,
+        role: index === 0 ? 'host' : 'member',
+        status: 'active',
+        joinedAt: now - (circleMembers.length - index) * 1000 * 60 * 60,
+      });
+      await ctx.db.insert('friendCircleReadStates', {
+        circleId,
+        travelerSlug,
+        lastReadAt: now - 1000 * 60 * 5,
+      });
+    }
+
+    const circleMessages = [
+      {
+        senderSlug: 'noah-london',
+        kind: 'text' as const,
+        body: 'I checked the dunes timing and we should leave before sunrise if we want the light to feel clean.',
+        createdAt: now - 1000 * 60 * 40,
+      },
+      {
+        senderSlug: 'local-demo-traveler',
+        kind: 'route' as const,
+        body: 'Shared the route update.',
+        routeTitle: 'Namibia Road Trip',
+        routeSummary: 'Windhoek warm-up, coast air, desert light, and a northern wildlife finish.',
+        routeDistanceLabel: '1,420 km planned',
+        routeStopCount: 5,
+        routeStopsPreview: ['Windhoek Craft Walk', 'Taste of Swakop', 'Sossusvlei Sunrise Drive'],
+        createdAt: now - 1000 * 60 * 25,
+      },
+      {
+        senderSlug: 'sofia-lisbon',
+        kind: 'text' as const,
+        body: 'That route looks good to me. I can take the first driving leg if we want a quieter start.',
+        createdAt: now - 1000 * 60 * 16,
+      },
+      {
+        senderSlug: 'local-demo-traveler',
+        kind: 'text' as const,
+        body: 'Perfect. Let us keep one slow breakfast stop on the coast before we head inland again.',
+        createdAt: now - 1000 * 60 * 8,
+      },
+    ];
+    for (const message of circleMessages) {
+      await ctx.db.insert('friendMessages', {
+        circleId,
+        ...message,
+      });
+    }
+
+    await ctx.db.insert('appNotifications', {
+      recipientSlug: 'local-demo-traveler',
+      actorSlug: 'sofia-lisbon',
+      kind: 'friend_added',
+      title: 'Sofia joined your travel circle',
+      body: 'You can now plan the coast and dunes route together.',
+      href: `/friends/group/${circleId}`,
+      entityId: circleId,
+      entityLabel: "Lea's Namibia Friends",
+      createdAt: now - 1000 * 60 * 7,
+    });
+
+    return {
+      success: true,
+      deletedCounts,
+      counts: await collectTableCounts(ctx),
+    };
   },
 });

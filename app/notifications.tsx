@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import { Bell, CaretRight, ChatCircleDots, CheckCircle, Compass, UsersThree } from 'phosphor-react-native';
+import { ChatCircleDots, CheckCircle, Compass, UsersThree } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,13 +9,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import {
+  acceptFriendRequestRef,
   approveTripJoinRequestRef,
-  declineTripJoinRequestRef,
   listNotificationsRef,
   markNotificationsReadRef,
   markNotificationsViewedRef,
@@ -39,6 +40,28 @@ function isRecentNotification(notification: AppNotification) {
   return Date.now() - notification.createdAt <= 7 * 24 * 60 * 60 * 1000;
 }
 
+function isFriendRequestNotification(notification: AppNotification) {
+  return (
+    notification.kind === 'friend_invite' &&
+    Boolean(notification.actorSlug) &&
+    (notification.actionStatus === 'pending' ||
+      notification.href === '/notifications' ||
+      notification.entityId === notification.actorSlug)
+  );
+}
+
+function getRequestStatus(notification: AppNotification) {
+  if (notification.actionStatus === 'approved' || notification.actionStatus === 'declined') {
+    return notification.actionStatus;
+  }
+
+  if (notification.kind === 'trip_join_request' || isFriendRequestNotification(notification)) {
+    return 'pending';
+  }
+
+  return null;
+}
+
 function NotificationIcon({ kind, unread }: { kind: AppNotification['kind']; unread: boolean }) {
   const isDark = useColorScheme() === 'dark';
   const color = unread
@@ -60,6 +83,9 @@ function NotificationIcon({ kind, unread }: { kind: AppNotification['kind']; unr
       return <Compass color={color} size={20} weight="bold" />;
     case 'trip_rating':
       return <ChatCircleDots color={color} size={20} weight="bold" />;
+    case 'friend_call':
+    case 'friend_call_reminder':
+      return <ChatCircleDots color={color} size={20} weight="fill" />;
   }
 }
 
@@ -70,8 +96,8 @@ export default function NotificationsScreen() {
   const traveler = useCurrentTraveler();
   const travelerSlug = traveler?.slug;
   const notifications = useQuery(listNotificationsRef, travelerSlug ? { travelerSlug } : 'skip');
+  const acceptFriendRequest = useMutation(acceptFriendRequestRef);
   const approveTripJoinRequest = useMutation(approveTripJoinRequestRef);
-  const declineTripJoinRequest = useMutation(declineTripJoinRequestRef);
   const markRead = useMutation(markNotificationsReadRef);
   const markViewed = useMutation(markNotificationsViewedRef);
   const viewedRequestsRef = useRef(new Set<string>());
@@ -86,12 +112,6 @@ export default function NotificationsScreen() {
   const visibleNotifications = filter === 'unread' ? unreadNotifications : (notifications ?? []);
   const recentNotifications = visibleNotifications.filter(isRecentNotification);
   const olderNotifications = visibleNotifications.filter((notification) => !isRecentNotification(notification));
-  const hasNotifications = Boolean(notifications && notifications.length > 0);
-  const emptyTitle = filter === 'unread' && hasNotifications ? 'All caught up' : 'Nothing new yet';
-  const emptyBody =
-    filter === 'unread' && hasNotifications
-      ? 'Every notification has been read. Switch back to all to revisit older trip updates and friend activity.'
-      : 'Friend invites, trip prompts, and join requests will collect here when they need your attention.';
 
   useEffect(() => {
     if (!travelerSlug || !notifications || notifications.length === 0) {
@@ -144,33 +164,24 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleApproveRequest = async (notification: AppNotification) => {
+  const handleAcceptRequest = async (notification: AppNotification) => {
     if (!travelerSlug || busyRequestId) {
       return;
     }
 
     setBusyRequestId(notification._id);
     try {
-      await approveTripJoinRequest({
-        travelerSlug,
-        notificationId: notification._id,
-      });
-    } finally {
-      setBusyRequestId(null);
-    }
-  };
-
-  const handleDeclineRequest = async (notification: AppNotification) => {
-    if (!travelerSlug || busyRequestId) {
-      return;
-    }
-
-    setBusyRequestId(notification._id);
-    try {
-      await declineTripJoinRequest({
-        travelerSlug,
-        notificationId: notification._id,
-      });
+      if (notification.kind === 'friend_invite') {
+        await acceptFriendRequest({
+          travelerSlug,
+          notificationId: notification._id,
+        });
+      } else {
+        await approveTripJoinRequest({
+          travelerSlug,
+          notificationId: notification._id,
+        });
+      }
     } finally {
       setBusyRequestId(null);
     }
@@ -189,12 +200,21 @@ export default function NotificationsScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: insets.top + 72,
             paddingBottom: insets.bottom + 64,
           },
         ]}>
-        <View style={styles.header}>
-          <ThemedText style={styles.title}>Notifications</ThemedText>
+        <View style={styles.controlsRow}>
+          <View style={styles.tabsWrap}>
+            <SegmentedTabs
+              value={filter}
+              options={[
+                { key: 'all', label: 'All' },
+                { key: 'unread', label: unreadNotifications.length > 0 ? `Unread ${unreadNotifications.length}` : 'Unread' },
+              ]}
+              onChange={setFilter}
+            />
+          </View>
           {unreadNotifications.length > 0 ? (
             <Pressable accessibilityRole="button" onPress={handleMarkAllRead} hitSlop={8}>
               <ThemedText style={[styles.markReadText, isDark ? styles.markReadTextDark : null]}>
@@ -204,27 +224,18 @@ export default function NotificationsScreen() {
           ) : null}
         </View>
 
-        <SegmentedTabs
-          value={filter}
-          options={[
-            { key: 'all', label: 'All' },
-            { key: 'unread', label: unreadNotifications.length > 0 ? `Unread ${unreadNotifications.length}` : 'Unread' },
-          ]}
-          onChange={setFilter}
-        />
-
         {isLoading ? (
           <View style={styles.list}>
             {Array.from({ length: 5 }).map((_, index) => (
               <SkeletonBlock key={`notification-skeleton-${index}`} style={styles.notificationSkeleton} />
             ))}
           </View>
-        ) : visibleNotifications.length === 0 ? (
+        ) : visibleNotifications.length === 0 && filter === 'all' ? (
           <View style={styles.emptyState}>
-            <Bell color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} size={24} weight="bold" />
-            <ThemedText style={styles.emptyTitle}>{emptyTitle}</ThemedText>
-            <ThemedText style={styles.emptyBody}>{emptyBody}</ThemedText>
+            <ThemedText style={styles.emptyTitle}>No notifications yet</ThemedText>
           </View>
+        ) : visibleNotifications.length === 0 ? (
+          <View style={styles.emptyUnreadState} />
         ) : (
           <View style={styles.list}>
             {recentNotifications.length > 0 ? (
@@ -232,8 +243,7 @@ export default function NotificationsScreen() {
                 title="Last 7 days"
                 notifications={recentNotifications}
                 busyRequestId={busyRequestId}
-                onApproveRequest={handleApproveRequest}
-                onDeclineRequest={handleDeclineRequest}
+                onAcceptRequest={handleAcceptRequest}
                 onPressNotification={handleNotificationPress}
               />
             ) : null}
@@ -242,8 +252,7 @@ export default function NotificationsScreen() {
                 title="Earlier"
                 notifications={olderNotifications}
                 busyRequestId={busyRequestId}
-                onApproveRequest={handleApproveRequest}
-                onDeclineRequest={handleDeclineRequest}
+                onAcceptRequest={handleAcceptRequest}
                 onPressNotification={handleNotificationPress}
               />
             ) : null}
@@ -258,15 +267,13 @@ function NotificationSection({
   title,
   notifications,
   busyRequestId,
-  onApproveRequest,
-  onDeclineRequest,
+  onAcceptRequest,
   onPressNotification,
 }: {
   title: string;
   notifications: AppNotification[];
   busyRequestId: string | null;
-  onApproveRequest: (notification: AppNotification) => void;
-  onDeclineRequest: (notification: AppNotification) => void;
+  onAcceptRequest: (notification: AppNotification) => void;
   onPressNotification: (notification: AppNotification) => void;
 }) {
   return (
@@ -278,8 +285,7 @@ function NotificationSection({
             key={notification._id}
             notification={notification}
             isBusy={busyRequestId === notification._id}
-            onApprove={() => onApproveRequest(notification)}
-            onDecline={() => onDeclineRequest(notification)}
+            onAccept={() => onAcceptRequest(notification)}
             onPress={() => onPressNotification(notification)}
           />
         ))}
@@ -291,14 +297,12 @@ function NotificationSection({
 function NotificationRow({
   notification,
   isBusy,
-  onApprove,
-  onDecline,
+  onAccept,
   onPress,
 }: {
   notification: AppNotification;
   isBusy: boolean;
-  onApprove: () => void;
-  onDecline: () => void;
+  onAccept: () => void;
   onPress: () => void;
 }) {
   const isDark = useColorScheme() === 'dark';
@@ -309,9 +313,20 @@ function NotificationRow({
       ? designSystem.colors.darkSurface
       : designSystem.colors.surface;
   const requestStatus =
-    notification.kind === 'trip_join_request'
-      ? notification.actionStatus ?? 'pending'
-      : null;
+    getRequestStatus(notification);
+  const requestLabel = notification.kind === 'friend_invite' ? 'friend request' : 'trip join request';
+  const isPendingRequest = requestStatus === 'pending';
+  const showActorAvatar = Boolean(notification.actorSlug);
+  const actorName = notification.actorName ?? notification.actorSlug ?? '';
+  const actorBaseLabel = notification.actorBaseLabel;
+  const requestActionText = notification.kind === 'friend_invite' ? 'sent a request' : notification.body;
+  const inlineActionText = showActorAvatar
+    ? requestActionText
+    : notification.title;
+  const inlineMeta =
+    requestStatus && !isPendingRequest
+      ? `${formatRelativeTime(notification.createdAt)} · ${requestStatus === 'approved' ? 'Approved' : 'Declined'}`
+      : formatRelativeTime(notification.createdAt);
 
   return (
     <Pressable
@@ -321,55 +336,72 @@ function NotificationRow({
       onPress={onPress}
       style={styles.row}
     >
-      <View style={[styles.iconWrap, { backgroundColor: iconBackground }]}>
-        <NotificationIcon kind={notification.kind} unread={unread} />
-      </View>
+      {showActorAvatar ? (
+        <FaceHashAvatar
+          name={notification.actorName ?? notification.actorSlug ?? 'Wandr'}
+          size={52}
+          uri={notification.actorAvatarUri}
+          style={styles.actorAvatar}
+        />
+      ) : (
+        <View style={[styles.iconWrap, { backgroundColor: iconBackground }]}>
+          <NotificationIcon kind={notification.kind} unread={unread} />
+        </View>
+      )}
 
       <View style={styles.rowCopy}>
-        <View style={styles.titleLine}>
-          <ThemedText style={styles.rowTitle} numberOfLines={2}>
-            {notification.title}
-          </ThemedText>
-          <ThemedText style={styles.rowTime}>{formatRelativeTime(notification.createdAt)}</ThemedText>
-        </View>
-        <ThemedText style={styles.rowBody} numberOfLines={2}>{notification.body}</ThemedText>
-        {requestStatus === 'pending' ? (
-          <View style={styles.requestActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Approve trip join request"
-              disabled={isBusy}
-              onPress={(event) => {
-                event.stopPropagation();
-                onApprove();
-              }}
-              style={[styles.requestButton, styles.approveButton, isBusy ? styles.requestButtonDisabled : null]}>
-              <ThemedText style={styles.approveButtonText}>{isBusy ? 'Working' : 'Approve'}</ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Decline trip join request"
-              disabled={isBusy}
-              onPress={(event) => {
-                event.stopPropagation();
-                onDecline();
-              }}
-              style={[styles.requestButton, styles.declineButton, isBusy ? styles.requestButtonDisabled : null]}>
-              <ThemedText style={styles.declineButtonText}>Decline</ThemedText>
-            </Pressable>
-          </View>
-        ) : requestStatus ? (
-          <View style={styles.requestStatusPill}>
-            <ThemedText style={styles.requestStatusText}>
-              {requestStatus === 'approved' ? 'Approved' : 'Declined'}
-            </ThemedText>
-          </View>
-        ) : null}
+        {showActorAvatar ? (
+          <>
+            <View style={styles.actorTitleRow}>
+              <View style={styles.actorTitleCopy}>
+                <ThemedText style={styles.actorName} numberOfLines={1}>
+                  {actorName}
+                </ThemedText>
+                {actorBaseLabel ? (
+                  <ThemedText style={styles.actorBaseLabel} numberOfLines={1}>
+                    {actorBaseLabel}
+                  </ThemedText>
+                ) : null}
+              </View>
+              <ThemedText style={styles.rowTime}>{inlineMeta}</ThemedText>
+            </View>
+            <ThemedText style={styles.rowBody} numberOfLines={2}>{inlineActionText}</ThemedText>
+          </>
+        ) : (
+          <>
+            <View style={styles.messageLine}>
+              <ThemedText style={styles.rowMessage} numberOfLines={2}>
+                {inlineActionText}
+                {' '}
+                <ThemedText style={styles.rowTime}>{inlineMeta}</ThemedText>
+              </ThemedText>
+            </View>
+            {!requestStatus ? (
+              <ThemedText style={styles.rowBody} numberOfLines={2}>{notification.body}</ThemedText>
+            ) : null}
+          </>
+        )}
       </View>
 
-      {unread ? <View style={styles.unreadDot} /> : null}
-      {notification.href ? (
-        <CaretRight color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} size={18} weight="bold" />
+      {isPendingRequest ? (
+        <View style={styles.requestActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Accept ${requestLabel}`}
+            disabled={isBusy}
+            onPress={(event) => {
+              event.stopPropagation();
+              onAccept();
+            }}
+            style={[
+              styles.requestButton,
+              styles.approveButton,
+              isDark ? styles.approveButtonDark : null,
+              isBusy ? styles.requestButtonDisabled : null,
+            ]}>
+            <ThemedText style={styles.approveButtonText}>{isBusy ? '...' : 'Accept'}</ThemedText>
+          </Pressable>
+        </View>
       ) : null}
     </Pressable>
   );
@@ -383,11 +415,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.lg,
   },
-  header: {
+  controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: designSystem.spacing.md,
+  },
+  tabsWrap: {
+    flex: 1,
   },
   markReadText: {
     ...designSystem.type.bodySmallStrong,
@@ -396,27 +431,14 @@ const styles = StyleSheet.create({
   markReadTextDark: {
     color: designSystem.colors.lime,
   },
-  title: {
-    ...designSystem.type.pageTitle,
-    color: designSystem.colors.ink,
-  },
   emptyState: {
-    alignItems: 'center',
-    gap: 12,
-    padding: designSystem.spacing.xl,
-    borderRadius: 30,
-    backgroundColor: designSystem.colors.whiteGlass,
+    paddingTop: designSystem.spacing.md,
+  },
+  emptyUnreadState: {
+    minHeight: 1,
   },
   emptyTitle: {
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
-  emptyBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
+    ...designSystem.type.bodySmall,
     color: designSystem.colors.gray,
   },
   list: {
@@ -434,7 +456,7 @@ const styles = StyleSheet.create({
     color: designSystem.colors.ink,
   },
   rows: {
-    gap: designSystem.spacing.lg,
+    gap: designSystem.spacing.xl,
   },
   row: {
     flexDirection: 'row',
@@ -449,23 +471,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actorAvatar: {
+    backgroundColor: designSystem.colors.limeSoft,
+  },
   rowCopy: {
     flex: 1,
-    gap: 3,
     minWidth: 0,
   },
-  titleLine: {
+  messageLine: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: designSystem.spacing.xs,
+    alignItems: 'center',
   },
-  rowTitle: {
+  actorTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: designSystem.spacing.sm,
+  },
+  actorTitleCopy: {
     flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  rowMessage: {
     ...designSystem.type.cardTitle,
     color: designSystem.colors.ink,
   },
+  actorName: {
+    ...designSystem.type.cardTitle,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  actorBaseLabel: {
+    ...designSystem.type.cardBody,
+    color: designSystem.colors.gray,
+    flexShrink: 1,
+  },
   rowTime: {
-    ...designSystem.type.bodySmall,
+    ...designSystem.type.cardTitle,
     color: designSystem.colors.gray,
   },
   rowBody: {
@@ -473,28 +518,26 @@ const styles = StyleSheet.create({
     color: designSystem.colors.warmDark,
   },
   requestActions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: designSystem.spacing.xs,
-    paddingTop: designSystem.spacing.xs,
+    gap: 6,
   },
   requestButton: {
-    minHeight: 34,
-    minWidth: 82,
+    minHeight: 30,
+    minWidth: 74,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 17,
-    paddingHorizontal: designSystem.spacing.md,
+    borderRadius: 15,
+    paddingHorizontal: designSystem.spacing.sm,
   },
   approveButton: {
     backgroundColor: designSystem.colors.lime,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: designSystem.colors.borderAccent,
   },
-  declineButton: {
-    backgroundColor: designSystem.colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: designSystem.colors.borderSoft,
+  approveButtonDark: {
+    backgroundColor: designSystem.colors.lime,
+    borderColor: designSystem.colors.lime,
   },
   requestButtonDisabled: {
     opacity: 0.6,
@@ -502,28 +545,5 @@ const styles = StyleSheet.create({
   approveButtonText: {
     ...designSystem.type.label,
     color: designSystem.colors.darkGreen,
-  },
-  declineButtonText: {
-    ...designSystem.type.label,
-    color: designSystem.colors.warmDark,
-  },
-  requestStatusPill: {
-    alignSelf: 'flex-start',
-    marginTop: designSystem.spacing.xs,
-    minHeight: 30,
-    justifyContent: 'center',
-    borderRadius: 15,
-    paddingHorizontal: designSystem.spacing.md,
-    backgroundColor: designSystem.colors.scrimFaint,
-  },
-  requestStatusText: {
-    ...designSystem.type.label,
-    color: designSystem.colors.gray,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: designSystem.colors.lime,
   },
 });

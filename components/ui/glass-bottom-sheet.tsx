@@ -1,6 +1,4 @@
 import BottomSheet, { BottomSheetBackgroundProps, BottomSheetProps } from '@gorhom/bottom-sheet';
-import { BlurView, type BlurTint } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import React, { forwardRef } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
@@ -9,26 +7,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export const GLASS_BOTTOM_SHEET_BLUR_INTENSITY = 82;
-
-export function getGlassBottomSheetTint(isDark: boolean): BlurTint {
-  return isDark ? 'dark' : 'light';
-}
-
 export function isNativeGlassBottomSheetAvailable() {
-  return Platform.OS === 'ios' && isLiquidGlassAvailable();
+  return false;
 }
 
 export function getGlassBottomSheetBorderColor(isDark: boolean) {
+  if (Platform.OS === 'android') {
+    return isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;
+  }
+
   return isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
 }
 
-export function getGlassBottomSheetSurfaceColor(isDark: boolean, shouldUseNativeGlass = isNativeGlassBottomSheetAvailable()) {
-  if (shouldUseNativeGlass) {
-    return isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassStrong;
-  }
-
-  return isDark ? designSystem.colors.darkOliveGlass : designSystem.colors.whiteGlassMax;
+export function getGlassBottomSheetSurfaceColor(isDark: boolean, _shouldUseNativeGlass = isNativeGlassBottomSheetAvailable()) {
+  return isDark ? designSystem.colors.darkPage : designSystem.colors.surfaceRaised;
 }
 
 type GlassBottomSheetSurfaceProps = {
@@ -36,36 +28,12 @@ type GlassBottomSheetSurfaceProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export function GlassBottomSheetSurface({ overlay = false, style }: GlassBottomSheetSurfaceProps) {
+export function GlassBottomSheetSurface({ style }: GlassBottomSheetSurfaceProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const shouldUseNativeGlass = isNativeGlassBottomSheetAvailable();
-  const tint = getGlassBottomSheetTint(isDark);
-  const nativeTintColor = isDark
-    ? designSystem.colors.nativeDarkTint
-    : designSystem.colors.whiteOverlaySoft;
+  const surfaceColor = getGlassBottomSheetSurfaceColor(isDark);
 
-  return (
-    <View pointerEvents="none" style={style}>
-      {shouldUseNativeGlass ? (
-        <GlassView
-          style={StyleSheet.absoluteFill}
-          glassEffectStyle="regular"
-          tintColor={nativeTintColor}
-        />
-      ) : (
-        <BlurView intensity={GLASS_BOTTOM_SHEET_BLUR_INTENSITY} tint={tint} style={StyleSheet.absoluteFill} />
-      )}
-      {overlay ? (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: getGlassBottomSheetSurfaceColor(isDark, shouldUseNativeGlass) },
-          ]}
-        />
-      ) : null}
-    </View>
-  );
+  return <View pointerEvents="none" style={[style, { backgroundColor: surfaceColor }]} />;
 }
 
 const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({

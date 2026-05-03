@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from 'convex/react';
-import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChatCircleDots, MapPin, UserCheck, UserPlus } from 'phosphor-react-native';
 import { useState } from 'react';
@@ -10,8 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
-import { fallbackAvatar } from '@/components/wandr/profile/profile-data';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
@@ -149,14 +148,14 @@ function ViewerHero({
   friendCount: number;
   profile: NonNullable<FriendViewerProfile>;
 }) {
-  const avatarUri = profile.traveler.avatarUri ?? fallbackAvatar;
+  const avatarUri = profile.traveler.avatarUri ?? null;
   const matchScore = profile.profile?.matchScore ?? 0;
   const sharedCount = profile.profile?.sharedInterests.length ?? 0;
 
   return (
     <View style={styles.hero}>
       <View style={styles.heroTop}>
-        <ExpoImage source={{ uri: avatarUri }} style={styles.heroAvatar} contentFit="cover" />
+        <FaceHashAvatar name={profile.traveler.slug ?? profile.traveler.name} size={92} uri={avatarUri} style={styles.heroAvatar} />
         <View style={styles.heroBody}>
           <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.name}>
             {profile.traveler.name}
@@ -166,7 +165,7 @@ function ViewerHero({
           </ThemedText>
           {profile.profile?.destinationLabel ? (
             <ThemedText numberOfLines={1} style={styles.destination}>
-              Planning {profile.profile.destinationLabel}
+              {profile.profile.destinationLabel}
             </ThemedText>
           ) : null}
         </View>
@@ -195,10 +194,10 @@ function RelationshipButton({
   const label =
     relationshipState === 'self'
       ? 'Your profile'
-      : relationshipState === 'friend'
-        ? 'Friend'
+        : relationshipState === 'friend'
+          ? 'Friend'
         : relationshipState === 'invited'
-          ? 'Invited'
+          ? 'Requested'
           : 'Add friend';
   const isConfirmed = relationshipState === 'friend' || relationshipState === 'self';
   const Icon = isConfirmed ? UserCheck : UserPlus;
@@ -317,7 +316,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 28,
     lineHeight: 32,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   location: {
@@ -329,13 +328,13 @@ const styles = StyleSheet.create({
   destination: {
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   headline: {
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   bio: {
@@ -361,7 +360,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 21,
     lineHeight: 24,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   statLabel: {
@@ -387,7 +386,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 14,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   messageButton: {
@@ -402,7 +401,7 @@ const styles = StyleSheet.create({
   messageButtonText: {
     fontSize: 14,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   travelCard: {
@@ -419,7 +418,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   metaRow: {
@@ -437,7 +436,7 @@ const styles = StyleSheet.create({
   metaPillText: {
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   interestSection: {
@@ -452,13 +451,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     lineHeight: 26,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   sectionSubtitle: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
   chipWrap: {
@@ -479,7 +478,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.warmDark,
   },
   sharedChipText: {
@@ -493,7 +492,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   emptyBody: {

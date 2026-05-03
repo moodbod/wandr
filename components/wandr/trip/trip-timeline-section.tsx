@@ -8,10 +8,13 @@ import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { TripDashboardItem } from '@/types/trip';
 
+import { TripTimelineSkeleton } from './trip-skeletons';
+
 type TripTimelineSectionProps = {
-  items: readonly TripDashboardItem[];
+  items?: readonly TripDashboardItem[];
   variant?: 'default' | 'sheet';
   isEditing?: boolean;
+  isLoading?: boolean;
   onRemoveItem?: (itemId: string) => void;
   removingItemId?: string | null;
 };
@@ -47,14 +50,19 @@ function buildStayContextLine(locationLabel?: string) {
 }
 
 export function TripTimelineSection({
-  items,
+  items = [],
   variant = 'default',
   isEditing = false,
+  isLoading = false,
   onRemoveItem,
   removingItemId = null,
 }: TripTimelineSectionProps) {
   const isDark = useColorScheme() === 'dark';
   const isSheet = variant === 'sheet';
+
+  if (isLoading) {
+    return <TripTimelineSkeleton />;
+  }
 
   return (
     <View style={[styles.timeline, isSheet ? styles.timelineSheet : null]}>

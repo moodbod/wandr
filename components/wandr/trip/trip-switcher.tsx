@@ -3,6 +3,7 @@ import { Plus, UsersThree, X } from 'phosphor-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { TripListItem } from '@/types/trip';
@@ -11,6 +12,7 @@ type TripSwitcherProps = {
   trips: TripListItem[];
   selectedTripId?: string;
   isEditing?: boolean;
+  isLoading?: boolean;
   onDeleteTrip: (id: string) => void;
   onSelectTrip: (id: string) => void;
   onNewTrip: () => void;
@@ -21,12 +23,17 @@ export function TripSwitcher({
   trips,
   selectedTripId,
   isEditing = false,
+  isLoading = false,
   onDeleteTrip,
   onSelectTrip,
   onNewTrip,
   onRenameTrip,
 }: TripSwitcherProps) {
   const isDark = useColorScheme() === 'dark';
+
+  if (isLoading) {
+    return <TripSwitcherSkeleton />;
+  }
 
   return (
     <View style={styles.switcherContainer}>
@@ -96,6 +103,21 @@ export function TripSwitcher({
   );
 }
 
+export function TripSwitcherSkeleton() {
+  return (
+    <View style={styles.switcherContainer}>
+      <View style={styles.switcherContent}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={`trip-switcher-skeleton-${index}`} style={styles.tripCard}>
+            <SkeletonBlock style={styles.imageFrame} />
+            <SkeletonBlock style={styles.switcherLabelSkeleton} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   switcherContainer: {
     marginTop: 12,
@@ -149,6 +171,11 @@ const styles = StyleSheet.create({
   tripCardNameActive: {
     color: designSystem.colors.ink,
     fontWeight: '600',
+  },
+  switcherLabelSkeleton: {
+    width: 84,
+    height: 16,
+    borderRadius: 6,
   },
   deleteButton: {
     position: 'absolute',

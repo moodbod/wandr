@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
 import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
-import { Image as ExpoImage } from 'expo-image';
 import { Check, FadersHorizontal } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -11,8 +10,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented-tabs';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
@@ -34,7 +33,7 @@ export default function FriendsChatListScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
-  const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
+  const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chatList = useQuery(getFriendChatListRef, { travelerSlug: traveler?.slug ?? '' });
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const createGroup = useMutation(createOpenFriendGroupRef);
@@ -46,7 +45,6 @@ export default function FriendsChatListScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('primary');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const isLoading = isBootstrapping || traveler === undefined || chatList === undefined;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredGroups = useMemo(() => {
     const groups = chatList?.groups ?? [];
@@ -54,8 +52,8 @@ export default function FriendsChatListScreen() {
       return groups;
     }
 
-    return groups.filter((item) =>
-      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+    return groups.filter((item: any) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value: string) =>
         value.toLowerCase().includes(normalizedSearchQuery)
       )
     );
@@ -66,8 +64,8 @@ export default function FriendsChatListScreen() {
       return directs;
     }
 
-    return directs.filter((item) =>
-      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+    return directs.filter((item: any) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value: string) =>
         value.toLowerCase().includes(normalizedSearchQuery)
       )
     );
@@ -128,14 +126,10 @@ export default function FriendsChatListScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: insets.top + 72,
             paddingBottom: insets.bottom + 80,
           },
         ]}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.title}>Chats</ThemedText>
-        </View>
-
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
         <GlassInput
@@ -156,46 +150,38 @@ export default function FriendsChatListScreen() {
           }
         />
 
-        {showGroups && (isLoading || filteredGroups.length) ? (
+        {showGroups && filteredGroups.length ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
             <View style={styles.rowList}>
-              {isLoading
-                ? Array.from({ length: 2 }).map((_, index) => (
-                    <SkeletonBlock key={`chat-group-skeleton-${index}`} style={styles.rowSkeleton} />
-                  ))
-                : filteredGroups.map((item) => (
-                    <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
-                  ))}
+              {filteredGroups.map((item: any) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
+              ))}
             </View>
           </View>
         ) : null}
 
-        {showDirects && (isLoading || filteredDirects.length) ? (
+        {showDirects && filteredDirects.length ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Chats</ThemedText>
             <View style={styles.rowList}>
-              {isLoading
-                ? Array.from({ length: 3 }).map((_, index) => (
-                    <SkeletonBlock key={`chat-direct-skeleton-${index}`} style={styles.rowSkeleton} />
-                  ))
-                : filteredDirects.map((item) => (
-                    <FriendChatListRow
-                      key={item.id}
-                      item={item}
-                      onAvatarPress={
-                        item.travelerSlug
-                          ? () => router.push(`/friends/profile/${item.travelerSlug}` as never)
-                          : undefined
-                      }
-                      onPress={() => router.push(item.href as never)}
-                    />
-                  ))}
+              {filteredDirects.map((item: any) => (
+                <FriendChatListRow
+                  key={item.id}
+                  item={item}
+                  onAvatarPress={
+                    item.travelerSlug
+                      ? () => router.push(`/friends/profile/${item.travelerSlug}` as never)
+                      : undefined
+                  }
+                  onPress={() => router.push(item.href as never)}
+                />
+              ))}
             </View>
           </View>
         ) : null}
 
-        {!isLoading && (showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
+        {(showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyTitle}>No chats yet</ThemedText>
             <ThemedText style={styles.emptyDescription}>
@@ -226,7 +212,7 @@ export default function FriendsChatListScreen() {
                   <ThemedText style={styles.friendEmptyText}>Add friends before creating a group.</ThemedText>
                 </View>
               ) : null}
-              {(chatList?.friends ?? []).map((friend) => {
+              {(chatList?.friends ?? []).map((friend: any) => {
                 const isSelected = selectedFriendSlugs.includes(friend.travelerSlug);
 
                 return (
@@ -234,13 +220,7 @@ export default function FriendsChatListScreen() {
                     key={friend.travelerSlug}
                     onPress={() => toggleSelectedFriend(friend.travelerSlug)}
                     style={[styles.friendOption, isSelected ? styles.friendOptionActive : null]}>
-                    {friend.avatarUri ? (
-                      <ExpoImage source={friend.avatarUri} style={styles.friendAvatar} contentFit="cover" />
-                    ) : (
-                      <View style={styles.friendAvatarFallback}>
-                        <ThemedText style={styles.friendAvatarInitial}>{friend.name.slice(0, 1)}</ThemedText>
-                      </View>
-                    )}
+                    <FaceHashAvatar name={friend.travelerSlug ?? friend.name} size={44} uri={friend.avatarUri} style={styles.friendAvatar} />
                     <View style={styles.friendOptionCopy}>
                       <ThemedText style={styles.friendOptionName} numberOfLines={1}>
                         {friend.name}
@@ -318,15 +298,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.xl,
   },
-  hero: {
-    gap: 2,
-  },
-  title: {
-    fontSize: 42,
-    lineHeight: 40,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
   notice: {
     fontSize: 14,
     lineHeight: 20,
@@ -343,10 +314,6 @@ const styles = StyleSheet.create({
   },
   rowList: {
     gap: 18,
-  },
-  rowSkeleton: {
-    height: 76,
-    borderRadius: 24,
   },
   sheetContent: {
     flex: 1,

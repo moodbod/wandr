@@ -1,7 +1,8 @@
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export type MessageActionAnchor = {
   x: number;
@@ -22,6 +23,7 @@ export function MessageActionMenu({
   onDelete: () => void;
 }) {
   const { width, height } = useWindowDimensions();
+  const isDark = useColorScheme() === 'dark';
 
   if (!visible || !anchor) {
     return null;
@@ -37,15 +39,15 @@ export function MessageActionMenu({
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <View style={[styles.menu, { left, top, width: menuWidth }]}>
+      <Pressable style={[styles.backdrop, isDark ? styles.backdropDark : null]} onPress={onClose}>
+        <View style={[styles.menu, isDark ? styles.menuDark : styles.menuLight, { left, top, width: menuWidth }]}>
           <Pressable
             onPress={() => {
               onClose();
               onDelete();
             }}
-            style={styles.action}>
-            <ThemedText style={styles.actionText}>Delete message</ThemedText>
+            style={({ pressed }) => [styles.action, pressed ? styles.actionPressed : null]}>
+            <ThemedText style={[styles.actionText, isDark ? styles.actionTextDark : null]}>Delete message</ThemedText>
           </Pressable>
         </View>
       </Pressable>
@@ -57,28 +59,43 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
   },
+  backdropDark: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
   menu: {
     position: 'absolute',
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: designSystem.colors.whiteGlassMax,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
     shadowColor: designSystem.colors.black,
     shadowOpacity: 0.12,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 12,
   },
+  menuLight: {
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassMax,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
+  },
+  menuDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkSurfaceBorder,
+  },
   action: {
     minHeight: 58,
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
+  actionPressed: {
+    opacity: 0.72,
+  },
   actionText: {
     fontSize: 15,
     lineHeight: 18,
     fontWeight: '600',
-    color: designSystem.colors.ink,
+    color: designSystem.colors.copper,
+  },
+  actionTextDark: {
+    color: '#ff9b73',
   },
 });

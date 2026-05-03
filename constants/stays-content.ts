@@ -3,278 +3,6 @@ import type { RankedStayProperty, StayBookingProfile, StayProperty } from '@/typ
 
 const routeOrigin = [17.0832, -22.5609] as const;
 
-const standardArrivalOptions = [
-  { id: 'midday', label: 'Midday' },
-  { id: 'afternoon', label: 'Afternoon' },
-  { id: 'evening', label: 'Evening' },
-  { id: 'late-night', label: 'Late night' },
-] as const;
-
-export const stayBookingProfilesBySlug: Readonly<Record<string, StayBookingProfile>> = {
-  'olive-grove-lofts': {
-    defaultRoomOptionId: 'loft-king-studio',
-    defaultArrivalOptionId: 'afternoon',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'loft-king-studio',
-        label: 'Loft king studio',
-        detail: 'Best for one or two travelers who want a quiet design-led base near town.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }, { id: 'queen', label: 'Queen bed' }],
-      },
-      {
-        id: 'loft-twin-share',
-        label: 'Twin share loft',
-        detail: 'A better fit when friends are sharing but want separate beds.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'twin', label: 'Twin beds' }],
-      },
-    ],
-  },
-  'naankuse-bush-lodge': {
-    defaultRoomOptionId: 'bush-suite',
-    defaultArrivalOptionId: 'evening',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'bush-suite',
-        label: 'Bush-facing suite',
-        detail: 'A private suite with the stronger wildlife-lodge feel.',
-        maxAdults: 2,
-        maxChildren: 1,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }, { id: 'queen', label: 'Queen bed' }],
-      },
-      {
-        id: 'family-lodge-room',
-        label: 'Family lodge room',
-        detail: 'Adds more flexibility when a child is part of the stay.',
-        maxAdults: 2,
-        maxChildren: 2,
-        maxRooms: 2,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'mixed', label: 'Host setup' }],
-      },
-    ],
-  },
-  'jetty-quarter-house': {
-    defaultRoomOptionId: 'jetty-king-room',
-    defaultArrivalOptionId: 'afternoon',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'jetty-king-room',
-        label: 'Jetty king room',
-        detail: 'Good for couples using Swakopmund as a walkable multi-night base.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }],
-      },
-      {
-        id: 'jetty-family-loft',
-        label: 'Harbour family loft',
-        detail: 'Works better when you need more floor space and luggage room.',
-        maxAdults: 3,
-        maxChildren: 1,
-        maxRooms: 1,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'mixed', label: 'Mixed beds' }],
-      },
-    ],
-  },
-  'lagoon-tide-suites': {
-    defaultRoomOptionId: 'lagoon-suite',
-    defaultArrivalOptionId: 'afternoon',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'lagoon-suite',
-        label: 'Lagoon suite',
-        detail: 'Calmer and quieter, ideal for sunrise departures.',
-        maxAdults: 2,
-        maxChildren: 1,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }, { id: 'queen', label: 'Queen bed' }],
-      },
-      {
-        id: 'spa-corner-room',
-        label: 'Spa corner room',
-        detail: 'A simpler overnight option if this is just a one-night coastal stop.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'twin', label: 'Twin beds' }],
-      },
-    ],
-  },
-  'spitzkoppe-star-camp': {
-    defaultRoomOptionId: 'star-camp-tent',
-    defaultArrivalOptionId: 'evening',
-    arrivalOptions: [{ id: 'afternoon', label: 'Afternoon' }, { id: 'evening', label: 'Evening' }],
-    roomOptions: [
-      {
-        id: 'star-camp-tent',
-        label: 'Star camp tent',
-        detail: 'The atmospheric sleep under granite skies.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }],
-      },
-      {
-        id: 'shared-camp-pitch',
-        label: 'Shared camp pitch',
-        detail: 'A more social setup for friends who care more about the night sky than privacy.',
-        maxAdults: 4,
-        maxChildren: 0,
-        maxRooms: 1,
-        bedOptions: [{ id: 'mixed', label: 'Camp setup' }],
-      },
-    ],
-  },
-  'damaraland-courtyard-lodge': {
-    defaultRoomOptionId: 'courtyard-room',
-    defaultArrivalOptionId: 'evening',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'courtyard-room',
-        label: 'Courtyard room',
-        detail: 'Good for an overnight split on the long northwest drive.',
-        maxAdults: 2,
-        maxChildren: 1,
-        maxRooms: 2,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'twin', label: 'Twin beds' }],
-      },
-      {
-        id: 'guide-family-room',
-        label: 'Guide family room',
-        detail: 'Adds a little more flexibility for a longer Damaraland pause.',
-        maxAdults: 3,
-        maxChildren: 2,
-        maxRooms: 1,
-        bedOptions: [{ id: 'mixed', label: 'Mixed beds' }],
-      },
-    ],
-  },
-  'etosha-waterhole-lodge': {
-    defaultRoomOptionId: 'waterhole-suite',
-    defaultArrivalOptionId: 'afternoon',
-    arrivalOptions: standardArrivalOptions,
-    roomOptions: [
-      {
-        id: 'waterhole-suite',
-        label: 'Waterhole suite',
-        detail: 'Best for couples doing sunrise or sunset game drives.',
-        maxAdults: 2,
-        maxChildren: 1,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }, { id: 'queen', label: 'Queen bed' }],
-      },
-      {
-        id: 'etosha-family-chalet',
-        label: 'Family chalet',
-        detail: 'More practical when children are part of the safari night.',
-        maxAdults: 2,
-        maxChildren: 3,
-        maxRooms: 2,
-        bedOptions: [{ id: 'mixed', label: 'Family setup' }],
-      },
-    ],
-  },
-  'sesriem-dune-house': {
-    defaultRoomOptionId: 'dune-suite',
-    defaultArrivalOptionId: 'evening',
-    arrivalOptions: [{ id: 'afternoon', label: 'Afternoon' }, { id: 'evening', label: 'Evening' }, { id: 'late-night', label: 'Late night' }],
-    roomOptions: [
-      {
-        id: 'dune-suite',
-        label: 'Dune suite',
-        detail: 'The cleanest setup for one iconic desert overnight.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }],
-      },
-      {
-        id: 'sunrise-twin-room',
-        label: 'Sunrise twin room',
-        detail: 'A practical setup for friends sharing the early dune start.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'twin', label: 'Twin beds' }],
-      },
-    ],
-  },
-  'namibrand-sky-lodge': {
-    defaultRoomOptionId: 'sky-suite',
-    defaultArrivalOptionId: 'evening',
-    arrivalOptions: [{ id: 'afternoon', label: 'Afternoon' }, { id: 'evening', label: 'Evening' }],
-    roomOptions: [
-      {
-        id: 'sky-suite',
-        label: 'Sky suite',
-        detail: 'The stronger dark-sky stay, ideal for couples or slower travel.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 2,
-        bedOptions: [{ id: 'king', label: 'King bed' }],
-      },
-      {
-        id: 'star-deck-room',
-        label: 'Star deck room',
-        detail: 'A simpler astronomy-focused room when the overnight is about the night sky.',
-        maxAdults: 2,
-        maxChildren: 0,
-        maxRooms: 1,
-        bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'twin', label: 'Twin beds' }],
-      },
-    ],
-  },
-};
-
-export function getStayBookingProfile(slug: string): StayBookingProfile {
-  return (
-    stayBookingProfilesBySlug[slug] ?? {
-      defaultRoomOptionId: 'standard-room',
-      defaultArrivalOptionId: 'afternoon',
-      arrivalOptions: standardArrivalOptions,
-      roomOptions: [
-        {
-          id: 'standard-room',
-          label: 'Standard room',
-          detail: 'A default private room when the stay has not published more specific booking details yet.',
-          maxAdults: 2,
-          maxChildren: 1,
-          maxRooms: 2,
-          bedOptions: [{ id: 'queen', label: 'Queen bed' }, { id: 'twin', label: 'Twin beds' }],
-        },
-      ],
-    }
-  );
-}
-
-export function getStayBookingPhone(slug: string) {
-  return (
-    {
-      'olive-grove-lofts': '+264612300101',
-      'naankuse-bush-lodge': '+264612300202',
-      'jetty-quarter-house': '+264644600303',
-      'lagoon-tide-suites': '+264644600404',
-      'spitzkoppe-star-camp': '+264648800505',
-      'damaraland-courtyard-lodge': '+264673300606',
-      'etosha-waterhole-lodge': '+264672700707',
-      'sesriem-dune-house': '+264632500808',
-      'namibrand-sky-lodge': '+264632500909',
-    } as const
-  )[slug] ?? null;
-}
-
 export const stayProperties: readonly StayProperty[] = [
   {
     id: 'olive-grove-lofts',
@@ -555,13 +283,14 @@ function getRouteStops(trip?: TripDashboard | null) {
 }
 
 export function rankStayProperties(args: {
-  stays: readonly StayProperty[];
+  stays?: readonly StayProperty[];
   trip?: TripDashboard | null;
   currentCoordinate?: readonly [number, number] | null;
 }) {
   const routeStops = getRouteStops(args.trip);
+  const sourceStays = args.stays?.length ? args.stays : stayProperties;
 
-  return [...args.stays]
+  return [...sourceStays]
     .map<RankedStayProperty>((stay) => {
       const closestStop = routeStops.reduce((best, stop) => {
         const distance = getDistanceInKm(stay.coordinate, stop.coordinate);
@@ -591,6 +320,44 @@ export function rankStayProperties(args: {
       };
     })
     .sort((a, b) => a.matchScore - b.matchScore);
+}
+
+export function getStayBookingProfile(stay?: StayProperty | null): StayBookingProfile {
+  return stay?.bookingProfile ?? {
+    roomOptions: [
+      {
+        id: 'standard-suite',
+        label: 'Standard suite',
+        detail: 'Comfortable private room with the essentials for a route stop.',
+        maxAdults: 2,
+        maxChildren: 1,
+        maxRooms: 3,
+        bedOptions: [
+          { id: 'queen', label: 'Queen bed' },
+          { id: 'twin', label: 'Twin beds' },
+        ],
+      },
+      {
+        id: 'family-suite',
+        label: 'Family suite',
+        detail: 'Larger room for small groups or families traveling together.',
+        maxAdults: 4,
+        maxChildren: 2,
+        maxRooms: 2,
+        bedOptions: [
+          { id: 'king-sofa', label: 'King + sofa bed' },
+          { id: 'two-queen', label: 'Two queen beds' },
+        ],
+      },
+    ],
+    arrivalOptions: [
+      { id: 'afternoon', label: '14:00 - 17:00' },
+      { id: 'evening', label: '17:00 - 21:00' },
+      { id: 'late', label: 'After 21:00' },
+    ],
+    defaultRoomOptionId: 'standard-suite',
+    defaultArrivalOptionId: 'afternoon',
+  };
 }
 
 export function getStayBySlug(slug?: string | string[]) {

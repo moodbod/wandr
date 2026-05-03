@@ -2,7 +2,8 @@ import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
 export const friendCallsTable = defineTable({
-  circleId: v.id('friendCircles'),
+  circleId: v.optional(v.id('friendCircles')),
+  directThreadId: v.optional(v.id('friendDirectThreads')),
   roomName: v.string(),
   createdBySlug: v.string(),
   mode: v.union(v.literal('voice'), v.literal('video')),
@@ -18,5 +19,6 @@ export const friendCallsTable = defineTable({
   updatedAt: v.number(),
 })
   .index('by_circleId_and_createdAt', ['circleId', 'createdAt'])
+  .index('by_directThreadId_and_createdAt', ['directThreadId', 'createdAt'])
   .index('by_roomName', ['roomName'])
   .index('by_status_and_scheduledFor', ['status', 'scheduledFor']);

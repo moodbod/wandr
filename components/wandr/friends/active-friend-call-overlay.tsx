@@ -1,8 +1,9 @@
-import { AudioSession, LiveKitRoom, registerGlobals } from '@livekit/react-native';
-import { VideoPresets } from 'livekit-client';
+import { AudioSession, LiveKitRoom, useConnectionState, useRemoteParticipants, useRoomContext } from '@livekit/react-native';
+import { ConnectionState, VideoPresets, type RoomOptions } from 'livekit-client';
 import { useAction, useMutation, useQuery } from 'convex/react';
+import { useAudioPlayer } from 'expo-audio';
 import { useRouter } from 'expo-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallControls } from '@/components/wandr/friends/call/call-controls';
@@ -11,8 +12,10 @@ import { CallVideoGrid, MiniCallContent } from '@/components/wandr/friends/call/
 import { DraggableMiniCall } from '@/components/wandr/friends/call/draggable-mini-call';
 import { FullCallLayout } from '@/components/wandr/friends/call/full-call-layout';
 import { VoiceCallStage } from '@/components/wandr/friends/call/voice-call-stage';
+import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { endNativeCall, markNativeCallConnected } from '@/lib/native-calls';
 import {
   createFriendCallTokenRef,
   endFriendCallRef,
@@ -20,13 +23,25 @@ import {
   joinScheduledFriendCallRef,
 } from '@/lib/convex';
 
-registerGlobals();
-
 type LiveKitConnection = {
   serverUrl: string;
   token: string;
   roomName: string;
 };
+
+const FRIEND_CALL_ROOM_OPTIONS: RoomOptions = {
+  adaptiveStream: { pixelDensity: 'screen' },
+  dynacast: true,
+  publishDefaults: {
+    videoEncoding: {
+      maxBitrate: 500_000,
+      maxFramerate: 20,
+    },
+    videoSimulcastLayers: [VideoPresets.h180],
+  },
+};
+const VOICE_RINGBACK_SOUND = require('../../../assets/sounds/voice_call_ring.wav');
+const VIDEO_RINGBACK_SOUND = require('../../../assets/sounds/video_call_ring.wav');
 
 export default function ActiveFriendCallOverlay() {
   const insets = useSafeAreaInsets();
@@ -47,12 +62,17 @@ export default function ActiveFriendCallOverlay() {
   const endCall = useMutation(endFriendCallRef);
   const [connection, setConnection] = useState<LiveKitConnection | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [remoteParticipantCount, setRemoteParticipantCount] = useState(0);
+  const preparedCallKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeCallId) {
       setConnection(null);
+      setRemoteParticipantCount(0);
+      preparedCallKeyRef.current = null;
       return;
     }
 
@@ -69,6 +89,12 @@ export default function ActiveFriendCallOverlay() {
 
     const currentCallId = activeCallId;
     const currentTravelerSlug = traveler.slug;
+    const prepareCallKey = `${currentCallId}:${currentTravelerSlug}`;
+    if (preparedCallKeyRef.current === prepareCallKey) {
+      return;
+    }
+
+    preparedCallKeyRef.current = prepareCallKey;
     let cancelled = false;
 
     async function prepareCall() {
@@ -81,6 +107,7 @@ export default function ActiveFriendCallOverlay() {
         }
       } catch (error) {
         if (!cancelled) {
+          preparedCallKeyRef.current = null;
           setLoadError(error instanceof Error ? error.message : 'Unable to prepare this call.');
         }
       }
@@ -109,7 +136,10 @@ export default function ActiveFriendCallOverlay() {
 
     setIsLeaving(true);
     try {
-      await endCall({ callId: activeCallId, travelerSlug: traveler.slug });
+      endNativeCall(activeCallId);
+      if (!call?.circleId) {
+        await endCall({ callId: activeCallId, travelerSlug: traveler.slug });
+      }
     } finally {
       clearCall();
       setIsLeaving(false);
@@ -117,22 +147,64 @@ export default function ActiveFriendCallOverlay() {
   };
 
   const shouldSendVideo = call?.mode === 'video' && isVideoEnabled;
-  const memberAvatars = call?.members.flatMap((member) => (member.avatarUri ? [member.avatarUri] : [])) ?? [];
+  const shouldPlayRingback =
+    Boolean(activeCallId) &&
+    call?.createdBySlug === traveler?.slug &&
+    call?.status === 'active' &&
+    remoteParticipantCount === 0 &&
+    !isLeaving;
+  const memberAvatars = call?.members.flatMap((member: any) => (member.avatarUri ? [member.avatarUri] : [])) ?? [];
   const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
   const callMode = call?.mode ?? 'voice';
-  const roomContent = isMinimized ? (
-    <MiniCallContent callTitle={callTitle} mode={callMode} />
-  ) : shouldSendVideo ? (
+  const fullRoomContent = shouldSendVideo ? (
     <CallVideoGrid />
   ) : (
     <VoiceCallStage memberAvatars={memberAvatars} title={callTitle} />
   );
+  const callSurface = isMinimized ? (
+    <DraggableMiniCall
+      bottomInset={Math.max(insets.bottom, 18)}
+      onExpand={() => {
+        expandCall();
+        router.push(`/friends/call/${activeCallId}`);
+      }}>
+      <MiniCallContent callTitle={callTitle} mode={callMode} />
+    </DraggableMiniCall>
+  ) : (
+    <FullCallLayout
+      bottomInset={insets.bottom}
+      onMinimize={minimizeCall}
+      subtitle={call?.circleId ? 'Call is active' : 'Waiting for others...'}
+      title={callTitle}
+      topInset={insets.top}
+      controls={
+        <CallControls
+          isMicEnabled={isMicEnabled}
+          isLeaving={isLeaving}
+          mode={call?.mode}
+          onEnd={handleLeave}
+          onToggleMic={() => setIsMicEnabled((value) => !value)}
+          onToggleVideo={() => setIsVideoEnabled((value) => !value)}
+          shouldSendVideo={shouldSendVideo}
+        />
+      }>
+      {fullRoomContent}
+    </FullCallLayout>
+  );
 
-  const room = connection ? (
-    <FriendLiveKitRoom connection={connection} shouldSendVideo={shouldSendVideo}>
-      {roomContent}
-    </FriendLiveKitRoom>
-  ) : null;
+  if (connection) {
+    return (
+      <FriendLiveKitRoom
+        callId={activeCallId}
+        connection={connection}
+        onRemoteParticipantCountChange={setRemoteParticipantCount}
+        shouldSendAudio={isMicEnabled}
+        shouldSendVideo={shouldSendVideo}>
+        <CallerRingbackTone isPlaying={shouldPlayRingback} mode={callMode} />
+        {callSurface}
+      </FriendLiveKitRoom>
+    );
+  }
 
   if (isMinimized) {
     return (
@@ -142,7 +214,8 @@ export default function ActiveFriendCallOverlay() {
           expandCall();
           router.push(`/friends/call/${activeCallId}`);
         }}>
-        {room ?? <MiniCallLoading label={loadError ?? 'Connecting'} />}
+        <CallerRingbackTone isPlaying={shouldPlayRingback} mode={callMode} />
+        <MiniCallLoading label={loadError ?? 'Connecting'} />
       </DraggableMiniCall>
     );
   }
@@ -151,30 +224,57 @@ export default function ActiveFriendCallOverlay() {
     <FullCallLayout
       bottomInset={insets.bottom}
       onMinimize={minimizeCall}
-      subtitle={connection ? 'Waiting for others...' : loadError ?? 'Connecting...'}
+      subtitle={loadError ?? 'Connecting...'}
       title={callTitle}
       topInset={insets.top}
-      controls={
-        <CallControls
-          isLeaving={isLeaving}
-          mode={call?.mode}
-          onEnd={handleLeave}
-          onToggleVideo={() => setIsVideoEnabled((value) => !value)}
-          shouldSendVideo={shouldSendVideo}
-        />
-      }>
-      {room ?? <FullCallLoading label={loadError ?? 'Preparing secure call room...'} />}
+      controls={null}>
+      <CallerRingbackTone isPlaying={shouldPlayRingback} mode={callMode} />
+      <FullCallLoading label={loadError ?? 'Connecting...'} />
     </FullCallLayout>
   );
 }
 
+function CallerRingbackTone({ isPlaying, mode }: { isPlaying: boolean; mode: 'voice' | 'video' }) {
+  const player = useAudioPlayer(mode === 'video' ? VIDEO_RINGBACK_SOUND : VOICE_RINGBACK_SOUND, {
+    keepAudioSessionActive: true,
+  });
+
+  useEffect(() => {
+    player.loop = true;
+    player.volume = 0.42;
+
+    if (isPlaying) {
+      player.play();
+      return;
+    }
+
+    player.pause();
+    void player.seekTo(0);
+  }, [isPlaying, player]);
+
+  useEffect(() => {
+    return () => {
+      player.pause();
+      void player.seekTo(0);
+    };
+  }, [player]);
+
+  return null;
+}
+
 function FriendLiveKitRoom({
+  callId,
   children,
   connection,
+  onRemoteParticipantCountChange,
+  shouldSendAudio,
   shouldSendVideo,
 }: {
+  callId: Id<'friendCalls'>;
   children: ReactNode;
   connection: LiveKitConnection;
+  onRemoteParticipantCountChange: (count: number) => void;
+  shouldSendAudio: boolean;
   shouldSendVideo: boolean;
 }) {
   return (
@@ -182,20 +282,35 @@ function FriendLiveKitRoom({
       serverUrl={connection.serverUrl}
       token={connection.token}
       connect
-      audio
+      audio={shouldSendAudio}
       video={shouldSendVideo}
-      options={{
-        adaptiveStream: { pixelDensity: 'screen' },
-        dynacast: true,
-        publishDefaults: {
-          videoEncoding: {
-            maxBitrate: 500_000,
-            maxFramerate: 20,
-          },
-          videoSimulcastLayers: [VideoPresets.h180],
-        },
-      }}>
+      options={FRIEND_CALL_ROOM_OPTIONS}>
+      <NativeCallConnectionReporter callId={callId} />
+      <RemoteParticipantCountReporter onChange={onRemoteParticipantCountChange} />
       {children}
     </LiveKitRoom>
   );
+}
+
+function RemoteParticipantCountReporter({ onChange }: { onChange: (count: number) => void }) {
+  const remoteParticipants = useRemoteParticipants();
+
+  useEffect(() => {
+    onChange(remoteParticipants.length);
+  }, [onChange, remoteParticipants.length]);
+
+  return null;
+}
+
+function NativeCallConnectionReporter({ callId }: { callId: Id<'friendCalls'> }) {
+  const room = useRoomContext();
+  const connectionState = useConnectionState(room);
+
+  useEffect(() => {
+    if (connectionState === ConnectionState.Connected) {
+      markNativeCallConnected(callId);
+    }
+  }, [callId, connectionState]);
+
+  return null;
 }

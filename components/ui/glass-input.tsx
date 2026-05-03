@@ -59,6 +59,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
     const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
     const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
     const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+    const androidSurfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
+    const androidBorderColor = isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;
 
     if (plain) {
       return (
@@ -145,8 +147,8 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
           styles.androidFill,
           {
             borderRadius: radius,
-            backgroundColor: surfaceColor,
-            borderColor,
+            backgroundColor: androidSurfaceColor,
+            borderColor: androidBorderColor,
           },
           contentStyle,
           containerStyle,

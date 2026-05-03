@@ -1,35 +1,41 @@
-import { Image as ExpoImage } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type TravelerAvatarStackProps = {
   avatars: readonly string[];
   totalCount: number;
+  fallbackName?: string;
+  maxVisible?: number;
   size?: 'compact' | 'default';
 };
 
 export function TravelerAvatarStack({
   avatars,
+  fallbackName = 'Traveler',
+  maxVisible = 2,
   totalCount,
   size = 'default',
 }: TravelerAvatarStackProps) {
   const isDark = useColorScheme() === 'dark';
-  const visibleAvatars = avatars.slice(0, 2);
-  const remainingCount = Math.max(0, totalCount - visibleAvatars.length);
+  const visibleAvatarCount = Math.min(Math.max(totalCount, avatars.length), maxVisible);
+  const visibleAvatars = Array.from({ length: visibleAvatarCount }, (_, index) => ({
+    name: avatars[index] ?? `${fallbackName} ${index + 1}`,
+    uri: avatars[index] ?? null,
+  }));
   const avatarSize = size === 'compact' ? 28 : 32;
   const borderRadius = avatarSize / 2;
   const overlap = size === 'compact' ? 12 : 12;
 
-  if (visibleAvatars.length === 0 && remainingCount <= 0) {
+  if (visibleAvatars.length === 0) {
     return null;
   }
 
   return (
     <View style={styles.stack}>
-      {visibleAvatars.map((uri, index) => (
+      {visibleAvatars.map((avatar, index) => (
         <View
           key={`traveler-avatar-${index}`}
           style={[
@@ -43,27 +49,9 @@ export function TravelerAvatarStack({
               borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
             },
           ]}>
-          <ExpoImage source={uri} style={styles.avatar} contentFit="cover" />
+          <FaceHashAvatar name={avatar.name} size={avatarSize} uri={avatar.uri} />
         </View>
       ))}
-
-      {remainingCount > 0 ? (
-        <View
-          style={[
-            styles.moreBadge,
-            {
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius,
-              marginLeft: visibleAvatars.length > 0 ? -overlap : 0,
-              zIndex: 0,
-              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
-              backgroundColor: isDark ? designSystem.colors.darkSurfaceOverlay : designSystem.colors.borderFaint,
-            },
-          ]}>
-          <ThemedText style={[styles.moreText, size === 'compact' ? styles.moreTextCompact : null]}>+</ThemedText>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -77,24 +65,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     overflow: 'hidden',
     backgroundColor: designSystem.colors.surface,
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  moreBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  moreText: {
-    fontSize: 12,
-    lineHeight: 12,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
-  moreTextCompact: {
-    fontSize: 11,
-    lineHeight: 11,
   },
 });

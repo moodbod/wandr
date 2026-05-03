@@ -42,12 +42,27 @@ export function useCurrentLocation() {
           return;
         }
 
-        const lastKnown = await location.getLastKnownPositionAsync();
-        const position =
-          lastKnown ??
-          (await location.getCurrentPositionAsync({
+        let position = null;
+
+        try {
+          position = await location.getCurrentPositionAsync({
             accuracy: location.Accuracy.Balanced,
-          }));
+          });
+        } catch {
+          position = await location.getLastKnownPositionAsync();
+        }
+
+        if (!position) {
+          if (!isCancelled) {
+            setState({
+              coordinate: null,
+              heading: null,
+              hasPermission: true,
+              isLoading: false,
+            });
+          }
+          return;
+        }
 
         if (!isCancelled) {
           setState({

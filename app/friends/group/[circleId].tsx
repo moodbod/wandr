@@ -20,7 +20,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CallOptionsMenu } from '@/components/wandr/friends/call-options-menu';
@@ -97,7 +96,7 @@ export default function FriendsChatScreen() {
   const params = useLocalSearchParams<{ circleId?: string | string[] }>();
   const circleId = Array.isArray(params.circleId) ? params.circleId[0] : params.circleId;
   const traveler = useCurrentTraveler();
-  const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
+  const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chat = useQuery(getFriendChatRef, {
     travelerSlug: traveler?.slug ?? '',
     circleId: circleId as never,
@@ -226,6 +225,11 @@ export default function FriendsChatScreen() {
       if (call?._id) {
         router.push(`/friends/call/${call._id}`);
       }
+    } catch (error) {
+      Alert.alert(
+        'Call unavailable',
+        error instanceof Error ? error.message : 'Unable to start this call right now.'
+      );
     } finally {
       setIsCallBusy(false);
     }
@@ -257,6 +261,11 @@ export default function FriendsChatScreen() {
         setScheduledReminderMinutes(15);
         setIncludeScheduledEnd(true);
       }
+    } catch (error) {
+      Alert.alert(
+        'Call unavailable',
+        error instanceof Error ? error.message : 'Unable to schedule this call right now.'
+      );
     } finally {
       setIsCallBusy(false);
     }
@@ -388,88 +397,80 @@ export default function FriendsChatScreen() {
     setMessageMenuAnchor(anchor);
   };
 
-  const isLoading = isBootstrapping || traveler === undefined || chat === undefined;
-
   return (
     <ThemedView style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-            trailingActions: [
-              {
-                kind: 'call',
-                accessibilityLabel: 'Call the group',
-                render: ({ iconColor }) => (
-                  <CallOptionsMenu
-                    disabled={isCallBusy || !traveler?.slug || !chat?.circle?._id}
-                    iconColor={iconColor}
-                    onScheduleCall={handleOpenScheduleSheet}
-                    onStartVideoCall={() => handleStartCall('video')}
-                    onStartVoiceCall={() => handleStartCall('voice')}
-                  />
-                ),
-              },
-              {
-                kind: 'menu',
-                accessibilityLabel: 'Group options',
-                onPress: () => menuSheetRef.current?.snapToIndex(0),
-              },
-            ],
-          }}
-        />
-
-        <ScrollView
-          ref={scrollRef}
-          style={styles.messageScroller}
-          contentContainerStyle={[
-            styles.content,
+      <WandrHeader
+        config={{
+          overlay: true,
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          trailingActions: [
             {
-              paddingTop: insets.top + 76,
-              paddingBottom: insets.bottom + 156,
+              kind: 'call',
+              accessibilityLabel: 'Call the group',
+              render: ({ iconColor }) => (
+                <CallOptionsMenu
+                  disabled={isCallBusy || !traveler?.slug || !chat?.circle?._id}
+                  iconColor={iconColor}
+                  onScheduleCall={handleOpenScheduleSheet}
+                  onStartVideoCall={() => handleStartCall('video')}
+                  onStartVoiceCall={() => handleStartCall('voice')}
+                />
+              ),
             },
-          ]}
-          keyboardShouldPersistTaps="handled">
-          {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
+            {
+              kind: 'menu',
+              accessibilityLabel: 'Group options',
+              onPress: () => menuSheetRef.current?.snapToIndex(0),
+            },
+          ],
+        }}
+      />
 
-          <View style={styles.messageStack}>
-            {isLoading
-              ? Array.from({ length: 5 }).map((_, index) => (
-                  <SkeletonBlock
-                    key={`group-message-skeleton-${index}`}
-                    style={[styles.messageSkeleton, index % 2 === 0 ? styles.messageSkeletonLeft : styles.messageSkeletonRight]}
-                  />
-                ))
-              : chat?.messages.map((message) => (
-                  <FriendChatMessageBubble
-                    key={message._id}
-                    message={message}
-                    onLongPressMessage={handleMessageLongPress}
-                  />
-                ))}
-          </View>
-        </ScrollView>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.messageScroller}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + 76,
+            paddingBottom: 24,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled">
+        {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
-        <MessageActionMenu
-          visible={Boolean(selectedMessage && messageMenuAnchor)}
-          anchor={messageMenuAnchor}
-          onClose={() => {
-            setSelectedMessage(null);
-            setMessageMenuAnchor(null);
-          }}
-          onDelete={() => {
-            if (selectedMessage) {
-              void handleDeleteMessage(selectedMessage);
-            }
-          }}
-        />
+        <View style={styles.messageStack}>
+          {(chat?.messages ?? []).map((message: any) => (
+            <FriendChatMessageBubble
+              key={message._id}
+              message={message}
+              onLongPressMessage={handleMessageLongPress}
+            />
+          ))}
+        </View>
+      </ScrollView>
 
-        {chat ? (
-          <View style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom - 12, 8) }]}>
+      <MessageActionMenu
+        visible={Boolean(selectedMessage && messageMenuAnchor)}
+        anchor={messageMenuAnchor}
+        onClose={() => {
+          setSelectedMessage(null);
+          setMessageMenuAnchor(null);
+        }}
+        onDelete={() => {
+          if (selectedMessage) {
+            void handleDeleteMessage(selectedMessage);
+          }
+        }}
+      />
+
+      {chat ? (
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          style={styles.composerKeyboardFrame}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
+          <View pointerEvents="box-none" style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom - 12, 8) }]}>
             <FriendChatComposer
               value={draft}
               onChangeText={setDraft}
@@ -481,14 +482,15 @@ export default function FriendsChatScreen() {
               isSending={isSending}
             />
           </View>
-        ) : null}
+        </KeyboardAvoidingView>
+      ) : null}
 
-        {chat ? (
-          <GlassBottomSheet
-            ref={scheduleSheetRef}
-            index={-1}
-            snapPoints={['92%']}
-            enablePanDownToClose>
+      {chat ? (
+        <GlassBottomSheet
+          ref={scheduleSheetRef}
+          index={-1}
+          snapPoints={['92%']}
+          enablePanDownToClose>
             <BottomSheetScrollView
               contentContainerStyle={[styles.scheduleSheetContent, { paddingBottom: Math.max(insets.bottom, 16) + 28 }]}
               showsVerticalScrollIndicator={false}>
@@ -578,20 +580,19 @@ export default function FriendsChatScreen() {
 
               <ThemedText style={styles.scheduleHelpText}>Guests also get notified at the time of the event.</ThemedText>
             </BottomSheetScrollView>
-          </GlassBottomSheet>
-        ) : null}
+        </GlassBottomSheet>
+      ) : null}
 
-        {chat ? (
-          <GroupChatOptionsSheet
-            chat={chat}
-            isBusy={isSheetBusy}
-            onDeleteGroup={handleDeleteCircle}
-            onLeaveGroup={handleLeaveCircle}
-            onRenameGroup={handleRenameCircle}
-            sheetRef={menuSheetRef}
-          />
-        ) : null}
-      </KeyboardAvoidingView>
+      {chat ? (
+        <GroupChatOptionsSheet
+          chat={chat}
+          isBusy={isSheetBusy}
+          onDeleteGroup={handleDeleteCircle}
+          onLeaveGroup={handleLeaveCircle}
+          onRenameGroup={handleRenameCircle}
+          sheetRef={menuSheetRef}
+        />
+      ) : null}
 
       {chat ? (
         <FriendChatToolsSheet
@@ -658,24 +659,12 @@ const styles = StyleSheet.create({
   messageStack: {
     gap: 16,
   },
-  messageSkeleton: {
-    height: 54,
-    borderRadius: 22,
-    maxWidth: '78%',
-  },
-  messageSkeletonLeft: {
-    alignSelf: 'flex-start',
-    width: '68%',
-  },
-  messageSkeletonRight: {
-    alignSelf: 'flex-end',
-    width: '74%',
+  composerKeyboardFrame: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
   },
   composerDock: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     zIndex: 20,
     paddingTop: 10,
     paddingHorizontal: designSystem.spacing.lg,
@@ -717,15 +706,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 21,
     lineHeight: 25,
-    fontWeight: '700',
+    fontWeight: '600',
     color: designSystem.colors.ink,
   },
   scheduleTextCard: {
     minHeight: 210,
     borderRadius: 22,
-    backgroundColor: designSystem.colors.whiteGlassStrong,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassStrong,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
     overflow: 'hidden',
   },
   scheduleTitleInput: {
@@ -763,9 +752,9 @@ const styles = StyleSheet.create({
   },
   scheduleDateCard: {
     borderRadius: 22,
-    backgroundColor: designSystem.colors.whiteGlassStrong,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassStrong,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
     overflow: 'hidden',
   },
   scheduleDateRow: {
@@ -811,7 +800,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontWeight: '600',
     color: designSystem.colors.ink,
-    backgroundColor: designSystem.colors.whiteOverlayFaint,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surface : designSystem.colors.whiteOverlayFaint,
   },
   includeEndRow: {
     minHeight: 70,
@@ -837,9 +826,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
-    backgroundColor: designSystem.colors.whiteGlassStrong,
+    backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassStrong,
     borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
+    borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
   },
   scheduleOptionLabel: {
     fontSize: 22,

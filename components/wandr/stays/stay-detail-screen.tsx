@@ -1,12 +1,12 @@
 import { useMutation, useQuery } from 'convex/react';
 import { GlassView } from 'expo-glass-effect';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +15,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { ClockCountdown, MapPin, Star } from 'phosphor-react-native';
+import { CaretDown, CaretUp, ClockCountdown, MapPin, Star } from 'phosphor-react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +24,7 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { getStayBookingProfile } from '@/constants/stays-content';
@@ -507,11 +508,14 @@ export function StayDetailScreen() {
               title="Stay details"
               subtitle="A quick read before you book."
             />
-            <View style={styles.detailGrid}>
-              <DetailBlock isDark={isDark} label="Works well for" value={stay.idealFor.join(' · ')} />
-              <DetailBlock isDark={isDark} label="Nearby" value={stay.nearbyHighlights.join(' · ')} />
-              <DetailBlock isDark={isDark} label="Sleep signal" value={stay.sleepSignal} />
-            </View>
+            <StayDetailsDropdown
+              isDark={isDark}
+              items={[
+                { label: 'Works well for', value: stay.idealFor.join(' · ') },
+                { label: 'Nearby', value: stay.nearbyHighlights.join(' · ') },
+                { label: 'Sleep signal', value: stay.sleepSignal },
+              ]}
+            />
             <View style={styles.chipGrid}>
               {stay.amenities.map((item: string) => (
                 <View key={item} style={[styles.amenityChip, isDark && styles.amenityChipDark]}>
@@ -606,7 +610,11 @@ export function StayDetailScreen() {
 
       <BookingGlassBar
         buttonLabel={hasExistingStayBooking ? 'View trip' : 'Start booking'}
-        containerStyle={[styles.bottomBar, { bottom: Math.max(insets.bottom, 12) }]}
+        containerStyle={[
+          styles.bottomBar,
+          Platform.OS === 'android' ? styles.bottomBarAndroidShadowless : null,
+          { bottom: Math.max(insets.bottom, 12) },
+        ]}
         isDark={isDark}
         isLoading={!hasExistingStayBooking && isBooking}
         nights={bookingBarNights}
@@ -795,8 +803,9 @@ export function StayDetailScreen() {
           <Pressable
             style={[
               styles.confirmButton,
+              Platform.OS === 'android' ? styles.confirmButtonAndroid : null,
               isDark && styles.confirmButtonDark,
-              isBooking && styles.confirmButtonDisabled,
+              isBooking ? (Platform.OS === 'android' ? styles.confirmButtonDisabledAndroid : styles.confirmButtonDisabled) : null,
             ]}
             onPress={confirmBooking}
             disabled={isBooking}>
@@ -897,17 +906,28 @@ function BookingGlassBar({
   onPress: () => void;
   totalPrice: number;
 }) {
+  const isAndroid = Platform.OS === 'android';
+
   return (
     <View style={containerStyle}>
-      <View style={[styles.bottomBarGlassClip, isDark && styles.bottomBarGlassClipDark]}>
-        <GlassView
-          colorScheme={isDark ? 'dark' : 'light'}
-          glassEffectStyle="regular"
-          isInteractive
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, styles.bottomBarGlassView]}
-        />
-        <View pointerEvents="none" style={[styles.bottomBarHighlight, isDark && styles.bottomBarHighlightDark]} />
+      <View
+        style={[
+          styles.bottomBarGlassClip,
+          isDark && styles.bottomBarGlassClipDark,
+          isAndroid ? (isDark ? styles.bottomBarAndroidDark : styles.bottomBarAndroid) : null,
+        ]}>
+        {isAndroid ? null : (
+          <>
+            <GlassView
+              colorScheme={isDark ? 'dark' : 'light'}
+              glassEffectStyle="regular"
+              isInteractive
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.bottomBarGlassView]}
+            />
+            <View pointerEvents="none" style={[styles.bottomBarHighlight, isDark && styles.bottomBarHighlightDark]} />
+          </>
+        )}
         <View style={styles.bottomBarContent}>
           <View style={styles.bottomBarPriceBlock}>
             <ThemedText style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
@@ -918,7 +938,10 @@ function BookingGlassBar({
             </ThemedText>
           </View>
           <Pressable
-            style={[styles.bookNearbyButton, isLoading && styles.bookNearbyButtonDisabled]}
+            style={[
+              styles.bookNearbyButton,
+              isLoading ? (isAndroid ? styles.bookNearbyButtonDisabledAndroid : styles.bookNearbyButtonDisabled) : null,
+            ]}
             onPress={onPress}
             disabled={isLoading}>
             {isLoading ? (
@@ -980,11 +1003,49 @@ function SectionHeading({ title, subtitle, isDark }: { title: string; subtitle?:
   );
 }
 
-function DetailBlock({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
+function StayDetailsDropdown({
+  isDark,
+  items,
+}: {
+  isDark: boolean;
+  items: readonly { label: string; value: string }[];
+}) {
+  const [openItemKey, setOpenItemKey] = useState<string | null>(null);
+  const mutedColor = isDark ? darkSheetPalette.mutedText : designSystem.colors.warmDark;
+
   return (
-    <View style={[styles.detailBlock, isDark && styles.detailBlockDark]}>
-      <ThemedText style={styles.detailLabel}>{label}</ThemedText>
-      <ThemedText style={[styles.detailValue, isDark && styles.detailValueDark]}>{value}</ThemedText>
+    <View style={[styles.detailDropdown, isDark && styles.detailDropdownDark]}>
+      {items.map((item, index) => {
+        const itemKey = `${item.label}-${item.value}`;
+        const open = openItemKey === itemKey;
+        const Icon = open ? CaretUp : CaretDown;
+
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            key={itemKey}
+            onPress={() => setOpenItemKey(open ? null : itemKey)}
+            style={[
+              styles.detailDropdownRow,
+              index < items.length - 1 ? styles.detailDropdownRowBorder : null,
+              isDark && index < items.length - 1 ? styles.detailDropdownRowBorderDark : null,
+            ]}
+          >
+            <View style={styles.detailDropdownSummary}>
+              <ThemedText style={[styles.detailLabel, isDark && styles.detailLabelDark]}>
+                {item.label}
+              </ThemedText>
+              <Icon color={mutedColor} size={18} weight="bold" />
+            </View>
+            {open ? (
+              <ThemedText style={[styles.detailValue, isDark && styles.detailValueDark]}>
+                {item.value}
+              </ThemedText>
+            ) : null}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -1122,15 +1183,7 @@ function ReviewCard({
     <View style={[styles.reviewCard, isDark && styles.reviewCardDark]}>
       <View style={styles.reviewHeader}>
         <View style={styles.reviewAvatar}>
-          {avatarUri ? (
-            <Image source={avatarUri} contentFit="cover" style={styles.smallAvatarImage} />
-          ) : (
-            <View style={[styles.avatarFallback, isDark && styles.avatarFallbackDark]}>
-              <ThemedText style={[styles.avatarFallbackText, isDark && styles.avatarFallbackTextDark]}>
-                {name.slice(0, 1)}
-              </ThemedText>
-            </View>
-          )}
+          <FaceHashAvatar name={name} size={42} uri={avatarUri} />
         </View>
         <View>
           <ThemedText style={[styles.reviewName, isDark && styles.reviewNameDark]}>{name}</ThemedText>
@@ -1224,8 +1277,8 @@ const styles = StyleSheet.create({
   },
   title: {
     ...designSystem.type.title,
-    fontSize: 36,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 34,
     color: designSystem.colors.ink,
   },
   titleDark: {
@@ -1294,27 +1347,44 @@ const styles = StyleSheet.create({
   supportingNoteDark: {
     color: darkSheetPalette.mutedText,
   },
-  detailGrid: {
-    marginHorizontal: -designSystem.spacing.lg,
-    gap: 12,
+  detailDropdown: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
   },
-  detailBlock: {
-    paddingHorizontal: designSystem.spacing.lg,
-    paddingBottom: 14,
+  detailDropdownDark: {
+    borderColor: darkSheetPalette.border,
+  },
+  detailDropdownRow: {
+    paddingVertical: 16,
+    gap: 10,
+  },
+  detailDropdownRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: designSystem.colors.borderSoft,
   },
-  detailBlockDark: {
+  detailDropdownRowBorderDark: {
     borderBottomColor: darkSheetPalette.border,
   },
+  detailDropdownSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: designSystem.spacing.md,
+  },
   detailLabel: {
-    ...designSystem.type.eyebrow,
-    color: designSystem.colors.gray,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: designSystem.colors.warmDark,
+  },
+  detailLabelDark: {
+    color: darkSheetPalette.mutedText,
   },
   detailValue: {
-    marginTop: 8,
-    fontSize: 17,
-    lineHeight: 24,
+    maxWidth: '92%',
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },
@@ -1525,6 +1595,11 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     elevation: 18,
   },
+  bottomBarAndroidShadowless: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   bottomBarGlassClip: {
     overflow: 'hidden',
     borderWidth: 1,
@@ -1535,6 +1610,14 @@ const styles = StyleSheet.create({
   bottomBarGlassClipDark: {
     borderColor: designSystem.colors.whiteOverlayBarely,
     backgroundColor: designSystem.colors.transparentWhite,
+  },
+  bottomBarAndroid: {
+    borderColor: designSystem.colors.lightSurfaceAlt,
+    backgroundColor: designSystem.colors.surfaceRaised,
+  },
+  bottomBarAndroidDark: {
+    borderColor: designSystem.colors.darkBorder,
+    backgroundColor: designSystem.colors.darkSurface,
   },
   bottomBarGlassView: {
     borderRadius: 40,
@@ -1603,6 +1686,9 @@ const styles = StyleSheet.create({
   },
   bookNearbyButtonDisabled: {
     opacity: 0.72,
+  },
+  bookNearbyButtonDisabledAndroid: {
+    backgroundColor: designSystem.colors.limeSoft,
   },
   bookNearbyText: {
     fontSize: 15,
@@ -1946,15 +2032,25 @@ const styles = StyleSheet.create({
   confirmButton: {
     minHeight: 56,
     borderRadius: 999,
+    marginHorizontal: 24,
+    marginTop: 4,
     backgroundColor: designSystem.colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  confirmButtonAndroid: {
+    minHeight: 60,
+    borderWidth: 1,
+    borderColor: designSystem.colors.darkGreen,
   },
   confirmButtonDark: {
     backgroundColor: darkSheetPalette.accent,
   },
   confirmButtonDisabled: {
     opacity: 0.7,
+  },
+  confirmButtonDisabledAndroid: {
+    backgroundColor: designSystem.colors.limeSoft,
   },
   confirmButtonText: {
     fontSize: 16,

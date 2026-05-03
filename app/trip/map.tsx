@@ -11,9 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
-import { WandrHeader } from '@/components/wandr/header';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
-import { TripTimelineSkeleton } from '@/components/wandr/trip/trip-skeletons';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentLocation } from '@/hooks/use-current-location';
@@ -49,10 +47,14 @@ function ConnectedTripMapScreen() {
     [planningLocation, trips]
   );
 
-  const trip = useQuery(getTripDashboardRef, { 
-    travelerSlug: traveler?.slug ?? '',
-    tripId: selectedTripId,
-  });
+  const trip = useQuery(
+    getTripDashboardRef,
+    traveler?.slug
+      ? selectedTripId
+        ? { travelerSlug: traveler.slug, tripId: selectedTripId }
+        : { travelerSlug: traveler.slug }
+      : 'skip'
+  );
   useEffect(() => {
     if (orderedTrips.length === 0) {
       return;
@@ -82,10 +84,7 @@ function ConnectedTripMapScreen() {
   });
 
   const displayTrip = trip ?? lastResolvedTrip;
-
-  if (!traveler || !displayTrip) {
-    return <TripMapLoadingScreen insetsTop={insets.top} />;
-  }
+  const isLoading = !traveler || !displayTrip;
 
   return (
     <TripMapScreenView
@@ -100,30 +99,10 @@ function ConnectedTripMapScreen() {
       trips={orderedTrips}
       selectedTripId={selectedTripId}
       onSelectTrip={setSelectedTripId}
-      useSkeletons={false}
+      fallbackCenterCoordinate={planningLocation.centerCoordinate ?? currentLocation ?? [17.0832, -22.5609]}
+      fallbackLocationLabel={planningLocation.label}
+      useSkeletons={isLoading}
     />
-  );
-}
-
-function TripMapLoadingScreen({ insetsTop }: { insetsTop: number }) {
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          title: 'Trip Map',
-        }}
-      />
-      <View style={styles.body}>
-        <View style={styles.mapLayer}>
-          <SkeletonBlock style={styles.mapSkeleton} />
-        </View>
-        <View style={[styles.loadingSheet, { paddingTop: insetsTop + 12 }]}>
-          <TripTimelineSkeleton />
-        </View>
-      </View>
-    </ThemedView>
   );
 }
 
@@ -131,6 +110,8 @@ function TripMapScreenView({
   animatedIndex,
   currentHeading,
   currentLocation,
+  fallbackCenterCoordinate,
+  fallbackLocationLabel,
   headerAnimatedStyle,
   insetsTop,
   sheetRef,
@@ -144,23 +125,27 @@ function TripMapScreenView({
   animatedIndex?: ReturnType<typeof useSharedValue<number>>;
   currentHeading?: number | null;
   currentLocation?: readonly [number, number] | null;
+  fallbackCenterCoordinate: readonly [number, number];
+  fallbackLocationLabel: string;
   headerAnimatedStyle?: object;
   insetsTop: number;
   sheetRef?: React.RefObject<BottomSheet | null>;
   snapPoints?: (string | number)[];
-  trip: TripDashboard;
+  trip: TripDashboard | null;
   trips: readonly TripListItem[];
   selectedTripId?: string;
   onSelectTrip: (tripId: string) => void;
   useSkeletons: boolean;
 }) {
   const [mapResetKey, setMapResetKey] = useState(0);
-  const items = trip.items;
-  const markers = buildTripMapMarkers(items, 10);
-  const routeCoordinates = buildTripRouteCoordinates(trip, {
-    onlyRemaining: true,
-  });
-  const centerCoordinate = trip.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? null;
+  const items = trip?.items ?? [];
+  const markers = trip ? buildTripMapMarkers(items, 10) : [];
+  const routeCoordinates = trip
+    ? buildTripRouteCoordinates(trip, {
+        onlyRemaining: true,
+      })
+    : [];
+  const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? fallbackCenterCoordinate;
 
   const handleMapInteract = () => {
     sheetRef?.current?.snapToIndex(0);
@@ -176,7 +161,7 @@ function TripMapScreenView({
               centerCoordinate={centerCoordinate}
               userCoordinate={currentLocation}
               userHeading={currentHeading}
-              locationLabel={trip.dayTitle}
+              locationLabel={trip?.dayTitle ?? fallbackLocationLabel}
               markers={markers}
               routeCoordinates={routeCoordinates}
               showRoutes={routeCoordinates.length > 1}
@@ -189,38 +174,66 @@ function TripMapScreenView({
         ) : null}
 
         <GlassBottomSheet
-          index={1}
+          index={useSkeletons ? 0 : 1}
           ref={sheetRef}
           snapPoints={snapPoints ?? ['34%', '64%', '100%']}
           animatedIndex={animatedIndex}
           style={styles.sheet}>
           <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
             <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
-              <View style={styles.sectionCopy}>
-                <ThemedText
-                  style={styles.locationEyebrow}
-                  lightColor={designSystem.colors.darkGreen}
-                  darkColor={designSystem.colors.lime}>
-                  {trip.stopCount} stop itinerary
-                </ThemedText>
-                <ThemedText style={styles.sectionTitle}>{trip.locationLabel}</ThemedText>
-              </View>
+              {useSkeletons ? <TripMapSheetHeaderSkeleton /> : (
+                <View style={styles.sectionCopy}>
+                  <ThemedText
+                    style={styles.locationEyebrow}
+                    lightColor={designSystem.colors.darkGreen}
+                    darkColor={designSystem.colors.lime}>
+                    {trip?.stopCount ?? 0} stop itinerary
+                  </ThemedText>
+                  <ThemedText style={styles.sectionTitle}>{trip?.locationLabel ?? fallbackLocationLabel}</ThemedText>
+                </View>
+              )}
             </Animated.View>
 
-            <TripFilterTabs
-              trips={trips}
-              selectedTripId={selectedTripId}
-              onSelectTrip={(tripId) => {
-                onSelectTrip(tripId);
-                setMapResetKey((prev) => prev + 1);
-              }}
-            />
+            {useSkeletons && trips.length === 0 ? (
+              <TripMapFilterTabsSkeleton />
+            ) : (
+              <TripFilterTabs
+                trips={trips}
+                selectedTripId={selectedTripId}
+                onSelectTrip={(tripId) => {
+                  onSelectTrip(tripId);
+                  setMapResetKey((prev) => prev + 1);
+                }}
+              />
+            )}
 
-            {useSkeletons ? <TripTimelineSkeleton /> : <TripTimelineSection items={items} variant="sheet" />}
+            <TripTimelineSection items={items} isLoading={useSkeletons} variant="sheet" />
           </BottomSheetScrollView>
         </GlassBottomSheet>
       </View>
     </ThemedView>
+  );
+}
+
+function TripMapSheetHeaderSkeleton() {
+  return (
+    <View style={styles.sectionCopy}>
+      <SkeletonBlock style={styles.headerMetaSkeleton} />
+      <SkeletonBlock style={styles.headerTitleSkeleton} />
+    </View>
+  );
+}
+
+function TripMapFilterTabsSkeleton() {
+  return (
+    <View style={styles.filterSkeletonRow}>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <View key={`trip-map-filter-skeleton-${index}`} style={styles.filterSkeletonPill}>
+          <SkeletonBlock style={styles.filterSkeletonImage} />
+          <SkeletonBlock style={styles.filterSkeletonLabel} />
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -238,23 +251,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  mapSkeleton: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 0,
-  },
-  loadingSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '62%',
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    backgroundColor: designSystem.colors.lightGlassStrong,
-    paddingHorizontal: designSystem.spacing.lg,
-    paddingBottom: 132,
   },
   sheet: {
     zIndex: 30,
@@ -283,5 +279,46 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...designSystem.type.title,
     color: designSystem.colors.ink,
+  },
+  headerMetaSkeleton: {
+    width: 126,
+    height: 16,
+    borderRadius: 8,
+  },
+  headerTitleSkeleton: {
+    width: '72%',
+    height: 34,
+    borderRadius: 10,
+  },
+  filterSkeletonRow: {
+    minHeight: 44,
+    marginHorizontal: -designSystem.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designSystem.spacing.xs,
+    paddingHorizontal: designSystem.spacing.lg,
+  },
+  filterSkeletonPill: {
+    minHeight: 44,
+    width: 146,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: designSystem.radii.pill,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.surface,
+    paddingLeft: 5,
+    paddingRight: 14,
+  },
+  filterSkeletonImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  filterSkeletonLabel: {
+    flex: 1,
+    height: 14,
+    borderRadius: 7,
   },
 });
