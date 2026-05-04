@@ -10,9 +10,9 @@ type JourneyMapCtaProps = {
   loadingAction?: 'primary' | 'secondary' | null;
   markers?: readonly ExploreMapMarker[];
   onPrimaryPress: () => void;
-  onSecondaryPress: () => void;
+  onSecondaryPress?: () => void;
   primaryLabel: string;
-  secondaryLabel: string;
+  secondaryLabel?: string;
 };
 
 export function JourneyMapCta({
@@ -37,15 +37,17 @@ export function JourneyMapCta({
               {isPrimaryLoading ? 'Saving...' : primaryLabel}
             </ThemedText>
           </Pressable>
-          <Pressable disabled={isDisabled} onPress={onSecondaryPress} style={styles.secondaryAction}>
-            <ThemedText
-              lightColor={designSystem.colors.ink}
-              darkColor={designSystem.colors.ink}
-              style={styles.secondaryActionLabel}
-            >
-              {isSecondaryLoading ? 'Saving...' : secondaryLabel}
-            </ThemedText>
-          </Pressable>
+          {secondaryLabel && onSecondaryPress ? (
+            <Pressable disabled={isDisabled} onPress={onSecondaryPress} style={styles.secondaryAction}>
+              <ThemedText
+                lightColor={designSystem.colors.ink}
+                darkColor={designSystem.colors.ink}
+                style={styles.secondaryActionLabel}
+              >
+                {isSecondaryLoading ? 'Saving...' : secondaryLabel}
+              </ThemedText>
+            </Pressable>
+          ) : null}
         </View>
       </MapFrame>
     </View>

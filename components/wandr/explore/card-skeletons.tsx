@@ -14,9 +14,6 @@ export function ExploreActivityCardSkeleton() {
     <View style={styles.activityShell}>
       <SkeletonBlock style={styles.activityImage} />
       <View style={styles.activityBody}>
-        <View style={styles.metaRow}>
-          <SkeletonBlock style={styles.badge} />
-        </View>
         <View style={styles.copy}>
           <SkeletonBlock style={styles.titleLine} />
           <SkeletonBlock style={styles.subtitleLine} />
@@ -25,7 +22,6 @@ export function ExploreActivityCardSkeleton() {
           <SkeletonBlock style={styles.travelerGroup} />
           <SkeletonBlock style={styles.travelerText} />
         </View>
-        <SkeletonBlock style={styles.ctaButton} />
       </View>
     </View>
   );
@@ -76,37 +72,30 @@ export function ExploreHiddenGemCardSkeleton() {
 
 const styles = StyleSheet.create({
   activityShell: {
-    gap: 16,
-    marginBottom: 24,
+    gap: 14,
+    marginBottom: 20,
   },
   activityImage: {
-    height: 320,
-    borderRadius: CARD_RADIUS,
+    width: '100%',
+    height: 280,
+    borderRadius: 28,
   },
   activityBody: {
-    paddingHorizontal: 4,
-    gap: 16,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  badge: {
-    width: 104,
-    height: 26,
-    borderRadius: designSystem.radii.pill,
+    paddingHorizontal: 2,
+    gap: 12,
   },
   copy: {
     gap: 8,
   },
   titleLine: {
-    width: '84%',
-    height: 36,
+    width: '76%',
+    height: 26,
+    borderRadius: 13,
   },
   subtitleLine: {
-    width: '100%',
-    height: 24,
+    width: '94%',
+    height: 22,
+    borderRadius: 11,
   },
   travelerRow: {
     flexDirection: 'row',
@@ -121,11 +110,7 @@ const styles = StyleSheet.create({
   travelerText: {
     width: 140,
     height: 18,
-  },
-  ctaButton: {
-    width: '100%',
-    height: 54,
-    borderRadius: designSystem.radii.pill,
+    borderRadius: 9,
   },
   sheetHeaderShell: {
     flexDirection: 'row',

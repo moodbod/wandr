@@ -1,7 +1,7 @@
 import type { ExploreExperience } from '@/constants/explore-content';
 import type { StayBookingDetails, StayProperty } from '@/types/stays';
 
-export type TripItemKind = 'experience' | 'stay';
+export type TripItemKind = 'experience' | 'stay' | 'hiddenGem';
 
 export type TripItineraryItem = {
   _id: string;
@@ -65,7 +65,7 @@ export type ProfilePlaceItem = {
   subtitle: string;
   imageUri: string | null;
   createdAt: number;
-  kind: TripItemKind | 'hiddenGem';
+  kind: TripItemKind;
   tripId?: string;
 };
 

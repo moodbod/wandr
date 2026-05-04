@@ -184,10 +184,10 @@ function ConnectedExploreScreen({
             </View>
           ) : (
             <GlassBottomSheet index={0} ref={sheetRef} snapPoints={snapPoints} animatedIndex={animatedIndex}>
-              <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+              <BottomSheetScrollView contentContainerStyle={styles.mobileSheetContent} showsVerticalScrollIndicator={false}>
                 <ExploreSheetHeaderSkeleton />
                 <ExploreTripFilterSkeleton />
-                <View style={styles.cardList}>
+                <View style={styles.mobileCardList}>
                   <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
                 </View>
               </BottomSheetScrollView>

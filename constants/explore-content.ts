@@ -29,15 +29,33 @@ export type ExploreHiddenGem = {
   imageUri: string;
   countryCode?: string;
   countryLabel?: string;
+  coordinate?: readonly [number, number];
   planningLocationId?: string;
   geography?: ExploreGeography;
+  badge?: string;
+  locationLabel?: string;
+  summary?: string;
+  tripFit?: readonly {
+    label: string;
+    value: string;
+    detail: string;
+    icon: 'compass' | 'clock' | 'users';
+    tone?: 'dark' | 'light' | 'accent';
+  }[];
+  sections?: readonly {
+    title: string;
+    body: string;
+  }[];
+  visitTips?: readonly string[];
+  primaryLabel?: string;
+  secondaryLabel?: string;
 };
 
 export type ExploreMapMarker = {
   id: string;
   coordinate: readonly [number, number];
   experienceSlug?: string;
-  itemKind?: 'experience' | 'stay';
+  itemKind?: 'experience' | 'stay' | 'hiddenGem';
   imageUri?: string;
   label?: string;
   popularityScore?: number;

@@ -4,7 +4,7 @@ export type MapMarker = {
   id: string;
   coordinate: readonly [number, number];
   experienceSlug?: string;
-  itemKind?: 'experience' | 'stay';
+  itemKind?: 'experience' | 'stay' | 'hiddenGem';
   imageUri?: string;
   label?: string;
   popularityScore?: number;

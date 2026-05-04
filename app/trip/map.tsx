@@ -1,6 +1,6 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useQuery } from 'convex/react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -17,6 +17,7 @@ import { designSystem } from '@/constants/design-system';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useResponsive } from '@/hooks/use-responsive';
 import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
@@ -30,12 +31,15 @@ export default function TripMapScreen() {
 function ConnectedTripMapScreen() {
   const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { isLargeScreen } = useResponsive();
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const animatedIndex = useSharedValue(0);
   const traveler = useCurrentTraveler();
   const params = useLocalSearchParams<{ tripId?: string }>();
+  const routeTripId = typeof params.tripId === 'string' ? params.tripId : undefined;
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(
-    typeof params.tripId === 'string' ? params.tripId : undefined
+    routeTripId
   );
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
   const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
@@ -46,6 +50,17 @@ function ConnectedTripMapScreen() {
     () => orderTripsByPlanningCountry(trips ?? [], planningLocation),
     [planningLocation, trips]
   );
+
+  useEffect(() => {
+    if (!isLargeScreen) {
+      return;
+    }
+
+    router.replace({
+      pathname: '/(tabs)/trip',
+      params: routeTripId ? { tripId: routeTripId } : undefined,
+    });
+  }, [isLargeScreen, routeTripId, router]);
 
   const trip = useQuery(
     getTripDashboardRef,

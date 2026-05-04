@@ -3,7 +3,7 @@ import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { action, internalMutation, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
-import type { ExploreExperience } from '../constants/explore-content';
+import type { ExploreExperience, ExploreHiddenGem } from '../constants/explore-content';
 
 type TripItineraryItem = {
   _id: Id<'experienceBookings'>;
@@ -12,7 +12,7 @@ type TripItineraryItem = {
   travelerSlug: string;
   tripId?: Id<'trips'>;
   bookedAt: number;
-  kind: 'experience' | 'stay';
+  kind: 'experience' | 'stay' | 'hiddenGem';
   experience: ExploreExperience;
   stay?: ReturnType<typeof normalizeStayForTrip> | null;
   checkIn?: number;
@@ -705,6 +705,33 @@ function getItineraryCoordinate(item: TripItineraryItem | null | undefined) {
   return item?.stay?.coordinate ?? item?.experience.coordinate;
 }
 
+function getHiddenGemSlug(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function hiddenGemToExperience(gem: Doc<'hiddenGems'>): ExploreExperience {
+  return {
+    slug: getHiddenGemSlug(gem.title),
+    badge: gem.badge ?? 'Hidden Gem',
+    ctaLabel: gem.primaryLabel ?? 'Add to trip',
+    title: gem.title,
+    subtitle: gem.locationLabel ?? gem.geography?.town ?? gem.geography?.region ?? 'Hidden gem',
+    description: gem.summary ?? gem.description,
+    imageUri: gem.imageUri,
+    price: 'Free',
+    priceSuffix: 'detour',
+    category: 'Hidden Gem',
+    coordinate: gem.coordinate as ExploreHiddenGem['coordinate'],
+    geography: gem.geography,
+    locationLabel: gem.locationLabel,
+    tripFit: gem.tripFit,
+    includes: gem.visitTips ?? [],
+  };
+}
+
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
@@ -860,8 +887,9 @@ async function getResolvedItinerary(
 
   const bookings = (await bookingsQuery.collect()).filter((b) => b.tripId === trip._id);
 
-  const [allExperiences, allStays, stayBookings] = await Promise.all([
+  const [allExperiences, allHiddenGems, allStays, stayBookings] = await Promise.all([
     ctx.db.query('experiences').collect(),
+    ctx.db.query('hiddenGems').collect(),
     ctx.db.query('stays').collect(),
     ctx.db
       .query('stayBookings')
@@ -886,6 +914,16 @@ async function getResolvedItinerary(
           ...booking,
           kind: 'experience',
           experience: experience as ExploreExperience,
+        };
+      }
+
+      const hiddenGem = allHiddenGems.find((item) => getHiddenGemSlug(item.title) === booking.experienceSlug);
+
+      if (hiddenGem) {
+        return {
+          ...booking,
+          kind: 'hiddenGem',
+          experience: hiddenGemToExperience(hiddenGem),
         };
       }
 

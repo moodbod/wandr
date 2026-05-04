@@ -23,7 +23,7 @@ import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { TripDashboard, TripDashboardItem, TripListItem } from '@/types/trip';
 import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GlobeHemisphereWest, LockSimple, PencilSimple, UsersThree } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -87,6 +87,8 @@ function ConnectedTripScreen({
   travelerSlug: string;
 }) {
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(undefined);
+  const params = useLocalSearchParams<{ tripId?: string | string[] }>();
+  const routeTripId = Array.isArray(params.tripId) ? params.tripId[0] : params.tripId;
   const trips = useQuery(listUserTripsRef, { travelerSlug });
   const { coordinate: currentLocation } = useCurrentLocation();
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
@@ -127,11 +129,16 @@ function ConnectedTripScreen({
       return;
     }
 
+    if (routeTripId && orderedTrips.some((candidate) => candidate._id === routeTripId)) {
+      setSelectedTripId(routeTripId);
+      return;
+    }
+
     const hasSelection = orderedTrips.some((candidate) => candidate._id === selectedTripId);
     if (!selectedTripId || !hasSelection) {
       setSelectedTripId(orderedTrips[0]._id);
     }
-  }, [orderedTrips, selectedTripId]);
+  }, [orderedTrips, routeTripId, selectedTripId]);
 
   useEffect(() => {
     if (!tripSettings || tripSettings.tripId === settingsSeedTripId) {

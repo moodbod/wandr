@@ -62,6 +62,11 @@ export function ExploreMapHero({
             return;
           }
 
+          if (marker.itemKind === 'hiddenGem' && marker.experienceSlug) {
+            router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: marker.experienceSlug } });
+            return;
+          }
+
           if (marker.experienceSlug) {
             router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
           }
