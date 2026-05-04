@@ -61,6 +61,15 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/voice_call_ring.wav",
+            "./assets/sounds/video_call_ring.wav"
+          ]
+        }
+      ],
       "expo-location",
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
@@ -94,6 +103,13 @@
     },
     "assetBundlePatterns": [
       "**/*"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "318619b4-feb0-4aa0-86de-66dbf94e2d9e"
+      }
+    },
+    "owner": "tuyoleni"
   }
 }

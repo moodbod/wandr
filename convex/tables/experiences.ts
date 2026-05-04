@@ -40,6 +40,18 @@ export const experiencesTable = defineTable({
       })
     )
   ),
+  sections: v.optional(
+    v.array(
+      v.object({
+        title: v.string(),
+        body: v.string(),
+      })
+    )
+  ),
+  summary: v.optional(v.string()),
+  visitTips: v.optional(v.array(v.string())),
+  primaryLabel: v.optional(v.string()),
+  secondaryLabel: v.optional(v.string()),
   galleryImages: v.optional(v.array(v.string())),
   travelerMomentum: v.optional(
     v.object({

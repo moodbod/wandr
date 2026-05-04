@@ -1,7 +1,8 @@
+import { LiveKitRoom, RoomAudioRenderer, VideoTrack, isTrackReference, useRemoteParticipants, useTracks } from '@livekit/components-react';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { useRouter, useSegments } from 'expo-router';
-import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack, type LocalTrack, type Participant, type RemoteTrackPublication, type RemoteTrack } from 'livekit-client';
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { Track, VideoPresets, type MediaDeviceFailure, type RoomOptions } from 'livekit-client';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +26,18 @@ type LiveKitConnection = {
   serverUrl: string;
   token: string;
   roomName: string;
+};
+
+const WEB_ROOM_OPTIONS: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  publishDefaults: {
+    videoEncoding: {
+      maxBitrate: 500_000,
+      maxFramerate: 20,
+    },
+    videoSimulcastLayers: [VideoPresets.h180],
+  },
 };
 
 export default function ActiveFriendCallOverlay() {
@@ -102,8 +115,10 @@ export default function ActiveFriendCallOverlay() {
   useEffect(() => {
     if (call?.mode === 'voice') {
       setIsVideoEnabled(false);
+    } else if (call?.mode === 'video') {
+      setIsVideoEnabled(true);
     }
-  }, [call?.mode]);
+  }, [activeCallId, call?.mode]);
 
   useEffect(() => {
     if (activeCallId && call === null) {
@@ -174,7 +189,7 @@ export default function ActiveFriendCallOverlay() {
                 shouldSendVideo={shouldSendVideo}
               />
             }>
-            {shouldSendVideo ? (
+            {callMode === 'video' ? (
               <WebVideoStage callTitle={callTitle} mode={callMode} />
             ) : (
               <VoiceCallStage members={callMembers} title={callTitle} />
@@ -221,236 +236,32 @@ function WebLiveKitRoom({
   shouldSendAudio: boolean;
   shouldSendVideo: boolean;
 }) {
-  const roomRef = useRef<Room | null>(null);
-  const localTracksRef = useRef<LocalTrack[]>([]);
-  const remoteAudioElementsRef = useRef(new Map<string, HTMLAudioElement>());
-  const [isConnected, setIsConnected] = useState(false);
+  const videoCaptureOptions = shouldSendVideo ? (getWebCameraCaptureOptions() ?? true) : false;
 
-  useEffect(() => {
-    const room = new Room({
-      adaptiveStream: true,
-      dynacast: true,
-    });
-    let cancelled = false;
-    const remoteAudioElements = remoteAudioElementsRef.current;
-
-    roomRef.current = room;
-
-    async function connectRoom() {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          await room.connect(connection.serverUrl, connection.token);
-          if (cancelled) {
-            return;
-          }
-          setIsConnected(true);
-          onMediaError(null);
-          onRemoteParticipantCountChange(room.remoteParticipants.size);
-          return;
-        } catch (error) {
-          if (cancelled || isClientInitiatedDisconnect(error)) {
-            return;
-          }
-
-          if (isLiveKitSignalAbort(error) && attempt === 0) {
-            await delay(250);
-            continue;
-          }
-
-          onMediaError(formatConnectionError(error));
-          return;
-        }
-      }
-    }
-
-    const reportParticipants = () => onRemoteParticipantCountChange(room.remoteParticipants.size);
-    const handleTrackSubscribed = (track: RemoteTrack, publication?: RemoteTrackPublication) => {
-      if (track.kind !== Track.Kind.Audio) {
-        return;
-      }
-
-      const trackKey = publication?.trackSid ?? track.sid;
-      if (!trackKey) {
-        return;
-      }
-
-      const audioElement = track.attach() as HTMLAudioElement;
-      audioElement.autoplay = true;
-      audioElement.dataset.livekitAudio = 'true';
-      document.body.appendChild(audioElement);
-      remoteAudioElements.set(trackKey, audioElement);
-    };
-    const handleTrackUnsubscribed = (track: RemoteTrack, publication?: RemoteTrackPublication) => {
-      const trackKey = publication?.trackSid ?? track.sid;
-      if (!trackKey) {
-        return;
-      }
-
-      const audioElement = remoteAudioElements.get(trackKey);
-      if (!audioElement) {
-        return;
-      }
-
-      track.detach(audioElement);
-      audioElement.remove();
-      remoteAudioElements.delete(trackKey);
-    };
-    room.on(RoomEvent.ParticipantConnected, reportParticipants);
-    room.on(RoomEvent.ParticipantDisconnected, reportParticipants);
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-    void connectRoom();
-
-    return () => {
-      cancelled = true;
-      room.off(RoomEvent.ParticipantConnected, reportParticipants);
-      room.off(RoomEvent.ParticipantDisconnected, reportParticipants);
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-      localTracksRef.current.forEach((track) => track.stop());
-      localTracksRef.current = [];
-      remoteAudioElements.forEach((audioElement) => audioElement.remove());
-      remoteAudioElements.clear();
-      room.disconnect();
-      roomRef.current = null;
-      setIsConnected(false);
-      onMediaError(null);
-      onRemoteParticipantCountChange(0);
-    };
-  }, [connection.serverUrl, connection.token, onMediaError, onRemoteParticipantCountChange]);
-
-  useEffect(() => {
-    const room = roomRef.current;
-    if (!room || !isConnected) {
-      return;
-    }
-    const liveRoom = room;
-
-    let cancelled = false;
-    async function enableAudio() {
-      const existingAudio = localTracksRef.current.find((track) => track.source === Track.Source.Microphone);
-      if (existingAudio) {
-        return;
-      }
-
-      try {
-        const audioTrack = await createLocalAudioTrack();
-        if (cancelled) {
-          audioTrack.stop();
-          return;
-        }
-        localTracksRef.current.push(audioTrack);
-        await liveRoom.localParticipant.publishTrack(audioTrack);
-      } catch (error) {
-        if (!cancelled) {
-          onMediaError(formatMediaError(error, 'microphone'));
-        }
-      }
-    }
-
-    async function disableAudio() {
-      const existingAudio = localTracksRef.current.find((track) => track.source === Track.Source.Microphone);
-      if (!existingAudio) {
-        return;
-      }
-
-      liveRoom.localParticipant.unpublishTrack(existingAudio);
-      existingAudio.stop();
-      localTracksRef.current = localTracksRef.current.filter((track) => track !== existingAudio);
-    }
-
-    async function enableVideo() {
-      const existingVideo = localTracksRef.current.find((track) => track.source === Track.Source.Camera);
-      if (existingVideo) {
-        onMediaError(null);
-        return;
-      }
-
-      try {
-        assertCameraCanStart();
-        const videoTrack = await createLocalVideoTrack(getWebCameraCaptureOptions());
-        if (cancelled) {
-          videoTrack.stop();
-          return;
-        }
-        localTracksRef.current.push(videoTrack);
-        await liveRoom.localParticipant.publishTrack(videoTrack);
-        onMediaError(null);
-      } catch (error) {
-        if (!cancelled) {
-          onMediaError(formatMediaError(error, 'camera'));
-        }
-      }
-    }
-
-    async function disableVideo() {
-      const existingVideo = localTracksRef.current.find((track) => track.source === Track.Source.Camera);
-      if (!existingVideo) {
-        return;
-      }
-
-      liveRoom.localParticipant.unpublishTrack(existingVideo);
-      existingVideo.stop();
-      localTracksRef.current = localTracksRef.current.filter((track) => track !== existingVideo);
-      onMediaError(null);
-    }
-
-    async function syncLocalTracks() {
-      const tasks = [
-        shouldSendVideo ? enableVideo() : disableVideo(),
-        shouldSendAudio ? enableAudio() : disableAudio(),
-      ];
-
-      await Promise.all(tasks);
-    }
-
-    void syncLocalTracks();
-    return () => {
-      cancelled = true;
-    };
-  }, [isConnected, onMediaError, shouldSendAudio, shouldSendVideo]);
-
-  return <LiveKitWebRoomContext.Provider value={roomRef}>{children}</LiveKitWebRoomContext.Provider>;
-}
-
-function isClientInitiatedDisconnect(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  return error.message === 'Client initiated disconnect' || error.name === 'AbortError';
-}
-
-function isLiveKitSignalAbort(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  return error.message.includes('Signal connection aborted') || error.message.includes('Abort handler called');
+  return (
+    <LiveKitRoom
+      serverUrl={connection.serverUrl}
+      token={connection.token}
+      connect
+      audio={shouldSendAudio}
+      video={videoCaptureOptions}
+      options={WEB_ROOM_OPTIONS}
+      onConnected={() => onMediaError(null)}
+      onError={(error) => onMediaError(formatConnectionError(error))}
+      onMediaDeviceFailure={(failure, kind) => onMediaError(formatMediaDeviceFailure(failure, kind))}>
+      <RoomAudioRenderer />
+      <WebRemoteParticipantCountReporter onChange={onRemoteParticipantCountChange} />
+      {children}
+    </LiveKitRoom>
+  );
 }
 
 function formatConnectionError(error: unknown) {
-  if (isLiveKitSignalAbort(error)) {
+  if (error instanceof Error && (error.message.includes('Signal connection aborted') || error.message.includes('Abort handler called'))) {
     return 'Call connection was interrupted. Trying again should reconnect.';
   }
 
   return error instanceof Error ? error.message : 'Unable to connect to this call.';
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function assertCameraCanStart() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Camera capture is not supported in this browser.');
-  }
-
-  if (typeof window !== 'undefined' && !window.isSecureContext) {
-    throw new Error('Camera requires HTTPS on mobile browsers. Open Wandr over HTTPS or localhost.');
-  }
 }
 
 function getWebCameraCaptureOptions() {
@@ -489,7 +300,25 @@ function formatMediaError(error: unknown, deviceName: 'camera' | 'microphone') {
   return `Unable to start the ${deviceName}.`;
 }
 
-const LiveKitWebRoomContext = createContext<MutableRefObject<Room | null> | null>(null);
+function formatMediaDeviceFailure(failure?: MediaDeviceFailure, kind?: MediaDeviceKind) {
+  const deviceName = kind === 'audioinput' ? 'microphone' : 'camera';
+  const error = failure ? new Error(String(failure)) : undefined;
+  if (error) {
+    error.name = String(failure);
+  }
+
+  return formatMediaError(error, deviceName);
+}
+
+function WebRemoteParticipantCountReporter({ onChange }: { onChange: (count: number) => void }) {
+  const remoteParticipants = useRemoteParticipants();
+
+  useEffect(() => {
+    onChange(remoteParticipants.length);
+  }, [onChange, remoteParticipants.length]);
+
+  return null;
+}
 
 function WebMiniCall({
   callTitle,
@@ -500,31 +329,13 @@ function WebMiniCall({
   mode: 'voice' | 'video';
   onExpand: () => void;
 }) {
-  const roomContext = useContext(LiveKitWebRoomContext);
-  const [version, setVersion] = useState(0);
-  const room = roomContext?.current ?? null;
-  const participant = room ? room.localParticipant : null;
-  void version;
-
-  useEffect(() => {
-    if (!room) {
-      return;
-    }
-
-    const refresh = () => setVersion((value) => value + 1);
-    room.on(RoomEvent.LocalTrackPublished, refresh);
-    room.on(RoomEvent.LocalTrackUnpublished, refresh);
-
-    return () => {
-      room.off(RoomEvent.LocalTrackPublished, refresh);
-      room.off(RoomEvent.LocalTrackUnpublished, refresh);
-    };
-  }, [room]);
+  const tracks = useTracks([Track.Source.Camera]);
+  const localVideoTrack = tracks.find((track) => isTrackReference(track) && track.participant.isLocal);
 
   return (
     <WebMiniCallFrame onExpand={onExpand}>
-      {mode === 'video' && participant ? (
-        <ParticipantVideo participant={participant} fallbackName={participant.name || participant.identity || callTitle} />
+      {mode === 'video' && localVideoTrack ? (
+        <VideoTrack data-wandr-call-video="true" muted playsInline trackRef={localVideoTrack} style={videoStyle} />
       ) : (
         <View style={styles.miniVoice}>
           <ThemedText style={styles.miniInitial}>{callTitle.charAt(0).toUpperCase()}</ThemedText>
@@ -545,34 +356,7 @@ function WebMiniCallFrame({ children, onExpand }: { children: ReactNode; onExpan
 }
 
 function WebVideoStage({ callTitle, mode }: { callTitle: string; mode: 'voice' | 'video' }) {
-  const roomContext = useContext(LiveKitWebRoomContext);
-  const [version, setVersion] = useState(0);
-  const room = roomContext?.current ?? null;
-  const participants = room ? [room.localParticipant, ...Array.from(room.remoteParticipants.values())] : [];
-  void version;
-
-  useEffect(() => {
-    if (!room) {
-      return;
-    }
-
-    const refresh = () => setVersion((value) => value + 1);
-    room.on(RoomEvent.TrackSubscribed, refresh);
-    room.on(RoomEvent.TrackUnsubscribed, refresh);
-    room.on(RoomEvent.LocalTrackPublished, refresh);
-    room.on(RoomEvent.LocalTrackUnpublished, refresh);
-    room.on(RoomEvent.ParticipantConnected, refresh);
-    room.on(RoomEvent.ParticipantDisconnected, refresh);
-
-    return () => {
-      room.off(RoomEvent.TrackSubscribed, refresh);
-      room.off(RoomEvent.TrackUnsubscribed, refresh);
-      room.off(RoomEvent.LocalTrackPublished, refresh);
-      room.off(RoomEvent.LocalTrackUnpublished, refresh);
-      room.off(RoomEvent.ParticipantConnected, refresh);
-      room.off(RoomEvent.ParticipantDisconnected, refresh);
-    };
-  }, [room]);
+  const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }]);
 
   if (mode !== 'video') {
     return null;
@@ -580,36 +364,23 @@ function WebVideoStage({ callTitle, mode }: { callTitle: string; mode: 'voice' |
 
   return (
     <View style={styles.videoGrid}>
-      {participants.slice(0, 9).map((participant) => (
-        <View key={participant.identity} style={styles.videoTile}>
-          <ParticipantVideo participant={participant} fallbackName={participant.name || participant.identity || callTitle} />
+      {tracks.slice(0, 9).map((track) => (
+        <View key={`${track.participant.identity}:${track.source}`} style={styles.videoTile}>
+          {isTrackReference(track) ? (
+            <VideoTrack data-wandr-call-video="true" muted={track.participant.isLocal} playsInline trackRef={track} style={videoStyle} />
+          ) : (
+            <ParticipantVideoPlaceholder fallbackName={track.participant.name || track.participant.identity || callTitle} />
+          )}
         </View>
       ))}
     </View>
   );
 }
 
-function ParticipantVideo({ fallbackName, participant }: { fallbackName: string; participant: Participant }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const publication = Array.from(participant.videoTrackPublications.values()).find((item) => item.track) as RemoteTrackPublication | undefined;
+function ParticipantVideoPlaceholder({ fallbackName }: { fallbackName: string }) {
   const initial = fallbackName.charAt(0).toUpperCase();
 
-  useEffect(() => {
-    const element = videoRef.current;
-    const track = publication?.track;
-    if (!element || !track) {
-      return;
-    }
-
-    track.attach(element);
-    return () => {
-      track.detach(element);
-    };
-  }, [publication?.track]);
-
-  return publication?.track ? (
-    <video autoPlay data-wandr-call-video="true" muted={participant.isLocal} playsInline ref={videoRef} style={videoStyle} />
-  ) : (
+  return (
     <View style={styles.videoPlaceholder}>
       <ThemedText style={styles.videoPlaceholderInitial}>{initial}</ThemedText>
     </View>
@@ -620,7 +391,7 @@ const videoStyle = {
   height: '100%',
   objectFit: 'cover',
   width: '100%',
-} satisfies React.CSSProperties;
+} satisfies CSSProperties;
 
 const styles = StyleSheet.create({
   videoGrid: {

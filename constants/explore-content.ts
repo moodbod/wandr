@@ -106,6 +106,14 @@ export type ExploreExperience = {
     icon: 'compass' | 'clock' | 'users';
     tone?: 'dark' | 'light' | 'accent';
   }[];
+  sections?: readonly {
+    title: string;
+    body: string;
+  }[];
+  summary?: string;
+  visitTips?: readonly string[];
+  primaryLabel?: string;
+  secondaryLabel?: string;
   galleryImages?: readonly string[];
   travelerMomentum?: {
     countryCode: string;

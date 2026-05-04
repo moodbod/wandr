@@ -25,6 +25,7 @@
     "@expo/ui": "0.2.0-beta.9",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.9",
+    "@livekit/components-react": "^2.9.20",
     "@livekit/react-native": "^2.10.2",
     "@livekit/react-native-expo-plugin": "^1.0.2",
     "@livekit/react-native-webrtc": "^144.0.0",

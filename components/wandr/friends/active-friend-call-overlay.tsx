@@ -65,6 +65,7 @@ export default function ActiveFriendCallOverlay() {
   const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [remoteParticipantCount, setRemoteParticipantCount] = useState(0);
   const videoGridRef = useRef<CallVideoGridHandle>(null);
   const preparedCallKeyRef = useRef<string | null>(null);
@@ -72,6 +73,7 @@ export default function ActiveFriendCallOverlay() {
   useEffect(() => {
     if (!activeCallId) {
       setConnection(null);
+      setMediaError(null);
       setRemoteParticipantCount(0);
       preparedCallKeyRef.current = null;
       return;
@@ -123,8 +125,10 @@ export default function ActiveFriendCallOverlay() {
   useEffect(() => {
     if (call?.mode === 'voice') {
       setIsVideoEnabled(false);
+    } else if (call?.mode === 'video') {
+      setIsVideoEnabled(true);
     }
-  }, [call?.mode]);
+  }, [activeCallId, call?.mode]);
 
   useEffect(() => {
     if (activeCallId && call === null) {
@@ -172,7 +176,7 @@ export default function ActiveFriendCallOverlay() {
 
     minimizeCall();
   };
-  const fullRoomContent = shouldSendVideo ? (
+  const fullRoomContent = callMode === 'video' ? (
     <CallVideoGrid ref={videoGridRef} />
   ) : (
     <VoiceCallStage members={callMembers} title={callTitle} />
@@ -190,7 +194,7 @@ export default function ActiveFriendCallOverlay() {
     <FullCallLayout
       bottomInset={insets.bottom}
       onMinimize={handleMinimize}
-      subtitle={call?.circleId ? 'Call is active' : 'Waiting for others...'}
+      subtitle={mediaError ?? (call?.circleId ? 'Call is active' : 'Waiting for others...')}
       title={callTitle}
       topInset={insets.top}
       controls={
@@ -213,6 +217,7 @@ export default function ActiveFriendCallOverlay() {
       <FriendLiveKitRoom
         callId={activeCallId}
         connection={connection}
+        onMediaError={setMediaError}
         onRemoteParticipantCountChange={setRemoteParticipantCount}
         shouldSendAudio={isMicEnabled}
         shouldSendVideo={shouldSendVideo}>
@@ -258,6 +263,7 @@ function FriendLiveKitRoom({
   callId,
   children,
   connection,
+  onMediaError,
   onRemoteParticipantCountChange,
   shouldSendAudio,
   shouldSendVideo,
@@ -265,6 +271,7 @@ function FriendLiveKitRoom({
   callId: Id<'friendCalls'>;
   children: ReactNode;
   connection: LiveKitConnection;
+  onMediaError: (error: string | null) => void;
   onRemoteParticipantCountChange: (count: number) => void;
   shouldSendAudio: boolean;
   shouldSendVideo: boolean;
@@ -274,14 +281,61 @@ function FriendLiveKitRoom({
       serverUrl={connection.serverUrl}
       token={connection.token}
       connect
-      audio={shouldSendAudio}
-      video={shouldSendVideo}
-      options={FRIEND_CALL_ROOM_OPTIONS}>
+      audio={false}
+      video={false}
+      options={FRIEND_CALL_ROOM_OPTIONS}
+      onError={(error) => onMediaError(formatNativeLiveKitError(error))}>
+      <NativeLocalMediaPublisher onMediaError={onMediaError} shouldSendAudio={shouldSendAudio} shouldSendVideo={shouldSendVideo} />
       <NativeCallConnectionReporter callId={callId} />
       <RemoteParticipantCountReporter onChange={onRemoteParticipantCountChange} />
       {children}
     </LiveKitRoom>
   );
+}
+
+function NativeLocalMediaPublisher({
+  onMediaError,
+  shouldSendAudio,
+  shouldSendVideo,
+}: {
+  onMediaError: (error: string | null) => void;
+  shouldSendAudio: boolean;
+  shouldSendVideo: boolean;
+}) {
+  const room = useRoomContext();
+  const connectionState = useConnectionState(room);
+  const syncIdRef = useRef(0);
+
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) {
+      return;
+    }
+
+    const syncId = syncIdRef.current + 1;
+    syncIdRef.current = syncId;
+    let cancelled = false;
+
+    async function syncLocalMedia() {
+      const results = await Promise.allSettled([
+        room.localParticipant.setMicrophoneEnabled(shouldSendAudio),
+        room.localParticipant.setCameraEnabled(shouldSendVideo),
+      ]);
+
+      if (cancelled || syncId !== syncIdRef.current) {
+        return;
+      }
+
+      const failedResult = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      onMediaError(failedResult ? formatNativeLiveKitError(failedResult.reason) : null);
+    }
+
+    void syncLocalMedia();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionState, onMediaError, room, shouldSendAudio, shouldSendVideo]);
+
+  return null;
 }
 
 function RemoteParticipantCountReporter({ onChange }: { onChange: (count: number) => void }) {
@@ -292,6 +346,18 @@ function RemoteParticipantCountReporter({ onChange }: { onChange: (count: number
   }, [onChange, remoteParticipants.length]);
 
   return null;
+}
+
+function formatNativeLiveKitError(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message.includes('engine not connected')) {
+      return 'Call media is still connecting. Try toggling your mic or camera in a moment.';
+    }
+
+    return error.message;
+  }
+
+  return 'Unable to publish call media.';
 }
 
 function NativeCallConnectionReporter({ callId }: { callId: Id<'friendCalls'> }) {
