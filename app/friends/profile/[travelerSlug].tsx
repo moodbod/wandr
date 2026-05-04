@@ -22,13 +22,19 @@ import type { FriendViewerProfile } from '@/types/friends';
 
 type RelationshipState = NonNullable<FriendViewerProfile>['relationship']['state'];
 
-export default function FriendViewerProfileScreen() {
+export default function FriendViewerProfileScreen({
+  onClose,
+  travelerSlug: travelerSlugProp,
+}: {
+  onClose?: () => void;
+  travelerSlug?: string;
+} = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const params = useLocalSearchParams<{ travelerSlug?: string | string[] }>();
-  const profileSlug = Array.isArray(params.travelerSlug) ? params.travelerSlug[0] : params.travelerSlug;
+  const profileSlug = travelerSlugProp ?? (Array.isArray(params.travelerSlug) ? params.travelerSlug[0] : params.travelerSlug);
   const traveler = useCurrentTraveler();
   const profile = useQuery(
     getFriendViewerProfileRef,
@@ -61,7 +67,9 @@ export default function FriendViewerProfileScreen() {
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: onClose
+            ? { kind: 'back', accessibilityLabel: 'Close profile', onPress: onClose }
+            : { kind: 'back', accessibilityLabel: 'Go back' },
         }}
       />
       <ScrollView

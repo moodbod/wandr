@@ -1,11 +1,14 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Check, FadersHorizontal } from 'phosphor-react-native';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import DirectChatScreen from '@/app/friends/direct/[threadId]';
+import FriendsChatScreen from '@/app/friends/group/[circleId]';
+import FriendViewerProfileScreen from '@/app/friends/profile/[travelerSlug]';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassInput } from '@/components/ui/glass-input';
@@ -14,13 +17,19 @@ import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
 import { WandrHeader } from '@/components/wandr/header';
+import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
+import { useResponsive } from '@/hooks/use-responsive';
 import { createOpenFriendGroupRef, getFriendChatListRef, listUserTripsRef } from '@/lib/convex';
 
 type ChatFilter = 'primary' | 'groups' | 'chats';
+type ChatDetail =
+  | { kind: 'direct'; id: string }
+  | { kind: 'group'; id: string }
+  | { kind: 'profile'; slug: string };
 
 const chatFilters: { key: ChatFilter; label: string }[] = [
   { key: 'primary', label: 'Primary' },
@@ -31,7 +40,12 @@ const chatFilters: { key: ChatFilter; label: string }[] = [
 export default function FriendsChatListScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    directThreadId?: string | string[];
+    groupCircleId?: string | string[];
+  }>();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen, isTablet } = useResponsive();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chatList = useQuery(getFriendChatListRef, { travelerSlug: traveler?.slug ?? '' });
@@ -44,6 +58,9 @@ export default function FriendsChatListScreen() {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('primary');
   const [searchQuery, setSearchQuery] = useState('');
+  const [detail, setDetail] = useState<ChatDetail | null>(null);
+  const directThreadId = Array.isArray(params.directThreadId) ? params.directThreadId[0] : params.directThreadId;
+  const groupCircleId = Array.isArray(params.groupCircleId) ? params.groupCircleId[0] : params.groupCircleId;
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredGroups = useMemo(() => {
@@ -72,6 +89,29 @@ export default function FriendsChatListScreen() {
   }, [chatList?.directs, normalizedSearchQuery]);
   const showGroups = activeFilter === 'primary' || activeFilter === 'groups';
   const showDirects = activeFilter === 'primary' || activeFilter === 'chats';
+
+  useEffect(() => {
+    if (!isLargeScreen) {
+      return;
+    }
+
+    if (directThreadId) {
+      setDetail((current) =>
+        current?.kind === 'direct' && current.id === directThreadId
+          ? current
+          : { kind: 'direct', id: directThreadId }
+      );
+      return;
+    }
+
+    if (groupCircleId) {
+      setDetail((current) =>
+        current?.kind === 'group' && current.id === groupCircleId
+          ? current
+          : { kind: 'group', id: groupCircleId }
+      );
+    }
+  }, [directThreadId, groupCircleId, isLargeScreen]);
 
   const handleCreateGroup = async () => {
     sheetRef.current?.snapToIndex(0);
@@ -103,6 +143,10 @@ export default function FriendsChatListScreen() {
         setSelectedTripId(null);
         setSelectedFriendSlugs([]);
         sheetRef.current?.close();
+        if (isLargeScreen) {
+          setDetail({ kind: 'group', id: String(circleId) });
+          return;
+        }
         router.push(`/friends/group/${circleId}` as never);
       }
     } finally {
@@ -110,27 +154,86 @@ export default function FriendsChatListScreen() {
     }
   };
 
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [
-            { kind: 'plus', accessibilityLabel: 'Create group', onPress: handleCreateGroup },
-            { kind: 'notifications', accessibilityLabel: 'Notifications' },
-          ],
-        }}
-      />
+  const openChatItem = (item: { href?: string }) => {
+    const href = item.href ?? '';
+    const groupId = href.match(/\/friends\/group\/([^/?#]+)/)?.[1];
+    const directId = href.match(/\/friends\/direct\/([^/?#]+)/)?.[1];
+
+    if (isLargeScreen) {
+      if (groupId) {
+        setDetail({ kind: 'group', id: decodeURIComponent(groupId) });
+        return;
+      }
+
+      if (directId) {
+        setDetail({ kind: 'direct', id: decodeURIComponent(directId) });
+        return;
+      }
+    }
+
+    if (href) {
+      router.push(href as never);
+    }
+  };
+
+  const openProfile = (travelerSlug: string) => {
+    if (isLargeScreen) {
+      setDetail({ kind: 'profile', slug: travelerSlug });
+      return;
+    }
+
+    router.push(`/friends/profile/${travelerSlug}` as never);
+  };
+
+  const chatListContent = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+            trailingActions: [
+              { kind: 'plus', accessibilityLabel: 'Create group', onPress: handleCreateGroup },
+              { kind: 'notifications', accessibilityLabel: 'Notifications' },
+            ],
+          }}
+        />
+      ) : null}
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 72,
+            paddingTop: isLargeScreen ? insets.top + 24 : insets.top + 72,
             paddingBottom: insets.bottom + 80,
           },
         ]}>
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
+
+        {isLargeScreen ? (
+          <View style={styles.largeHeaderRow}>
+            <View style={styles.largeTitleBlock}>
+              <ThemedText
+                style={[
+                  styles.largeTitle,
+                  { color: isDark ? designSystem.colors.darkText : designSystem.colors.ink },
+                ]}
+              >
+                Chats
+              </ThemedText>
+              <ThemedText
+                style={[
+                  styles.largeSubtitle,
+                  { color: isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray },
+                ]}
+              >
+                Groups and direct messages
+              </ThemedText>
+            </View>
+            <Pressable accessibilityRole="button" onPress={handleCreateGroup} style={styles.largeCreateButton}>
+              <ThemedText style={styles.largeCreateButtonText}>New</ThemedText>
+            </Pressable>
+          </View>
+        ) : null}
 
         <GlassInput
           value={searchQuery}
@@ -155,7 +258,7 @@ export default function FriendsChatListScreen() {
             <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
             <View style={styles.rowList}>
               {filteredGroups.map((item: any) => (
-                <FriendChatListRow key={item.id} item={item} onPress={() => router.push(item.href as never)} />
+                <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
               ))}
             </View>
           </View>
@@ -171,10 +274,10 @@ export default function FriendsChatListScreen() {
                   item={item}
                   onAvatarPress={
                     item.travelerSlug
-                      ? () => router.push(`/friends/profile/${item.travelerSlug}` as never)
+                      ? () => openProfile(item.travelerSlug)
                       : undefined
                   }
-                  onPress={() => router.push(item.href as never)}
+                  onPress={() => openChatItem(item)}
                 />
               ))}
             </View>
@@ -190,6 +293,54 @@ export default function FriendsChatListScreen() {
           </View>
         ) : null}
       </ScrollView>
+    </>
+  );
+
+  const detailContent = detail?.kind === 'direct' ? (
+    <DirectChatScreen onClose={() => setDetail(null)} threadId={detail.id} />
+  ) : detail?.kind === 'group' ? (
+    <FriendsChatScreen circleId={detail.id} onClose={() => setDetail(null)} />
+  ) : detail?.kind === 'profile' ? (
+    <FriendViewerProfileScreen onClose={() => setDetail(null)} travelerSlug={detail.slug} />
+  ) : null;
+
+  return (
+    <ThemedView style={styles.root}>
+      {isLargeScreen ? (
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            {chatListContent}
+          </View>
+          {detailContent ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              {detailContent}
+            </View>
+          ) : null}
+          <View style={styles.mapColumn}>
+            <AppMapWorkspace />
+          </View>
+        </View>
+      ) : (
+        chatListContent
+      )}
 
       <GlassBottomSheet ref={sheetRef} index={-1} snapPoints={['68%']} enablePanDownToClose>
         <BottomSheetView style={styles.sheetContent}>
@@ -294,9 +445,79 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  detailColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    borderRightWidth: 1,
+  },
+  detailColumnTablet: {
+    width: 340,
+  },
+  detailColumnDesktop: {
+    width: 430,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    position: 'relative',
+  },
   content: {
     paddingHorizontal: designSystem.spacing.lg,
     gap: designSystem.spacing.xl,
+  },
+  largeHeaderRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  largeTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  largeTitle: {
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: '700',
+  },
+  largeSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  largeCreateButton: {
+    minWidth: 64,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: designSystem.colors.lime,
+    paddingHorizontal: 18,
+  },
+  largeCreateButtonText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: designSystem.colors.darkGreen,
   },
   notice: {
     fontSize: 14,

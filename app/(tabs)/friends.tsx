@@ -1,25 +1,30 @@
 import { useMutation, useQuery } from 'convex/react';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { ArrowRight } from 'phosphor-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import FriendViewerProfileScreen from '@/app/friends/profile/[travelerSlug]';
+import FriendsDiscoverScreen from '@/app/friends/discover';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FriendCircleBanner, FriendCircleBannerSkeleton } from '@/components/wandr/friends/friend-circle-banner';
 import { FriendMatchCard, FriendMatchCardSkeleton } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
+import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
+import { useResponsive } from '@/hooks/use-responsive';
 import { actOnFriendCandidateRef, getFriendsDashboardRef } from '@/lib/convex';
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen, isTablet } = useResponsive();
   const { width: screenWidth } = useWindowDimensions();
   const horizontalGutter = Math.max(designSystem.spacing.lg, insets.left, insets.right);
   const groupCardWidth = Math.min(312, Math.max(260, screenWidth - horizontalGutter * 3));
@@ -28,6 +33,8 @@ export default function FriendsScreen() {
   const dashboard = useQuery(getFriendsDashboardRef, { travelerSlug: traveler?.slug ?? '' });
   const actOnCandidate = useMutation(actOnFriendCandidateRef);
   const [busyCandidateSlug, setBusyCandidateSlug] = useState<string | null>(null);
+  const [selectedProfileSlug, setSelectedProfileSlug] = useState<string | null>(null);
+  const [mainMode, setMainMode] = useState<'dashboard' | 'discover'>('dashboard');
   const [hiddenCandidateSlugs, setHiddenCandidateSlugs] = useState<Set<string>>(() => new Set());
   const topMatches = useMemo(
     () => dashboard?.topMatches.filter((candidate: any) => !hiddenCandidateSlugs.has(candidate.travelerSlug)) ?? [],
@@ -73,25 +80,28 @@ export default function FriendsScreen() {
 
   const isLoading = isBootstrapping || traveler === undefined || dashboard === undefined;
 
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          trailingActions: [
-            { kind: 'chat', accessibilityLabel: 'Open chats' },
-            { kind: 'notifications', accessibilityLabel: 'Notifications' },
-          ],
-        }}
-      />
+  const dashboardContent = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            trailingActions: [
+              { kind: 'chat', accessibilityLabel: 'Open chats' },
+              { kind: 'notifications', accessibilityLabel: 'Notifications' },
+            ],
+          }}
+        />
+      ) : null}
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: isLargeScreen ? insets.top + 24 : insets.top + 88,
             paddingBottom: insets.bottom + 120,
           },
-        ]}>
+        ]}
+        showsVerticalScrollIndicator={false}>
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
         {isLoading || dashboard?.activeCircles.length ? (
@@ -131,16 +141,23 @@ export default function FriendsScreen() {
         ) : null}
 
         <View style={styles.sectionHeader}>
-          <View style={styles.sectionTopRow}>
-            <ThemedText style={styles.sectionTitle}>People to meet</ThemedText>
-            <Link href="/friends/discover" asChild>
-              <Pressable style={styles.linkPill}>
+            <View style={styles.sectionTopRow}>
+              <ThemedText style={styles.sectionTitle}>People to meet</ThemedText>
+              <Pressable
+                onPress={() => {
+                  if (isLargeScreen) {
+                    setMainMode('discover');
+                    return;
+                  }
+                  router.push('/friends/discover');
+                }}
+                style={styles.linkPill}
+              >
                 <ThemedText style={[styles.linkPillText, { color: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen }]}>
                   See all
                 </ThemedText>
                 <ArrowRight color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={16} weight="bold" />
               </Pressable>
-            </Link>
           </View>
         </View>
 
@@ -155,13 +172,73 @@ export default function FriendsScreen() {
                   candidate={candidate}
                   disabled={busyCandidateSlug === candidate.travelerSlug}
                   onInvite={() => handleCandidateAction(candidate.travelerSlug, 'invited')}
-                  onOpenProfile={() => router.push(`/friends/profile/${candidate.travelerSlug}` as never)}
+                  onOpenProfile={() => {
+                    if (isLargeScreen) {
+                      setSelectedProfileSlug(candidate.travelerSlug);
+                      return;
+                    }
+                    router.push(`/friends/profile/${candidate.travelerSlug}` as never);
+                  }}
                   onPass={() => handleCandidateAction(candidate.travelerSlug, 'passed')}
                   onFriend={() => handleCandidateAction(candidate.travelerSlug, 'friended')}
                 />
               ))}
         </View>
       </ScrollView>
+    </>
+  );
+  const mainContent = mainMode === 'discover' && isLargeScreen ? (
+    <FriendsDiscoverScreen
+      onBack={() => setMainMode('dashboard')}
+      onOpenProfile={setSelectedProfileSlug}
+      showHeader
+    />
+  ) : dashboardContent;
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            {mainContent}
+          </View>
+          {selectedProfileSlug ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              <FriendViewerProfileScreen
+                onClose={() => setSelectedProfileSlug(null)}
+                travelerSlug={selectedProfileSlug}
+              />
+            </View>
+          ) : null}
+          <View style={styles.mapColumn}>
+            <AppMapWorkspace />
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.root}>
+      {mainContent}
     </ThemedView>
   );
 }
@@ -169,6 +246,39 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  detailColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    borderRightWidth: 1,
+  },
+  detailColumnTablet: {
+    width: 340,
+  },
+  detailColumnDesktop: {
+    width: 430,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    position: 'relative',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,

@@ -1,11 +1,12 @@
 import BottomSheet, { BottomSheetBackgroundProps, BottomSheetProps } from '@gorhom/bottom-sheet';
-import React, { forwardRef } from 'react';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 
 export function isNativeGlassBottomSheetAvailable() {
   return false;
@@ -41,13 +42,18 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
   animatedPosition,
 }) => {
   const insets = useSafeAreaInsets();
+  const { isLargeScreen } = useResponsive();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const borderColor = getGlassBottomSheetBorderColor(isDark);
 
   const animatedStyle = useAnimatedStyle(() => {
-    // When the sheet hits the top of the screen (or top inset), the border radius drops to 0.
-    // As it slides down 40px below the top, the border radius animates to the full sheet radius.
+    if (isLargeScreen) {
+      return {
+        borderRadius: designSystem.radii.sheet,
+      };
+    }
+
     const radius = interpolate(
       animatedPosition.value,
       [insets.top, insets.top + 40],
@@ -68,7 +74,7 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
         styles.sheetClip,
         styles.sheetShadow,
         { backgroundColor: 'transparent', borderColor },
-        styles.sheetBorder,
+        isLargeScreen ? styles.popupBorder : styles.sheetBorder,
         animatedStyle,
       ]}
     >
@@ -78,16 +84,190 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
 };
 
 export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props, ref) => {
-  const { containerStyle, ...bottomSheetProps } = props;
+  const {
+    backdropComponent,
+    bottomInset,
+    containerStyle,
+    detached,
+    enablePanDownToClose,
+    index,
+    snapPoints,
+    style,
+    topInset,
+    onClose,
+    ...bottomSheetProps
+  } = props;
+  const sheetRef = useRef<BottomSheet>(null);
+  const { height, width } = useWindowDimensions();
+  const { isLargeScreen } = useResponsive();
+  const modalWidth = Math.min(560, Math.max(380, width * 0.34));
+  const modalHeightRatio = getDesktopSnapRatio(snapPoints);
+  const modalHeight = Math.min(height - 120, Math.max(340, height * modalHeightRatio));
+  const [isDesktopVisible, setIsDesktopVisible] = useState(() => {
+    const initialIndex = typeof index === 'number' ? index : -1;
+    return isLargeScreen && initialIndex >= 0;
+  });
+  const [desktopIndex, setDesktopIndex] = useState(() => {
+    const initialIndex = typeof index === 'number' ? index : 0;
+    return initialIndex >= 0 ? initialIndex : 0;
+  });
+
+  useEffect(() => {
+    if (!isLargeScreen) {
+      return;
+    }
+
+    const nextIndex = typeof index === 'number' ? index : -1;
+    if (nextIndex >= 0) {
+      setDesktopIndex(nextIndex);
+      setIsDesktopVisible(true);
+      return;
+    }
+
+    if (nextIndex === -1) {
+      setIsDesktopVisible(false);
+    }
+  }, [index, isLargeScreen]);
+
+  useEffect(() => {
+    if (!isLargeScreen || !isDesktopVisible) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      sheetRef.current?.snapToIndex(0);
+    });
+  }, [desktopIndex, isDesktopVisible, isLargeScreen]);
+
+  const closeDesktopSheet = useCallback(() => {
+    sheetRef.current?.close();
+    setIsDesktopVisible(false);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    snapToIndex: (index, animationConfigs) => {
+      if (isLargeScreen) {
+        setDesktopIndex(index);
+        setIsDesktopVisible(index >= 0);
+        requestAnimationFrame(() => {
+          sheetRef.current?.snapToIndex(0, animationConfigs);
+        });
+        return;
+      }
+
+      sheetRef.current?.snapToIndex(index, animationConfigs);
+    },
+    snapToPosition: (position, animationConfigs) => {
+      if (isLargeScreen) {
+        setDesktopIndex(0);
+        setIsDesktopVisible(true);
+        requestAnimationFrame(() => {
+          sheetRef.current?.snapToIndex(0, animationConfigs);
+        });
+        return;
+      }
+
+      sheetRef.current?.snapToPosition(position, animationConfigs);
+    },
+    expand: (animationConfigs) => {
+      if (isLargeScreen) {
+        setDesktopIndex(0);
+        setIsDesktopVisible(true);
+        requestAnimationFrame(() => {
+          sheetRef.current?.snapToIndex(0, animationConfigs);
+        });
+        return;
+      }
+
+      sheetRef.current?.expand(animationConfigs);
+    },
+    collapse: (animationConfigs) => {
+      if (isLargeScreen) {
+        setDesktopIndex(0);
+        setIsDesktopVisible(true);
+        requestAnimationFrame(() => {
+          sheetRef.current?.snapToIndex(0, animationConfigs);
+        });
+        return;
+      }
+
+      sheetRef.current?.collapse(animationConfigs);
+    },
+    close: (animationConfigs) => {
+      if (isLargeScreen) {
+        sheetRef.current?.close(animationConfigs);
+        setIsDesktopVisible(false);
+        return;
+      }
+
+      sheetRef.current?.close(animationConfigs);
+    },
+    forceClose: (animationConfigs) => {
+      if (isLargeScreen) {
+        sheetRef.current?.forceClose(animationConfigs);
+        setIsDesktopVisible(false);
+        return;
+      }
+
+      sheetRef.current?.forceClose(animationConfigs);
+    },
+  }) as BottomSheet, [isLargeScreen]);
+
+  if (isLargeScreen) {
+    return (
+      <Modal
+        animationType="fade"
+        onRequestClose={enablePanDownToClose === false ? undefined : closeDesktopSheet}
+        transparent
+        visible={isDesktopVisible}
+      >
+        <View style={styles.modalHost}>
+          {enablePanDownToClose === false ? null : (
+            <Pressable accessibilityRole="button" onPress={closeDesktopSheet} style={styles.modalBackdrop} />
+          )}
+          <View style={[styles.popupHost, { width: modalWidth, height: modalHeight }]}>
+            <BottomSheet
+              {...bottomSheetProps}
+              ref={sheetRef}
+              backgroundComponent={CustomBackground}
+              backdropComponent={undefined}
+              handleComponent={null}
+              enableContentPanningGesture
+              enableHandlePanningGesture={false}
+              detached={false}
+              enablePanDownToClose={false}
+              snapPoints={['100%']}
+              index={0}
+              onClose={() => {
+                setIsDesktopVisible(false);
+                onClose?.();
+              }}
+              style={[styles.popupSheet, style]}
+              containerStyle={[styles.sheetContainer, styles.popupContainer, containerStyle]}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <BottomSheet
-      ref={ref}
+      ref={sheetRef}
       backgroundComponent={CustomBackground}
+      backdropComponent={backdropComponent}
       handleComponent={null}
       enableContentPanningGesture
       enableHandlePanningGesture
+      detached={detached}
+      bottomInset={bottomInset}
+      topInset={topInset}
+      enablePanDownToClose={enablePanDownToClose}
+      index={index}
+      snapPoints={snapPoints}
+      style={style}
       containerStyle={[styles.sheetContainer, containerStyle]}
+      onClose={onClose}
       {...bottomSheetProps}
     />
   );
@@ -95,10 +275,51 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
 
 GlassBottomSheet.displayName = 'GlassBottomSheet';
 
+function getDesktopSnapRatio(snapPoints: BottomSheetProps['snapPoints']) {
+  const fallback = 0.58;
+
+  if (!Array.isArray(snapPoints)) {
+    return fallback;
+  }
+
+  const firstPoint = snapPoints[0];
+  if (typeof firstPoint === 'string') {
+    const percentage = Number(firstPoint.replace('%', ''));
+    return Number.isFinite(percentage) ? Math.min(0.72, Math.max(0.38, percentage / 100)) : fallback;
+  }
+
+  if (typeof firstPoint === 'number') {
+    return Math.min(0.72, Math.max(0.38, firstPoint / 900));
+  }
+
+  return fallback;
+}
+
 const styles = StyleSheet.create({
+  modalHost: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 60,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  popupHost: {
+    maxWidth: '92%',
+    maxHeight: '82%',
+  },
   sheetContainer: {
     zIndex: 1000,
     elevation: 1000,
+  },
+  popupContainer: {
+    alignItems: 'center',
+  },
+  popupSheet: {
+    overflow: 'hidden',
+    borderRadius: designSystem.radii.sheet,
   },
   sheetClip: {
     overflow: 'hidden',
@@ -112,5 +333,8 @@ const styles = StyleSheet.create({
   },
   sheetBorder: {
     borderTopWidth: 1,
+  },
+  popupBorder: {
+    borderWidth: 1,
   },
 });

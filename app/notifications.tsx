@@ -11,9 +11,11 @@ import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
+import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   acceptFriendRequestRef,
   approveTripJoinRequestRef,
@@ -93,6 +95,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen, isTablet } = useResponsive();
   const traveler = useCurrentTraveler();
   const travelerSlug = traveler?.slug;
   const notifications = useQuery(listNotificationsRef, travelerSlug ? { travelerSlug } : 'skip');
@@ -187,20 +190,22 @@ export default function NotificationsScreen() {
     }
   };
 
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-        }}
-      />
+  const content = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          }}
+        />
+      ) : null}
 
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 72,
+            paddingTop: isLargeScreen ? insets.top + 24 : insets.top + 72,
             paddingBottom: insets.bottom + 64,
           },
         ]}>
@@ -259,6 +264,36 @@ export default function NotificationsScreen() {
           </View>
         )}
       </ScrollView>
+    </>
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            {content}
+          </View>
+          <View style={styles.mapColumn}>
+            <AppMapWorkspace />
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.root}>
+      {content}
     </ThemedView>
   );
 }
@@ -410,6 +445,28 @@ function NotificationRow({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    position: 'relative',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,

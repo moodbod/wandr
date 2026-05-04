@@ -2,7 +2,17 @@ import { Image } from 'expo-image';
 import { ImagesSquare, X } from 'phosphor-react-native';
 import { useState } from 'react';
 import Carousel from 'react-native-reanimated-carousel';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
@@ -22,78 +32,116 @@ export function ExperienceGalleryCarousel({
   height = 500,
 }: ExperienceGalleryCarouselProps) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
 
-  const cardWidth = Math.min(windowWidth - 76, 344);
+  const availableWidth = containerWidth || windowWidth;
+  const cardWidth = Math.min(Math.max(availableWidth - 48, 240), 344);
   const itemGap = 18;
   const itemWidth = cardWidth + itemGap;
   const normalizedImages = images.map((image) => (typeof image === 'string' ? { uri: image, source: 'host' as const } : image));
   const previewImages = normalizedImages.slice(0, 6);
+  const renderPreviewSlide = (item: GalleryImageItem, index: number) => (
+    <View style={[styles.slide, { width: itemWidth }]}>
+      <Pressable
+        accessibilityLabel={`Open photo ${index + 1} of ${normalizedImages.length}`}
+        accessibilityRole="imagebutton"
+        onPress={() => {
+          setActiveIndex(index);
+          setGalleryVisible(true);
+        }}
+        style={[
+          styles.frame,
+          {
+            width: cardWidth,
+            height,
+          },
+        ]}>
+        <Image source={item.uri} contentFit="cover" style={styles.image} />
+        {item.source === 'visitor' ? (
+          <View style={styles.visitorTag}>
+            <ThemedText style={styles.visitorTagText}>Visitor</ThemedText>
+          </View>
+        ) : null}
+        <View style={styles.photoCountPill}>
+          <ImagesSquare color={designSystem.colors.white} size={15} weight="bold" />
+          <ThemedText style={styles.photoCountText}>
+            {index + 1}/{normalizedImages.length}
+          </ThemedText>
+        </View>
+        {index === previewImages.length - 1 && normalizedImages.length > previewImages.length ? (
+          <View style={styles.morePhotosOverlay}>
+            <ThemedText style={styles.morePhotosText}>+{normalizedImages.length - previewImages.length}</ThemedText>
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+  const handleWebScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / itemWidth));
+  };
 
   if (images.length === 0) {
     return null;
   }
 
   return (
-    <View style={[styles.shell, { height }]}>
+    <View
+      onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
+      style={[styles.shell, { height }]}
+    >
       <View style={[styles.stage, { height }]}>
-        <Carousel
-          loop={false}
-          width={itemWidth}
-          height={height}
-          pagingEnabled
-          snapEnabled
-          overscrollEnabled={false}
-          style={styles.carousel}
-          mode="parallax"
-          modeConfig={{
-            parallaxScrollingScale: 0.96,
-            parallaxScrollingOffset: Math.max((windowWidth - cardWidth) / 2 - 8, 28),
-            parallaxAdjacentItemScale: 0.84,
-          }}
-          data={previewImages}
-          onSnapToItem={setActiveIndex}
-          renderItem={({ index, item }) => {
-            return (
-              <View style={[styles.slide, { width: itemWidth }]}>
-                <Pressable
-                  accessibilityLabel={`Open photo ${index + 1} of ${normalizedImages.length}`}
-                  accessibilityRole="imagebutton"
-                  onPress={() => {
-                    setActiveIndex(index);
-                    setGalleryVisible(true);
-                  }}
-                  style={[
-                    styles.frame,
-                    {
-                      width: cardWidth,
-                      height,
-                    },
-                  ]}>
-                  <Image source={item.uri} contentFit="cover" style={styles.image} />
-                  {item.source === 'visitor' ? (
-                    <View style={styles.visitorTag}>
-                      <ThemedText style={styles.visitorTagText}>Visitor</ThemedText>
-                    </View>
-                  ) : null}
-                  <View style={styles.photoCountPill}>
-                    <ImagesSquare color={designSystem.colors.white} size={15} weight="bold" />
-                    <ThemedText style={styles.photoCountText}>
-                      {index + 1}/{normalizedImages.length}
-                    </ThemedText>
-                  </View>
-                  {index === previewImages.length - 1 && normalizedImages.length > previewImages.length ? (
-                    <View style={styles.morePhotosOverlay}>
-                      <ThemedText style={styles.morePhotosText}>+{normalizedImages.length - previewImages.length}</ThemedText>
-                    </View>
-                  ) : null}
-                </Pressable>
-              </View>
-            );
-          }}
-        />
+        {containerWidth > 0 && Platform.OS === 'web' ? (
+          <ScrollView
+            horizontal
+            decelerationRate="fast"
+            keyboardShouldPersistTaps="handled"
+            onScroll={handleWebScroll}
+            scrollEventThrottle={16}
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={itemWidth}
+            snapToAlignment="center"
+            style={[styles.carousel, { width: availableWidth }]}
+            contentContainerStyle={[
+              styles.webCarouselContent,
+              {
+                paddingLeft: Math.max((availableWidth - cardWidth) / 2, 18),
+                paddingRight: Math.max((availableWidth - cardWidth) / 2, 18),
+              },
+            ]}
+            {...({
+              onWheel: (event: WheelEvent) => {
+                const target = event.currentTarget as HTMLElement;
+                target.scrollLeft += Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+              },
+            } as any)}
+          >
+            {previewImages.map((item, index) => (
+              <View key={`${item.uri}-${index}`}>{renderPreviewSlide(item, index)}</View>
+            ))}
+          </ScrollView>
+        ) : containerWidth > 0 ? (
+          <Carousel
+            loop={false}
+            width={itemWidth}
+            height={height}
+            pagingEnabled
+            snapEnabled
+            overscrollEnabled={false}
+            style={[styles.carousel, { width: availableWidth }]}
+            mode="parallax"
+            modeConfig={{
+              parallaxScrollingScale: 0.96,
+              parallaxScrollingOffset: Math.max((availableWidth - cardWidth) / 2, 18),
+              parallaxAdjacentItemScale: 0.84,
+            }}
+            data={previewImages}
+            onSnapToItem={setActiveIndex}
+            renderItem={({ index, item }) => renderPreviewSlide(item, index)}
+          />
+        ) : null}
       </View>
       <Modal
         animationType="slide"
@@ -199,13 +247,18 @@ export function ExperienceGalleryCarousel({
 const styles = StyleSheet.create({
   shell: {
     width: '100%',
+    overflow: 'hidden',
   },
   stage: {
     position: 'relative',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   carousel: {
-    width: '100%',
+    overflow: 'hidden',
+  },
+  webCarouselContent: {
+    alignItems: 'center',
   },
   slide: {
     alignItems: 'center',

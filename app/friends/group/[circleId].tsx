@@ -30,8 +30,11 @@ import { FriendChatMessageBubble } from '@/components/wandr/friends/friend-chat-
 import { FriendChatToolsSheet } from '@/components/wandr/friends/friend-chat-tools-sheet';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
+import type { Id } from '@/convex/_generated/dataModel';
+import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   deleteFriendCircleRef,
   deleteFriendMessageRef,
@@ -90,17 +93,30 @@ function formatReminder(minutes: number) {
   return `${minutes} minutes before`;
 }
 
-export default function FriendsChatScreen() {
+type FriendsChatScreenProps = {
+  circleId?: string;
+  onClose?: () => void;
+};
+
+export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: FriendsChatScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ circleId?: string | string[] }>();
-  const circleId = Array.isArray(params.circleId) ? params.circleId[0] : params.circleId;
+  const routeCircleId = Array.isArray(params.circleId) ? params.circleId[0] : params.circleId;
+  const circleId = circleIdProp ?? routeCircleId;
+  const { isLargeScreen } = useResponsive();
+  const { openCall } = useActiveFriendCall();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
-  const chat = useQuery(getFriendChatRef, {
-    travelerSlug: traveler?.slug ?? '',
-    circleId: circleId as never,
-  });
+  const chat = useQuery(
+    getFriendChatRef,
+    traveler?.slug && circleId
+      ? {
+          travelerSlug: traveler.slug,
+          circleId: circleId as never,
+        }
+      : 'skip'
+  );
   const deleteCircle = useMutation(deleteFriendCircleRef);
   const deleteMessage = useMutation(deleteFriendMessageRef);
   const leaveCircle = useMutation(leaveFriendCircleRef);
@@ -127,6 +143,17 @@ export default function FriendsChatScreen() {
   const menuSheetRef = useRef<BottomSheet>(null);
   const scheduleSheetRef = useRef<BottomSheet>(null);
   const toolsSheetRef = useRef<BottomSheet>(null);
+
+  useEffect(() => {
+    if (!isLargeScreen || circleIdProp || !routeCircleId) {
+      return;
+    }
+
+    router.replace({
+      pathname: '/friends/chat',
+      params: { groupCircleId: routeCircleId },
+    });
+  }, [circleIdProp, isLargeScreen, routeCircleId, router]);
 
   useEffect(() => {
     if (!chat?.messages?.length) {
@@ -223,6 +250,10 @@ export default function FriendsChatScreen() {
         mode,
       });
       if (call?._id) {
+        if (isLargeScreen) {
+          openCall(call._id as Id<'friendCalls'>);
+          return;
+        }
         router.push(`/friends/call/${call._id}`);
       }
     } catch (error) {
@@ -340,6 +371,10 @@ export default function FriendsChatScreen() {
               travelerSlug: traveler.slug,
             });
             menuSheetRef.current?.close();
+            if (onClose) {
+              onClose();
+              return;
+            }
             router.replace('/friends/chat');
           } finally {
             setIsSheetBusy(false);
@@ -368,6 +403,10 @@ export default function FriendsChatScreen() {
             });
             if (deleted) {
               menuSheetRef.current?.close();
+              if (onClose) {
+                onClose();
+                return;
+              }
               router.replace('/friends/chat');
             }
           } finally {
@@ -397,12 +436,16 @@ export default function FriendsChatScreen() {
     setMessageMenuAnchor(anchor);
   };
 
+  if (isLargeScreen && !circleIdProp) {
+    return null;
+  }
+
   return (
     <ThemedView style={styles.root}>
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back', onPress: onClose },
           trailingActions: [
             {
               kind: 'call',

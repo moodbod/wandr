@@ -1,4 +1,5 @@
 import { useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreJoinableTripCardsRef, getExplorePageContentRef } from '@/lib/convex';
 import {
     buildRegionOptions,
@@ -43,7 +45,9 @@ export default function ExploreSearchScreen() {
 }
 
 function ConnectedExploreSearchScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
   const joinableTripCards = useQuery(
@@ -56,6 +60,12 @@ function ConnectedExploreSearchScreen() {
   const [activeIntent, setActiveIntent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
+
+  useEffect(() => {
+    if (isLargeScreen) {
+      router.replace('/(tabs)/explore');
+    }
+  }, [isLargeScreen, router]);
 
   const locationExperiences = useMemo(
     () =>

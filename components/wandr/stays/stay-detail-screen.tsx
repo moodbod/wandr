@@ -128,8 +128,15 @@ function buildRoomSummary(
   return `${roomCount} ${roomOption.label.toLowerCase()}${roomCount === 1 ? '' : 's'} · ${bedOption.label.toLowerCase()}`;
 }
 
-export function StayDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug?: string }>();
+export function StayDetailScreen({
+  onClose,
+  slug: slugProp,
+}: {
+  onClose?: () => void;
+  slug?: string;
+} = {}) {
+  const { slug: routeSlug } = useLocalSearchParams<{ slug?: string }>();
+  const slug = slugProp ?? routeSlug;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
@@ -451,7 +458,9 @@ export function StayDetailScreen() {
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: onClose
+            ? { kind: 'back', accessibilityLabel: 'Close stay details', onPress: onClose }
+            : { kind: 'back', accessibilityLabel: 'Go back' },
           trailingActions: [
             {
               kind: 'plus',

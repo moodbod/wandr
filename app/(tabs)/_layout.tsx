@@ -2,11 +2,12 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs, VectorIcon } from 'expo-router/unstable-native-tabs';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 
 export const unstable_settings = {
   initialRouteName: 'explore',
@@ -15,6 +16,7 @@ export const unstable_settings = {
 export default function TabLayout() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
+  const { isLargeScreen } = useResponsive();
   const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.darkGreen;
   const inactiveColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
   const tabSurfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
@@ -41,67 +43,79 @@ export default function TabLayout() {
       return TabIcon;
     };
 
-  if (Platform.OS === 'android') {
-    return (
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: activeColor,
-          tabBarInactiveTintColor: inactiveColor,
-          tabBarLabelPosition: 'below-icon',
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '600',
-            lineHeight: 14,
-          },
-          tabBarShowLabel: true,
-          tabBarStyle: {
-            backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-            borderTopColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-            height: 68 + androidBottomInset,
-            paddingBottom: androidBottomInset,
-            paddingTop: 8,
-          },
+  const tabsContent = (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
+        tabBarLabelPosition: 'below-icon',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          lineHeight: 14,
+        },
+        tabBarShowLabel: true,
+        tabBarStyle: isLargeScreen ? { display: 'none' } : {
+          backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+          borderTopColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+          height: 68 + androidBottomInset,
+          paddingBottom: androidBottomInset,
+          paddingTop: 8,
+        },
+      }}
+    >
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Explore',
+          tabBarIcon: getExpoTabIcon('compass-outline', 'compass'),
         }}
-      >
-        <Tabs.Screen name="index" options={{ href: null }} />
-        <Tabs.Screen
-          name="explore"
-          options={{
-            title: 'Explore',
-            tabBarIcon: getExpoTabIcon('compass-outline', 'compass'),
-          }}
-        />
-        <Tabs.Screen
-          name="trip"
-          options={{
-            title: 'Trip',
-            tabBarIcon: getExpoTabIcon('map-outline', 'map'),
-          }}
-        />
-        <Tabs.Screen
-          name="stays"
-          options={{
-            title: 'Stays',
-            tabBarIcon: getExpoTabIcon('bed-outline', 'bed'),
-          }}
-        />
-        <Tabs.Screen
-          name="friends"
-          options={{
-            title: 'Friends',
-            tabBarIcon: getExpoTabIcon('account-group-outline', 'account-group'),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: getExpoTabIcon('account-circle-outline', 'account-circle'),
-          }}
-        />
-      </Tabs>
+      />
+      <Tabs.Screen
+        name="trip"
+        options={{
+          title: 'Trip',
+          tabBarIcon: getExpoTabIcon('map-outline', 'map'),
+        }}
+      />
+      <Tabs.Screen
+        name="stays"
+        options={{
+          title: 'Stays',
+          tabBarIcon: getExpoTabIcon('bed-outline', 'bed'),
+        }}
+      />
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Friends',
+          tabBarIcon: getExpoTabIcon('account-group-outline', 'account-group'),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: getExpoTabIcon('account-circle-outline', 'account-circle'),
+        }}
+      />
+    </Tabs>
+  );
+
+  if (isLargeScreen) {
+    return (
+        <View style={styles.largeContainer}>
+            <View style={styles.tabContentColumn}>
+                {tabsContent}
+            </View>
+        </View>
     );
+  }
+
+  if (Platform.OS === 'android' || Platform.OS === 'web') {
+    return tabsContent;
   }
 
   return (
@@ -173,3 +187,20 @@ export default function TabLayout() {
     </NativeTabs>
   );
 }
+
+const styles = StyleSheet.create({
+  largeLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  content: {
+    flex: 1,
+  },
+  largeContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  tabContentColumn: {
+    flex: 1,
+  },
+});

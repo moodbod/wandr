@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 import { completePhoneOnboardingRef, getPhoneAuthSessionRef, requestPhoneOtpRef, verifyPhoneOtpRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
@@ -128,11 +129,12 @@ export default function PhoneOnboardingScreen() {
   const getPhoneAuthSession = useMutation(getPhoneAuthSessionRef);
   const requestPhoneOtp = useAction(requestPhoneOtpRef);
   const verifyPhoneOtp = useMutation(verifyPhoneOtpRef);
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const { isLargeScreen } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
   const countrySheetRef = useRef<BottomSheet>(null);
-  const codeInputRefs = useRef<Array<TextInput | null>>([]);
+  const codeInputRefs = useRef<(TextInput | null)[]>([]);
   const [step, setStep] = useState<FlowStep>('intro');
   const [slideIndex, setSlideIndex] = useState(0);
   const [countryCode, setCountryCode] = useState<CountryCode>('NA');
@@ -158,6 +160,9 @@ export default function PhoneOnboardingScreen() {
 
   const canContinuePhone = parsedPhoneNumber?.isValid() ?? false;
   const canContinueProfile = name.trim().length >= 2;
+  const isDesktopAuth = Platform.OS === 'web' && isLargeScreen;
+  const authFrameWidth = isDesktopAuth ? Math.min(width - designSystem.spacing.xl * 2, 430) : width;
+  const authFrameHeight = isDesktopAuth ? Math.min(height - designSystem.spacing.xl * 2, 780) : undefined;
   const filteredCountries = useMemo(() => {
     const query = normalizeSearch(countrySearch);
     if (!query) {
@@ -345,13 +350,26 @@ export default function PhoneOnboardingScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardFrame}>
+    <SafeAreaView style={[styles.safeArea, isDesktopAuth && styles.desktopSafeArea, { backgroundColor: palette.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[
+          styles.keyboardFrame,
+          isDesktopAuth && [
+            styles.desktopAuthFrame,
+            {
+              backgroundColor: palette.background,
+              borderColor: palette.border,
+              height: authFrameHeight,
+              width: authFrameWidth,
+            },
+          ],
+        ]}>
         {step === 'intro' ? (
           <IntroStep
             palette={palette}
             slideIndex={slideIndex}
-            width={width}
+            width={authFrameWidth}
             onNext={handleIntroNext}
             onSlideChange={setSlideIndex}
             onSkip={() => setStep('phone')}
@@ -832,6 +850,19 @@ const styles = StyleSheet.create({
   },
   keyboardFrame: {
     flex: 1,
+  },
+  desktopSafeArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: designSystem.spacing.xl,
+  },
+  desktopAuthFrame: {
+    borderRadius: designSystem.radii.sheet,
+    borderWidth: 1,
+    boxShadow: '0 24px 80px rgba(0,0,0,0.26)',
+    flex: 0,
+    maxHeight: 780,
+    overflow: 'hidden',
   },
   introFrame: {
     flex: 1,

@@ -1,7 +1,7 @@
 import { isRunningInExpoGo } from 'expo';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { PhoneDisconnect, VideoCamera } from 'phosphor-react-native';
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 
 export default function FriendCallScreen() {
-  if (Platform.OS === 'web' || isRunningInExpoGo()) {
+  if (Platform.OS !== 'web' && isRunningInExpoGo()) {
     return <ExpoGoUnsupportedCallScreen />;
   }
 
@@ -29,7 +29,7 @@ function ActiveCallRouteBridge() {
   const didOpenCall = useRef(false);
   const didSeeActiveCall = useRef(false);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!callId) {
       return;
     }
@@ -37,7 +37,7 @@ function ActiveCallRouteBridge() {
     openCall(callId);
   }, [callId, openCall]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!didOpenCall.current) {
       return;
     }
@@ -47,8 +47,19 @@ function ActiveCallRouteBridge() {
     }
 
     if (didSeeActiveCall.current && (isMinimized || !activeCallId)) {
-      router.back();
+      const timeoutId = setTimeout(() => {
+        if (router.canGoBack()) {
+          router.back();
+          return;
+        }
+
+        router.replace('/friends/chat');
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
     }
+
+    return undefined;
   }, [activeCallId, isMinimized, router]);
 
   return (

@@ -123,6 +123,12 @@ export default function ActiveFriendCallOverlay() {
     }
   }, [call?.mode]);
 
+  useEffect(() => {
+    if (activeCallId && call === null) {
+      clearCall();
+    }
+  }, [activeCallId, call, clearCall]);
+
   if (!activeCallId) {
     return null;
   }
@@ -135,9 +141,7 @@ export default function ActiveFriendCallOverlay() {
     setIsLeaving(true);
     try {
       endNativeCall(activeCallId);
-      if (!call?.circleId) {
-        await endCall({ callId: activeCallId, travelerSlug: traveler.slug });
-      }
+      await endCall({ callId: activeCallId, travelerSlug: traveler.slug });
     } finally {
       clearCall();
       setIsLeaving(false);

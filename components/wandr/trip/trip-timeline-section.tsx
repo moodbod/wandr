@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MapPin, MapTrifold, X } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -15,6 +15,7 @@ type TripTimelineSectionProps = {
   variant?: 'default' | 'sheet';
   isEditing?: boolean;
   isLoading?: boolean;
+  onOpenItem?: (item: TripDashboardItem) => void;
   onRemoveItem?: (itemId: string) => void;
   removingItemId?: string | null;
 };
@@ -54,9 +55,11 @@ export function TripTimelineSection({
   variant = 'default',
   isEditing = false,
   isLoading = false,
+  onOpenItem,
   onRemoveItem,
   removingItemId = null,
 }: TripTimelineSectionProps) {
+  const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const isSheet = variant === 'sheet';
 
@@ -91,8 +94,22 @@ export function TripTimelineSection({
             ? ({ pathname: '/stays/details', params: { slug: item.experienceSlug } } as const)
             : ({ pathname: '/explore/[slug]', params: { slug: experience.slug } } as const);
 
-          const itemContent = (
-            <Pressable style={[styles.item, isEditing && styles.itemEditing]} disabled={isEditing}>
+          return (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isEditing}
+              key={item._id}
+              onPress={() => {
+                if (!isEditing) {
+                  if (onOpenItem) {
+                    onOpenItem(item);
+                    return;
+                  }
+                  router.push(href);
+                }
+              }}
+              style={[styles.item, isEditing && styles.itemEditing]}
+            >
               <View style={styles.mainRow}>
                 <View style={styles.markerCell}>
                   <TimelineMarker index={index} isDark={isDark} />
@@ -162,16 +179,6 @@ export function TripTimelineSection({
                 </View>
               </View>
             </Pressable>
-          );
-
-          if (isEditing) {
-            return <View key={item._id}>{itemContent}</View>;
-          }
-
-          return (
-            <Link key={item._id} href={href} asChild>
-              {itemContent}
-            </Link>
           );
         })}
       </View>

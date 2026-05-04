@@ -12,9 +12,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { WandrHeader } from '@/components/wandr/header';
+import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   getFriendsDashboardRef,
   listSavedPlacesRef,
@@ -46,6 +48,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
+  const { isLargeScreen, isTablet } = useResponsive();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const history = useQuery(listTravelerHistoryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
@@ -75,16 +78,18 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const planningLabel = rawPlanningLabel && !generatedPlanningLabels.has(rawPlanningLabel) ? rawPlanningLabel : null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
 
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: showBackButton
-            ? { kind: 'back', accessibilityLabel: 'Go back' }
-            : { kind: 'menu', accessibilityLabel: 'Open profile settings', onPress: () => setIsSidebarOpen(true) },
-        }}
-      />
+  const mainContent = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            leadingAction: showBackButton
+              ? { kind: 'back', accessibilityLabel: 'Go back' }
+              : { kind: 'menu', accessibilityLabel: 'Open profile settings', onPress: () => setIsSidebarOpen(true) },
+          }}
+        />
+      ) : null}
 
       <ProfileSettingsSidebar
         avatarUri={avatarUri}
@@ -98,7 +103,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: isLargeScreen ? insets.top + 24 : insets.top + 88,
             paddingBottom: insets.bottom + 120,
           },
         ]}
@@ -127,6 +132,36 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
           <ProfileBookings bookings={isLoading ? [] : bookings ?? []} colors={colors} />
         )}
       </ScrollView>
+    </>
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            {mainContent}
+          </View>
+          <View style={styles.mapColumn}>
+            <AppMapWorkspace />
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.root}>
+      {mainContent}
     </ThemedView>
   );
 }
@@ -441,6 +476,28 @@ function navigateToBooking(router: ReturnType<typeof useRouter>, booking: Travel
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    position: 'relative',
   },
   content: {
     gap: 20,

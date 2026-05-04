@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useResponsive } from '@/hooks/use-responsive';
 import { requestJoinExploreTripRef } from '@/lib/convex';
 import type { ExploreJoinableTripCard } from '@/types/explore';
 
@@ -17,18 +18,23 @@ const CARD_RADIUS = 32;
 export function ExploreGroupTripCard({
   card,
   href,
+  onOpen,
 }: {
   card: ExploreJoinableTripCard;
   href?: Href;
+  onOpen?: () => void;
 }) {
   const router = useRouter();
   const traveler = useCurrentTraveler();
+  const { isLargeScreen } = useResponsive();
   const requestJoinTrip = useMutation(requestJoinExploreTripRef);
   const [isRequesting, setIsRequesting] = useState(false);
   const [hasRequested, setHasRequested] = useState(false);
 
   const handleOpen = () => {
-    if (href) {
+    if (onOpen) {
+      onOpen();
+    } else if (href) {
       router.push(href);
     }
   };
@@ -54,18 +60,22 @@ export function ExploreGroupTripCard({
   };
 
   return (
-    <View style={styles.shell}>
-      <Pressable accessibilityRole={href ? 'button' : undefined} onPress={href ? handleOpen : undefined} style={styles.pressable}>
+    <View style={[styles.shell, isLargeScreen && styles.shellLarge]}>
+      <Pressable
+        accessibilityRole={(href || onOpen) ? 'button' : undefined}
+        onPress={(href || onOpen) ? handleOpen : undefined}
+        style={[styles.pressable, isLargeScreen && styles.pressableLarge]}
+      >
         <Image source={card.experienceImageUri} contentFit="cover" style={styles.backgroundImage} />
         <LinearGradient
           colors={[designSystem.colors.scrimTransparent, designSystem.colors.border, designSystem.colors.scrim, designSystem.colors.scrimStrong, designSystem.colors.scrimSolid]}
           locations={[0, 0.18, 0.42, 0.72, 1]}
-          style={styles.gradient}
+          style={[styles.gradient, isLargeScreen && styles.gradientLarge]}
         />
-        <View style={styles.body}>
-          <ThemedText style={styles.title}>{card.groupName}</ThemedText>
-          <ThemedText style={styles.subtitle}>{card.experienceTitle}</ThemedText>
-          <ThemedText style={styles.meta}>
+        <View style={[styles.body, isLargeScreen && styles.bodyLarge]}>
+          <ThemedText style={[styles.title, isLargeScreen && styles.titleLarge]}>{card.groupName}</ThemedText>
+          <ThemedText style={[styles.subtitle, isLargeScreen && styles.subtitleLarge]}>{card.experienceTitle}</ThemedText>
+          <ThemedText style={[styles.meta, isLargeScreen && styles.metaLarge]}>
             {card.hostName} • {card.memberCount} travelers • {card.locationLabel}
           </ThemedText>
           <View style={styles.footer}>
@@ -79,6 +89,7 @@ export function ExploreGroupTripCard({
               }}
               style={[
                 styles.actionButton,
+                isLargeScreen && styles.actionButtonLarge,
                 hasRequested || isRequesting ? styles.actionDisabled : null,
               ]}>
               <ThemedText
@@ -102,10 +113,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
+  shellLarge: {
+    width: 260,
+    borderRadius: 24,
+  },
   pressable: {
     minHeight: 520,
     justifyContent: 'flex-end',
     overflow: 'hidden',
+  },
+  pressableLarge: {
+    minHeight: 304,
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
@@ -117,6 +135,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     top: 120,
   },
+  gradientLarge: {
+    top: 76,
+  },
   body: {
     paddingHorizontal: 18,
     paddingTop: 172,
@@ -124,11 +145,21 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: 'transparent',
   },
+  bodyLarge: {
+    paddingHorizontal: 16,
+    paddingTop: 92,
+    paddingBottom: 16,
+    gap: 7,
+  },
   title: {
     fontSize: 24,
     lineHeight: 26,
     fontWeight: '600',
     color: designSystem.colors.cream,
+  },
+  titleLarge: {
+    fontSize: 19,
+    lineHeight: 22,
   },
   subtitle: {
     fontSize: 15,
@@ -136,10 +167,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: designSystem.colors.creamMuted,
   },
+  subtitleLarge: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   meta: {
     fontSize: 14,
     lineHeight: 20,
     color: designSystem.colors.creamSubtle,
+  },
+  metaLarge: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   footer: {
     flexDirection: 'row',
@@ -161,6 +200,12 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: designSystem.colors.lime,
+  },
+  actionButtonLarge: {
+    minWidth: 82,
+    height: 34,
+    borderRadius: 17,
+    paddingHorizontal: 14,
   },
   actionText: {
     fontSize: 12,

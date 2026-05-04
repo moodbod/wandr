@@ -16,12 +16,19 @@ import { getHiddenGemSlug, hiddenGemDetails } from '@/constants/hidden-gems-cont
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getExplorePageContentRef, getLocationLikeStateRef, toggleLocationLikeRef } from '@/lib/convex';
 
-export default function HiddenGemDetailScreen() {
-  return <ConnectedHiddenGemDetailScreen />;
+export default function HiddenGemDetailScreen({
+  onClose,
+  slug,
+}: {
+  onClose?: () => void;
+  slug?: string;
+} = {}) {
+  return <ConnectedHiddenGemDetailScreen onClose={onClose} slug={slug} />;
 }
 
-function ConnectedHiddenGemDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?: () => void; slug?: string }) {
+  const { slug: routeSlug } = useLocalSearchParams<{ slug: string }>();
+  const slug = slugProp ?? routeSlug;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
@@ -72,7 +79,9 @@ function ConnectedHiddenGemDetailScreen() {
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: onClose
+            ? { kind: 'back', accessibilityLabel: 'Close hidden gem', onPress: onClose }
+            : { kind: 'back', accessibilityLabel: 'Go back' },
           trailingActions: [
             {
               kind: 'favorite',

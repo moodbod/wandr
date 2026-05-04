@@ -1,3 +1,5 @@
+import { type StyleProp, type ViewStyle } from 'react-native';
+
 export type MapMarker = {
   id: string;
   coordinate: readonly [number, number];
@@ -41,4 +43,5 @@ export type MapPreviewProps = {
   markerVariant?: 'default' | 'routeWidget';
   onInteract?: () => void;
   onMarkerPress?: (marker: MapMarker) => void;
+  style?: StyleProp<ViewStyle>;
 };

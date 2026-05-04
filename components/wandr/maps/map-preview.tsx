@@ -7,6 +7,9 @@ import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchRoutePath } from '@/lib/routing';
 
+import { MapboxClusterMarker, MapboxPlaceMarker } from './mapbox/mapbox-marker';
+import { getMapboxModule } from './mapbox/mapbox-module';
+import { MapRouteOverlays } from './mapbox/mapbox-routes';
 import {
   buildMarkerDisplayItems,
   filterMarkersForZoom,
@@ -15,9 +18,6 @@ import {
   regionsAreClose,
   regionToZoomLevel,
 } from './mapbox/marker-clustering';
-import { MapboxClusterMarker, MapboxPlaceMarker } from './mapbox/mapbox-marker';
-import { getMapboxModule } from './mapbox/mapbox-module';
-import { MapRouteOverlays } from './mapbox/mapbox-routes';
 import type { MapMarker, MapPreviewProps, MapRegion } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
@@ -34,6 +34,7 @@ function MapPreviewComponent({
   markerVariant = 'default',
   onInteract,
   onMarkerPress,
+  style,
 }: MapPreviewProps) {
   const cameraRef = useRef<Camera | null>(null);
   const hasSettledOnUserRef = useRef(false);
@@ -44,6 +45,8 @@ function MapPreviewComponent({
   const MapboxGL = getMapboxModule();
   const colorScheme = useColorScheme();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
+  const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
+  const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const styleURL = MapboxGL ? (isDark ? MapboxGL.StyleURL.Dark : MapboxGL.StyleURL.Outdoors) : null;
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate =
@@ -210,25 +213,67 @@ function MapPreviewComponent({
   }, [MapboxGL]);
 
   if (isWeb) {
+    if (!MAPBOX_ACCESS_TOKEN) {
+        return (
+          <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+            <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
+          </View>
+        );
+    }
+
+    const MapboxMap = MapboxGL?.MapView;
+
+    if (!MapboxMap) {
+        return (
+          <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+            <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map preview is still loading...</ThemedText>
+          </View>
+        );
+    }
+
     return (
-      <View style={[styles.fallback, styles.webFallback]}>
-        <ThemedText style={styles.fallbackTitle}>Map preview is mobile-only right now.</ThemedText>
+      <View style={[styles.mapRoot, style]}>
+        <MapboxMap
+          style={StyleSheet.absoluteFill}
+          styleURL={styleURL ?? undefined}
+        >
+           <MapboxGL.Camera
+              centerCoordinate={resolvedCenterCoordinate ? (toMapboxPosition(resolvedCenterCoordinate) as [number, number]) : undefined}
+              zoomLevel={zoomLevel}
+            />
+            <MapRouteOverlays 
+                upcomingRouteCoords={upcomingRouteCoords}
+                stayBranchCoords={stayBranchCoords}
+            />
+            {markerDisplayItems.map((displayItem) => {
+                if (displayItem.kind !== 'marker') return null;
+                return (
+                    <MapboxPlaceMarker
+                        isDark={isDark}
+                        marker={displayItem.marker}
+                        key={displayItem.marker.id}
+                        onPress={onMarkerPress}
+                        variant={markerVariant}
+                    />
+                );
+            })}
+        </MapboxMap>
       </View>
     );
   }
 
   if (!MAPBOX_ACCESS_TOKEN) {
     return (
-      <View style={styles.fallback}>
-        <ThemedText style={styles.fallbackTitle}>Mapbox needs an access token to render maps.</ThemedText>
+      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
       </View>
     );
   }
 
   if (!MapboxGL) {
     return (
-      <View style={styles.fallback}>
-        <ThemedText style={styles.fallbackTitle}>
+      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>
           Mapbox maps need a custom development build. Rebuild Wandr to enable native maps.
         </ThemedText>
       </View>
@@ -237,14 +282,14 @@ function MapPreviewComponent({
 
   if (!resolvedCenterCoordinate || !styleURL) {
     return (
-      <View style={styles.fallback}>
-        <ThemedText style={styles.fallbackTitle}>Map data is still loading.</ThemedText>
+      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map data is still loading.</ThemedText>
       </View>
     );
   }
 
   return (
-    <View style={styles.mapRoot} onTouchStart={onInteract}>
+    <View style={[styles.mapRoot, style]} onTouchStart={onInteract}>
       <MapboxGL.MapView
         key="map-preview"
         style={StyleSheet.absoluteFill}
@@ -369,17 +414,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: designSystem.colors.mapFallbackMuted,
     paddingHorizontal: 24,
-  },
-  webFallback: {
-    backgroundColor: designSystem.colors.mapFallback,
   },
   fallbackTitle: {
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
-    color: designSystem.colors.warmDark,
   },
 });

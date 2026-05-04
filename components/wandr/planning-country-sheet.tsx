@@ -39,7 +39,7 @@ export function PlanningLocationSheet({
   const isDark = useColorScheme() === 'dark';
   const currentLocation = getPlanningLocationForCoordinate(currentCoordinate);
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
-  const snapPoints = useMemo(() => ['32%', '78%'], []);
+  const snapPoints = useMemo(() => ['48%', '70%'], []);
   const normalizedQuery = query.trim().toLowerCase();
   const countryOptions = useMemo(
     () =>
@@ -230,13 +230,13 @@ export function PlanningLocationSheet({
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: designSystem.spacing.lg,
-    paddingTop: designSystem.spacing.lg,
+    paddingTop: designSystem.spacing.md,
     paddingBottom: designSystem.spacing.md,
     backgroundColor: 'transparent',
   },
   title: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '600',
   },
   description: {
@@ -260,8 +260,8 @@ const styles = StyleSheet.create({
     marginHorizontal: designSystem.spacing.lg,
   },
   option: {
-    minHeight: 62,
-    paddingVertical: designSystem.spacing.sm,
+    minHeight: 56,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: designSystem.spacing.sm,

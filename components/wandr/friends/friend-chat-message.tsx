@@ -8,7 +8,10 @@ import { ThemedText } from '@/components/themed-text';
 import { RouteMapWidget } from '@/components/wandr/friends/chat-widgets';
 import type { MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { designSystem } from '@/constants/design-system';
+import type { Id } from '@/convex/_generated/dataModel';
+import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 import type { DirectChatMessage, FriendChatMessage } from '@/types/friends';
 
 function formatTime(timestamp: number) {
@@ -125,6 +128,8 @@ export function FriendChatMessageBubble({
 }) {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const { openCall } = useActiveFriendCall();
   const widgetMessage = getWidgetMessage(message.body);
   const WidgetIcon = widgetMessage?.icon;
   const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
@@ -155,6 +160,10 @@ export function FriendChatMessageBubble({
       return;
     }
     lastNavigateAtRef.current = now;
+    if (isLargeScreen) {
+      openCall(message.callCard.callId as Id<'friendCalls'>);
+      return;
+    }
     router.push(`/friends/call/${message.callCard.callId}`);
   };
 
@@ -334,6 +343,8 @@ export function DirectChatMessageBubble({
 }) {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const { openCall } = useActiveFriendCall();
   const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
   const lastNavigateAtRef = useRef(0);
   const longPressLockUntilRef = useRef(0);
@@ -350,6 +361,10 @@ export function DirectChatMessageBubble({
       return;
     }
     lastNavigateAtRef.current = now;
+    if (isLargeScreen) {
+      openCall(message.callCard.callId as Id<'friendCalls'>);
+      return;
+    }
     router.push(`/friends/call/${message.callCard.callId}`);
   };
 

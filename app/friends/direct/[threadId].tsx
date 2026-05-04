@@ -22,8 +22,11 @@ import { FriendChatToolsSheet } from '@/components/wandr/friends/friend-chat-too
 import { MessageActionMenu, type MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
+import type { Id } from '@/convex/_generated/dataModel';
+import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   deleteDirectFriendMessageRef,
   deleteDirectFriendThreadRef,
@@ -35,11 +38,19 @@ import {
 } from '@/lib/convex';
 import type { DirectChatMessage } from '@/types/friends';
 
-export default function DirectChatScreen() {
+type DirectChatScreenProps = {
+  onClose?: () => void;
+  threadId?: string;
+};
+
+export default function DirectChatScreen({ onClose, threadId: threadIdProp }: DirectChatScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ threadId?: string | string[] }>();
-  const threadId = Array.isArray(params.threadId) ? params.threadId[0] : params.threadId;
+  const routeThreadId = Array.isArray(params.threadId) ? params.threadId[0] : params.threadId;
+  const threadId = threadIdProp ?? routeThreadId;
+  const { isLargeScreen } = useResponsive();
+  const { openCall } = useActiveFriendCall();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chat = useQuery(
@@ -66,6 +77,17 @@ export default function DirectChatScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const menuSheetRef = useRef<BottomSheet>(null);
   const toolsSheetRef = useRef<BottomSheet>(null);
+
+  useEffect(() => {
+    if (!isLargeScreen || threadIdProp || !routeThreadId) {
+      return;
+    }
+
+    router.replace({
+      pathname: '/friends/chat',
+      params: { directThreadId: routeThreadId },
+    });
+  }, [isLargeScreen, routeThreadId, router, threadIdProp]);
 
   useEffect(() => {
     if (!chat?.messages?.length) {
@@ -118,6 +140,10 @@ export default function DirectChatScreen() {
         mode,
       });
       if (call?._id) {
+        if (isLargeScreen) {
+          openCall(call._id as Id<'friendCalls'>);
+          return;
+        }
         router.push(`/friends/call/${call._id}`);
       }
     } catch (error) {
@@ -182,6 +208,10 @@ export default function DirectChatScreen() {
             });
             if (deleted) {
               menuSheetRef.current?.close();
+              if (onClose) {
+                onClose();
+                return;
+              }
               router.replace('/friends/chat');
             }
           } finally {
@@ -200,12 +230,16 @@ export default function DirectChatScreen() {
     setMessageMenuAnchor(anchor);
   };
 
+  if (isLargeScreen && !threadIdProp) {
+    return null;
+  }
+
   return (
     <ThemedView style={styles.root}>
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: { kind: 'back', accessibilityLabel: 'Go back', onPress: onClose },
           trailingActions: [
             {
               kind: 'call',

@@ -26,9 +26,10 @@ export function StaysRailCard({
   return (
     <View
       style={[
-        styles.propertyCard,
-        isDark && styles.propertyCardDark,
-        isSelected && styles.propertyCardSelected,
+        styles.propertyRow,
+        {
+          borderBottomColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
+        },
       ]}
     >
       <View style={styles.propertyImageShell}>
@@ -71,28 +72,18 @@ export function StaysRailCard({
 }
 
 const styles = StyleSheet.create({
-  propertyCard: {
+  propertyRow: {
     width: '100%',
-    borderRadius: 22,
-    backgroundColor: designSystem.colors.white,
-    borderWidth: 1,
-    borderColor: designSystem.colors.scrimWash,
-    padding: 8,
+    borderBottomWidth: 1,
+    paddingVertical: 12,
     flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 10,
-  },
-  propertyCardDark: {
-    backgroundColor: designSystem.colors.darkSurface,
-    borderColor: designSystem.colors.darkBorder,
-  },
-  propertyCardSelected: {
-    borderColor: designSystem.colors.limeSoft,
+    alignItems: 'center',
+    gap: 14,
   },
   propertyImageShell: {
-    width: 118,
-    height: 118,
-    borderRadius: 14,
+    width: 96,
+    height: 96,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -116,22 +107,20 @@ const styles = StyleSheet.create({
   },
   propertyBody: {
     flex: 1,
-    justifyContent: 'space-between',
-    paddingTop: 4,
-    paddingRight: 4,
-    paddingBottom: 4,
+    minWidth: 0,
     gap: 8,
   },
   propertyMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   propertyTitleBlock: {
-    flex: 1,
     gap: 2,
   },
   propertyTitle: {
-    fontSize: 20,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 21,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },
@@ -139,6 +128,8 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkText,
   },
   propertyLocation: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 12,
     lineHeight: 14,
     fontWeight: '600',
@@ -151,7 +142,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingTop: 4,
+    flexShrink: 0,
   },
   ratingStar: {
     fontSize: 12,

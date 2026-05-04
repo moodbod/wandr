@@ -1,4 +1,5 @@
 import { DarkTheme, DefaultTheme, type Theme } from '@react-navigation/native';
+import { Platform } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
 
@@ -27,8 +28,8 @@ export function getNavigationTheme(isDark: boolean): Theme {
 
 export function getStackScreenOptions(isDark: boolean) {
   return {
-    animation: 'fade' as const,
-    animationDuration: 160,
+    animation: (Platform.OS === 'web' ? 'none' : 'fade') as any,
+    animationDuration: Platform.OS === 'web' ? 0 : 160,
     contentStyle: {
       backgroundColor: getNavigationBackground(isDark),
     },

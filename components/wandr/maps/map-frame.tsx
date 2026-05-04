@@ -18,7 +18,7 @@ export function MapFrame({
   return (
     <View style={[styles.shell, shellStyle]}>
       <View style={[styles.mapContainer, mapContainerStyle]}>
-        <MapPreview {...mapProps} />
+        <MapPreview {...mapProps} style={{ flex: 1 }} />
       </View>
       {children}
     </View>
@@ -27,10 +27,12 @@ export function MapFrame({
 
 const styles = StyleSheet.create({
   shell: {
+    flex: 1,
     position: 'relative',
     overflow: 'hidden',
   },
   mapContainer: {
     ...StyleSheet.absoluteFillObject,
+    display: 'flex',
   },
 });

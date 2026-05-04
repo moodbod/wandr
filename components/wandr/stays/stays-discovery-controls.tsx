@@ -1,4 +1,5 @@
 import { GlobeHemisphereWest, NavigationArrow } from 'phosphor-react-native';
+import type React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -15,9 +16,12 @@ type SortMode = 'best' | 'price';
 
 type StaysDiscoveryControlsProps = {
   discoveryMode: DiscoveryMode;
+  leadingSearchAccessory?: React.ReactNode;
+  showMapButtons?: boolean;
   searchQuery: string;
   selectedTripId?: string;
   sortMode: SortMode;
+  trailingSearchAccessory?: React.ReactNode;
   trips?: readonly TripListItem[];
   onChangeDiscoveryMode: (mode: DiscoveryMode) => void;
   onChangeSearchQuery: (value: string) => void;
@@ -29,10 +33,13 @@ type StaysDiscoveryControlsProps = {
 
 export function StaysDiscoveryControls({
   discoveryMode,
+  leadingSearchAccessory,
+  showMapButtons = true,
   searchQuery,
   selectedTripId,
   sortMode,
   trips = [],
+  trailingSearchAccessory,
   onChangeDiscoveryMode,
   onChangeSearchQuery,
   onOpenLocationSheet,
@@ -46,16 +53,20 @@ export function StaysDiscoveryControls({
   return (
     <View style={styles.discoveryBar}>
       <View style={styles.searchRow}>
-        <GlassButton
-          accessibilityLabel="Change planning location"
-          height={52}
-          onPress={onOpenLocationSheet}
-          style={styles.locationButton}
-          width={52}
-          radius={designSystem.radii.pill}
-        >
-          <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
-        </GlassButton>
+        {leadingSearchAccessory ? (
+          <View style={styles.searchAccessory}>{leadingSearchAccessory}</View>
+        ) : showMapButtons ? (
+          <GlassButton
+            accessibilityLabel="Change planning location"
+            height={52}
+            onPress={onOpenLocationSheet}
+            style={styles.locationButton}
+            width={52}
+            radius={designSystem.radii.pill}
+          >
+            <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
+          </GlassButton>
+        ) : null}
         <GlassInput
           containerStyle={styles.searchGlass}
           value={searchQuery}
@@ -63,16 +74,20 @@ export function StaysDiscoveryControls({
           placeholder="Search stays or towns"
           intensity={70}
         />
-        <GlassButton
-          accessibilityLabel="Reset map position"
-          height={52}
-          onPress={onResetMap}
-          style={styles.resetButton}
-          width={52}
-          radius={designSystem.radii.pill}
-        >
-          <NavigationArrow color={iconColor} size={20} weight="bold" />
-        </GlassButton>
+        {trailingSearchAccessory ? (
+          <View style={styles.searchAccessory}>{trailingSearchAccessory}</View>
+        ) : showMapButtons ? (
+          <GlassButton
+            accessibilityLabel="Reset map position"
+            height={52}
+            onPress={onResetMap}
+            style={styles.resetButton}
+            width={52}
+            radius={designSystem.radii.pill}
+          >
+            <NavigationArrow color={iconColor} size={20} weight="bold" />
+          </GlassButton>
+        ) : null}
       </View>
 
       {onSelectTrip && trips.length > 0 ? (
@@ -127,6 +142,9 @@ const styles = StyleSheet.create({
   },
   searchGlass: {
     flex: 1,
+  },
+  searchAccessory: {
+    flexShrink: 0,
   },
   locationButton: {
     flexShrink: 0,

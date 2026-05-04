@@ -13,10 +13,13 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavigationArrow } from 'phosphor-react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WandrHeader } from '@/components/wandr/header';
+import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
+import { GlassButton } from '@/components/ui/glass-button';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { PlanningLocationSheet } from '@/components/wandr/planning-country-sheet';
 import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery-controls';
@@ -31,10 +34,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useResponsive } from '@/hooks/use-responsive';
 import { getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { RankedStayProperty } from '@/types/stays';
+
+import { StayDetailScreen } from './stay-detail-screen';
 
 const NEAR_ROUTE_RADIUS_KM = 90;
 const NEAR_ME_RADIUS_KM = 60;
@@ -43,6 +49,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const { isLargeScreen, isTablet } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
   const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
@@ -59,6 +66,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const { planningLocation, setPlanningLocation } = usePlanningLocation();
   const [sortMode, setSortMode] = useState<'best' | 'price'>('best');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedStaySlug, setSelectedStaySlug] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   useSyncPlanningLocationWithCurrentLocation(currentLocation.coordinate);
@@ -241,24 +249,189 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const userCoordinate = coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
     ? currentLocation.coordinate
     : null;
+  const handleSelectStayIndex = useCallback((stayIndex: number, shouldScroll = true) => {
+    if (stayIndex < 0 || stayIndex >= filteredStays.length) {
+      return;
+    }
+
+    setSelectedIndex(stayIndex);
+    setSelectedStaySlug(filteredStays[stayIndex].slug);
+    if (shouldScroll) {
+      scrollToCard(stayIndex);
+    }
+  }, [filteredStays, scrollToCard]);
+  const mapContent = (
+    <MapPreview
+      centerCoordinate={centerCoordinate}
+      userCoordinate={userCoordinate}
+      markers={mapMarkers}
+      routeCoordinates={locationRouteCoordinates}
+      showRoutes={locationRouteCoordinates.length > 1}
+      zoomLevel={12}
+      onMarkerPress={(marker) => {
+        const stayIndex = filteredStays.findIndex((s: any) => (s.id || s._id) === marker.id);
+        handleSelectStayIndex(stayIndex);
+      }}
+    />
+  );
+  const discoveryControls = (
+    <StaysDiscoveryControls
+      discoveryMode={discoveryMode}
+      leadingSearchAccessory={
+        isLargeScreen ? (
+          <HeaderLocationSelector location={planningLocation} onPress={() => setLocationSheetVisible(true)} />
+        ) : undefined
+      }
+      showMapButtons={!isLargeScreen}
+      searchQuery={searchQuery}
+      selectedTripId={selectedTripId}
+      sortMode={sortMode}
+      trailingSearchAccessory={
+        isLargeScreen ? (
+          <GlassButton
+            accessibilityLabel="Reset map position"
+            height={52}
+            onPress={() => resetToStart()}
+            radius={designSystem.radii.pill}
+            width={52}
+          >
+            <NavigationArrow
+              color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+              size={20}
+              weight="bold"
+            />
+          </GlassButton>
+        ) : undefined
+      }
+      trips={locationTrips}
+      onChangeDiscoveryMode={(mode) => {
+        setDiscoveryMode(mode);
+        resetToStart();
+      }}
+      onChangeSearchQuery={(value) => {
+        setSearchQuery(value);
+        resetToStart();
+      }}
+      onOpenLocationSheet={() => setLocationSheetVisible(true)}
+      onResetMap={() => {
+        scrollX.setValue(0);
+      }}
+      onSelectTrip={(tripId) => {
+        setSelectedTripId(tripId);
+        setDiscoveryMode('route');
+        setSortMode('best');
+        resetToStart();
+      }}
+      onTogglePriceSort={() => {
+        setSortMode((current) => (current === 'price' ? 'best' : 'price'));
+        resetToStart();
+      }}
+    />
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            <ScrollView
+              contentContainerStyle={[styles.mainColumnContent, { paddingTop: insets.top + 24 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.stayList}>
+                {filteredStays.length === 0 ? (
+                  <View
+                    style={[
+                      styles.emptyCard,
+                      {
+                        borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
+                        backgroundColor: isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong,
+                      },
+                    ]}
+                  >
+                    <ThemedText style={styles.emptyTitle}>No {planningLocation.label} stays yet</ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.emptyText,
+                        { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+                      ]}
+                    >
+                      Keep planning in this location and new places will appear here when inventory is added.
+                    </ThemedText>
+                  </View>
+                ) : null}
+                {filteredStays.map((stay, index) => {
+                  const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
+                  const isSelected = stay.slug === selectedStaySlug || index === selectedIndex;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={stayKey}
+                      onPress={() => handleSelectStayIndex(index, false)}
+                    >
+                      <StaysRailCard
+                        imageUri={stay.imageUri}
+                        isDark={isDark}
+                        isSelected={isSelected}
+                        locationLabel={discoveryMode === 'nearby' ? stay.town : stay.matchedStopLabel}
+                        name={stay.name}
+                        priceLabel={stay.priceLabel || `$${stay.pricePerNight}`}
+                        rating={stay.rating}
+                      />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+          {selectedStaySlug ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              <StayDetailScreen onClose={() => setSelectedStaySlug(null)} slug={selectedStaySlug} />
+            </View>
+          ) : null}
+          <View style={styles.mapColumn}>
+            {mapContent}
+            <View pointerEvents="box-none" style={styles.mapControlsOverlay}>
+              {discoveryControls}
+            </View>
+          </View>
+        </View>
+        <PlanningLocationSheet
+          currentCoordinate={currentLocation.coordinate}
+          selectedLocation={planningLocation}
+          visible={locationSheetVisible}
+          onClose={() => setLocationSheetVisible(false)}
+          onSelectLocation={(location) => {
+            setPlanningLocation(location, { manual: true });
+            resetToStart();
+          }}
+        />
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.root}>
-      <MapPreview
-        centerCoordinate={centerCoordinate}
-        userCoordinate={userCoordinate}
-        markers={mapMarkers}
-        routeCoordinates={locationRouteCoordinates}
-        showRoutes={locationRouteCoordinates.length > 1}
-        zoomLevel={12}
-        onMarkerPress={(marker) => {
-          const stayIndex = filteredStays.findIndex((s: any) => (s.id || s._id) === marker.id);
-          if (stayIndex !== -1) {
-            setSelectedIndex(stayIndex);
-            scrollToCard(stayIndex);
-          }
-        }}
-      />
+      {mapContent}
 
       <WandrHeader
         config={{
@@ -266,35 +439,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           leadingAction: showBack ? { kind: 'back', accessibilityLabel: 'Go back' } : undefined,
         }}
         bottomContent={
-          <StaysDiscoveryControls
-            discoveryMode={discoveryMode}
-            searchQuery={searchQuery}
-            selectedTripId={selectedTripId}
-            sortMode={sortMode}
-            trips={locationTrips}
-            onChangeDiscoveryMode={(mode) => {
-              setDiscoveryMode(mode);
-              resetToStart();
-            }}
-            onChangeSearchQuery={(value) => {
-              setSearchQuery(value);
-              resetToStart();
-            }}
-            onOpenLocationSheet={() => setLocationSheetVisible(true)}
-            onResetMap={() => {
-              scrollX.setValue(0);
-            }}
-            onSelectTrip={(tripId) => {
-              setSelectedTripId(tripId);
-              setDiscoveryMode('route');
-              setSortMode('best');
-              resetToStart();
-            }}
-            onTogglePriceSort={() => {
-              setSortMode((current) => (current === 'price' ? 'best' : 'price'));
-              resetToStart();
-            }}
-          />
+          discoveryControls
         }
         bottomContentHeight={discoveryControlsHeight}
         bottomContentVisible
@@ -546,6 +691,55 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: designSystem.colors.mapSurface,
+  },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+    zIndex: 10,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  mainColumnContent: {
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  stayList: {
+    gap: 0,
+  },
+  detailColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    borderRightWidth: 1,
+    zIndex: 11,
+  },
+  detailColumnTablet: {
+    width: 340,
+  },
+  detailColumnDesktop: {
+    width: 430,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    position: 'relative',
+  },
+  mapControlsOverlay: {
+    position: 'absolute',
+    top: 28,
+    left: 24,
+    right: 24,
+    maxWidth: 760,
   },
   carouselWrap: {
     position: 'absolute',

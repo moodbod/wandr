@@ -15,11 +15,20 @@ const INNER_RADIUS = CARD_RADIUS - CARD_PADDING;
 type ExploreHiddenGemCardProps = {
   card: ExploreHiddenGem;
   href?: Href;
+  onPress?: () => void;
 };
 
-export function ExploreHiddenGemCard({ card, href }: ExploreHiddenGemCardProps) {
+export function ExploreHiddenGemCard({ card, href, onPress }: ExploreHiddenGemCardProps) {
   const isDark = useColorScheme() === 'dark';
   const router = useRouter();
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    } else if (href) {
+      router.push(href);
+    }
+  };
 
   const content = (
     <>
@@ -40,8 +49,8 @@ export function ExploreHiddenGemCard({ card, href }: ExploreHiddenGemCardProps) 
         { borderColor: isDark ? designSystem.colors.darkBorder : designSystem.colors.border }
       ]}
     >
-      {href ? (
-        <Pressable accessibilityRole="button" onPress={() => router.push(href)} style={styles.pressable}>
+      {href || onPress ? (
+        <Pressable accessibilityRole="button" onPress={handlePress} style={styles.pressable}>
           {content}
         </Pressable>
       ) : (

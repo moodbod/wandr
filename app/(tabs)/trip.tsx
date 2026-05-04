@@ -3,7 +3,10 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { ExperienceDetailContent } from '@/components/wandr/explore/experience-detail-content';
 import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
+import { MapPreview } from '@/components/wandr/maps/map-preview';
+import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
 import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
@@ -12,9 +15,12 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useResponsive } from '@/hooks/use-responsive';
 import { createTripRef, deleteTripRef, getTripDashboardRef, getTripSettingsRef, inviteFriendsToTripRef, listUserTripsRef, removeExperienceFromTripRef, updateTripSettingsRef } from '@/lib/convex';
+import { buildTripMapMarkers } from '@/lib/explore-map-markers';
+import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
-import type { TripDashboard, TripListItem } from '@/types/trip';
+import type { TripDashboard, TripDashboardItem, TripListItem } from '@/types/trip';
 import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
@@ -540,7 +546,11 @@ function TripScreenView({
   removingItemId: string | null;
   useSkeletons: boolean;
 }) {
+  const { isLargeScreen, isTablet } = useResponsive();
+  const [detailItem, setDetailItem] = useState<TripDashboardItem | null>(null);
   const items = trip.items;
+  const mapMarkers = useMemo(() => buildTripMapMarkers(trip.items, 10), [trip.items]);
+  const routeCoordinates = useMemo(() => buildTripRouteCoordinates(trip, { onlyRemaining: false }), [trip]);
   const canEditTrip = !trip.isGroupTrip || Boolean(trip.group?.isHost);
   const trailingActions: HeaderAction[] = [
     ...(canEditTrip
@@ -566,19 +576,21 @@ function TripScreenView({
     { kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' },
   ];
 
-  return (
-    <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          trailingActions,
-        }}
-      />
+  const mainContent = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            trailingActions,
+          }}
+        />
+      ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + 88 },
+          { paddingTop: isLargeScreen ? insetsTop + 24 : insetsTop + 72, paddingBottom: insetsBottom + 88 },
         ]}>
         
         {/* Trip Switcher Cards */}
@@ -603,11 +615,69 @@ function TripScreenView({
             items={items}
             isLoading={useSkeletons}
             isEditing={isEditing}
+            onOpenItem={isLargeScreen ? setDetailItem : undefined}
             onRemoveItem={onRemoveItem}
             removingItemId={removingItemId}
           />
         ) : null}
       </ScrollView>
+    </>
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.largeBody}>
+          <View
+            style={[
+              styles.mainColumn,
+              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            {mainContent}
+          </View>
+          {detailItem ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              {detailItem.kind === 'stay' ? (
+                <StayDetailScreen onClose={() => setDetailItem(null)} slug={detailItem.experienceSlug} />
+              ) : (
+                <ExperienceDetailContent
+                  onClose={() => setDetailItem(null)}
+                  slug={detailItem.experience.slug}
+                />
+              )}
+            </View>
+          ) : null}
+          <View style={styles.mapColumn}>
+            <MapPreview
+              centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? null}
+              markers={mapMarkers}
+              routeCoordinates={routeCoordinates}
+              showRoutes={routeCoordinates.length > 1}
+              zoomLevel={12}
+            />
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.root}>
+      {mainContent}
     </ThemedView>
   );
 }
@@ -615,6 +685,40 @@ function TripScreenView({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  largeBody: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  mainColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    borderRightWidth: 1,
+  },
+  mainColumnTablet: {
+    width: 360,
+  },
+  mainColumnDesktop: {
+    width: 420,
+  },
+  detailColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    borderRightWidth: 1,
+  },
+  detailColumnTablet: {
+    width: 340,
+  },
+  detailColumnDesktop: {
+    width: 430,
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: designSystem.colors.mapFallback,
+    overflow: 'hidden',
+    position: 'relative',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,

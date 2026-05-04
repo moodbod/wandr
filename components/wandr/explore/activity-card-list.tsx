@@ -6,6 +6,7 @@ import { ExploreActivityCardSkeleton } from './card-skeletons';
 type ExploreActivityCardListProps = {
   activities: readonly ExploreActivityCardProps['card'][];
   getHref: (activity: ExploreActivityCardProps['card'], index: number) => Href;
+  onPressActivity?: (activity: ExploreActivityCardProps['card'], index: number) => void;
   isLoading?: boolean;
   skeletonCount?: number;
 };
@@ -13,6 +14,7 @@ type ExploreActivityCardListProps = {
 export function ExploreActivityCardList({
   activities,
   getHref,
+  onPressActivity,
   isLoading = false,
   skeletonCount = 3,
 }: ExploreActivityCardListProps) {
@@ -26,6 +28,7 @@ export function ExploreActivityCardList({
     <ExploreActivityCard
       card={activity}
       href={getHref(activity, index)}
+      onPress={onPressActivity ? () => onPressActivity(activity, index) : undefined}
       key={`activity-${activity.experienceSlug}-${index}`}
     />
   ));

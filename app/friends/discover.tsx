@@ -63,7 +63,15 @@ function normalizePhoneNumber(value: string) {
   return `${hasPlus ? '+' : ''}${digits}`;
 }
 
-export default function FriendsDiscoverScreen() {
+export default function FriendsDiscoverScreen({
+  onBack,
+  onOpenProfile,
+  showHeader = true,
+}: {
+  onBack?: () => void;
+  onOpenProfile?: (travelerSlug: string) => void;
+  showHeader?: boolean;
+} = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const traveler = useCurrentTraveler();
@@ -245,20 +253,24 @@ export default function FriendsDiscoverScreen() {
 
   return (
     <ThemedView style={styles.root}>
+      {showHeader ? (
       <WandrHeader
         config={{
           overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
+          leadingAction: onBack
+            ? { kind: 'back', accessibilityLabel: 'Go back', onPress: onBack }
+            : { kind: 'back', accessibilityLabel: 'Go back' },
           trailingActions: [
             { kind: 'share', accessibilityLabel: 'Connect contacts', onPress: handleOpenContacts },
           ],
         }}
       />
+      ) : null}
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 72,
+            paddingTop: showHeader ? insets.top + 72 : insets.top + 24,
             paddingBottom: insets.bottom + 120,
           },
         ]}>
@@ -291,7 +303,13 @@ export default function FriendsDiscoverScreen() {
                   candidate={candidate}
                   disabled={busyCandidateSlug === candidate.travelerSlug}
                   onInvite={() => handleCandidateAction(candidate.travelerSlug, 'invited')}
-                  onOpenProfile={() => router.push(`/friends/profile/${candidate.travelerSlug}` as never)}
+                  onOpenProfile={() => {
+                    if (onOpenProfile) {
+                      onOpenProfile(candidate.travelerSlug);
+                      return;
+                    }
+                    router.push(`/friends/profile/${candidate.travelerSlug}` as never);
+                  }}
                   onPass={() => handleCandidateAction(candidate.travelerSlug, 'passed')}
                   onFriend={() => handleCandidateAction(candidate.travelerSlug, 'friended')}
                 />
@@ -349,6 +367,10 @@ export default function FriendsDiscoverScreen() {
                       accessibilityLabel={`Open ${match.name}'s Wandr profile`}
                       onPress={() => {
                         contactSheetRef.current?.close();
+                        if (onOpenProfile) {
+                          onOpenProfile(match.travelerSlug);
+                          return;
+                        }
                         router.push(`/friends/profile/${match.travelerSlug}` as never);
                       }}
                       style={styles.contactCopy}>

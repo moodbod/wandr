@@ -436,13 +436,13 @@ function performHeaderAction(
   onBack: () => void,
   onNavigate: (href: NonNullable<HeaderAction['href']>) => void
 ) {
-  if (action.kind === 'back') {
-    onBack();
+  if (action.onPress) {
+    action.onPress();
     return;
   }
 
-  if (action.onPress) {
-    action.onPress();
+  if (action.kind === 'back') {
+    onBack();
     return;
   }
 

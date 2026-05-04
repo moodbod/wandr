@@ -1,3 +1,4 @@
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { GlassInput } from '@/components/ui/glass-input';
@@ -10,11 +11,14 @@ type DiscoveryFiltersProps = {
   intents: readonly DiscoveryOption[];
   activeRegion: string;
   activeIntent: string;
+  leadingSearchAccessory?: React.ReactNode;
   searchQuery: string;
+  trailingSearchAccessory?: React.ReactNode;
   onRegionChange: (key: string) => void;
   onIntentChange: (key: string) => void;
   onSearchQueryChange: (value: string) => void;
   searchPlaceholder?: string;
+  fullBleed?: boolean;
 };
 
 export function DiscoveryFilters({
@@ -22,40 +26,48 @@ export function DiscoveryFilters({
   intents,
   activeRegion,
   activeIntent,
+  leadingSearchAccessory,
   searchQuery,
+  trailingSearchAccessory,
   onRegionChange,
   onIntentChange,
   onSearchQueryChange,
   searchPlaceholder = 'Search places or experiences',
+  fullBleed = true,
 }: DiscoveryFiltersProps) {
   return (
     <View style={styles.shell}>
-      <GlassInput
-        autoCapitalize="none"
-        autoCorrect={false}
-        intensity={70}
-        onChangeText={onSearchQueryChange}
-        placeholder={searchPlaceholder}
-        returnKeyType="search"
-        value={searchQuery}
-      />
+      <View style={styles.searchRow}>
+        {leadingSearchAccessory ? <View style={styles.searchAccessory}>{leadingSearchAccessory}</View> : null}
+        <GlassInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerStyle={styles.searchInput}
+          intensity={70}
+          onChangeText={onSearchQueryChange}
+          placeholder={searchPlaceholder}
+          returnKeyType="search"
+          value={searchQuery}
+        />
+        {trailingSearchAccessory ? <View style={styles.searchAccessory}>{trailingSearchAccessory}</View> : null}
+      </View>
 
       <SegmentedTabs
         value={activeRegion}
         options={regions}
         onChange={onRegionChange}
-        style={styles.fullBleedTabs}
+        style={fullBleed ? styles.fullBleedTabs : undefined}
         tabStyle={styles.borderlessTab}
-        contentContainerStyle={styles.fullBleedTabContent}
+        contentContainerStyle={fullBleed ? styles.fullBleedTabContent : undefined}
       />
 
       <SegmentedTabs
         value={activeIntent}
         options={intents}
         onChange={onIntentChange}
-        style={styles.fullBleedTabs}
+        style={fullBleed ? styles.fullBleedTabs : undefined}
         tabStyle={styles.borderlessTab}
-        contentContainerStyle={styles.fullBleedTabContent}
+        contentContainerStyle={fullBleed ? styles.fullBleedTabContent : undefined}
       />
     </View>
   );
@@ -64,6 +76,17 @@ export function DiscoveryFilters({
 const styles = StyleSheet.create({
   shell: {
     gap: 12,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  searchAccessory: {
+    flexShrink: 0,
+  },
+  searchInput: {
+    flex: 1,
   },
   fullBleedTabs: {
     marginHorizontal: -designSystem.spacing.lg,

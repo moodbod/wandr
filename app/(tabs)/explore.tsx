@@ -1,11 +1,13 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useQuery } from 'convex/react';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import ExploreGroupTripDetailScreen from '@/app/explore/group/[circleId]';
+import HiddenGemDetailScreen from '@/app/explore/hidden-gems/[slug]';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
@@ -15,28 +17,47 @@ import {
   ExploreSheetHeaderSkeleton,
   ExploreTripFilterSkeleton,
 } from '@/components/wandr/explore/card-skeletons';
+import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
+import { ExperienceDetailContent } from '@/components/wandr/explore/experience-detail-content';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
+import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
+import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
+import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
+import type { PlanningLocation } from '@/constants/planning-countries';
 import {
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
 } from '@/constants/planning-countries';
-import type { PlanningLocation } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreJoinableTripCardsRef, getExplorePageContentRef, getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
+import {
+  buildRegionOptions,
+  matchesExperienceFilters,
+  matchesHiddenGemFilters,
+  matchesIntent,
+  type DiscoveryOption,
+} from '@/lib/explore-filters';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import type { ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
 import type { TripDashboard, TripListItem } from '@/types/trip';
-import { MagnifyingGlass, Plus } from 'phosphor-react-native';
+import { MagnifyingGlass, NavigationArrow, Plus } from 'phosphor-react-native';
 
 const EMPTY_TRIPS: readonly TripListItem[] = [];
 const EMPTY_JOINABLE_TRIP_CARDS: readonly ExploreJoinableTripCard[] = [];
+const INTENT_OPTIONS: readonly DiscoveryOption[] = [
+  { key: 'all', label: 'Everything' },
+  { key: 'adventure', label: 'Adventure' },
+  { key: 'food', label: 'Food & Drink' },
+  { key: 'popular', label: 'Popular with Travelers' },
+];
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
@@ -65,6 +86,7 @@ function ConnectedExploreScreen({
   isDark: boolean;
   mapTopInset: number;
 }) {
+  const { isLargeScreen, isTablet } = useResponsive();
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const traveler = useCurrentTraveler();
@@ -122,8 +144,8 @@ function ConnectedExploreScreen({
 
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.body}>
-          <View style={styles.mapLayer}>
+        <View style={isLargeScreen ? styles.bodyLarge : styles.body}>
+          <View style={isLargeScreen ? styles.mapColumn : styles.mapLayer}>
             <ExploreMapHero
               key={loadingMapResetKey}
               centerCoordinate={loadingMapCenterCoordinate}
@@ -136,25 +158,41 @@ function ConnectedExploreScreen({
               topInset={mapTopInset}
               onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
               planningLocation={planningLocation}
+              hideHeader={isLargeScreen}
+              shellStyle={StyleSheet.absoluteFill}
             />
           </View>
-          <GlassBottomSheet
-            index={0}
-            ref={sheetRef}
-            snapPoints={snapPoints}
-            animatedIndex={animatedIndex}>
-            <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-              <ExploreSheetHeaderSkeleton />
-              <ExploreTripFilterSkeleton />
-              <View style={styles.cardList}>
-                <ExploreActivityCardList
-                  activities={[]}
-                  getHref={() => '/explore/search'}
-                  isLoading
-                />
-              </View>
-            </BottomSheetScrollView>
-          </GlassBottomSheet>
+
+          {isLargeScreen ? (
+            <View
+              style={[
+                styles.contentColumn,
+                isTablet ? styles.contentColumnTablet : styles.contentColumnDesktop,
+                { backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background },
+              ]}
+            >
+              <ScrollView
+                contentContainerStyle={[styles.sheetContent, styles.columnScroll]}
+                showsVerticalScrollIndicator={false}
+              >
+                <ExploreSheetHeaderSkeleton />
+                <ExploreTripFilterSkeleton />
+                <View style={styles.cardList}>
+                  <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
+                </View>
+              </ScrollView>
+            </View>
+          ) : (
+            <GlassBottomSheet index={0} ref={sheetRef} snapPoints={snapPoints} animatedIndex={animatedIndex}>
+              <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+                <ExploreSheetHeaderSkeleton />
+                <ExploreTripFilterSkeleton />
+                <View style={styles.cardList}>
+                  <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
+                </View>
+              </BottomSheetScrollView>
+            </GlassBottomSheet>
+          )}
         </View>
       </ThemedView>
     );
@@ -168,7 +206,6 @@ function ConnectedExploreScreen({
       isCardLoading={false}
       isDark={isDark}
       mapTopInset={mapTopInset}
-      notice={null}
       pageContent={page}
       joinableTripCards={joinableTripCards}
       sheetRef={sheetRef}
@@ -194,6 +231,7 @@ function useRetainedQueryValue<T>(value: T | null | undefined) {
   return value ?? retainedValue;
 }
 
+
 function ExploreScreenView({
   animatedIndex,
   currentHeading,
@@ -202,7 +240,6 @@ function ExploreScreenView({
   isCardLoading,
   isDark,
   mapTopInset,
-  notice,
   pageContent,
   joinableTripCards,
   sheetRef,
@@ -219,7 +256,6 @@ function ExploreScreenView({
   isCardLoading: boolean;
   isDark: boolean;
   mapTopInset: number;
-  notice: string | null;
   pageContent: ExplorePageContent;
   joinableTripCards: readonly ExploreJoinableTripCard[];
   sheetRef?: React.RefObject<BottomSheet | null>;
@@ -229,9 +265,30 @@ function ExploreScreenView({
   selectedTripId?: string;
   onSelectTrip: (tripId: string) => void;
 }) {
+  const params = useLocalSearchParams<{
+    experienceSlug?: string | string[];
+    groupCircleId?: string | string[];
+    hiddenGemSlug?: string | string[];
+  }>();
+  const { isLargeScreen, isTablet } = useResponsive();
   const [mapResetKey, setMapResetKey] = useState(0);
+  const [selectedExperienceSlug, setSelectedExperienceSlug] = useState<string | null>(null);
+  const [selectedGroupCircleId, setSelectedGroupCircleId] = useState<string | null>(null);
+  const [selectedHiddenGemSlug, setSelectedHiddenGemSlug] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeDiscoveryRegion, setActiveDiscoveryRegion] = useState('');
+  const [activeDiscoveryIntent, setActiveDiscoveryIntent] = useState('all');
   const { openPlanningLocationSheet, planningLocation } = usePlanningLocation();
   const content = pageContent.home;
+  const routeExperienceSlug = Array.isArray(params.experienceSlug)
+    ? params.experienceSlug[0]
+    : params.experienceSlug;
+  const routeGroupCircleId = Array.isArray(params.groupCircleId)
+    ? params.groupCircleId[0]
+    : params.groupCircleId;
+  const routeHiddenGemSlug = Array.isArray(params.hiddenGemSlug)
+    ? params.hiddenGemSlug[0]
+    : params.hiddenGemSlug;
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
   const planningCopy = useMemo(() => getPlanningLocationCopy(planningLocation.id), [planningLocation.id]);
   const locationTrips = useMemo(
@@ -375,6 +432,161 @@ function ExploreScreenView({
       }),
     [joinableTripCards, locationExperienceBySlug, planningLocation]
   );
+  const locationHiddenGems = useMemo(
+    () =>
+      pageContent.search.hiddenGems.items.filter((item) =>
+        destinationMatchesPlanningLocation({
+          countryCode: item.countryCode,
+          countryLabel: item.countryLabel,
+          location: planningLocation,
+          planningLocationId: item.planningLocationId,
+          labels: [item.title, item.description, item.geography?.region, item.geography?.town],
+        })
+      ),
+    [pageContent.search.hiddenGems.items, planningLocation]
+  );
+  const searchMatchedExperiences = useMemo(
+    () =>
+      Array.from(locationExperienceBySlug.values()).filter((experience) =>
+        matchesExperienceFilters(experience, 'all', 'all', searchQuery)
+      ),
+    [locationExperienceBySlug, searchQuery]
+  );
+  const searchMatchedGems = useMemo(
+    () => locationHiddenGems.filter((item) => matchesHiddenGemFilters(item, 'all', searchQuery)),
+    [locationHiddenGems, searchQuery]
+  );
+  const discoveryRegionOptions = useMemo(
+    () =>
+      buildRegionOptions(
+        searchMatchedExperiences,
+        searchMatchedGems,
+        currentLocationInPlanningLocation ?? planningLocation.centerCoordinate ?? content.hero.centerCoordinate
+      ),
+    [content.hero.centerCoordinate, currentLocationInPlanningLocation, planningLocation.centerCoordinate, searchMatchedExperiences, searchMatchedGems]
+  );
+  const regionMatchedExperiences = useMemo(
+    () =>
+      Array.from(locationExperienceBySlug.values()).filter((experience) =>
+        matchesExperienceFilters(experience, activeDiscoveryRegion || 'all', 'all', searchQuery)
+      ),
+    [activeDiscoveryRegion, locationExperienceBySlug, searchQuery]
+  );
+  const discoveryIntentOptions = useMemo(
+    () =>
+      INTENT_OPTIONS.filter(
+        (option) =>
+          option.key === 'all' ||
+          regionMatchedExperiences.some((experience) =>
+            matchesIntent(experience.category, experience.travelerMomentum?.visitorCount, option.key)
+          )
+      ),
+    [regionMatchedExperiences]
+  );
+
+  useEffect(() => {
+    if (discoveryRegionOptions.length === 0) {
+      return;
+    }
+
+    const hasActiveRegion = discoveryRegionOptions.some((option) => option.key === activeDiscoveryRegion);
+    if (!activeDiscoveryRegion || !hasActiveRegion) {
+      setActiveDiscoveryRegion(discoveryRegionOptions[0].key);
+    }
+  }, [activeDiscoveryRegion, discoveryRegionOptions]);
+
+  useEffect(() => {
+    if (discoveryIntentOptions.some((option) => option.key === activeDiscoveryIntent)) {
+      return;
+    }
+
+    setActiveDiscoveryIntent('all');
+  }, [activeDiscoveryIntent, discoveryIntentOptions]);
+
+  useEffect(() => {
+    if (!isLargeScreen) {
+      return;
+    }
+
+    if (routeExperienceSlug) {
+      setSelectedGroupCircleId(null);
+      setSelectedHiddenGemSlug(null);
+      setSelectedExperienceSlug(routeExperienceSlug);
+      return;
+    }
+
+    if (routeGroupCircleId) {
+      setSelectedExperienceSlug(null);
+      setSelectedHiddenGemSlug(null);
+      setSelectedGroupCircleId(routeGroupCircleId);
+      return;
+    }
+
+    if (routeHiddenGemSlug) {
+      setSelectedExperienceSlug(null);
+      setSelectedGroupCircleId(null);
+      setSelectedHiddenGemSlug(routeHiddenGemSlug);
+    }
+  }, [isLargeScreen, routeExperienceSlug, routeGroupCircleId, routeHiddenGemSlug]);
+
+  const handleOpenExperienceDetail = useCallback((slug: string) => {
+    setSelectedGroupCircleId(null);
+    setSelectedHiddenGemSlug(null);
+    setSelectedExperienceSlug(slug);
+  }, []);
+
+  const handleOpenGroupTripDetail = useCallback((circleId: string) => {
+    setSelectedExperienceSlug(null);
+    setSelectedHiddenGemSlug(null);
+    setSelectedGroupCircleId(circleId);
+  }, []);
+
+  const handleOpenHiddenGemDetail = useCallback((slug: string) => {
+    setSelectedExperienceSlug(null);
+    setSelectedGroupCircleId(null);
+    setSelectedHiddenGemSlug(slug);
+  }, []);
+
+  const resolvedDiscoveryRegion = activeDiscoveryRegion || 'all';
+  const discoveryActivities = useMemo(
+    () =>
+      Array.from(locationExperienceBySlug.values())
+        .filter((experience) =>
+          matchesExperienceFilters(experience, resolvedDiscoveryRegion, activeDiscoveryIntent, searchQuery)
+        )
+        .map((experience) => ({
+          badge: experience.badge,
+          badgeTone: experience.badgeTone,
+          ctaLabel: experience.ctaLabel,
+          experienceSlug: experience.slug,
+          imageUri: experience.imageUri,
+          price: experience.price,
+          priceSuffix: experience.priceSuffix,
+          subtitle: experience.locationLabel ?? experience.subtitle,
+          title: experience.title,
+        })),
+    [activeDiscoveryIntent, locationExperienceBySlug, resolvedDiscoveryRegion, searchQuery]
+  );
+  const discoveryHiddenGems = useMemo(
+    () =>
+      locationHiddenGems.filter((item) =>
+        matchesHiddenGemFilters(item, resolvedDiscoveryRegion, searchQuery)
+      ),
+    [locationHiddenGems, resolvedDiscoveryRegion, searchQuery]
+  );
+  const discoveryJoinableTripCards = useMemo(
+    () =>
+      locationJoinableTripCards.filter((card) => {
+        const experience = locationExperienceBySlug.get(card.experienceSlug);
+
+        return experience
+          ? matchesExperienceFilters(experience, 'all', 'all', searchQuery)
+          : [card.experienceTitle, card.locationLabel, card.destinationLabel, card.groupName].some((value) =>
+              value.toLowerCase().includes(searchQuery.trim().toLowerCase())
+            );
+      }),
+    [locationExperienceBySlug, locationJoinableTripCards, searchQuery]
+  );
   const tripCenterInPlanningLocation = coordinateIsInPlanningLocation(trip?.centerCoordinate, planningLocation)
     ? trip?.centerCoordinate
     : null;
@@ -405,8 +617,10 @@ function ExploreScreenView({
   }, [locationTrips, onSelectTrip, selectedTripId]);
 
   const handleMapInteract = useCallback(() => {
-    sheetRef?.current?.snapToIndex(0);
-  }, [sheetRef]);
+    if (!isLargeScreen) {
+      sheetRef?.current?.snapToIndex(0);
+    }
+  }, [isLargeScreen, sheetRef]);
   const handleSelectTrip = useCallback(
     (tripId: string) => {
       onSelectTrip(tripId);
@@ -426,25 +640,160 @@ function ExploreScreenView({
     });
   }, [currentLocation, openPlanningLocationSheet]);
 
+  const mapLayerContent = (
+    <ExploreMapHero
+        key={mapResetKey}
+        centerCoordinate={mapCenterCoordinate}
+        locationLabel={mapLocationLabel}
+        userCoordinate={currentLocationInPlanningLocation}
+        userHeading={currentHeading}
+        markers={mapMarkers}
+        routeCoordinates={locationRouteCoordinates}
+        showRoutes={locationRouteCoordinates.length > 1}
+        topInset={mapTopInset}
+        onInteract={handleMapInteract}
+        onLocateMe={handleLocateMe}
+        onOpenLocationSheet={handleOpenLocationSheet}
+        planningLocation={planningLocation}
+        hideHeader={isLargeScreen}
+        shellStyle={StyleSheet.absoluteFill}
+    />
+  );
+  const largeMapControls = (
+    <View pointerEvents="box-none" style={styles.mapControlsOverlay}>
+      <DiscoveryFilters
+        activeIntent={activeDiscoveryIntent}
+        activeRegion={resolvedDiscoveryRegion}
+        intents={discoveryIntentOptions}
+        leadingSearchAccessory={
+          <HeaderLocationSelector location={planningLocation} onPress={handleOpenLocationSheet} />
+        }
+        regions={discoveryRegionOptions}
+        searchPlaceholder={pageContent.search.intro.searchPlaceholder}
+        searchQuery={searchQuery}
+        trailingSearchAccessory={
+          <GlassButton
+            accessibilityLabel="Locate me"
+            height={52}
+            onPress={handleLocateMe}
+            radius={designSystem.radii.pill}
+            width={52}
+          >
+            <NavigationArrow
+              color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+              size={20}
+              weight="bold"
+            />
+          </GlassButton>
+        }
+        onIntentChange={setActiveDiscoveryIntent}
+        onRegionChange={setActiveDiscoveryRegion}
+        onSearchQueryChange={setSearchQuery}
+        fullBleed={false}
+      />
+    </View>
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={styles.root}>
+        <View style={styles.bodyLarge}>
+          <View
+            style={[
+              styles.contentColumn,
+              isTablet ? styles.contentColumnTablet : styles.contentColumnDesktop,
+              {
+                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+              },
+            ]}
+          >
+            <ExploreContent
+              discoveryActivities={discoveryActivities}
+              discoveryHiddenGems={discoveryHiddenGems}
+              discoveryJoinableTripCards={discoveryJoinableTripCards}
+              isDark={isDark}
+              locationActivities={locationActivities}
+              locationJoinableTripCards={locationJoinableTripCards}
+              locationLabel={planningLocation.label}
+              locationTrips={locationTrips}
+              planningCopy={planningCopy}
+              searchQuery={searchQuery}
+              selectedTripId={selectedTripId}
+              showInlineFilters={false}
+              onSelectGroupTrip={handleOpenGroupTripDetail}
+              onSelectHiddenGem={handleOpenHiddenGemDetail}
+              onSelectTrip={handleSelectTrip}
+              onSelectActivity={handleOpenExperienceDetail}
+              scrollContainerStyle={styles.columnScroll}
+            />
+          </View>
+          {selectedGroupCircleId ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              <ExploreGroupTripDetailScreen
+                circleId={selectedGroupCircleId}
+                onClose={() => setSelectedGroupCircleId(null)}
+              />
+            </View>
+          ) : selectedHiddenGemSlug ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              <HiddenGemDetailScreen
+                onClose={() => setSelectedHiddenGemSlug(null)}
+                slug={selectedHiddenGemSlug}
+              />
+            </View>
+          ) : selectedExperienceSlug ? (
+            <View
+              style={[
+                styles.detailColumn,
+                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
+                {
+                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
+                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+                },
+              ]}
+            >
+              <ExperienceDetailContent
+                hideHeader={false}
+                onClose={() => setSelectedExperienceSlug(null)}
+                slug={selectedExperienceSlug}
+              />
+            </View>
+          ) : null}
+          <View style={styles.mapColumn}>
+            <View style={styles.mapLayerLarge}>
+              {mapLayerContent}
+            </View>
+            {largeMapControls}
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.root}>
       <View style={styles.body}>
         <View style={styles.mapLayer}>
-          <ExploreMapHero
-            key={mapResetKey}
-            centerCoordinate={mapCenterCoordinate}
-            locationLabel={mapLocationLabel}
-            userCoordinate={currentLocationInPlanningLocation}
-            userHeading={currentHeading}
-            markers={mapMarkers}
-            routeCoordinates={locationRouteCoordinates}
-            showRoutes={locationRouteCoordinates.length > 1}
-            topInset={mapTopInset}
-            onInteract={handleMapInteract}
-            onLocateMe={handleLocateMe}
-            onOpenLocationSheet={handleOpenLocationSheet}
-            planningLocation={planningLocation}
-          />
+            {mapLayerContent}
         </View>
 
         <ExploreLoadedSheet
@@ -466,6 +815,234 @@ function ExploreScreenView({
     </ThemedView>
   );
 }
+
+const ExploreContent = memo(function ExploreContent({
+  isDark,
+  discoveryActivities,
+  discoveryHiddenGems,
+  discoveryJoinableTripCards,
+  locationActivities,
+  locationJoinableTripCards,
+  locationLabel,
+  locationTrips,
+  planningCopy,
+  searchQuery,
+  selectedTripId,
+  showInlineFilters = true,
+  onSelectTrip,
+  scrollContainerStyle,
+  headerAnimatedStyle,
+  onSelectActivity,
+  onSelectGroupTrip,
+  onSelectHiddenGem,
+}: {
+  discoveryActivities?: ExplorePageContent['home']['activities'];
+  discoveryHiddenGems?: ExplorePageContent['search']['hiddenGems']['items'];
+  discoveryJoinableTripCards?: readonly ExploreJoinableTripCard[];
+  isDark: boolean;
+  locationActivities: ExplorePageContent['home']['activities'];
+  locationJoinableTripCards: readonly ExploreJoinableTripCard[];
+  locationLabel: string;
+  locationTrips: readonly TripListItem[];
+  planningCopy: ReturnType<typeof getPlanningLocationCopy>;
+  searchQuery: string;
+  selectedTripId?: string;
+  showInlineFilters?: boolean;
+  onSelectTrip: (tripId: string) => void;
+  scrollContainerStyle?: object;
+  headerAnimatedStyle?: object;
+  onSelectActivity?: (slug: string) => void;
+  onSelectGroupTrip?: (circleId: string) => void;
+  onSelectHiddenGem?: (slug: string) => void;
+}) {
+  const router = useRouter();
+  const getActivityHref = useCallback(
+    (activity: ExplorePageContent['home']['activities'][number]) => {
+        return {
+            pathname: '/explore/[slug]' as const,
+            params: { slug: activity.experienceSlug },
+        };
+    },
+    []
+  );
+
+  const handlePressActivity = useCallback(
+    (activity: ExplorePageContent['home']['activities'][number]) => {
+      if (onSelectActivity) {
+        onSelectActivity(activity.experienceSlug);
+        return;
+      }
+
+      router.push({
+        pathname: '/explore/[slug]' as const,
+        params: { slug: activity.experienceSlug },
+      });
+    },
+    [onSelectActivity, router]
+  );
+  const handlePressHiddenGem = useCallback(
+    (slug: string) => {
+      if (onSelectHiddenGem) {
+        onSelectHiddenGem(slug);
+        return;
+      }
+
+      router.push({
+        pathname: '/explore/hidden-gems/[slug]' as const,
+        params: { slug },
+      });
+    },
+    [onSelectHiddenGem, router]
+  );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const contentActivities = discoveryActivities ?? locationActivities;
+  const contentJoinableTripCards = discoveryJoinableTripCards ?? locationJoinableTripCards;
+  const searchedActivities = useMemo(() => {
+    if (discoveryActivities || !normalizedSearchQuery) {
+      return contentActivities;
+    }
+
+    return contentActivities.filter((activity) => {
+      const experience = activity.experienceSlug;
+      return [
+        activity.title,
+        activity.subtitle,
+        activity.countryLabel,
+        experience,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
+    });
+  }, [contentActivities, discoveryActivities, normalizedSearchQuery]);
+
+  const { isLargeScreen } = useResponsive();
+  const ScrollComponent = isLargeScreen ? ScrollView : BottomSheetScrollView;
+
+  return (
+    <ScrollComponent contentContainerStyle={[styles.sheetContent, scrollContainerStyle]} showsVerticalScrollIndicator={false}>
+      <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
+        <View style={styles.sectionCopy}>
+          <ThemedText numberOfLines={2} style={styles.sectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+        </View>
+      </Animated.View>
+
+      {showInlineFilters ? (
+      <View style={styles.searchRail}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/explore/search')}
+          style={[
+            styles.searchPrimaryAction,
+            {
+              backgroundColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised,
+              borderColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
+            },
+          ]}
+        >
+          <MagnifyingGlass
+            color={isDark ? designSystem.colors.darkText : designSystem.colors.warmDark}
+            size={20}
+            weight="bold"
+          />
+          <ThemedText
+            numberOfLines={1}
+            style={[
+              styles.searchPrimaryText,
+              { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+            ]}
+          >
+            {searchQuery || `Search ${locationLabel} places`}
+          </ThemedText>
+        </Pressable>
+      </View>
+      ) : null}
+
+      {showInlineFilters ? (
+      <View style={styles.tripFilterRail}>
+        {locationTrips.length > 0 ? (
+          <TripFilterTabs
+            trips={locationTrips}
+            selectedTripId={selectedTripId}
+            onSelectTrip={onSelectTrip}
+          />
+        ) : (
+          null
+        )}
+      </View>
+      ) : null}
+
+      <View style={styles.cardList}>
+        {contentJoinableTripCards.length > 0 ? (
+          <View style={styles.groupTripSection}>
+            <ThemedText style={styles.groupTripTitle}>Open groups to join</ThemedText>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.groupTripRail}
+              decelerationRate="fast"
+              snapToInterval={272}
+            >
+              {contentJoinableTripCards.map((card) => (
+                <ExploreGroupTripCard
+                  card={card}
+                  href={{ pathname: '/explore/group/[circleId]', params: { circleId: card.circleId } }}
+                  onOpen={onSelectGroupTrip ? () => onSelectGroupTrip(card.circleId) : undefined}
+                  key={card.circleId}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+        <ExploreActivityCardList
+          activities={searchedActivities}
+          getHref={getActivityHref}
+          onPressActivity={handlePressActivity}
+        />
+        {discoveryHiddenGems && discoveryHiddenGems.length > 0 ? (
+          <View style={styles.groupTripSection}>
+            <ThemedText style={styles.groupTripTitle}>Local detours worth keeping</ThemedText>
+            <View style={styles.hiddenGemStack}>
+              {discoveryHiddenGems.map((item) => {
+                const slug = getHiddenGemSlug(item.title);
+
+                return (
+                  <ExploreHiddenGemCard
+                    card={item}
+                    href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug } }}
+                    key={item.title}
+                    onPress={() => handlePressHiddenGem(slug)}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+        {searchedActivities.length === 0 ? (
+          <View
+            style={[
+              styles.emptyLocationCard,
+              { borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft },
+            ]}
+          >
+            <ThemedText style={styles.emptyLocationTitle}>
+              {normalizedSearchQuery ? 'No matches yet' : `No ${locationLabel} picks yet`}
+            </ThemedText>
+            <ThemedText
+              style={[
+                styles.emptyLocationText,
+                { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+              ]}
+            >
+              {normalizedSearchQuery
+                ? 'Try another place, activity, or region name.'
+                : 'Keep this location selected while you plan ahead. New stays and experiences will appear here when they are added.'}
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
+    </ScrollComponent>
+  );
+});
 
 const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   animatedIndex,
@@ -510,10 +1087,10 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
       ref={sheetRef}
       snapPoints={snapPoints ?? ['34%', '64%', '100%']}
       animatedIndex={animatedIndex}>
-      <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
+      <BottomSheetScrollView contentContainerStyle={styles.mobileSheetContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={headerAnimatedStyle ? [styles.mobileSectionHeader, headerAnimatedStyle] : styles.mobileSectionHeader}>
           <View style={styles.sectionCopy}>
-            <ThemedText style={styles.sectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+            <ThemedText style={styles.mobileSectionTitle}>{planningCopy.exploreTitle}</ThemedText>
           </View>
           <Link href="/explore/search" asChild>
             <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
@@ -522,7 +1099,7 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
           </Link>
         </Animated.View>
 
-        <View style={styles.tripFilterRail}>
+        <View style={styles.mobileTripFilterRail}>
           {locationTrips.length > 0 ? (
             <TripFilterTabs
               trips={locationTrips}
@@ -551,7 +1128,7 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
           )}
         </View>
 
-        <View style={styles.cardList}>
+        <View style={styles.mobileCardList}>
           {locationJoinableTripCards.length > 0 ? (
             <View style={styles.openTripsSection}>
               <View style={styles.openTripsHeader}>
@@ -609,7 +1186,10 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    position: 'relative',
+  },
+  bodyLarge: {
+    flex: 1,
+    flexDirection: 'row',
   },
   mapLayer: {
     position: 'absolute',
@@ -617,8 +1197,71 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  mapLayerLarge: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  contentColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 340,
+    zIndex: 10,
+    borderRightWidth: 1,
+    height: '100%',
+  },
+  contentColumnTablet: {
+    width: 360,
+  },
+  contentColumnDesktop: {
+    width: 420,
+  },
+  detailColumn: {
+    flexShrink: 0,
+    flexGrow: 0,
+    borderRightWidth: 1,
+    zIndex: 11,
+  },
+  detailColumnTablet: {
+    width: 340,
+  },
+  detailColumnDesktop: {
+    width: 430,
+  },
+  detailEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  detailEmptyText: {
+    fontSize: 16,
+    color: designSystem.colors.gray,
+    textAlign: 'center',
+  },
+  mapColumn: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: designSystem.colors.mapFallback,
+    position: 'relative',
+  },
+  mapControlsOverlay: {
+    position: 'absolute',
+    top: 28,
+    left: 24,
+    right: 24,
+    maxWidth: 760,
+    gap: 14,
+  },
+  columnScroll: {
+    paddingTop: 28,
+    paddingBottom: 48,
   },
   sheetContent: {
+    paddingBottom: 32,
+  },
+  mobileSheetContent: {
     paddingTop: designSystem.spacing.lg,
     paddingHorizontal: designSystem.spacing.lg,
     paddingBottom: 132,
@@ -626,15 +1269,29 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 14,
   },
   sectionCopy: {
     flex: 1,
     gap: 4,
   },
   sectionTitle: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  mobileSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  mobileSectionTitle: {
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '600',
@@ -652,7 +1309,30 @@ const styles = StyleSheet.create({
   createTripButtonTextDark: {
     color: designSystem.colors.darkText,
   },
+  searchRail: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  searchPrimaryAction: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  searchPrimaryText: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    padding: 0,
+  },
   tripFilterRail: {
+    paddingBottom: 8,
+  },
+  mobileTripFilterRail: {
     minHeight: 44,
     justifyContent: 'center',
   },
@@ -665,7 +1345,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   cardList: {
+    paddingHorizontal: 20,
     gap: 16,
+  },
+  mobileCardList: {
+    gap: 16,
+  },
+  groupTripSection: {
+    marginTop: 6,
+    marginBottom: 12,
+    gap: 12,
+  },
+  groupTripTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  groupTripRail: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  hiddenGemStack: {
+    gap: 14,
   },
   openTripsSection: {
     gap: 12,
@@ -683,26 +1384,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   emptyLocationCard: {
+    padding: 24,
+    borderRadius: 24,
     borderWidth: 1,
-    borderRadius: designSystem.radii.card,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 6,
-    backgroundColor: designSystem.colors.whiteOverlayFaint,
+    gap: 12,
+    marginTop: 12,
   },
   emptyLocationTitle: {
     fontSize: 18,
-    lineHeight: 24,
     fontWeight: '600',
   },
   emptyLocationText: {
-    ...designSystem.type.body,
-  },
-  noticeCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    fontSize: 15,
+    lineHeight: 22,
   },
   noticeText: {
     fontSize: 14,

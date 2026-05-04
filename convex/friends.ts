@@ -3025,18 +3025,43 @@ export const endFriendCall = mutation({
       return null;
     }
 
-    if (call.circleId) {
-      const now = Date.now();
-      await ctx.db.patch(call._id, { updatedAt: now });
-      return await ctx.db.get(call._id);
-    }
-
     const now = Date.now();
     await ctx.db.patch(call._id, {
       status: 'ended',
       endedAt: now,
       updatedAt: now,
     });
+
+    if (call.circleId) {
+      const callMessages = await ctx.db
+        .query('friendMessages')
+        .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', call.circleId!))
+        .order('desc')
+        .take(50);
+
+      await Promise.all(
+        callMessages
+          .filter((message) => message.callId === call._id && message.callStatus !== 'ended')
+          .map((message) => ctx.db.patch(message._id, { callStatus: 'ended' }))
+      );
+      await ctx.db.patch(call.circleId, { updatedAt: now });
+    }
+
+    if (call.directThreadId) {
+      const callMessages = await ctx.db
+        .query('friendDirectMessages')
+        .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', call.directThreadId!))
+        .order('desc')
+        .take(50);
+
+      await Promise.all(
+        callMessages
+          .filter((message) => message.callId === call._id && message.callStatus !== 'ended')
+          .map((message) => ctx.db.patch(message._id, { callStatus: 'ended' }))
+      );
+      await ctx.db.patch(call.directThreadId, { updatedAt: now });
+    }
+
     return await ctx.db.get(call._id);
   },
 });
@@ -3048,7 +3073,7 @@ export const getFriendCall = query({
   },
   handler: async (ctx, args) => {
     const call = await ctx.db.get(args.callId);
-    if (!call) {
+    if (!call || call.status === 'ended' || call.status === 'cancelled') {
       return null;
     }
 

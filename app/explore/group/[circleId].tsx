@@ -13,20 +13,48 @@ import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreGroupTripDetailRef, requestJoinExploreTripRef } from '@/lib/convex';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-export default function ExploreGroupTripDetailScreen() {
-  const { circleId } = useLocalSearchParams<{ circleId: string }>();
+export default function ExploreGroupTripDetailScreen({
+  circleId: circleIdProp,
+  onClose,
+}: {
+  circleId?: string;
+  onClose?: () => void;
+} = {}) {
+  const { circleId: routeCircleId } = useLocalSearchParams<{ circleId: string }>();
+  const circleId = circleIdProp ?? routeCircleId;
   const router = useRouter();
   const traveler = useCurrentTraveler();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen } = useResponsive();
+  const shouldRedirectToExploreShell = isLargeScreen && !circleIdProp && Boolean(circleId);
+
+  useEffect(() => {
+    if (!shouldRedirectToExploreShell || !circleId) {
+      return;
+    }
+
+    router.replace({
+      pathname: '/explore',
+      params: { groupCircleId: circleId },
+    });
+  }, [circleId, router, shouldRedirectToExploreShell]);
+
   const detail = useQuery(
     getExploreGroupTripDetailRef,
-    circleId ? { circleId: circleId as Id<'friendCircles'>, travelerSlug: traveler?.slug } : 'skip'
+    circleId && !shouldRedirectToExploreShell
+      ? { circleId: circleId as Id<'friendCircles'>, travelerSlug: traveler?.slug }
+      : 'skip'
   );
   const requestJoin = useMutation(requestJoinExploreTripRef);
   const [isRequesting, setIsRequesting] = useState(false);
+
+  if (shouldRedirectToExploreShell) {
+    return null;
+  }
 
   const handleJoin = async () => {
     if (!traveler?.slug || !detail || detail.itinerary.length === 0 || isRequesting || detail.isMember) {
@@ -49,7 +77,12 @@ export default function ExploreGroupTripDetailScreen() {
     return (
       <ThemedView style={styles.root}>
         <WandrHeader
-          config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }}
+          config={{
+            overlay: true,
+            leadingAction: onClose
+              ? { kind: 'back', accessibilityLabel: 'Close group trip', onPress: onClose }
+              : { kind: 'back', accessibilityLabel: 'Go back' },
+          }}
         />
       </ThemedView>
     );
@@ -65,7 +98,12 @@ export default function ExploreGroupTripDetailScreen() {
   return (
     <ThemedView style={styles.root}>
       <WandrHeader
-        config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }}
+        config={{
+          overlay: true,
+          leadingAction: onClose
+            ? { kind: 'back', accessibilityLabel: 'Close group trip', onPress: onClose }
+            : { kind: 'back', accessibilityLabel: 'Go back' },
+        }}
       />
       <ScrollView
         contentContainerStyle={[
@@ -73,7 +111,7 @@ export default function ExploreGroupTripDetailScreen() {
           { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 56 },
         ]}>
         <View style={styles.carouselContainer}>
-          <ExperienceGalleryCarousel images={galleryImages} />
+          <ExperienceGalleryCarousel height={420} images={galleryImages} />
         </View>
 
         <View style={styles.paddedContent}>
