@@ -5,8 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
-import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
+import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
+import { ExploreActivityCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
@@ -94,11 +94,12 @@ function ExploreHiddenGemsScreenView({
               </View>
             ) : null}
             {isLoading ? (
-              <ExploreHiddenGemCardSkeleton />
+              <ExploreActivityCardSkeleton />
             ) : (
-              <ExploreHiddenGemCard
-                card={leadGem}
+              <ExploreActivityCard
+                card={toHiddenGemActivityCard(leadGem)}
                 href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(leadGem.title) } }}
+                marker="gem"
               />
             )}
           </ThemedView>
@@ -127,14 +128,15 @@ function ExploreHiddenGemsScreenView({
               {isLoading
                 ? Array.from({ length: group.items.length || 1 }).map((_, index) => (
                     <View key={`${group.key}-skeleton-${index}`} style={styles.groupedCard}>
-                      <ExploreHiddenGemCardSkeleton />
+                      <ExploreActivityCardSkeleton />
                     </View>
                   ))
                 : group.items.map((item) => (
                     <View key={item.title} style={styles.groupedCard}>
-                      <ExploreHiddenGemCard
-                        card={item}
+                      <ExploreActivityCard
+                        card={toHiddenGemActivityCard(item)}
                         href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
+                        marker="gem"
                       />
                       <View style={styles.noteRow}>
                         <GemTag label={getGemMeta(item).district} />
@@ -181,6 +183,21 @@ function getGemMeta(item: ExploreHiddenGem) {
       note: item.description,
     }
   );
+}
+
+function toHiddenGemActivityCard(item: ExploreHiddenGem) {
+  return {
+    badge: item.badge ?? 'Hidden gem',
+    badgeTone: 'soft' as const,
+    ctaLabel: item.primaryLabel ?? 'Open gem',
+    experienceSlug: getHiddenGemSlug(item.title),
+    imageUri: item.imageUri,
+    price: '',
+    priceSuffix: '',
+    subtitle: item.locationLabel ?? item.summary ?? item.description,
+    title: item.title,
+    countryLabel: item.countryLabel,
+  };
 }
 
 function buildGemGroups(items: readonly ExploreHiddenGem[]) {

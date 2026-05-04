@@ -1,7 +1,7 @@
 import { type Href, useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bell, GearSix, LockSimple, PencilSimple, SignOut } from 'phosphor-react-native';
+import { ArrowRight, BellRinging, CurrencyDollar, LockSimple, PencilSimple, SignOut } from 'phosphor-react-native';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
 import {
   PanGestureHandler,
@@ -15,19 +15,14 @@ import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getAppMetadata } from '@/lib/app-metadata';
+import { useAuthSession } from '@/providers/auth-session';
 
 const SIDEBAR_WIDTH = 360;
-const APP_ICON_OPTIONS = [
-  { label: 'Default', value: null, backgroundColor: '#eaf6df', foregroundColor: '#174900' },
-  { label: 'Forest', value: 'Forest', backgroundColor: '#0f1f12', foregroundColor: '#9fe870' },
-  { label: 'Sky', value: 'Sky', backgroundColor: '#edf8ff', foregroundColor: '#103246' },
-] as const;
-
-type AppIconValue = (typeof APP_ICON_OPTIONS)[number]['value'];
 type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designSystem.semantic];
 
 type ProfileSettingsSidebarProps = {
   avatarUri?: string | null;
+  avatarSeed?: string | null;
   baseLabel: string;
   isOpen: boolean;
   name: string;
@@ -36,12 +31,14 @@ type ProfileSettingsSidebarProps = {
 
 export function ProfileSettingsSidebar({
   avatarUri,
+  avatarSeed,
   baseLabel,
   isOpen,
   name,
   onClose,
 }: ProfileSettingsSidebarProps) {
   const router = useRouter();
+  const { signOut } = useAuthSession();
   const metadata = getAppMetadata();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -49,7 +46,7 @@ export function ProfileSettingsSidebar({
   const slideProgress = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
   const dragX = useRef(new Animated.Value(0)).current;
   const [isRendered, setIsRendered] = useState(isOpen);
-  const [selectedAppIcon, setSelectedAppIcon] = useState<AppIconValue>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -117,6 +114,21 @@ export function ProfileSettingsSidebar({
     router.push(href);
   };
 
+  const handleLogout = async () => {
+    if (isSigningOut) {
+      return;
+    }
+
+    setIsSigningOut(true);
+    onClose();
+
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   return (
     <Modal animationType="none" transparent visible={isRendered} onRequestClose={onClose}>
       <View style={styles.sidebarOverlay}>
@@ -134,7 +146,7 @@ export function ProfileSettingsSidebar({
           <Animated.View style={[styles.sidebar, { backgroundColor: colors.background }, sidebarStyle]}>
             <View style={styles.sidebarHeader}>
               <View style={styles.sidebarIdentity}>
-                <FaceHashAvatar name={name} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
+                <FaceHashAvatar name={name} seed={avatarSeed} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
                 <View style={styles.sidebarNameWrap}>
                   <ThemedText numberOfLines={1} style={styles.sidebarName}>
                     {name}
@@ -152,44 +164,41 @@ export function ProfileSettingsSidebar({
                 colors={colors}
                 icon={<PencilSimple color={colors.text} size={20} weight="regular" />}
                 onPress={() => navigateTo('/profile/edit')}
-                title="Edit profile"
-                subtitle="Photo, home base, and traveler details"
+                title="Account"
               />
               <SidebarAction
                 colors={colors}
-                icon={<Bell color={colors.text} size={20} weight="regular" />}
-                onPress={() => navigateTo('/notifications')}
+                icon={<CurrencyDollar color={colors.text} size={20} weight="regular" />}
+                onPress={() => navigateTo('/profile/preferences')}
+                title="Preferences"
+              />
+              <SidebarAction
+                colors={colors}
+                icon={<BellRinging color={colors.text} size={20} weight="regular" />}
+                onPress={() => navigateTo('/profile/notifications')}
                 title="Notifications"
-                subtitle="Trip alerts, chats, and friend invites"
               />
               <SidebarAction
                 colors={colors}
                 icon={<LockSimple color={colors.text} size={20} weight="regular" />}
                 onPress={() => navigateTo('/profile/privacy')}
                 title="Privacy"
-                subtitle="Visibility, saved places, and data controls"
-              />
-              <SidebarAction
-                colors={colors}
-                icon={<GearSix color={colors.text} size={20} weight="regular" />}
-                onPress={() => navigateTo('/profile/account')}
-                title="Account"
-                subtitle="Security, billing, and app preferences"
               />
             </View>
 
             <View style={styles.sidebarFooter}>
-              <AppIconPicker
-                selectedIcon={selectedAppIcon}
-                onSelectIcon={setSelectedAppIcon}
-              />
               {metadata.appDescription ? (
                 <ThemedText style={styles.appDescription}>{metadata.appDescription}</ThemedText>
               ) : null}
               {metadata.versionLabel ? (
                 <ThemedText style={styles.versionText}>Version {metadata.versionLabel}</ThemedText>
               ) : null}
-              <Pressable style={[styles.logoutButton, { backgroundColor: colors.text }]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isSigningOut }}
+                disabled={isSigningOut}
+                onPress={handleLogout}
+                style={[styles.logoutButton, { backgroundColor: colors.text }, isSigningOut && styles.logoutButtonDisabled]}>
                 <SignOut color={colors.background} size={18} weight="bold" />
                 <ThemedText style={[styles.logoutText, { color: colors.background }]}>Logout</ThemedText>
               </Pressable>
@@ -201,54 +210,15 @@ export function ProfileSettingsSidebar({
   );
 }
 
-function AppIconPicker({
-  selectedIcon,
-  onSelectIcon,
-}: {
-  selectedIcon: AppIconValue;
-  onSelectIcon: (icon: AppIconValue) => void;
-}) {
-  return (
-    <View style={styles.appIconPicker}>
-      <View style={styles.appIconPickerHeader}>
-        <ThemedText style={styles.appIconPickerTitle}>App icon</ThemedText>
-      </View>
-      <View style={styles.appIconOptions}>
-        {APP_ICON_OPTIONS.map((option) => {
-          const isSelected = selectedIcon === option.value;
-
-          return (
-            <Pressable
-              key={option.label}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`Select ${option.label} app icon`}
-              onPress={() => onSelectIcon(option.value)}
-              style={[styles.appIconOption, isSelected && styles.appIconOptionActive]}
-            >
-              <View style={[styles.appIconPreview, { backgroundColor: option.backgroundColor }]}>
-                <ThemedText style={[styles.appIconGlyph, { color: option.foregroundColor }]}>W</ThemedText>
-              </View>
-              <ThemedText style={styles.appIconLabel}>{option.label}</ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function SidebarAction({
   colors,
   icon,
   onPress,
-  subtitle,
   title,
 }: {
   colors: ProfileSemanticColors;
   icon: React.ReactNode;
   onPress: () => void;
-  subtitle: string;
   title: string;
 }) {
   return (
@@ -258,7 +228,6 @@ function SidebarAction({
       <View style={[styles.actionIcon, { backgroundColor: colors.surface }]}>{icon}</View>
       <View style={styles.actionTextWrap}>
         <ThemedText style={styles.actionTitle}>{title}</ThemedText>
-        <ThemedText style={styles.actionSubtitle}>{subtitle}</ThemedText>
       </View>
       <ArrowRight color={colors.textSubtle} size={18} weight="regular" />
     </Pressable>
@@ -325,56 +294,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 12,
   },
-  appIconPicker: {
-    gap: 10,
-  },
-  appIconPickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  appIconPickerTitle: {
-    ...designSystem.type.bodySmallStrong,
-    color: designSystem.colors.ink,
-  },
-  appIconOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  appIconOption: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: designSystem.colors.borderSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-  },
-  appIconOptionActive: {
-    borderColor: designSystem.colors.borderAccent,
-    backgroundColor: designSystem.colors.limeSoft,
-  },
-  appIconPreview: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-  },
-  appIconGlyph: {
-    fontSize: 17,
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-  appIconLabel: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-    color: designSystem.colors.mutedText,
-  },
   appDescription: {
     fontSize: 12,
     lineHeight: 18,
@@ -395,6 +314,9 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: designSystem.radii.pill,
   },
+  logoutButtonDisabled: {
+    opacity: 0.65,
+  },
   logoutText: {
     fontSize: 13,
     lineHeight: 16,
@@ -408,11 +330,11 @@ const styles = StyleSheet.create({
     color: designSystem.colors.ink,
   },
   actionRow: {
-    minHeight: 66,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
-    paddingVertical: 11,
+    paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   actionIcon: {
@@ -431,12 +353,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
     color: designSystem.colors.ink,
-  },
-  actionSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '500',
-    color: designSystem.colors.subtleText,
   },
 });

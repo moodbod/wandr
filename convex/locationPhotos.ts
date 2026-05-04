@@ -25,9 +25,74 @@ export const submitLocationPhoto = mutation({
       storageId: args.storageId,
       caption: args.caption,
       source: 'user',
-      status: 'approved',
+      status: 'pending',
       createdAt: Date.now(),
     });
+  },
+});
+
+export const listManagedLocationPhotos = query({
+  args: {
+    status: v.optional(v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected'))),
+  },
+  handler: async (ctx, args) => {
+    const status = args.status;
+    const query = status
+      ? ctx.db
+          .query('locationPhotos')
+          .withIndex('by_status_and_createdAt', (q) => q.eq('status', status))
+          .order('desc')
+      : ctx.db.query('locationPhotos').order('desc');
+    const photos = await query.take(80);
+
+    const resolved = await Promise.all(
+      photos.map(async (photo) => {
+        const imageUri = await ctx.storage.getUrl(photo.storageId);
+
+        if (!imageUri) {
+          return null;
+        }
+
+        return {
+          id: photo._id,
+          imageUri,
+          locationKind: photo.locationKind,
+          locationSlug: photo.locationSlug,
+          travelerSlug: photo.travelerSlug,
+          caption: photo.caption ?? null,
+          source: photo.source,
+          status: photo.status,
+          createdAt: photo.createdAt,
+          reviewedAt: photo.reviewedAt ?? null,
+          reviewedBy: photo.reviewedBy ?? null,
+        };
+      })
+    );
+
+    return resolved.filter((photo): photo is NonNullable<typeof photo> => Boolean(photo));
+  },
+});
+
+export const updateLocationPhotoStatus = mutation({
+  args: {
+    photoId: v.id('locationPhotos'),
+    status: v.union(v.literal('approved'), v.literal('rejected')),
+    reviewerSlug: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const photo = await ctx.db.get(args.photoId);
+
+    if (!photo) {
+      return false;
+    }
+
+    await ctx.db.patch(args.photoId, {
+      status: args.status,
+      reviewedAt: Date.now(),
+      reviewedBy: args.reviewerSlug,
+    });
+
+    return true;
   },
 });
 

@@ -1,20 +1,38 @@
 import { isTrackReference, useTracks, VideoTrack } from '@livekit/react-native';
+import { startIOSPIP } from '@livekit/react-native-webrtc';
 import { Track } from 'livekit-client';
 import { CornersOut } from 'phosphor-react-native';
-import { useMemo, useState, type ComponentProps } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState, type Component, type ComponentProps } from 'react';
+import { Platform, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 
 type TrackItem = ReturnType<typeof useTracks>[number];
 type VideoTrackRef = ComponentProps<typeof VideoTrack>['trackRef'];
+type NativeVideoTrackRef = ComponentProps<typeof VideoTrack>['ref'];
 
-export function CallVideoGrid() {
+export type CallVideoGridHandle = {
+  startPictureInPicture: () => boolean;
+};
+
+export const CallVideoGrid = forwardRef<CallVideoGridHandle>(function CallVideoGrid(_props, ref) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }]);
   const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const primaryVideoRef = useRef<Component | null>(null);
   const data = useMemo(() => tracks.slice(0, 9), [tracks]);
   const frames = useMemo(() => getVideoTileFrames(data.length, layout.width, layout.height), [data.length, layout]);
+
+  useImperativeHandle(ref, () => ({
+    startPictureInPicture: () => {
+      if (Platform.OS !== 'ios' || !primaryVideoRef.current) {
+        return false;
+      }
+
+      startIOSPIP(primaryVideoRef);
+      return true;
+    },
+  }));
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { height, width } = event.nativeEvent.layout;
@@ -27,7 +45,13 @@ export function CallVideoGrid() {
         {data.map((item, index) => (
           <View key={getTrackKey(item, index)} style={[styles.videoTile, frames[index]]}>
             {isTrackReference(item) ? (
-              <VideoTrack objectFit="cover" trackRef={item} style={styles.video} />
+              <VideoTrack
+                iosPIP={getPictureInPictureOptions(index)}
+                objectFit="cover"
+                ref={index === 0 ? (primaryVideoRef as NativeVideoTrackRef) : undefined}
+                trackRef={item}
+                style={styles.video}
+              />
             ) : (
               <ParticipantVideoPlaceholder item={item} />
             )}
@@ -36,6 +60,22 @@ export function CallVideoGrid() {
       </View>
     </View>
   );
+});
+
+function getPictureInPictureOptions(index: number) {
+  if (Platform.OS !== 'ios' || index !== 0) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    preferredSize: {
+      width: 9,
+      height: 16,
+    },
+    startAutomatically: true,
+    stopAutomatically: true,
+  };
 }
 
 function ParticipantVideoPlaceholder({ item }: { item: TrackItem }) {

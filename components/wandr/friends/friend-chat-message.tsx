@@ -5,6 +5,7 @@ import { useRef, type ReactNode } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { RouteMapWidget } from '@/components/wandr/friends/chat-widgets';
 import type { MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { designSystem } from '@/constants/design-system';
@@ -71,6 +72,120 @@ function getWidgetMessage(body: string | null) {
   return null;
 }
 
+function getMediaMessage(body: string | null) {
+  if (!body?.startsWith('wandr:media:') && !body?.startsWith('wandr:sticker:') && !body?.startsWith('wandr:gif:')) {
+    return null;
+  }
+
+  if (body.startsWith('wandr:media:')) {
+    try {
+      const media = JSON.parse(decodeURIComponent(body.replace('wandr:media:', ''))) as {
+        kind?: string;
+        title?: string;
+        uri?: string;
+      };
+      if (!media.uri) {
+        return null;
+      }
+
+      return {
+        accessibilityLabel: `${media.title ?? media.kind ?? 'Travel media'} ${media.kind === 'gif' ? 'GIF' : 'sticker'}`,
+        uri: media.uri,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const mediaByBody: Record<string, { accessibilityLabel: string; uri: string }> = {
+    'wandr:sticker:noto-map': {
+      accessibilityLabel: 'Trip map sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f5fa.png',
+    },
+    'wandr:sticker:noto-camera': {
+      accessibilityLabel: 'Photo op sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f4f8.png',
+    },
+    'wandr:sticker:noto-compass': {
+      accessibilityLabel: 'Compass sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9ed.png',
+    },
+    'wandr:sticker:noto-beach': {
+      accessibilityLabel: 'Beach day sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3d6.png',
+    },
+    'wandr:sticker:noto-landmark': {
+      accessibilityLabel: 'Landmark sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3db.png',
+    },
+    'wandr:sticker:noto-luggage': {
+      accessibilityLabel: 'Packed luggage sticker',
+      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9f3.png',
+    },
+    'wandr:gif:noto-sunrise': {
+      accessibilityLabel: 'Sunrise travel GIF',
+      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f305/512.gif',
+    },
+    'wandr:gif:noto-camp': {
+      accessibilityLabel: 'Camping travel GIF',
+      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f3d5_fe0f/512.gif',
+    },
+    'wandr:gif:noto-car': {
+      accessibilityLabel: 'Road trip GIF',
+      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f697/512.gif',
+    },
+    'wandr:gif:noto-globe': {
+      accessibilityLabel: 'Explore the world GIF',
+      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f30d/512.gif',
+    },
+  };
+
+  return mediaByBody[body] ?? null;
+}
+
+function ReplyQuote({ replyTo }: { replyTo?: { senderName: string; preview: string } | null }) {
+  if (!replyTo) {
+    return null;
+  }
+
+  return (
+    <View style={styles.replyQuote}>
+      <ThemedText style={styles.replyQuoteSender} numberOfLines={1}>
+        {replyTo.senderName}
+      </ThemedText>
+      <ThemedText style={styles.replyQuotePreview} numberOfLines={2}>
+        {replyTo.preview}
+      </ThemedText>
+    </View>
+  );
+}
+
+export type ChatCallCard = NonNullable<FriendChatMessage['callCard'] | DirectChatMessage['callCard']>;
+
+function isJoinableCallStatus(status: ChatCallCard['status']) {
+  return status === 'active' || status === 'scheduled';
+}
+
+function getCallStatusText(callCard: ChatCallCard) {
+  if (callCard.status === 'scheduled' && callCard.scheduledFor) {
+    return `Starts ${formatCallTime(callCard.scheduledFor)}${callCard.endsAt ? ` - ${formatCallTime(callCard.endsAt)}` : ''}`;
+  }
+
+  if (callCard.status === 'scheduled') {
+    return 'Scheduled call.';
+  }
+
+  if (callCard.status === 'active') {
+    return 'Tap to join the live call.';
+  }
+
+  if (callCard.status === 'cancelled') {
+    return 'Call cancelled.';
+  }
+
+  return 'Call ended.';
+}
+
 function SpringPressable({
   children,
   style,
@@ -121,9 +236,11 @@ function SpringPressable({
 
 export function FriendChatMessageBubble({
   message,
+  onOpenCallCard,
   onLongPressMessage,
 }: {
   message: FriendChatMessage;
+  onOpenCallCard?: (callCard: ChatCallCard) => void;
   onLongPressMessage?: (message: FriendChatMessage, anchor: MessageActionAnchor) => void;
 }) {
   const router = useRouter();
@@ -131,8 +248,10 @@ export function FriendChatMessageBubble({
   const { isLargeScreen } = useResponsive();
   const { openCall } = useActiveFriendCall();
   const widgetMessage = getWidgetMessage(message.body);
+  const mediaMessage = getMediaMessage(message.body);
   const WidgetIcon = widgetMessage?.icon;
   const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
+  const isJoinableCall = message.callCard ? isJoinableCallStatus(message.callCard.status) : false;
   const lastNavigateAtRef = useRef(0);
   const longPressLockUntilRef = useRef(0);
 
@@ -149,7 +268,7 @@ export function FriendChatMessageBubble({
   };
 
   const handleOpenCall = () => {
-    if (!message.callCard?.callId) {
+    if (!message.callCard) {
       return;
     }
     const now = Date.now();
@@ -160,6 +279,10 @@ export function FriendChatMessageBubble({
       return;
     }
     lastNavigateAtRef.current = now;
+    if (!isJoinableCall || !message.callCard.callId) {
+      onOpenCallCard?.(message.callCard);
+      return;
+    }
     if (isLargeScreen) {
       openCall(message.callCard.callId as Id<'friendCalls'>);
       return;
@@ -184,7 +307,13 @@ export function FriendChatMessageBubble({
     <View style={[styles.messageWrap, message.isOwnMessage ? styles.messageWrapOwn : null]}>
       {!message.isOwnMessage ? (
         <View style={styles.senderRow}>
-          {message.senderAvatarUri ? <ExpoImage source={message.senderAvatarUri} style={styles.senderAvatar} contentFit="cover" /> : null}
+          <FaceHashAvatar
+            name={message.senderName || message.senderSlug || 'Traveler'}
+            seed={message.senderSlug}
+            size={24}
+            uri={message.senderAvatarUri}
+            style={styles.senderAvatar}
+          />
           <ThemedText style={styles.senderName}>{message.senderName}</ThemedText>
         </View>
       ) : null}
@@ -195,6 +324,7 @@ export function FriendChatMessageBubble({
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
           style={[styles.routeCard, message.isOwnMessage ? styles.routeCardOwn : null]}>
+          <ReplyQuote replyTo={message.replyTo} />
           <RouteMapWidget routeCard={message.routeCard} createdAt={message.createdAt} />
         </SpringPressable>
       ) : message.callCard ? (
@@ -205,43 +335,71 @@ export function FriendChatMessageBubble({
           style={[
             styles.callWidget,
             getWidgetSurfaceStyle(isDark),
+            !isJoinableCall ? [styles.callWidgetInactive, getInactiveCallSurfaceStyle(isDark)] : null,
             message.isOwnMessage ? styles.callWidgetOwn : null,
           ]}>
-          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
-            <CallIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
-          </View>
-          <View style={styles.widgetMessageCopy}>
-            <View style={styles.callTitleRow}>
-              <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>
-                {message.callCard.title}
-              </ThemedText>
-              {message.callCard.status === 'scheduled' ? (
-                <View style={[styles.callStatusPill, getWidgetIconStyle(isDark)]}>
-                  <CalendarBlank color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={12} weight="bold" />
-                  <ThemedText style={[styles.callStatusText, getWidgetAccentTextStyle(isDark)]}>Scheduled</ThemedText>
-                </View>
-              ) : null}
+          <ReplyQuote replyTo={message.replyTo} />
+          <View style={styles.widgetLayout}>
+            <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark), !isJoinableCall ? styles.callWidgetInactiveIcon : null]}>
+              <CallIcon
+                color={!isJoinableCall ? designSystem.colors.liked : isDark ? designSystem.colors.lime : designSystem.colors.darkGreen}
+                size={isJoinableCall ? 18 : 15}
+                weight="bold"
+              />
             </View>
-            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
-              {message.callCard.status === 'scheduled' && message.callCard.scheduledFor
-                ? `Starts ${formatCallTime(message.callCard.scheduledFor)}${
-                    message.callCard.endsAt ? ` - ${formatCallTime(message.callCard.endsAt)}` : ''
-                  }`
-                : message.callCard.status === 'active'
-                  ? 'Tap to join the live call.'
-                  : 'Call ended.'}
-            </ThemedText>
-            {message.callCard.description ? (
-              <ThemedText style={[styles.callDescription, getWidgetTitleStyle(isDark)]} numberOfLines={2}>
-                {message.callCard.description}
-              </ThemedText>
-            ) : null}
-            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
-              {[message.callCard.mode === 'voice' ? 'Voice call' : 'Video call', formatReminder(message.callCard.reminderMinutesBefore)]
-                .filter(Boolean)
-                .join(' | ')}
-            </ThemedText>
+            <View style={isJoinableCall ? styles.widgetMessageCopy : styles.callWidgetInactiveCopy}>
+              {isJoinableCall ? (
+                <>
+                  <View style={styles.callTitleRow}>
+                    <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>
+                      {message.callCard.title}
+                    </ThemedText>
+                    {message.callCard.status === 'scheduled' ? (
+                      <View style={[styles.callStatusPill, getWidgetIconStyle(isDark)]}>
+                        <CalendarBlank color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={12} weight="bold" />
+                        <ThemedText style={[styles.callStatusText, getWidgetAccentTextStyle(isDark)]}>Scheduled</ThemedText>
+                      </View>
+                    ) : null}
+                  </View>
+                  <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
+                    {getCallStatusText(message.callCard)}
+                  </ThemedText>
+                  {message.callCard.description ? (
+                    <ThemedText style={[styles.callDescription, getWidgetTitleStyle(isDark)]} numberOfLines={2}>
+                      {message.callCard.description}
+                    </ThemedText>
+                  ) : null}
+                  <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
+                    {[message.callCard.mode === 'voice' ? 'Voice call' : 'Video call', formatReminder(message.callCard.reminderMinutesBefore)]
+                      .filter(Boolean)
+                      .join(' | ')}
+                  </ThemedText>
+                </>
+              ) : (
+                <>
+                  <ThemedText style={[styles.callWidgetInactiveTitle, getWidgetTitleStyle(isDark)]}>
+                    {message.callCard.title}
+                  </ThemedText>
+                  <ThemedText style={[styles.callWidgetInactiveMeta, getWidgetDescriptionStyle(isDark)]}>
+                    {getCallStatusText(message.callCard)}
+                  </ThemedText>
+                </>
+              )}
+            </View>
           </View>
+        </SpringPressable>
+      ) : mediaMessage ? (
+        <SpringPressable
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.stickerBubble, message.isOwnMessage ? styles.stickerBubbleOwn : null]}>
+          <ReplyQuote replyTo={message.replyTo} />
+          <ExpoImage
+            accessibilityLabel={mediaMessage.accessibilityLabel}
+            source={{ uri: mediaMessage.uri }}
+            style={styles.stickerImage}
+            contentFit="contain"
+          />
         </SpringPressable>
       ) : widgetMessage ? (
         <SpringPressable
@@ -252,24 +410,27 @@ export function FriendChatMessageBubble({
             getWidgetSurfaceStyle(isDark),
             message.isOwnMessage ? styles.widgetMessageOwn : null,
           ]}>
-          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
-            {WidgetIcon ? (
-              <WidgetIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
-            ) : null}
-          </View>
-          <View style={styles.widgetMessageCopy}>
-            <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>{widgetMessage.title}</ThemedText>
-            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
-              {widgetMessage.description}
-            </ThemedText>
-            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>{widgetMessage.body}</ThemedText>
+          <ReplyQuote replyTo={message.replyTo} />
+          <View style={styles.widgetLayout}>
+            <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
+              {WidgetIcon ? (
+                <WidgetIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
+              ) : null}
+            </View>
+            <View style={styles.widgetMessageCopy}>
+              <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>{widgetMessage.title}</ThemedText>
+              <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
+                {widgetMessage.description}
+              </ThemedText>
+              <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>{widgetMessage.body}</ThemedText>
+            </View>
           </View>
         </SpringPressable>
       ) : (
         <SpringPressable
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
-          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : styles.plainOtherMessage}>
+          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : [styles.bubble, styles.bubbleOther, getOtherBubbleStyle(isDark)]}>
           <ThemedText style={message.isOwnMessage ? [styles.bubbleText, styles.bubbleTextOwn] : [styles.plainOtherText, getPlainOtherTextStyle(isDark)]}>
             {message.body}
           </ThemedText>
@@ -295,6 +456,13 @@ function getWidgetSurfaceStyle(isDark: boolean) {
       : Platform.OS === 'android'
         ? designSystem.colors.lightSurfaceAlt
         : designSystem.colors.borderSoft,
+  };
+}
+
+function getInactiveCallSurfaceStyle(isDark: boolean) {
+  return {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.045)' : 'rgba(14,15,12,0.045)',
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(14,15,12,0.06)',
   };
 }
 
@@ -330,15 +498,24 @@ function getWidgetAccentTextStyle(isDark: boolean) {
 
 function getPlainOtherTextStyle(isDark: boolean) {
   return {
-    color: isDark ? designSystem.colors.darkText : designSystem.colors.ink,
+    color: isDark ? designSystem.colors.darkText : designSystem.colors.lightTextStrong,
+  };
+}
+
+function getOtherBubbleStyle(isDark: boolean) {
+  return {
+    backgroundColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised,
+    borderColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
   };
 }
 
 export function DirectChatMessageBubble({
   message,
+  onOpenCallCard,
   onLongPressMessage,
 }: {
   message: DirectChatMessage;
+  onOpenCallCard?: (callCard: ChatCallCard) => void;
   onLongPressMessage?: (message: DirectChatMessage, anchor: MessageActionAnchor) => void;
 }) {
   const router = useRouter();
@@ -346,11 +523,13 @@ export function DirectChatMessageBubble({
   const { isLargeScreen } = useResponsive();
   const { openCall } = useActiveFriendCall();
   const CallIcon = message.callCard?.mode === 'video' ? VideoCamera : Phone;
+  const mediaMessage = getMediaMessage(message.body);
+  const isJoinableCall = message.callCard ? isJoinableCallStatus(message.callCard.status) : false;
   const lastNavigateAtRef = useRef(0);
   const longPressLockUntilRef = useRef(0);
 
   const handleOpenCall = () => {
-    if (!message.callCard?.callId) {
+    if (!message.callCard) {
       return;
     }
     const now = Date.now();
@@ -361,6 +540,10 @@ export function DirectChatMessageBubble({
       return;
     }
     lastNavigateAtRef.current = now;
+    if (!isJoinableCall || !message.callCard.callId) {
+      onOpenCallCard?.(message.callCard);
+      return;
+    }
     if (isLargeScreen) {
       openCall(message.callCard.callId as Id<'friendCalls'>);
       return;
@@ -377,9 +560,13 @@ export function DirectChatMessageBubble({
     <View style={[styles.messageWrap, message.isOwnMessage ? styles.messageWrapOwn : null]}>
       {!message.isOwnMessage ? (
         <View style={styles.senderRow}>
-          {message.senderAvatarUri ? (
-            <ExpoImage source={message.senderAvatarUri} style={styles.senderAvatar} contentFit="cover" />
-          ) : null}
+          <FaceHashAvatar
+            name={message.senderName || message.senderSlug || 'Traveler'}
+            seed={message.senderSlug}
+            size={24}
+            uri={message.senderAvatarUri}
+            style={styles.senderAvatar}
+          />
           <ThemedText style={styles.senderName}>{message.senderName}</ThemedText>
         </View>
       ) : null}
@@ -392,26 +579,51 @@ export function DirectChatMessageBubble({
           style={[
             styles.callWidget,
             getWidgetSurfaceStyle(isDark),
+            !isJoinableCall ? [styles.callWidgetInactive, getInactiveCallSurfaceStyle(isDark)] : null,
             message.isOwnMessage ? styles.callWidgetOwn : null,
           ]}>
-          <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark)]}>
-            <CallIcon color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
+          <ReplyQuote replyTo={message.replyTo} />
+          <View style={styles.widgetLayout}>
+            <View style={[styles.widgetMessageIcon, getWidgetIconStyle(isDark), !isJoinableCall ? styles.callWidgetInactiveIcon : null]}>
+              <CallIcon
+                color={!isJoinableCall ? designSystem.colors.liked : isDark ? designSystem.colors.lime : designSystem.colors.darkGreen}
+                size={isJoinableCall ? 18 : 15}
+                weight="bold"
+              />
+            </View>
+            <View style={isJoinableCall ? styles.widgetMessageCopy : styles.callWidgetInactiveCopy}>
+              <ThemedText style={[isJoinableCall ? styles.widgetMessageTitle : styles.callWidgetInactiveTitle, getWidgetTitleStyle(isDark)]}>
+                {message.callCard.title}
+              </ThemedText>
+              <ThemedText style={[isJoinableCall ? styles.widgetMessageDescription : styles.callWidgetInactiveMeta, getWidgetDescriptionStyle(isDark)]}>
+                {getCallStatusText(message.callCard)}
+              </ThemedText>
+              {isJoinableCall ? (
+                <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
+                  {message.callCard.mode === 'voice' ? 'Voice call' : 'Video call'}
+                </ThemedText>
+              ) : null}
+            </View>
           </View>
-          <View style={styles.widgetMessageCopy}>
-            <ThemedText style={[styles.widgetMessageTitle, getWidgetTitleStyle(isDark)]}>{message.callCard.title}</ThemedText>
-            <ThemedText style={[styles.widgetMessageDescription, getWidgetDescriptionStyle(isDark)]}>
-              {message.callCard.status === 'active' ? 'Tap to join the live call.' : 'Call ended.'}
-            </ThemedText>
-            <ThemedText style={[styles.widgetMessageBody, getWidgetBodyStyle(isDark)]}>
-              {message.callCard.mode === 'voice' ? 'Voice call' : 'Video call'}
-            </ThemedText>
-          </View>
+        </SpringPressable>
+      ) : mediaMessage ? (
+        <SpringPressable
+          delayLongPress={420}
+          onMeasuredLongPress={handleLongPress}
+          style={[styles.stickerBubble, message.isOwnMessage ? styles.stickerBubbleOwn : null]}>
+          <ReplyQuote replyTo={message.replyTo} />
+          <ExpoImage
+            accessibilityLabel={mediaMessage.accessibilityLabel}
+            source={{ uri: mediaMessage.uri }}
+            style={styles.stickerImage}
+            contentFit="contain"
+          />
         </SpringPressable>
       ) : (
         <SpringPressable
           delayLongPress={420}
           onMeasuredLongPress={handleLongPress}
-          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : styles.plainOtherMessage}>
+          style={message.isOwnMessage ? [styles.bubble, styles.bubbleOwn] : [styles.bubble, styles.bubbleOther, getOtherBubbleStyle(isDark)]}>
           <ThemedText style={message.isOwnMessage ? [styles.bubbleText, styles.bubbleTextOwn] : [styles.plainOtherText, getPlainOtherTextStyle(isDark)]}>
             {message.body}
           </ThemedText>
@@ -462,12 +674,22 @@ const styles = StyleSheet.create({
   },
   bubble: {
     borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   bubbleOwn: {
     backgroundColor: designSystem.colors.lime,
     borderTopRightRadius: 8,
+  },
+  bubbleOther: {
+    alignSelf: 'flex-start',
+    borderTopLeftRadius: 8,
+    borderWidth: 1,
+    shadowColor: designSystem.colors.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
   },
   bubbleText: {
     fontSize: 16,
@@ -476,11 +698,7 @@ const styles = StyleSheet.create({
     color: designSystem.colors.background,
   },
   bubbleTextOwn: {
-    color: designSystem.colors.darkGreen,
-  },
-  plainOtherMessage: {
-    maxWidth: '100%',
-    paddingVertical: 2,
+    color: designSystem.colors.oliveInk,
   },
   plainOtherText: {
     fontSize: 16,
@@ -496,10 +714,44 @@ const styles = StyleSheet.create({
   routeCardOwn: {
     alignSelf: 'flex-end',
   },
+  replyQuote: {
+    margin: 10,
+    marginBottom: 0,
+    paddingLeft: 9,
+    paddingVertical: 6,
+    paddingRight: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: designSystem.colors.lime,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+  },
+  replyQuoteSender: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '700',
+    color: designSystem.colors.lime,
+  },
+  replyQuotePreview: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '500',
+    color: designSystem.colors.darkMutedText,
+  },
+  stickerBubble: {
+    minWidth: 116,
+    minHeight: 116,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickerBubbleOwn: {
+    alignSelf: 'flex-end',
+  },
+  stickerImage: {
+    width: 108,
+    height: 108,
+  },
   widgetMessage: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -513,15 +765,26 @@ const styles = StyleSheet.create({
   callWidget: {
     maxWidth: 330,
     minWidth: 260,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: Platform.OS === 'android' ? designSystem.colors.surfaceRaised : designSystem.colors.whiteGlassMax,
     borderWidth: 1,
     borderColor: Platform.OS === 'android' ? designSystem.colors.lightSurfaceAlt : designSystem.colors.borderSoft,
+  },
+  widgetLayout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  callWidgetInactive: {
+    minWidth: 0,
+    maxWidth: 260,
+    gap: 8,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   callWidgetOwn: {
     alignSelf: 'flex-end',
@@ -533,6 +796,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: designSystem.colors.limeSoft,
+  },
+  callWidgetInactiveIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(206,83,96,0.14)',
+  },
+  callWidgetInactiveCopy: {
+    flexShrink: 1,
+    gap: 1,
+  },
+  callWidgetInactiveTitle: {
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  callWidgetInactiveMeta: {
+    fontSize: 13,
+    lineHeight: 16,
+    color: designSystem.colors.gray,
   },
   widgetMessageCopy: {
     flex: 1,

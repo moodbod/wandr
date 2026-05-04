@@ -10,6 +10,7 @@ type StaysRailCardProps = {
   isSelected: boolean;
   locationLabel: string;
   name: string;
+  presentation?: 'list' | 'floating';
   priceLabel: string;
   rating: number;
 };
@@ -20,15 +21,28 @@ export function StaysRailCard({
   isSelected,
   locationLabel,
   name,
+  presentation = 'list',
   priceLabel,
   rating,
 }: StaysRailCardProps) {
+  const isFloating = presentation === 'floating';
+
   return (
     <View
       style={[
         styles.propertyRow,
+        isFloating && styles.propertyRowFloating,
         {
-          borderBottomColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
+          backgroundColor: isFloating
+            ? isDark
+              ? designSystem.colors.darkSurface
+              : designSystem.colors.surfaceRaised
+            : 'transparent',
+          borderBottomColor: isFloating
+            ? 'transparent'
+            : isDark
+              ? designSystem.colors.darkBorderSoft
+              : designSystem.colors.borderSoft,
         },
       ]}
     >
@@ -79,6 +93,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+  },
+  propertyRowFloating: {
+    borderRadius: designSystem.radii.card,
+    paddingHorizontal: 12,
+    shadowColor: designSystem.colors.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 8,
   },
   propertyImageShell: {
     width: 96,

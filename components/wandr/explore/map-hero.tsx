@@ -4,6 +4,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WandrHeader } from '@/components/wandr/header';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { MapFrame } from '@/components/wandr/maps/map-frame';
+import type { MapMarker } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { type PlanningLocation } from '@/constants/planning-countries';
@@ -13,12 +14,20 @@ type ExploreMapHeroProps = {
   centerCoordinate: readonly [number, number];
   userCoordinate?: readonly [number, number] | null;
   userHeading?: number | null;
+  viewportPadding?: {
+    paddingBottom?: number;
+    paddingLeft?: number;
+    paddingRight?: number;
+    paddingTop?: number;
+  };
   markers: readonly ExploreMapMarker[];
   routeCoordinates?: readonly (readonly [number, number])[];
   showRoutes?: boolean;
+  recenterToUserSignal?: number;
   topInset?: number;
   onInteract?: () => void;
   onLocateMe?: () => void;
+  onMarkerPress?: (marker: MapMarker) => void;
   onOpenLocationSheet?: () => void;
   planningLocation?: PlanningLocation;
   showBackButton?: boolean;
@@ -31,12 +40,15 @@ export function ExploreMapHero({
   centerCoordinate,
   userCoordinate = null,
   userHeading = null,
+  viewportPadding,
   markers,
   routeCoordinates,
   showRoutes = true,
+  recenterToUserSignal,
   topInset = designSystem.spacing.xxxl,
   onInteract,
   onLocateMe,
+  onMarkerPress,
   onOpenLocationSheet,
   planningLocation,
   showBackButton = false,
@@ -51,12 +63,19 @@ export function ExploreMapHero({
         centerCoordinate={centerCoordinate}
         userCoordinate={userCoordinate}
         userHeading={userHeading}
+        viewportPadding={viewportPadding}
         markers={markers}
         routeCoordinates={routeCoordinates}
         zoomLevel={14}
         showRoutes={showRoutes}
+        recenterToUserSignal={recenterToUserSignal}
         onInteract={onInteract}
         onMarkerPress={(marker) => {
+          if (onMarkerPress) {
+            onMarkerPress(marker);
+            return;
+          }
+
           if (marker.itemKind === 'stay' && marker.experienceSlug) {
             router.push({ pathname: '/stays/details', params: { slug: marker.experienceSlug } });
             return;

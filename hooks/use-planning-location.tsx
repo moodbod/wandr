@@ -68,13 +68,15 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
   return (
     <PlanningLocationContext.Provider value={value}>
       {children}
-      <PlanningLocationSheet
-        currentCoordinate={pickerCoordinate}
-        selectedLocation={planningLocation}
-        visible={pickerVisible}
-        onClose={handleClosePicker}
-        onSelectLocation={handleSelectPickerLocation}
-      />
+      {pickerVisible ? (
+        <PlanningLocationSheet
+          currentCoordinate={pickerCoordinate}
+          selectedLocation={planningLocation}
+          visible={pickerVisible}
+          onClose={handleClosePicker}
+          onSelectLocation={handleSelectPickerLocation}
+        />
+      ) : null}
     </PlanningLocationContext.Provider>
   );
 }

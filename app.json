@@ -19,8 +19,7 @@
         "NSMicrophoneUsageDescription": "Wandr uses your microphone for voice and video calls.",
         "UIBackgroundModes": [
           "audio",
-          "voip",
-          "remote-notification"
+          "voip"
         ]
       },
       "bitcode": false,
@@ -62,18 +61,10 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-notifications",
-        {
-          "sounds": [
-            "./assets/sounds/voice_call_ring.wav",
-            "./assets/sounds/video_call_ring.wav"
-          ]
-        }
-      ],
       "expo-location",
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
+      "./plugins/with-android-picture-in-picture",
       [
         "expo-splash-screen",
         {

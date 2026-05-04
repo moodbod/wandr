@@ -1,15 +1,15 @@
 import BottomSheet from '@gorhom/bottom-sheet';
-import { ChatCircleText, Trash } from 'phosphor-react-native';
+import { Trash } from 'phosphor-react-native';
 import { type RefObject } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { ChatOptionsSheet } from '@/components/wandr/friends/chat-options-sheet';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { designSystem } from '@/constants/design-system';
 import {
   OptionsSheetAction,
   optionsSheetStyles as styles,
 } from '@/components/wandr/friends/chat-options-sheet-primitives';
-import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
-import { designSystem } from '@/constants/design-system';
 import type { DirectChatPayload } from '@/types/friends';
 
 type DirectChatOptionsSheetProps = {
@@ -32,11 +32,12 @@ export function DirectChatOptionsSheet({
   return (
     <ChatOptionsSheet
       avatar={
-        chat.participant.avatarUri ? (
-          <TravelerAvatarStack avatars={[chat.participant.avatarUri]} totalCount={1} />
-        ) : (
-          <ChatCircleText color={designSystem.colors.darkGreen} size={22} weight="bold" />
-        )
+        <FaceHashAvatar
+          name={chat.participant.name || chat.participant.slug || 'Traveler'}
+          seed={chat.participant.slug}
+          size={Platform.OS === 'web' ? 38 : 48}
+          uri={chat.participant.avatarUri}
+        />
       }
       editPlaceholder="Chat name"
       isBusy={isBusy}
@@ -44,7 +45,7 @@ export function DirectChatOptionsSheet({
       onChange={onChange}
       onRename={onRenameChat}
       sheetRef={sheetRef}
-      snapPoints={['56%', '84%']}
+      snapPoints={Platform.OS === 'web' ? [190] : ['56%', '84%']}
       title={chat.title}>
       <View style={styles.actionList}>
         <OptionsSheetAction

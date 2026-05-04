@@ -8,21 +8,34 @@ type FaceHashAvatarProps = {
   name: string;
   size: number;
   uri?: string | null;
+  seed?: string | null;
   style?: StyleProp<ViewStyle>;
 };
 
-export function FaceHashAvatar({ name, size, uri, style }: FaceHashAvatarProps) {
+const AVATAR_PALETTE = [
+  { backgroundColor: '#dff3b0', textColor: '#183700' },
+  { backgroundColor: '#bfe9d8', textColor: '#063627' },
+  { backgroundColor: '#c9ddff', textColor: '#102a62' },
+  { backgroundColor: '#ffd7a8', textColor: '#5a2a00' },
+  { backgroundColor: '#f5c7d8', textColor: '#59162f' },
+  { backgroundColor: '#d8d1ff', textColor: '#261868' },
+  { backgroundColor: '#ffe27a', textColor: '#3f3100' },
+  { backgroundColor: '#b8eee8', textColor: '#053b38' },
+] as const;
+
+export function FaceHashAvatar({ name, size, uri, seed, style }: FaceHashAvatarProps) {
   const usePlaceholder = shouldUseFaceHashAvatar(uri);
   const avatarStyle = [styles.avatar, { width: size, height: size, borderRadius: size / 2 }, style];
   const fontSize = Math.max(12, size * 0.38);
+  const palette = getAvatarPalette(seed ?? uri ?? name);
 
   if (usePlaceholder) {
     return (
-      <View style={[avatarStyle, styles.placeholder]}>
+      <View style={[avatarStyle, styles.placeholder, { backgroundColor: palette.backgroundColor }]}>
         <Text
           allowFontScaling={false}
           numberOfLines={1}
-          style={[styles.title, { fontSize, lineHeight: fontSize }]}>
+          style={[styles.title, { color: palette.textColor, fontSize, lineHeight: size }]}>
           {getInitials(name)}
         </Text>
       </View>
@@ -53,6 +66,17 @@ function getInitials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function getAvatarPalette(seed: string) {
+  const normalizedSeed = seed.trim().toLowerCase() || 'wandr';
+  let hash = 0;
+
+  for (let index = 0; index < normalizedSeed.length; index += 1) {
+    hash = (hash * 31 + normalizedSeed.charCodeAt(index)) >>> 0;
+  }
+
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
 const styles = StyleSheet.create({
   avatar: {
     backgroundColor: designSystem.colors.surfaceMuted,
@@ -63,9 +87,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    color: designSystem.colors.darkGreen,
-    fontWeight: '600',
+    fontWeight: '700',
     includeFontPadding: false,
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });

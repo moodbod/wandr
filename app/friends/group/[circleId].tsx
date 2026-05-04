@@ -9,10 +9,8 @@ import {
 } from 'phosphor-react-native';
 import {
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   View,
@@ -22,12 +20,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CallHistorySheet } from '@/components/wandr/friends/call-history-sheet';
 import { CallOptionsMenu } from '@/components/wandr/friends/call-options-menu';
 import { GroupChatOptionsSheet } from '@/components/wandr/friends/group-chat-options-sheet';
 import { MessageActionMenu, type MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
-import { FriendChatComposer } from '@/components/wandr/friends/friend-chat-composer';
-import { FriendChatMessageBubble } from '@/components/wandr/friends/friend-chat-message';
+import { FriendChatMessageBubble, type ChatCallCard } from '@/components/wandr/friends/friend-chat-message';
 import { FriendChatToolsSheet } from '@/components/wandr/friends/friend-chat-tools-sheet';
+import { WandrGiftedChat } from '@/components/wandr/friends/wandr-gifted-chat';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
@@ -53,6 +52,30 @@ const quickMessageByKey: Record<string, string> = {
   sunrise: 'We should lock the sunrise departure now so everyone packs for the same timing.',
   checkin: 'Quick check-in: what does everyone need before we lock the next leg?',
 };
+
+function getReplyPreview(message: FriendChatMessage) {
+  if (message.routeCard) {
+    return message.routeCard.title;
+  }
+  if (message.callCard) {
+    return message.callCard.title;
+  }
+  if (message.body?.startsWith('wandr:sticker:')) {
+    return 'Sticker';
+  }
+  if (message.body?.startsWith('wandr:gif:')) {
+    return 'GIF';
+  }
+  if (message.body?.startsWith('wandr:media:')) {
+    try {
+      const media = JSON.parse(decodeURIComponent(message.body.replace('wandr:media:', ''))) as { kind?: string; title?: string };
+      return media.title ?? (media.kind === 'gif' ? 'GIF' : 'Sticker');
+    } catch {
+      return 'Media';
+    }
+  }
+  return message.body ?? 'Message';
+}
 
 function formatScheduleDate(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
@@ -137,10 +160,12 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
   const [scheduledCallDescription, setScheduledCallDescription] = useState('');
   const [scheduledReminderMinutes, setScheduledReminderMinutes] = useState(15);
   const [scheduledCallTitle, setScheduledCallTitle] = useState('');
+  const [selectedCallCard, setSelectedCallCard] = useState<ChatCallCard | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<FriendChatMessage | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<FriendChatMessage | null>(null);
   const [messageMenuAnchor, setMessageMenuAnchor] = useState<MessageActionAnchor | null>(null);
-  const scrollRef = useRef<ScrollView | null>(null);
   const menuSheetRef = useRef<BottomSheet>(null);
+  const callHistorySheetRef = useRef<BottomSheet>(null);
   const scheduleSheetRef = useRef<BottomSheet>(null);
   const toolsSheetRef = useRef<BottomSheet>(null);
 
@@ -154,16 +179,6 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
       params: { groupCircleId: routeCircleId },
     });
   }, [circleIdProp, isLargeScreen, routeCircleId, router]);
-
-  useEffect(() => {
-    if (!chat?.messages?.length) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
-  }, [chat?.messages.length]);
 
   useEffect(() => {
     if (!traveler?.slug || !chat?.circle?._id) {
@@ -187,8 +202,10 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
         circleId: chat.circle._id,
         travelerSlug: traveler.slug,
         body: draft,
+        replyToMessageId: replyingToMessage?._id,
       });
       setDraft('');
+      setReplyingToMessage(null);
     } finally {
       setIsSending(false);
     }
@@ -215,7 +232,9 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
         circleId: chat.circle._id,
         travelerSlug: traveler.slug,
         body,
+        replyToMessageId: replyingToMessage?._id,
       });
+      setReplyingToMessage(null);
     } finally {
       setIsSending(false);
     }
@@ -232,6 +251,25 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
         circleId: chat.circle._id,
         travelerSlug: traveler.slug,
       });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSendMedia = async (body: string) => {
+    if (!traveler?.slug || !chat?.circle?._id || isSending) {
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendMessage({
+        circleId: chat.circle._id,
+        travelerSlug: traveler.slug,
+        body,
+        replyToMessageId: replyingToMessage?._id,
+      });
+      setReplyingToMessage(null);
     } finally {
       setIsSending(false);
     }
@@ -429,11 +467,18 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
   };
 
   const handleMessageLongPress = (message: FriendChatMessage, anchor: MessageActionAnchor) => {
-    if (!message.isOwnMessage) {
-      return;
-    }
     setSelectedMessage(message);
     setMessageMenuAnchor(anchor);
+  };
+
+  const handleTextMessageLongPress = (message: FriendChatMessage, anchor: MessageActionAnchor) => {
+    setSelectedMessage(message);
+    setMessageMenuAnchor(anchor);
+  };
+
+  const handleOpenCallCard = (callCard: ChatCallCard) => {
+    setSelectedCallCard(callCard);
+    callHistorySheetRef.current?.snapToIndex(0);
   };
 
   if (isLargeScreen && !circleIdProp) {
@@ -469,33 +514,54 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
         }}
       />
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.messageScroller}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: insets.top + 76,
-            paddingBottom: 24,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled">
-        {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
-
-        <View style={styles.messageStack}>
-          {(chat?.messages ?? []).map((message: any) => (
-            <FriendChatMessageBubble
-              key={message._id}
-              message={message}
-              onLongPressMessage={handleMessageLongPress}
-            />
-          ))}
-        </View>
-      </ScrollView>
+      <WandrGiftedChat<FriendChatMessage>
+        bottomOffset={insets.bottom}
+        header={bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
+        isSending={isSending}
+        isWidgetMessage={(message) =>
+          message.kind === 'system' ||
+          Boolean(
+            message.routeCard ||
+              message.callCard ||
+              message.body?.startsWith('wandr:sticker:') ||
+              message.body?.startsWith('wandr:gif:') ||
+              message.body?.startsWith('wandr:media:')
+          )
+        }
+        messages={chat?.messages ?? []}
+        onChangeText={setDraft}
+        onCancelReply={() => setReplyingToMessage(null)}
+        onLongPressMessage={handleTextMessageLongPress}
+        onReplyMessage={setReplyingToMessage}
+        onOpenTools={() => {
+          toolsSheetRef.current?.snapToIndex(0);
+        }}
+        onSendText={handleSend}
+        placeholder={chat?.composer.placeholder ?? 'Message'}
+        replyPreview={
+          replyingToMessage
+            ? {
+                senderName: replyingToMessage.senderName,
+                preview: getReplyPreview(replyingToMessage),
+              }
+            : null
+        }
+        renderWidgetMessage={(message) => (
+          <FriendChatMessageBubble
+            message={message}
+            onOpenCallCard={handleOpenCallCard}
+            onLongPressMessage={handleMessageLongPress}
+          />
+        )}
+        text={draft}
+        topInset={insets.top + 76}
+        userSlug={traveler?.slug}
+      />
 
       <MessageActionMenu
-        visible={Boolean(selectedMessage && messageMenuAnchor)}
+        visible={Boolean(selectedMessage)}
         anchor={messageMenuAnchor}
+        canDelete={Boolean(selectedMessage?.isOwnMessage)}
         onClose={() => {
           setSelectedMessage(null);
           setMessageMenuAnchor(null);
@@ -505,28 +571,12 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
             void handleDeleteMessage(selectedMessage);
           }
         }}
+        onReply={() => {
+          if (selectedMessage) {
+            setReplyingToMessage(selectedMessage);
+          }
+        }}
       />
-
-      {chat ? (
-        <KeyboardAvoidingView
-          pointerEvents="box-none"
-          style={styles.composerKeyboardFrame}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-          <View pointerEvents="box-none" style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom - 12, 8) }]}>
-            <FriendChatComposer
-              value={draft}
-              onChangeText={setDraft}
-              onSubmit={handleSend}
-              onOpenTools={() => {
-                toolsSheetRef.current?.snapToIndex(0);
-              }}
-              placeholder={chat.composer.placeholder}
-              isSending={isSending}
-            />
-          </View>
-        </KeyboardAvoidingView>
-      ) : null}
 
       {chat ? (
         <GlassBottomSheet
@@ -627,6 +677,23 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
       ) : null}
 
       {chat ? (
+        <CallHistorySheet
+          callCard={selectedCallCard}
+          contextLabel={chat.circle.name}
+          isBusy={isCallBusy}
+          onStartVideoCall={() => {
+            callHistorySheetRef.current?.close();
+            void handleStartCall('video');
+          }}
+          onStartVoiceCall={() => {
+            callHistorySheetRef.current?.close();
+            void handleStartCall('voice');
+          }}
+          sheetRef={callHistorySheetRef}
+        />
+      ) : null}
+
+      {chat ? (
         <GroupChatOptionsSheet
           chat={chat}
           isBusy={isSheetBusy}
@@ -643,6 +710,8 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
           onShareRoute={handleShareRoute}
           quickActions={chat.composer.quickActions}
           onQuickAction={handleQuickAction}
+          onGifAction={handleSendMedia}
+          onStickerAction={handleSendMedia}
         />
       ) : null}
     </ThemedView>
@@ -687,31 +756,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: designSystem.spacing.lg,
-    gap: designSystem.spacing.xl,
-  },
-  messageScroller: {
-    flex: 1,
-  },
   notice: {
     fontSize: 14,
     lineHeight: 20,
     color: designSystem.colors.copper,
-  },
-  messageStack: {
-    gap: 16,
-  },
-  composerKeyboardFrame: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-  },
-  composerDock: {
-    zIndex: 20,
-    paddingTop: 10,
-    paddingHorizontal: designSystem.spacing.lg,
-    backgroundColor: 'transparent',
   },
   sheetContent: {
     paddingTop: designSystem.spacing.lg,

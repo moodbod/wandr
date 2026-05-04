@@ -12,6 +12,10 @@ export const friendMessagesTable = defineTable({
     v.literal('scheduled_call')
   ),
   body: v.optional(v.string()),
+  replyToMessageId: v.optional(v.id('friendMessages')),
+  replyToSenderName: v.optional(v.string()),
+  replyToPreview: v.optional(v.string()),
+  replyToKind: v.optional(v.string()),
   routeTitle: v.optional(v.string()),
   routeSummary: v.optional(v.string()),
   routeDistanceLabel: v.optional(v.string()),

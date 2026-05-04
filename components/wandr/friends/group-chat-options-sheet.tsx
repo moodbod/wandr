@@ -1,7 +1,7 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { SignOut, Trash, UsersThree } from 'phosphor-react-native';
 import { type RefObject, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
@@ -52,11 +52,13 @@ export function GroupChatOptionsSheet({
     <>
       <ChatOptionsSheet
         avatar={
-          chat.circle.avatarUris.length > 0 ? (
-            <TravelerAvatarStack avatars={chat.circle.avatarUris} totalCount={chat.circle.memberCount} />
-          ) : (
-            <UsersThree color={designSystem.colors.darkGreen} size={22} weight="bold" />
-          )
+          <TravelerAvatarStack
+            avatars={chat.circle.avatarUris}
+            fallbackName={chat.members[0]?.name ?? chat.circle.name}
+            fallbackSeed={chat.members[0]?.travelerSlug ?? chat.circle.slug}
+            size={Platform.OS === 'web' ? 'compact' : 'default'}
+            totalCount={chat.circle.memberCount}
+          />
         }
         editPlaceholder="Group name"
         isBusy={isBusy}
@@ -64,7 +66,7 @@ export function GroupChatOptionsSheet({
         onChange={onChange}
         onRename={onRenameGroup}
         sheetRef={sheetRef}
-        snapPoints={['66%', '92%']}
+        snapPoints={Platform.OS === 'web' ? [420] : ['66%', '92%']}
         title={chat.circle.name}>
         <View style={styles.sheetSection}>
           <View style={styles.sectionHeadingRow}>
@@ -112,11 +114,16 @@ export function GroupChatOptionsSheet({
         </View>
       </ChatOptionsSheet>
 
-      <GlassBottomSheet ref={memberSheetRef} index={-1} snapPoints={['72%', '92%']} enablePanDownToClose>
+      <GlassBottomSheet
+        ref={memberSheetRef}
+        index={-1}
+        snapPoints={Platform.OS === 'web' ? [520] : ['72%', '92%']}
+        enablePanDownToClose
+        desktopPopupHostStyle={Platform.OS === 'web' ? { height: 520 } : undefined}>
         <BottomSheetScrollView
           contentContainerStyle={[
             localStyles.expandedSheetContent,
-            { paddingBottom: Math.max(insets.bottom, 16) + 20 },
+            { paddingBottom: Platform.OS === 'web' ? 12 : Math.max(insets.bottom, 16) + 20 },
           ]}
           showsVerticalScrollIndicator={false}>
           <View style={styles.sheetGrabber} />
@@ -167,7 +174,13 @@ function MemberAvatar({ member, size }: { member: FriendCircleMember; size: numb
           borderRadius: radius,
         },
       ]}>
-      <FaceHashAvatar name={member.travelerSlug ?? member.name} size={size} uri={member.avatarUri} style={StyleSheet.absoluteFill} />
+      <FaceHashAvatar
+        name={member.name || member.travelerSlug || 'Traveler'}
+        seed={member.travelerSlug}
+        size={size}
+        uri={member.avatarUri}
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 }
@@ -186,20 +199,20 @@ const localStyles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   moreRow: {
-    minHeight: 52,
+    minHeight: Platform.OS === 'web' ? 42 : 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Platform.OS === 'web' ? 10 : 12,
     borderRadius: 18,
-    paddingVertical: 4,
+    paddingVertical: Platform.OS === 'web' ? 2 : 4,
   },
   moreRowPressed: {
     backgroundColor: designSystem.colors.lightSurfaceAlt,
   },
   moreAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Platform.OS === 'web' ? 34 : 44,
+    height: Platform.OS === 'web' ? 34 : 44,
+    borderRadius: Platform.OS === 'web' ? 17 : 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: designSystem.colors.limeSoft,
@@ -211,28 +224,28 @@ const localStyles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   expandedSheetContent: {
-    paddingTop: designSystem.spacing.lg,
-    paddingHorizontal: designSystem.spacing.lg,
-    gap: 18,
+    paddingTop: Platform.OS === 'web' ? 12 : designSystem.spacing.lg,
+    paddingHorizontal: Platform.OS === 'web' ? 14 : designSystem.spacing.lg,
+    gap: Platform.OS === 'web' ? 10 : 18,
   },
   expandedHeader: {
-    minHeight: 44,
+    minHeight: Platform.OS === 'web' ? 34 : 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   expandedTitle: {
-    fontSize: 28,
-    lineHeight: 32,
+    fontSize: Platform.OS === 'web' ? 20 : 28,
+    lineHeight: Platform.OS === 'web' ? 24 : 32,
     fontWeight: '600',
     color: designSystem.colors.ink,
   },
   expandedMemberRow: {
-    minHeight: 60,
+    minHeight: Platform.OS === 'web' ? 46 : 60,
   },
   expandedMemberName: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: Platform.OS === 'web' ? 15 : 16,
+    lineHeight: Platform.OS === 'web' ? 18 : 20,
   },
 });

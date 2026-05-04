@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { Avatar } from 'react-native-elements';
 import { designSystem } from '@/constants/design-system';
 import type { FriendCircleMember } from '@/types/friends';
 
@@ -23,7 +23,13 @@ export function VoiceCallStage({ members, title }: { members: FriendCircleMember
                   zIndex: 10 - index,
                 },
               ]}>
-              <FaceHashAvatar name={member.name || member.travelerSlug} size={48} uri={member.avatarUri} style={styles.avatarImage} />
+              {member.avatarUri ? (
+                <Avatar rounded size={48} source={{ uri: member.avatarUri }} containerStyle={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <ThemedText style={styles.avatarFallbackText}>{getInitials(member.name || member.travelerSlug)}</ThemedText>
+                </View>
+              )}
             </View>
           ))
         ) : (
@@ -39,6 +45,19 @@ export function VoiceCallStage({ members, title }: { members: FriendCircleMember
       </View>
     </View>
   );
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return 'W';
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 const styles = StyleSheet.create({
@@ -63,6 +82,20 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.darkSurface,
   },
   avatarImage: {},
+  avatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.lime,
+  },
+  avatarFallbackText: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: designSystem.colors.darkGreen,
+  },
   initialAvatar: {
     width: 58,
     height: 58,

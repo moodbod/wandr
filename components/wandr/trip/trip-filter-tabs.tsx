@@ -11,11 +11,16 @@ type TripFilterTabsProps = {
   trips: readonly TripListItem[];
   selectedTripId?: string;
   children?: React.ReactNode;
+  variant?: 'default' | 'desktopMap';
   onSelectTrip: (tripId: string) => void;
 };
 
-export function TripFilterTabs({ children, trips, selectedTripId, onSelectTrip }: TripFilterTabsProps) {
+export function TripFilterTabs({ children, trips, selectedTripId, variant = 'default', onSelectTrip }: TripFilterTabsProps) {
   const isDark = useColorScheme() === 'dark';
+  const isDesktopMap = variant === 'desktopMap';
+  const desktopInactivePillColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
+  const desktopInactiveBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
 
   if (trips.length === 0 && !children) {
     return null;
@@ -27,8 +32,8 @@ export function TripFilterTabs({ children, trips, selectedTripId, onSelectTrip }
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={styles.scroller}
-      contentContainerStyle={styles.tabs}
+      style={[styles.scroller, isDesktopMap && styles.desktopScroller]}
+      contentContainerStyle={[styles.tabs, isDesktopMap && styles.desktopTabs]}
     >
       {trips.map((trip) => {
         const isActive = trip._id === selectedTrip;
@@ -42,10 +47,17 @@ export function TripFilterTabs({ children, trips, selectedTripId, onSelectTrip }
             style={[
               styles.pill,
               isDark && styles.pillDark,
+              isDesktopMap && styles.desktopPill,
+              isDesktopMap &&
+                !isActive && {
+                  backgroundColor: desktopInactivePillColor,
+                  borderColor: desktopInactiveBorderColor,
+                },
               isActive && styles.pillActive,
+              isDesktopMap && isActive && styles.desktopPillActive,
             ]}
           >
-            <View style={[styles.imageFrame, isActive && styles.imageFrameActive]}>
+            <View style={[styles.imageFrame, isDesktopMap && styles.desktopImageFrame, isActive && styles.imageFrameActive]}>
               {trip.previewImage ? (
                 <ExpoImage source={trip.previewImage} style={StyleSheet.absoluteFill} contentFit="cover" />
               ) : (
@@ -56,7 +68,13 @@ export function TripFilterTabs({ children, trips, selectedTripId, onSelectTrip }
             </View>
             <ThemedText
               numberOfLines={1}
-              lightColor={isActive ? designSystem.colors.darkGreen : designSystem.colors.ink}
+              lightColor={
+                isActive
+                  ? designSystem.colors.darkGreen
+                  : isDesktopMap
+                    ? desktopInactiveTextColor
+                    : designSystem.colors.ink
+              }
               darkColor={isActive ? designSystem.colors.darkGreen : designSystem.colors.darkText}
               style={styles.label}
             >
@@ -76,10 +94,19 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexGrow: 0,
   },
+  desktopScroller: {
+    marginHorizontal: 0,
+    minHeight: 36,
+  },
   tabs: {
     gap: designSystem.spacing.xs,
     alignItems: 'center',
     paddingHorizontal: designSystem.spacing.lg,
+  },
+  desktopTabs: {
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
   },
   pill: {
     minHeight: 44,
@@ -98,9 +125,17 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.darkBorderSoft,
     backgroundColor: designSystem.colors.darkSurface,
   },
+  desktopPill: {
+    minHeight: 36,
+    maxWidth: 168,
+    paddingLeft: 4,
+    paddingRight: 13,
+  },
   pillActive: {
     borderColor: designSystem.colors.lime,
     backgroundColor: designSystem.colors.lime,
+  },
+  desktopPillActive: {
   },
   imageFrame: {
     width: 34,
@@ -108,6 +143,11 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     overflow: 'hidden',
     backgroundColor: designSystem.colors.borderFaint,
+  },
+  desktopImageFrame: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   imageFrameActive: {
     borderWidth: 1,

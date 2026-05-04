@@ -7,17 +7,9 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useResponsive } from '@/hooks/use-responsive';
 import { fetchRoutePath } from '@/lib/routing';
 
-import {
-  buildMarkerDisplayItems,
-  filterMarkersForZoom,
-  regionFromCoordinate,
-  regionFromMapboxBounds,
-  regionToZoomLevel,
-} from './mapbox/marker-clustering';
-import type { MapMarker, MapPreviewProps, MapRegion } from './mapbox/types';
+import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 
@@ -26,10 +18,13 @@ type MapboxModule = typeof mapboxgl;
 function MapPreviewWebComponent({
   centerCoordinate,
   userCoordinate = null,
+  userHeading = null,
+  viewportPadding,
   markers = [],
   routeCoordinates,
   zoomLevel = 14,
   showRoutes = true,
+  recenterToUserSignal = 0,
   colorSchemeMode = 'system',
   markerVariant = 'default',
   onInteract,
@@ -39,32 +34,28 @@ function MapPreviewWebComponent({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markerRefs = useRef<mapboxgl.Marker[]>([]);
+  const onInteractRef = useRef(onInteract);
+  const initialMapConfigRef = useRef<{
+    centerCoordinate: readonly [number, number] | null;
+    isDark: boolean;
+    zoomLevel: number;
+  }>({
+    centerCoordinate: null,
+    isDark: false,
+    zoomLevel,
+  });
   const [mapbox, setMapbox] = useState<MapboxModule | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
-  const [visibleRegion, setVisibleRegion] = useState<MapRegion | null>(null);
   const colorScheme = useColorScheme();
-  const { isLargeScreen } = useResponsive();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
+  const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
-  const region = useMemo(
-    () => regionFromCoordinate(resolvedCenterCoordinate, zoomLevel),
-    [resolvedCenterCoordinate, zoomLevel]
-  );
-  const effectiveRegion = visibleRegion ?? region;
-  const effectiveZoomLevel = useMemo(() => regionToZoomLevel(effectiveRegion), [effectiveRegion]);
-  const visibleMarkers = useMemo(
-    () => filterMarkersForZoom(normalizedMarkers, effectiveZoomLevel),
-    [effectiveZoomLevel, normalizedMarkers]
-  );
-  const markerDisplayItems = useMemo(
-    () => buildMarkerDisplayItems(visibleMarkers, effectiveRegion, effectiveZoomLevel),
-    [effectiveRegion, effectiveZoomLevel, visibleMarkers]
-  );
+  const hasResolvedCenterCoordinate = resolvedCenterCoordinate !== null;
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -81,6 +72,18 @@ function MapPreviewWebComponent({
     () => stayMarkers.length === 1 && stayMarkers[0].status === 'active',
     [stayMarkers]
   );
+
+  useEffect(() => {
+    onInteractRef.current = onInteract;
+  }, [onInteract]);
+
+  useEffect(() => {
+    initialMapConfigRef.current = {
+      centerCoordinate: resolvedCenterCoordinate,
+      isDark,
+      zoomLevel,
+    };
+  }, [isDark, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,37 +106,63 @@ function MapPreviewWebComponent({
   }, []);
 
   useEffect(() => {
-    if (!mapbox || !containerRef.current || mapRef.current || !resolvedCenterCoordinate) {
+    const initialConfig = initialMapConfigRef.current;
+
+    if (!mapbox || !containerRef.current || mapRef.current || !initialConfig.centerCoordinate) {
       return;
     }
 
     const map = new mapbox.Map({
       accessToken: MAPBOX_ACCESS_TOKEN ?? undefined,
       attributionControl: false,
-      center: resolvedCenterCoordinate as [number, number],
+      center: initialConfig.centerCoordinate as [number, number],
       container: containerRef.current,
+      bearing: 0,
+      dragRotate: false,
       logoPosition: 'bottom-left',
-      pitchWithRotate: true,
-      style: isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/outdoors-v12',
-      zoom: zoomLevel,
+      pitch: 0,
+      pitchWithRotate: false,
+      style: initialConfig.isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/outdoors-v12',
+      touchPitch: false,
+      zoom: initialConfig.zoomLevel,
     });
 
     mapRef.current = map;
     map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
-    map.on('load', () => setIsMapReady(true));
-    map.on('dragstart', () => onInteract?.());
-    map.on('zoomstart', () => onInteract?.());
-    map.on('moveend', () => setVisibleRegion(mapToRegion(map)));
+    map.on('dragstart', () => onInteractRef.current?.());
+    map.on('zoomstart', () => onInteractRef.current?.());
 
+    let hasLoaded = false;
+    let resizeFrame: number | null = null;
     const resizeMap = () => {
-      map.resize();
+      if (resizeFrame !== null) {
+        cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+
+        if (!hasLoaded || mapRef.current !== map || !containerRef.current?.isConnected) {
+          return;
+        }
+
+        map.resize();
+      });
     };
+    map.on('load', () => {
+      hasLoaded = true;
+      setIsMapReady(true);
+      resizeMap();
+    });
     const resizeObserver = new ResizeObserver(resizeMap);
     resizeObserver.observe(containerRef.current);
-    requestAnimationFrame(resizeMap);
     window.addEventListener('resize', resizeMap);
 
     return () => {
+      hasLoaded = false;
+      if (resizeFrame !== null) {
+        cancelAnimationFrame(resizeFrame);
+      }
       window.removeEventListener('resize', resizeMap);
       resizeObserver.disconnect();
       markerRefs.current.forEach((marker) => marker.remove());
@@ -142,7 +171,15 @@ function MapPreviewWebComponent({
       mapRef.current = null;
       setIsMapReady(false);
     };
-  }, [isDark, mapbox, onInteract, resolvedCenterCoordinate, zoomLevel]);
+  }, [hasResolvedCenterCoordinate, mapbox]);
+
+  useEffect(() => {
+    if (!mapRef.current || !isMapReady) {
+      return;
+    }
+
+    mapRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/outdoors-v12');
+  }, [isDark, isMapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !resolvedCenterCoordinate) {
@@ -150,11 +187,29 @@ function MapPreviewWebComponent({
     }
 
     mapRef.current.easeTo({
+      bearing: 0,
       center: resolvedCenterCoordinate as [number, number],
       duration: 650,
+      padding: cameraPadding,
+      pitch: 0,
       zoom: zoomLevel,
     });
-  }, [resolvedCenterCoordinate, zoomLevel]);
+  }, [cameraPadding, resolvedCenterCoordinate, zoomLevel]);
+
+  useEffect(() => {
+    if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
+      return;
+    }
+
+    mapRef.current.easeTo({
+      bearing: userHeading ?? 0,
+      center: userCoordinate as [number, number],
+      duration: 650,
+      padding: cameraPadding,
+      pitch: 0,
+      zoom: 17,
+    });
+  }, [cameraPadding, recenterToUserSignal, userCoordinate, userHeading]);
 
   useEffect(() => {
     if (!showRoutes || routeMarkerCoordinates.length === 0 || shouldHideMainRouteForStayFocus) {
@@ -226,31 +281,18 @@ function MapPreviewWebComponent({
     markerRefs.current.forEach((marker) => marker.remove());
     markerRefs.current = [];
 
-    markerDisplayItems.forEach((displayItem) => {
-      const element =
-        displayItem.kind === 'cluster'
-          ? createClusterElement(displayItem.cluster.count, isDark)
-          : createMarkerElement(displayItem.marker, isDark, markerVariant);
-      const coordinate = displayItem.kind === 'cluster' ? displayItem.cluster.coordinate : displayItem.marker.coordinate;
+    normalizedMarkers.forEach((mapMarker) => {
+      const element = createMarkerElement(mapMarker, isDark, markerVariant);
       const marker = new mapbox.Marker({
-        anchor: displayItem.kind === 'marker' && displayItem.marker.priceLabel ? 'bottom' : 'center',
+        anchor: mapMarker.priceLabel ? 'bottom' : 'center',
         element,
       })
-        .setLngLat(coordinate as [number, number])
+        .setLngLat(mapMarker.coordinate as [number, number])
         .addTo(mapRef.current!);
 
       element.addEventListener('click', (event) => {
         event.stopPropagation();
-        if (displayItem.kind === 'cluster') {
-          onInteract?.();
-          mapRef.current?.easeTo({
-            center: displayItem.cluster.coordinate as [number, number],
-            duration: 650,
-            zoom: Math.min(14, Math.max(effectiveZoomLevel + 2.4, 8.5)),
-          });
-        } else {
-          onMarkerPress?.(displayItem.marker);
-        }
+        onMarkerPress?.(mapMarker);
       });
 
       markerRefs.current.push(marker);
@@ -270,17 +312,43 @@ function MapPreviewWebComponent({
         new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current)
       );
     }
-  }, [effectiveZoomLevel, isDark, isMapReady, mapbox, markerDisplayItems, markerVariant, onInteract, onMarkerPress, userCoordinate]);
+  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userCoordinate]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
       return;
     }
 
-    upsertRouteLayer(mapRef.current, 'upcoming-route', upcomingRouteCoords);
-    Object.entries(stayBranchCoords).forEach(([id, coords]) => {
-      upsertRouteLayer(mapRef.current!, `branch-${id}`, coords);
-    });
+    const map = mapRef.current;
+    let isCancelled = false;
+    const upsertRoutes = () => {
+      if (isCancelled || mapRef.current !== map || !map.isStyleLoaded()) {
+        return;
+      }
+
+      upsertRouteLayer(map, 'upcoming-route', upcomingRouteCoords);
+      Object.entries(stayBranchCoords).forEach(([id, coords]) => {
+        upsertRouteLayer(map, `branch-${id}`, coords);
+      });
+    };
+    const handleStyleReady = () => {
+      if (map.isStyleLoaded()) {
+        upsertRoutes();
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      upsertRoutes();
+    } else {
+      map.on('styledata', handleStyleReady);
+      map.on('idle', handleStyleReady);
+    }
+
+    return () => {
+      isCancelled = true;
+      map.off('styledata', handleStyleReady);
+      map.off('idle', handleStyleReady);
+    };
   }, [isMapReady, stayBranchCoords, upcomingRouteCoords]);
 
   if (!MAPBOX_ACCESS_TOKEN) {
@@ -303,7 +371,7 @@ function MapPreviewWebComponent({
     <View style={[styles.mapRoot, style]}>
       <div
         ref={containerRef}
-        style={isLargeScreen ? { ...webMapStyle, ...desktopWebMapStyle } : webMapStyle}
+        style={webMapStyle}
       />
     </View>
   );
@@ -331,18 +399,13 @@ function normalizeMarkers(markers: readonly MapMarker[]) {
   });
 }
 
-function mapToRegion(map: mapboxgl.Map): MapRegion {
-  const center = map.getCenter();
-  const bounds = map.getBounds();
-
-  if (!bounds) {
-    return regionFromCoordinate([center.lng, center.lat], map.getZoom());
-  }
-
-  return regionFromMapboxBounds([center.lng, center.lat], {
-    ne: [bounds.getNorthEast().lng, bounds.getNorthEast().lat],
-    sw: [bounds.getSouthWest().lng, bounds.getSouthWest().lat],
-  });
+function normalizeCameraPadding(viewportPadding: MapPreviewProps['viewportPadding']) {
+  return {
+    bottom: viewportPadding?.paddingBottom ?? 0,
+    left: viewportPadding?.paddingLeft ?? 0,
+    right: viewportPadding?.paddingRight ?? 0,
+    top: viewportPadding?.paddingTop ?? 0,
+  };
 }
 
 function createMarkerElement(marker: MapMarker, isDark: boolean, variant: MapPreviewProps['markerVariant']) {
@@ -396,32 +459,15 @@ function createMarkerElement(marker: MapMarker, isDark: boolean, variant: MapPre
   return element;
 }
 
-function createClusterElement(count: number, isDark: boolean) {
-  const element = document.createElement('button');
-  element.type = 'button';
-  element.setAttribute('aria-label', `${count} places`);
-  element.textContent = String(count);
-  element.style.cssText = [
-    'appearance:none',
-    'min-width:58px',
-    'height:58px',
-    'border-radius:29px',
-    'padding:0 10px',
-    `background:${isDark ? designSystem.colors.warmDark : designSystem.colors.lime}`,
-    `border:3px solid ${isDark ? designSystem.colors.whiteOverlayBorder : designSystem.colors.white}`,
-    `color:${isDark ? designSystem.colors.lime : designSystem.colors.darkGreen}`,
-    'box-shadow:0 8px 14px rgba(0,0,0,0.18)',
-    'cursor:pointer',
-    'font:600 18px/21px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  ].join(';');
-  return element;
-}
-
 function upsertRouteLayer(
   map: mapboxgl.Map,
   id: string,
   coordinates: readonly { latitude: number; longitude: number }[]
 ) {
+  if (!map.isStyleLoaded()) {
+    return;
+  }
+
   const sourceId = `${id}-source`;
   const layerId = `${id}-line`;
   const data = {
@@ -436,6 +482,9 @@ function upsertRouteLayer(
 
   if (existingSource) {
     existingSource.setData(data);
+    if (!map.getLayer(layerId) && coordinates.length > 0) {
+      addRouteLineLayer(map, layerId, sourceId);
+    }
     return;
   }
 
@@ -444,6 +493,10 @@ function upsertRouteLayer(
   }
 
   map.addSource(sourceId, { type: 'geojson', data });
+  addRouteLineLayer(map, layerId, sourceId);
+}
+
+function addRouteLineLayer(map: mapboxgl.Map, layerId: string, sourceId: string) {
   map.addLayer({
     id: layerId,
     source: sourceId,
@@ -470,18 +523,13 @@ function escapeHtml(value: string) {
 }
 
 const webMapStyle = {
-  width: '100%',
-  height: '100%',
+  width: '125%',
+  height: '125%',
   outline: 'none',
   border: 'none',
   position: 'absolute',
   top: 0,
   left: 0,
-} satisfies React.CSSProperties;
-
-const desktopWebMapStyle = {
-  width: '125%',
-  height: '125%',
 } satisfies React.CSSProperties;
 
 const styles = StyleSheet.create({

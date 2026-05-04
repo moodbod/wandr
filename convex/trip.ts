@@ -63,7 +63,7 @@ export const getCurrentTravelerProfile = query({
       homeCity: user.homeCity ?? null,
       travelStyle: user.travelStyle ?? null,
       onboardingCompletedAt: user.onboardingCompletedAt ?? null,
-      avatarUri: profile?.avatarUri ?? null,
+      avatarUri: profile?.avatarStorageId ? await ctx.storage.getUrl(profile.avatarStorageId) : profile?.avatarUri ?? null,
       regionCode: profile?.regionCode ?? user.countryCode,
       regionName: profile?.regionName ?? user.countryLabel,
     };
@@ -715,6 +715,7 @@ function getHiddenGemSlug(title: string) {
 function hiddenGemToExperience(gem: Doc<'hiddenGems'>): ExploreExperience {
   return {
     slug: getHiddenGemSlug(gem.title),
+    itemKind: 'hiddenGem',
     badge: gem.badge ?? 'Hidden Gem',
     ctaLabel: gem.primaryLabel ?? 'Add to trip',
     title: gem.title,
@@ -1151,6 +1152,8 @@ export const listTravelerBookings = query({
           .withIndex('by_slug', (q) => q.eq('slug', booking.experienceSlug))
           .unique();
 
+        const bookingStatus = booking.status ?? 'confirmed';
+
         return {
           _id: booking._id,
           source: 'experienceBooking' as const,
@@ -1160,8 +1163,8 @@ export const listTravelerBookings = query({
           imageUri: experience?.imageUri ?? null,
           bookedAt: booking.bookedAt,
           kind: 'experience' as const,
-          status: 'planned' as const,
-          statusLabel: 'Planned',
+          status: bookingStatus,
+          statusLabel: bookingStatus,
           tripId: booking.tripId,
           tripName: booking.tripId ? tripNameById.get(booking.tripId) ?? null : null,
         };
@@ -1195,6 +1198,127 @@ export const listTravelerBookings = query({
     );
 
     return [...experiences, ...stays].sort((a, b) => b.bookedAt - a.bookedAt);
+  },
+});
+
+export const listManagedBookings = query({
+  args: {
+    status: v.optional(v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'))),
+  },
+  handler: async (ctx, args) => {
+    const status = args.status;
+    const [experienceBookings, stayBookings] = await Promise.all([
+      status
+        ? ctx.db
+            .query('experienceBookings')
+            .withIndex('by_status_and_bookedAt', (q) => q.eq('status', status))
+            .order('desc')
+            .take(80)
+        : ctx.db.query('experienceBookings').order('desc').take(80),
+      status
+        ? ctx.db
+            .query('stayBookings')
+            .withIndex('by_status_and_bookedAt', (q) => q.eq('status', status))
+            .order('desc')
+            .take(80)
+        : ctx.db.query('stayBookings').order('desc').take(80),
+    ]);
+
+    const experiences = await Promise.all(
+      experienceBookings.map(async (booking) => {
+        const [experience, trip] = await Promise.all([
+          ctx.db
+            .query('experiences')
+            .withIndex('by_slug', (q) => q.eq('slug', booking.experienceSlug))
+            .unique(),
+          booking.tripId ? ctx.db.get(booking.tripId) : null,
+        ]);
+        const bookingStatus = booking.status ?? 'confirmed';
+
+        return {
+          _id: booking._id,
+          source: 'experienceBooking' as const,
+          slug: booking.experienceSlug,
+          title: experience?.title ?? booking.experienceSlug,
+          subtitle: experience?.locationLabel ?? experience?.subtitle ?? 'Experience booking',
+          imageUri: experience?.imageUri ?? null,
+          bookedAt: booking.bookedAt,
+          kind: 'experience' as const,
+          status: bookingStatus,
+          statusLabel: bookingStatus,
+          travelerSlug: booking.travelerSlug,
+          tripId: booking.tripId,
+          tripName: trip?.name ?? null,
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+          totalPrice: booking.totalPrice,
+          detailLabel: trip?.name ? `Trip: ${trip.name}` : 'Experience request',
+        };
+      })
+    );
+
+    const stays = await Promise.all(
+      stayBookings.map(async (booking) => {
+        const stay = await ctx.db
+          .query('stays')
+          .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
+          .unique();
+
+        return {
+          _id: booking._id,
+          source: 'stayBooking' as const,
+          slug: booking.staySlug,
+          title: stay?.name ?? booking.staySlug,
+          subtitle: stay?.locationLabel ?? 'Stay booking',
+          imageUri: stay?.imageUri ?? null,
+          bookedAt: booking.bookedAt,
+          kind: 'stay' as const,
+          status: booking.status,
+          statusLabel: booking.status,
+          travelerSlug: booking.travelerSlug,
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+          totalPrice: booking.totalPrice,
+          stayBookingDetails: booking.stayBookingDetails,
+          detailLabel: booking.stayBookingDetails
+            ? `${booking.stayBookingDetails.roomSummary} · ${booking.stayBookingDetails.guestSummary}`
+            : `${Math.max(1, Math.round((booking.checkOut - booking.checkIn) / 86_400_000))} night stay`,
+        };
+      })
+    );
+
+    return [...experiences, ...stays].sort((a, b) => b.bookedAt - a.bookedAt).slice(0, 100);
+  },
+});
+
+export const updateManagedBookingStatus = mutation({
+  args: {
+    bookingId: v.union(v.id('experienceBookings'), v.id('stayBookings')),
+    source: v.union(v.literal('experienceBooking'), v.literal('stayBooking')),
+    status: v.union(v.literal('confirmed'), v.literal('cancelled')),
+  },
+  handler: async (ctx, args) => {
+    if (args.source === 'experienceBooking') {
+      const bookingId = args.bookingId as Id<'experienceBookings'>;
+      const booking = await ctx.db.get(bookingId);
+
+      if (!booking) {
+        return false;
+      }
+
+      await ctx.db.patch(bookingId, { status: args.status });
+      return true;
+    }
+
+    const bookingId = args.bookingId as Id<'stayBookings'>;
+    const booking = await ctx.db.get(bookingId);
+
+    if (!booking) {
+      return false;
+    }
+
+    await ctx.db.patch(bookingId, { status: args.status });
+    return true;
   },
 });
 
@@ -1296,6 +1420,7 @@ export const addExperienceToTrip = mutation({
       travelerSlug: args.travelerSlug,
       tripId: resolvedTripId,
       bookedAt: Date.now(),
+      status: 'pending',
     });
   },
 });

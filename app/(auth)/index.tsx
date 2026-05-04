@@ -5,13 +5,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AsYouType, parsePhoneNumberFromString, type CountryCode as PhoneCountryCode } from 'libphonenumber-js/min';
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
 import { FlagType, getAllCountries, type Country, type CountryCode } from 'react-native-country-picker-modal';
+import { OtpInput, type OtpInputRef } from 'react-native-otp-entry';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
-  type TextInput,
-  type TextInputKeyPressEventData,
   Platform,
   Pressable,
   ScrollView,
@@ -81,6 +81,7 @@ const AUTH_LAYOUT = {
   countryFlagCircleSize: 32,
   countryRowFlagWidth: 32,
   countrySheetSnapPoints: ['58%'] as (string | number)[],
+  desktopMaxWidth: 560,
   doneCheckRadius: 42,
   doneCheckRotation: '-10deg',
   doneCheckSize: 190,
@@ -90,7 +91,7 @@ const AUTH_LAYOUT = {
   iconSizeSm: 20,
   iconSizeMd: 22,
   introCopyMaxWidth: 320,
-  introSlideHorizontalPadding: designSystem.spacing.xxl,
+  introSlideHorizontalPadding: designSystem.spacing.xl,
   primaryButtonHeight: designSystem.layout.inputHeight + designSystem.spacing.xs / 2,
   progressHeight: 5,
   sheetBackdropOpacity: 0.28,
@@ -129,12 +130,12 @@ export default function PhoneOnboardingScreen() {
   const getPhoneAuthSession = useMutation(getPhoneAuthSessionRef);
   const requestPhoneOtp = useAction(requestPhoneOtpRef);
   const verifyPhoneOtp = useMutation(verifyPhoneOtpRef);
-  const { height, width } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const { isLargeScreen } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
   const countrySheetRef = useRef<BottomSheet>(null);
-  const codeInputRefs = useRef<(TextInput | null)[]>([]);
+  const codeInputRef = useRef<OtpInputRef>(null);
   const [step, setStep] = useState<FlowStep>('intro');
   const [slideIndex, setSlideIndex] = useState(0);
   const [countryCode, setCountryCode] = useState<CountryCode>('NA');
@@ -142,6 +143,7 @@ export default function PhoneOnboardingScreen() {
   const [countryLabel, setCountryLabel] = useState('Namibia');
   const [countries, setCountries] = useState<Country[]>([]);
   const [countrySearch, setCountrySearch] = useState('');
+  const [countrySheetVisible, setCountrySheetVisible] = useState(false);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -160,9 +162,8 @@ export default function PhoneOnboardingScreen() {
 
   const canContinuePhone = parsedPhoneNumber?.isValid() ?? false;
   const canContinueProfile = name.trim().length >= 2;
-  const isDesktopAuth = Platform.OS === 'web' && isLargeScreen;
-  const authFrameWidth = isDesktopAuth ? Math.min(width - designSystem.spacing.xl * 2, 430) : width;
-  const authFrameHeight = isDesktopAuth ? Math.min(height - designSystem.spacing.xl * 2, 780) : undefined;
+  const shouldConstrainAuthWidth = isLargeScreen;
+  const authFrameWidth = shouldConstrainAuthWidth ? Math.min(width, AUTH_LAYOUT.desktopMaxWidth) : width;
   const filteredCountries = useMemo(() => {
     const query = normalizeSearch(countrySearch);
     if (!query) {
@@ -212,6 +213,7 @@ export default function PhoneOnboardingScreen() {
     setCountrySearch('');
     setPhone('');
     setError(null);
+    setCountrySheetVisible(false);
     countrySheetRef.current?.close();
   }
 
@@ -240,7 +242,7 @@ export default function PhoneOnboardingScreen() {
       const result = await requestPhoneOtp({ phoneNumber: fullPhoneNumber });
       setOtpHint(result.devCode ? `Dev build code: ${result.devCode}` : null);
       setStep('verify');
-      setTimeout(() => codeInputRefs.current[0]?.focus(), 150);
+      setTimeout(() => codeInputRef.current?.focus(), 150);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not send that code.');
     } finally {
@@ -248,32 +250,9 @@ export default function PhoneOnboardingScreen() {
     }
   }
 
-  function handleCodeChange(value: string, index: number) {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    const nextCode = `${code.slice(0, index)}${digit}${code.slice(index + 1)}`.slice(0, 6);
-
-    setCode(nextCode);
+  function handleCodeChange(value: string) {
+    setCode(value.replace(/\D/g, '').slice(0, 6));
     setError(null);
-
-    if (digit && index < 5) {
-      codeInputRefs.current[index + 1]?.focus();
-    }
-  }
-
-  function handleCodeKeyPress(event: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) {
-    if (event.nativeEvent.key !== 'Backspace') {
-      return;
-    }
-
-    if (code[index]) {
-      const nextCode = `${code.slice(0, index)}${code.slice(index + 1)}`.slice(0, 6);
-      setCode(nextCode);
-      return;
-    }
-
-    if (index > 0) {
-      codeInputRefs.current[index - 1]?.focus();
-    }
   }
 
   async function handleVerifyCode() {
@@ -350,26 +329,16 @@ export default function PhoneOnboardingScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, isDesktopAuth && styles.desktopSafeArea, { backgroundColor: palette.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[
-          styles.keyboardFrame,
-          isDesktopAuth && [
-            styles.desktopAuthFrame,
-            {
-              backgroundColor: palette.background,
-              borderColor: palette.border,
-              height: authFrameHeight,
-              width: authFrameWidth,
-            },
-          ],
-        ]}>
+        style={[styles.keyboardFrame, shouldConstrainAuthWidth && styles.maxWidthFrame]}>
         {step === 'intro' ? (
           <IntroStep
             palette={palette}
             slideIndex={slideIndex}
             width={authFrameWidth}
+            onBack={() => setSlideIndex((current) => Math.max(current - 1, 0))}
             onNext={handleIntroNext}
             onSlideChange={setSlideIndex}
             onSkip={() => setStep('phone')}
@@ -400,7 +369,7 @@ export default function PhoneOnboardingScreen() {
                 accessibilityLabel={`Change country, currently ${countryLabel}`}
                 accessibilityRole="button"
                 style={[styles.phoneCountryButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
-                onPress={() => countrySheetRef.current?.snapToIndex(0)}>
+                onPress={() => setCountrySheetVisible(true)}>
                 <CountryFlagAvatar countryCode={countryCode} size={AUTH_LAYOUT.countryFlagCircleSize} />
                 <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.countryDial}>
                   +{callingCode}
@@ -439,23 +408,31 @@ export default function PhoneOnboardingScreen() {
             onBack={() => setStep('phone')}
             palette={palette}
           >
-            <View style={styles.codeRow}>
-              {Array.from({ length: 6 }).map((_, index) => (
-                <Input
-                  key={index}
-                  ref={(input) => {
-                    codeInputRefs.current[index] = input;
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  containerStyle={[styles.codeBox, code.length === index && { borderColor: palette.borderStrong, borderWidth: 2 }]}
-                  style={styles.codeBoxInput}
-                  value={code[index] ?? ''}
-                  onChangeText={(value) => handleCodeChange(value, index)}
-                  onKeyPress={(event) => handleCodeKeyPress(event, index)}
-                />
-              ))}
-            </View>
+            <OtpInput
+              ref={codeInputRef}
+              autoFocus={false}
+              blurOnFilled
+              focusColor={palette.borderStrong}
+              numberOfDigits={6}
+              type="numeric"
+              onTextChange={handleCodeChange}
+              textInputProps={{
+                accessibilityLabel: 'Six-digit verification code',
+                autoComplete: Platform.OS === 'ios' ? 'sms-otp' : 'one-time-code',
+                keyboardType: 'number-pad',
+                textContentType: 'oneTimeCode',
+              }}
+              textProps={{
+                allowFontScaling: false,
+              }}
+              theme={{
+                containerStyle: styles.codeRow,
+                pinCodeContainerStyle: styles.codeBox,
+                focusedPinCodeContainerStyle: { borderColor: palette.borderStrong, borderWidth: 2 },
+                pinCodeTextStyle: styles.codeBoxInput,
+                focusStickStyle: { backgroundColor: palette.borderStrong },
+              }}
+            />
             {otpHint ? (
               <ThemedText lightColor={designSystem.colors.darkGreen} darkColor={designSystem.colors.lime} style={styles.helpText}>
                 {otpHint}
@@ -537,15 +514,21 @@ export default function PhoneOnboardingScreen() {
 
         {step === 'done' ? <DoneStep palette={palette} /> : null}
       </KeyboardAvoidingView>
-      <CountrySelectorSheet
-        countries={filteredCountries}
-        countrySearch={countrySearch}
-        palette={palette}
-        selectedCountryCode={countryCode}
-        sheetRef={countrySheetRef}
-        onChangeSearch={setCountrySearch}
-        onSelectCountry={handleSelectCountry}
-      />
+      {countrySheetVisible ? (
+        <CountrySelectorSheet
+          countries={filteredCountries}
+          countrySearch={countrySearch}
+          palette={palette}
+          selectedCountryCode={countryCode}
+          sheetRef={countrySheetRef}
+          onChangeSearch={setCountrySearch}
+          onClose={() => {
+            setCountrySearch('');
+            setCountrySheetVisible(false);
+          }}
+          onSelectCountry={handleSelectCountry}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -569,6 +552,7 @@ function CountrySelectorSheet({
   selectedCountryCode,
   sheetRef,
   onChangeSearch,
+  onClose,
   onSelectCountry,
 }: {
   countries: Country[];
@@ -577,17 +561,29 @@ function CountrySelectorSheet({
   selectedCountryCode: CountryCode;
   sheetRef: RefObject<BottomSheet | null>;
   onChangeSearch: (value: string) => void;
+  onClose: () => void;
   onSelectCountry: (country: Country) => void;
 }) {
   return (
     <GlassBottomSheet
       ref={sheetRef}
-      index={-1}
+      index={0}
       snapPoints={AUTH_LAYOUT.countrySheetSnapPoints}
       enableDynamicSizing={false}
       enablePanDownToClose
+      onChange={(index) => {
+        if (index === -1) {
+          onClose();
+        }
+      }}
       backdropComponent={(props) => (
-        <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={AUTH_LAYOUT.sheetBackdropOpacity} />
+        <BottomSheetBackdrop
+          {...props}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+          opacity={AUTH_LAYOUT.sheetBackdropOpacity}
+          pressBehavior="close"
+        />
       )}
     >
       <View style={styles.countrySheet}>
@@ -657,6 +653,7 @@ function IntroStep({
   palette,
   slideIndex,
   width,
+  onBack,
   onNext,
   onSlideChange,
   onSkip,
@@ -664,20 +661,38 @@ function IntroStep({
   palette: AuthPalette;
   slideIndex: number;
   width: number;
+  onBack: () => void;
   onNext: () => void;
   onSlideChange: (index: number) => void;
   onSkip: () => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
-  const slideWidth = Math.max(width - AUTH_LAYOUT.introSlideHorizontalPadding * 2, 1);
+  const [visibleSlideIndex, setVisibleSlideIndex] = useState(slideIndex);
+  const [pagerWidth, setPagerWidth] = useState(0);
+  const fallbackSlideWidth = Math.max(width - AUTH_LAYOUT.introSlideHorizontalPadding * 2, 1);
+  const slideWidth = pagerWidth > 0 ? pagerWidth : fallbackSlideWidth;
 
   useEffect(() => {
+    setVisibleSlideIndex(slideIndex);
     scrollRef.current?.scrollTo({ x: slideIndex * slideWidth, animated: true });
   }, [slideIndex, slideWidth]);
 
+  function getSlideIndex(offsetX: number) {
+    const nextIndex = Math.round(offsetX / slideWidth);
+    return Math.min(Math.max(nextIndex, 0), introSlides.length - 1);
+  }
+
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    setVisibleSlideIndex(getSlideIndex(event.nativeEvent.contentOffset.x));
+  }
+
   function handleMomentumEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / slideWidth);
-    onSlideChange(Math.min(Math.max(nextIndex, 0), introSlides.length - 1));
+    onSlideChange(getSlideIndex(event.nativeEvent.contentOffset.x));
+  }
+
+  function handlePagerLayout(event: LayoutChangeEvent) {
+    const nextWidth = Math.max(event.nativeEvent.layout.width, 1);
+    setPagerWidth((current) => (Math.abs(current - nextWidth) < 1 ? current : nextWidth));
   }
 
   return (
@@ -689,24 +704,37 @@ function IntroStep({
             style={[
               styles.progressTrack,
               { backgroundColor: palette.border },
-              index <= slideIndex && { backgroundColor: palette.borderStrong },
+              index <= visibleSlideIndex && { backgroundColor: palette.borderStrong },
             ]}
           />
         ))}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Skip onboarding intro"
-      style={({ pressed }) => [
-        styles.skipButton,
-        { backgroundColor: palette.primary },
-        pressed && styles.filledButtonPressed,
-      ]}
-        onPress={onSkip}>
-        <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.skipText}>
-          Skip
-        </ThemedText>
-      </Pressable>
+      <View style={styles.introTopControls}>
+        {slideIndex > 0 ? (
+          <GlassButton
+            accessibilityLabel="Go back to previous onboarding intro"
+            height={AUTH_LAYOUT.backButtonSize}
+            width={AUTH_LAYOUT.backButtonSize}
+            onPress={onBack}>
+            <MaterialCommunityIcons color={palette.borderStrong} name="arrow-left" size={AUTH_LAYOUT.iconSize} />
+          </GlassButton>
+        ) : (
+          <View style={styles.introControlSpacer} />
+        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding intro"
+          style={({ pressed }) => [
+            styles.skipButton,
+            { backgroundColor: palette.primary },
+            pressed && styles.filledButtonPressed,
+          ]}
+          onPress={onSkip}>
+          <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.skipText}>
+            Skip
+          </ThemedText>
+        </Pressable>
+      </View>
 
       <ScrollView
         ref={scrollRef}
@@ -717,6 +745,8 @@ function IntroStep({
         scrollEventThrottle={designSystem.spacing.md}
         showsHorizontalScrollIndicator={false}
         style={styles.introPager}
+        onLayout={handlePagerLayout}
+        onScroll={handleScroll}
         onMomentumScrollEnd={handleMomentumEnd}
       >
         {introSlides.map((item) => (
@@ -851,18 +881,10 @@ const styles = StyleSheet.create({
   keyboardFrame: {
     flex: 1,
   },
-  desktopSafeArea: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: designSystem.spacing.xl,
-  },
-  desktopAuthFrame: {
-    borderRadius: designSystem.radii.sheet,
-    borderWidth: 1,
-    boxShadow: '0 24px 80px rgba(0,0,0,0.26)',
-    flex: 0,
-    maxHeight: 780,
-    overflow: 'hidden',
+  maxWidthFrame: {
+    alignSelf: 'center',
+    maxWidth: AUTH_LAYOUT.desktopMaxWidth,
+    width: '100%',
   },
   introFrame: {
     flex: 1,
@@ -888,6 +910,15 @@ const styles = StyleSheet.create({
     ...designSystem.type.bodyStrong,
     color: designSystem.colors.darkGreen,
   },
+  introTopControls: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  introControlSpacer: {
+    height: AUTH_LAYOUT.backButtonSize,
+    width: AUTH_LAYOUT.backButtonSize,
+  },
   introPager: {
     flexGrow: 0,
   },
@@ -895,6 +926,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: designSystem.layout.sectionGap + designSystem.spacing.xxs / 2,
     justifyContent: 'center',
+    paddingHorizontal: AUTH_LAYOUT.introSlideHorizontalPadding,
   },
   artStage: {
     alignItems: 'center',

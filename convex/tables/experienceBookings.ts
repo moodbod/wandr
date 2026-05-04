@@ -6,6 +6,7 @@ export const experienceBookingsTable = defineTable({
   travelerSlug: v.string(),
   tripId: v.optional(v.id('trips')),
   bookedAt: v.number(),
+  status: v.optional(v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'))),
   bookingType: v.optional(v.union(v.literal('experience'), v.literal('stay'))),
   checkIn: v.optional(v.number()),
   checkOut: v.optional(v.number()),
@@ -30,6 +31,7 @@ export const experienceBookingsTable = defineTable({
   ),
 })
   .index('by_experienceSlug', ['experienceSlug'])
+  .index('by_status_and_bookedAt', ['status', 'bookedAt'])
   .index('by_travelerSlug_and_experienceSlug', ['travelerSlug', 'experienceSlug'])
   .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt'])
   .index('by_tripId', ['tripId']);

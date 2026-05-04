@@ -38,7 +38,13 @@ export function FriendMatchCard({
         disabled={!onOpenProfile}
         onPress={onOpenProfile}
         style={styles.avatarButton}>
-        <FaceHashAvatar name={candidate.travelerSlug ?? candidate.name} size={60} uri={candidate.avatarUri} style={styles.avatar} />
+        <FaceHashAvatar
+          name={candidate.name || candidate.travelerSlug || 'Traveler'}
+          seed={candidate.travelerSlug}
+          size={60}
+          uri={candidate.avatarUri}
+          style={styles.avatar}
+        />
       </Pressable>
 
       <View style={styles.identity}>

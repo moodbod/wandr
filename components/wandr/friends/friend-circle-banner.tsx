@@ -43,7 +43,12 @@ export function FriendCircleBanner({
             {circle.name}
           </ThemedText>
         </View>
-        <TravelerAvatarStack avatars={circle.avatarUris} totalCount={circle.memberCount} />
+        <TravelerAvatarStack
+          avatars={circle.avatarUris}
+          fallbackName={circle.name}
+          fallbackSeed={circle._id}
+          totalCount={circle.memberCount}
+        />
       </View>
 
       <View style={styles.inlineRow}>

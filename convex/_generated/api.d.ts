@@ -14,6 +14,7 @@ import type * as friends from "../friends.js";
 import type * as locationPhotos from "../locationPhotos.js";
 import type * as maintenance from "../maintenance.js";
 import type * as notifications from "../notifications.js";
+import type * as profile from "../profile.js";
 import type * as sedd from "../sedd.js";
 import type * as seed from "../seed.js";
 import type * as seeds_constants from "../seeds/constants.js";
@@ -48,6 +49,7 @@ import type * as tables_regions from "../tables/regions.js";
 import type * as tables_stays from "../tables/stays.js";
 import type * as tables_tripInvites from "../tables/tripInvites.js";
 import type * as tables_trips from "../tables/trips.js";
+import type * as tables_userSettings from "../tables/userSettings.js";
 import type * as trip from "../trip.js";
 
 import type {
@@ -63,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   locationPhotos: typeof locationPhotos;
   maintenance: typeof maintenance;
   notifications: typeof notifications;
+  profile: typeof profile;
   sedd: typeof sedd;
   seed: typeof seed;
   "seeds/constants": typeof seeds_constants;
@@ -97,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "tables/stays": typeof tables_stays;
   "tables/tripInvites": typeof tables_tripInvites;
   "tables/trips": typeof tables_trips;
+  "tables/userSettings": typeof tables_userSettings;
   trip: typeof trip;
 }>;
 

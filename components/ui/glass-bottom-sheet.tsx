@@ -83,11 +83,18 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
   );
 };
 
-export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props, ref) => {
+type GlassBottomSheetProps = BottomSheetProps & {
+  desktopModalHostStyle?: StyleProp<ViewStyle>;
+  desktopPopupHostStyle?: StyleProp<ViewStyle>;
+};
+
+export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((props, ref) => {
   const {
     backdropComponent,
     bottomInset,
     containerStyle,
+    desktopModalHostStyle,
+    desktopPopupHostStyle,
     detached,
     enablePanDownToClose,
     index,
@@ -100,20 +107,18 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
   const sheetRef = useRef<BottomSheet>(null);
   const { height, width } = useWindowDimensions();
   const { isLargeScreen } = useResponsive();
-  const modalWidth = Math.min(560, Math.max(380, width * 0.34));
+  const modalWidth = Math.min(460, Math.max(340, width * 0.28));
   const modalHeightRatio = getDesktopSnapRatio(snapPoints);
-  const modalHeight = Math.min(height - 120, Math.max(340, height * modalHeightRatio));
-  const [isDesktopVisible, setIsDesktopVisible] = useState(() => {
-    const initialIndex = typeof index === 'number' ? index : -1;
-    return isLargeScreen && initialIndex >= 0;
-  });
-  const [desktopIndex, setDesktopIndex] = useState(() => {
-    const initialIndex = typeof index === 'number' ? index : 0;
-    return initialIndex >= 0 ? initialIndex : 0;
-  });
+  const modalHeight = Math.min(height - 56, Math.max(240, height * modalHeightRatio));
+  const [isMobileVisible, setIsMobileVisible] = useState(() => (typeof index === 'number' ? index >= 0 : true));
+  const [mobileIndex, setMobileIndex] = useState(() => (typeof index === 'number' ? Math.max(index, 0) : 0));
+  const [isDesktopVisible, setIsDesktopVisible] = useState(false);
+  const [desktopIndex, setDesktopIndex] = useState(0);
+  const pendingMobileCommandRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isLargeScreen) {
+      setIsDesktopVisible(false);
       return;
     }
 
@@ -130,6 +135,26 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
   }, [index, isLargeScreen]);
 
   useEffect(() => {
+    if (isLargeScreen) {
+      return;
+    }
+
+    if (typeof index !== 'number') {
+      setMobileIndex(0);
+      setIsMobileVisible(true);
+      return;
+    }
+
+    if (index >= 0) {
+      setMobileIndex(index);
+      setIsMobileVisible(true);
+      return;
+    }
+
+    setIsMobileVisible(false);
+  }, [index, isLargeScreen]);
+
+  useEffect(() => {
     if (!isLargeScreen || !isDesktopVisible) {
       return;
     }
@@ -138,6 +163,21 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
       sheetRef.current?.snapToIndex(0);
     });
   }, [desktopIndex, isDesktopVisible, isLargeScreen]);
+
+  useEffect(() => {
+    if (isLargeScreen || !isMobileVisible || !pendingMobileCommandRef.current) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      pendingMobileCommandRef.current?.();
+      pendingMobileCommandRef.current = null;
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [isLargeScreen, isMobileVisible, mobileIndex]);
 
   const closeDesktopSheet = useCallback(() => {
     sheetRef.current?.close();
@@ -155,7 +195,17 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
         return;
       }
 
-      sheetRef.current?.snapToIndex(index, animationConfigs);
+      if (index < 0) {
+        sheetRef.current?.snapToIndex(index, animationConfigs);
+        setIsMobileVisible(false);
+        return;
+      }
+
+      setMobileIndex(index);
+      pendingMobileCommandRef.current = () => {
+        sheetRef.current?.snapToIndex(index, animationConfigs);
+      };
+      setIsMobileVisible(true);
     },
     snapToPosition: (position, animationConfigs) => {
       if (isLargeScreen) {
@@ -167,7 +217,10 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
         return;
       }
 
-      sheetRef.current?.snapToPosition(position, animationConfigs);
+      pendingMobileCommandRef.current = () => {
+        sheetRef.current?.snapToPosition(position, animationConfigs);
+      };
+      setIsMobileVisible(true);
     },
     expand: (animationConfigs) => {
       if (isLargeScreen) {
@@ -179,7 +232,10 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
         return;
       }
 
-      sheetRef.current?.expand(animationConfigs);
+      pendingMobileCommandRef.current = () => {
+        sheetRef.current?.expand(animationConfigs);
+      };
+      setIsMobileVisible(true);
     },
     collapse: (animationConfigs) => {
       if (isLargeScreen) {
@@ -191,7 +247,11 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
         return;
       }
 
-      sheetRef.current?.collapse(animationConfigs);
+      setMobileIndex(0);
+      pendingMobileCommandRef.current = () => {
+        sheetRef.current?.collapse(animationConfigs);
+      };
+      setIsMobileVisible(true);
     },
     close: (animationConfigs) => {
       if (isLargeScreen) {
@@ -201,6 +261,7 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
       }
 
       sheetRef.current?.close(animationConfigs);
+      setIsMobileVisible(false);
     },
     forceClose: (animationConfigs) => {
       if (isLargeScreen) {
@@ -210,10 +271,15 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
       }
 
       sheetRef.current?.forceClose(animationConfigs);
+      setIsMobileVisible(false);
     },
   }) as BottomSheet, [isLargeScreen]);
 
   if (isLargeScreen) {
+    if (!isDesktopVisible) {
+      return null;
+    }
+
     return (
       <Modal
         animationType="fade"
@@ -221,11 +287,11 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
         transparent
         visible={isDesktopVisible}
       >
-        <View style={styles.modalHost}>
+        <View style={[styles.modalHost, desktopModalHostStyle]}>
           {enablePanDownToClose === false ? null : (
             <Pressable accessibilityRole="button" onPress={closeDesktopSheet} style={styles.modalBackdrop} />
           )}
-          <View style={[styles.popupHost, { width: modalWidth, height: modalHeight }]}>
+          <View style={[styles.popupHost, { width: modalWidth, height: modalHeight }, desktopPopupHostStyle]}>
             <BottomSheet
               {...bottomSheetProps}
               ref={sheetRef}
@@ -251,6 +317,10 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
     );
   }
 
+  if (!isMobileVisible) {
+    return null;
+  }
+
   return (
     <BottomSheet
       ref={sheetRef}
@@ -263,11 +333,14 @@ export const GlassBottomSheet = forwardRef<BottomSheet, BottomSheetProps>((props
       bottomInset={bottomInset}
       topInset={topInset}
       enablePanDownToClose={enablePanDownToClose}
-      index={index}
+      index={mobileIndex}
       snapPoints={snapPoints}
       style={style}
       containerStyle={[styles.sheetContainer, containerStyle]}
-      onClose={onClose}
+      onClose={() => {
+        setIsMobileVisible(false);
+        onClose?.();
+      }}
       {...bottomSheetProps}
     />
   );
@@ -298,16 +371,19 @@ function getDesktopSnapRatio(snapPoints: BottomSheetProps['snapPoints']) {
 const styles = StyleSheet.create({
   modalHost: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 60,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingBottom: 0,
+    paddingLeft: 460,
+    paddingRight: 24,
+    paddingTop: 88,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.24)',
   },
   popupHost: {
-    maxWidth: '92%',
+    maxWidth: 460,
     maxHeight: '82%',
   },
   sheetContainer: {
@@ -332,7 +408,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   sheetBorder: {
-    borderTopWidth: 1,
+    borderTopWidth: 0,
   },
   popupBorder: {
     borderWidth: 1,

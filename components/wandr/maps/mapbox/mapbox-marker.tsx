@@ -6,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 
 import { getMapboxModule } from './mapbox-module';
-import type { MapMarker, MapPreviewProps, MarkerCluster } from './types';
+import type { MapMarker, MapPreviewProps } from './types';
 
 type MapboxMarkerProps = {
   isDark: boolean;
@@ -136,34 +136,6 @@ export const MapboxPlaceMarker = memo(function MapboxPlaceMarker({
   );
 });
 
-export function MapboxClusterMarker({
-  cluster,
-  isDark,
-  onPress,
-}: {
-  cluster: MarkerCluster;
-  isDark: boolean;
-  onPress: (cluster: MarkerCluster) => void;
-}) {
-  const MapboxGL = getMapboxModule();
-
-  if (!MapboxGL) {
-    return null;
-  }
-
-  return (
-    <MapboxGL.MarkerView coordinate={toMapboxPosition(cluster.coordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
-      <Pressable onPress={() => onPress(cluster)} hitSlop={10}>
-        <View style={[styles.clusterMarker, isDark && styles.clusterMarkerDark]}>
-          <ThemedText style={[styles.clusterCount, isDark && styles.clusterCountDark]}>
-            {cluster.count}
-          </ThemedText>
-        </View>
-      </Pressable>
-    </MapboxGL.MarkerView>
-  );
-}
-
 function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
   return [coordinate[0], coordinate[1]];
 }
@@ -176,35 +148,6 @@ const styles = StyleSheet.create({
   markerShell: {
     alignItems: 'center',
     gap: 6,
-  },
-  clusterMarker: {
-    minWidth: 58,
-    height: 58,
-    borderRadius: 29,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: designSystem.colors.lime,
-    borderWidth: 3,
-    borderColor: designSystem.colors.white,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  clusterMarkerDark: {
-    backgroundColor: designSystem.colors.warmDark,
-    borderColor: designSystem.colors.whiteOverlayBorder,
-  },
-  clusterCount: {
-    fontSize: 18,
-    lineHeight: 21,
-    fontWeight: '600',
-    color: designSystem.colors.darkGreen,
-  },
-  clusterCountDark: {
-    color: designSystem.colors.lime,
   },
   priceMarkerShell: {
     alignItems: 'center',

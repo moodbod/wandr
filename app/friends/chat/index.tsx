@@ -17,6 +17,7 @@ import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
 import { WandrHeader } from '@/components/wandr/header';
+import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -45,7 +46,7 @@ export default function FriendsChatListScreen() {
     groupCircleId?: string | string[];
   }>();
   const isDark = useColorScheme() === 'dark';
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chatList = useQuery(getFriendChatListRef, { travelerSlug: traveler?.slug ?? '' });
@@ -307,37 +308,16 @@ export default function FriendsChatListScreen() {
   return (
     <ThemedView style={styles.root}>
       {isLargeScreen ? (
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
+        <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
+          <LargeScreenPanel kind="main">
             {chatListContent}
-          </View>
+          </LargeScreenPanel>
           {detailContent ? (
-            <View
-              style={[
-                styles.detailColumn,
-                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
-                {
-                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-                },
-              ]}
-            >
+            <LargeScreenPanel kind="detail">
               {detailContent}
-            </View>
+            </LargeScreenPanel>
           ) : null}
-          <View style={styles.mapColumn}>
-            <AppMapWorkspace />
-          </View>
-        </View>
+        </LargeScreenWorkspace>
       ) : (
         chatListContent
       )}
@@ -371,7 +351,13 @@ export default function FriendsChatListScreen() {
                     key={friend.travelerSlug}
                     onPress={() => toggleSelectedFriend(friend.travelerSlug)}
                     style={[styles.friendOption, isSelected ? styles.friendOptionActive : null]}>
-                    <FaceHashAvatar name={friend.travelerSlug ?? friend.name} size={44} uri={friend.avatarUri} style={styles.friendAvatar} />
+                    <FaceHashAvatar
+                      name={friend.name || friend.travelerSlug || 'Traveler'}
+                      seed={friend.travelerSlug}
+                      size={44}
+                      uri={friend.avatarUri}
+                      style={styles.friendAvatar}
+                    />
                     <View style={styles.friendOptionCopy}>
                       <ThemedText style={styles.friendOptionName} numberOfLines={1}>
                         {friend.name}
@@ -444,39 +430,6 @@ export default function FriendsChatListScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  largeBody: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  mainColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    minWidth: 340,
-    borderRightWidth: 1,
-  },
-  mainColumnTablet: {
-    width: 360,
-  },
-  mainColumnDesktop: {
-    width: 420,
-  },
-  detailColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    borderRightWidth: 1,
-  },
-  detailColumnTablet: {
-    width: 340,
-  },
-  detailColumnDesktop: {
-    width: 430,
-  },
-  mapColumn: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    position: 'relative',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,

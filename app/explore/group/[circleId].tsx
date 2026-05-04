@@ -121,7 +121,12 @@ export default function ExploreGroupTripDetailScreen({
             <ThemedText style={styles.meta}>
               {detail.hostName} • {detail.memberCount} travelers • {detail.locationLabel}
             </ThemedText>
-            <TravelerAvatarStack avatars={detail.avatarUris} totalCount={detail.memberCount} />
+            <TravelerAvatarStack
+              avatars={detail.avatarUris}
+              fallbackName={detail.hostName || detail.groupName}
+              fallbackSeed={detail.circleId}
+              totalCount={detail.memberCount}
+            />
           </View>
 
           <Pressable

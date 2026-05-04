@@ -18,6 +18,11 @@ type SegmentedTabsProps<Key extends string> = {
   leadingAccessory?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   tabStyle?: StyleProp<ViewStyle>;
+  activeTabStyle?: StyleProp<ViewStyle>;
+  inactiveTabStyle?: StyleProp<ViewStyle>;
+  labelStyle?: React.ComponentProps<typeof ThemedText>['style'];
+  activeLabelStyle?: React.ComponentProps<typeof ThemedText>['style'];
+  inactiveLabelStyle?: React.ComponentProps<typeof ThemedText>['style'];
   contentContainerStyle?: StyleProp<ViewStyle>;
 };
 
@@ -28,6 +33,11 @@ export function SegmentedTabs<Key extends string>({
   leadingAccessory,
   style,
   tabStyle,
+  activeTabStyle,
+  inactiveTabStyle,
+  labelStyle,
+  activeLabelStyle,
+  inactiveLabelStyle,
   contentContainerStyle,
 }: SegmentedTabsProps<Key>) {
   const isDark = useColorScheme() === 'dark';
@@ -62,12 +72,13 @@ export function SegmentedTabs<Key extends string>({
                       : designSystem.colors.borderSoft,
                 },
                 tabStyle,
+                active ? activeTabStyle : inactiveTabStyle,
               ]}
             >
               <ThemedText
                 lightColor={active ? designSystem.colors.darkGreen : designSystem.colors.ink}
                 darkColor={active ? designSystem.colors.darkGreen : designSystem.colors.darkText}
-                style={styles.label}
+                style={[styles.label, labelStyle, active ? activeLabelStyle : inactiveLabelStyle]}
               >
                 {option.label}
               </ThemedText>

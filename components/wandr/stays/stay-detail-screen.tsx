@@ -33,6 +33,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import {
   createStayBookingRef,
   generateLocationPhotoUploadUrlRef,
@@ -45,6 +46,7 @@ import {
   submitLocationPhotoRef,
   submitStayRatingRef,
 } from '@/lib/convex';
+import { formatUsdAsCurrency } from '@/lib/currency';
 import type {
   StayArrivalOption,
   StayBedOption,
@@ -141,7 +143,9 @@ export function StayDetailScreen({
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
+  const settings = useCurrentUserSettings();
   const travelerSlug = traveler?.slug ?? '';
+  const preferredCurrency = settings?.preferredCurrency ?? 'USD';
 
   const currentLocation = useCurrentLocation();
   const createBooking = useMutation(createStayBookingRef);
@@ -278,6 +282,9 @@ export function StayDetailScreen({
   const totalPrice = bookingTotalOverride ?? stay.pricePerNight * nights * roomCount;
   const hasExistingStayBooking = !!existingStayBooking;
   const bookingBarTotalPrice = existingStayBooking?.totalPrice ?? totalPrice;
+  const nightlyPriceLabel = formatUsdAsCurrency(stay.pricePerNight, preferredCurrency);
+  const totalPriceLabel = formatUsdAsCurrency(totalPrice, preferredCurrency);
+  const bookingBarTotalPriceLabel = formatUsdAsCurrency(bookingBarTotalPrice, preferredCurrency);
   const bookingBarNights = existingStayBooking
     ? getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut)
     : nights;
@@ -421,6 +428,7 @@ export function StayDetailScreen({
         travelerSlug,
         storageId,
       });
+      Alert.alert('Photo submitted', 'A manager will approve it before it appears in the gallery.');
     } catch {
       Alert.alert('Photo upload failed', 'Could not share that picture. Please try again.');
     } finally {
@@ -628,7 +636,7 @@ export function StayDetailScreen({
         isLoading={!hasExistingStayBooking && isBooking}
         nights={bookingBarNights}
         onPress={hasExistingStayBooking ? handleExistingBookingPress : handleBookPress}
-        totalPrice={bookingBarTotalPrice}
+        totalPriceLabel={bookingBarTotalPriceLabel}
       />
 
       <GlassBottomSheet
@@ -795,10 +803,10 @@ export function StayDetailScreen({
                     {nights} night{nights === 1 ? '' : 's'} · {roomCount} room{roomCount === 1 ? '' : 's'}
                   </ThemedText>
                   <ThemedText style={[styles.priceRate, isDark && styles.priceRateDark]}>
-                    {stay.priceLabel}
+                    {nightlyPriceLabel}
                   </ThemedText>
                 </View>
-                <ThemedText style={[styles.priceValue, isDark && styles.priceValueDark]}>${totalPrice}</ThemedText>
+                <ThemedText style={[styles.priceValue, isDark && styles.priceValueDark]}>{totalPriceLabel}</ThemedText>
               </View>
               <ThemedText style={[styles.priceMeta, isDark && styles.priceMetaDark]}>
                 {formatDateLabel(checkIn)} - {formatDateLabel(checkOut)}
@@ -905,7 +913,7 @@ function BookingGlassBar({
   isLoading = false,
   nights,
   onPress,
-  totalPrice,
+  totalPriceLabel,
 }: {
   buttonLabel: string;
   containerStyle?: StyleProp<ViewStyle>;
@@ -913,7 +921,7 @@ function BookingGlassBar({
   isLoading?: boolean;
   nights: number;
   onPress: () => void;
-  totalPrice: number;
+  totalPriceLabel: string;
 }) {
   const isAndroid = Platform.OS === 'android';
 
@@ -940,7 +948,7 @@ function BookingGlassBar({
         <View style={styles.bottomBarContent}>
           <View style={styles.bottomBarPriceBlock}>
             <ThemedText style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
-              ${totalPrice}
+              {totalPriceLabel}
               <ThemedText style={[styles.bottomBarSuffix, isDark && styles.bottomBarSuffixDark]}>
                 {' '}for {nights} night{nights === 1 ? '' : 's'}
               </ThemedText>

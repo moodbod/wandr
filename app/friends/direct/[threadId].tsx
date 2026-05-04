@@ -4,9 +4,6 @@ import BottomSheet from '@gorhom/bottom-sheet';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -14,12 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CallHistorySheet } from '@/components/wandr/friends/call-history-sheet';
 import { CallOptionsMenu } from '@/components/wandr/friends/call-options-menu';
 import { DirectChatOptionsSheet } from '@/components/wandr/friends/direct-chat-options-sheet';
-import { FriendChatComposer } from '@/components/wandr/friends/friend-chat-composer';
-import { DirectChatMessageBubble } from '@/components/wandr/friends/friend-chat-message';
+import { DirectChatMessageBubble, type ChatCallCard } from '@/components/wandr/friends/friend-chat-message';
 import { FriendChatToolsSheet } from '@/components/wandr/friends/friend-chat-tools-sheet';
 import { MessageActionMenu, type MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
+import { WandrGiftedChat } from '@/components/wandr/friends/wandr-gifted-chat';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
@@ -42,6 +40,27 @@ type DirectChatScreenProps = {
   onClose?: () => void;
   threadId?: string;
 };
+
+function getReplyPreview(message: DirectChatMessage) {
+  if (message.callCard) {
+    return message.callCard.title;
+  }
+  if (message.body?.startsWith('wandr:sticker:')) {
+    return 'Sticker';
+  }
+  if (message.body?.startsWith('wandr:gif:')) {
+    return 'GIF';
+  }
+  if (message.body?.startsWith('wandr:media:')) {
+    try {
+      const media = JSON.parse(decodeURIComponent(message.body.replace('wandr:media:', ''))) as { kind?: string; title?: string };
+      return media.title ?? (media.kind === 'gif' ? 'GIF' : 'Sticker');
+    } catch {
+      return 'Media';
+    }
+  }
+  return message.body || 'Message';
+}
 
 export default function DirectChatScreen({ onClose, threadId: threadIdProp }: DirectChatScreenProps = {}) {
   const insets = useSafeAreaInsets();
@@ -72,10 +91,12 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
   const [isSending, setIsSending] = useState(false);
   const [isCallBusy, setIsCallBusy] = useState(false);
   const [isSheetBusy, setIsSheetBusy] = useState(false);
+  const [selectedCallCard, setSelectedCallCard] = useState<ChatCallCard | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<DirectChatMessage | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<DirectChatMessage | null>(null);
   const [messageMenuAnchor, setMessageMenuAnchor] = useState<MessageActionAnchor | null>(null);
-  const scrollRef = useRef<ScrollView | null>(null);
   const menuSheetRef = useRef<BottomSheet>(null);
+  const callHistorySheetRef = useRef<BottomSheet>(null);
   const toolsSheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
@@ -88,15 +109,6 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
       params: { directThreadId: routeThreadId },
     });
   }, [isLargeScreen, routeThreadId, router, threadIdProp]);
-
-  useEffect(() => {
-    if (!chat?.messages?.length) {
-      return;
-    }
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
-  }, [chat?.messages.length]);
 
   useEffect(() => {
     if (!traveler?.slug || !chat?.threadId) {
@@ -120,8 +132,10 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
         threadId: chat.threadId,
         travelerSlug: traveler.slug,
         body: draft,
+        replyToMessageId: replyingToMessage?._id,
       });
       setDraft('');
+      setReplyingToMessage(null);
     } finally {
       setIsSending(false);
     }
@@ -153,6 +167,25 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
       );
     } finally {
       setIsCallBusy(false);
+    }
+  };
+
+  const handleSendMedia = async (body: string) => {
+    if (!traveler?.slug || !chat?.threadId || isSending) {
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendMessage({
+        threadId: chat.threadId,
+        travelerSlug: traveler.slug,
+        body,
+        replyToMessageId: replyingToMessage?._id,
+      });
+      setReplyingToMessage(null);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -223,11 +256,18 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
   };
 
   const handleMessageLongPress = (message: DirectChatMessage, anchor: MessageActionAnchor) => {
-    if (!message.isOwnMessage) {
-      return;
-    }
     setSelectedMessage(message);
     setMessageMenuAnchor(anchor);
+  };
+
+  const handleTextMessageLongPress = (message: DirectChatMessage, anchor: MessageActionAnchor) => {
+    setSelectedMessage(message);
+    setMessageMenuAnchor(anchor);
+  };
+
+  const handleOpenCallCard = (callCard: ChatCallCard) => {
+    setSelectedCallCard(callCard);
+    callHistorySheetRef.current?.snapToIndex(0);
   };
 
   if (isLargeScreen && !threadIdProp) {
@@ -262,38 +302,61 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
         }}
       />
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.messageScroller}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: insets.top + 88,
-            paddingBottom: 24,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled">
+      <WandrGiftedChat<DirectChatMessage>
+        bottomOffset={insets.bottom}
+        header={
+          <>
         <View style={styles.hero}>
           <ThemedText style={styles.title}>{chat?.title ?? 'Chat'}</ThemedText>
           <ThemedText style={styles.subtitle}>{chat?.participant.baseLabel ?? ''}</ThemedText>
         </View>
 
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
-
-        <View style={styles.messageStack}>
-          {(chat?.messages ?? []).map((message: any) => (
-            <DirectChatMessageBubble
-              key={message._id}
-              message={message}
-              onLongPressMessage={handleMessageLongPress}
-            />
-          ))}
-        </View>
-      </ScrollView>
+          </>
+        }
+        isSending={isSending}
+        isWidgetMessage={(message) =>
+          Boolean(
+              message.callCard ||
+              message.body?.startsWith('wandr:sticker:') ||
+              message.body?.startsWith('wandr:gif:') ||
+              message.body?.startsWith('wandr:media:')
+          )
+        }
+        messages={chat?.messages ?? []}
+        onChangeText={setDraft}
+        onCancelReply={() => setReplyingToMessage(null)}
+        onLongPressMessage={handleTextMessageLongPress}
+        onReplyMessage={setReplyingToMessage}
+        onOpenTools={() => {
+          toolsSheetRef.current?.snapToIndex(0);
+        }}
+        onSendText={handleSend}
+        placeholder={chat?.composer.placeholder ?? 'Message'}
+        replyPreview={
+          replyingToMessage
+            ? {
+                senderName: replyingToMessage.senderName,
+                preview: getReplyPreview(replyingToMessage),
+              }
+            : null
+        }
+        renderWidgetMessage={(message) => (
+          <DirectChatMessageBubble
+            message={message}
+            onOpenCallCard={handleOpenCallCard}
+            onLongPressMessage={handleMessageLongPress}
+          />
+        )}
+        text={draft}
+        topInset={insets.top + 88}
+        userSlug={traveler?.slug}
+      />
 
       <MessageActionMenu
-        visible={Boolean(selectedMessage && messageMenuAnchor)}
+        visible={Boolean(selectedMessage)}
         anchor={messageMenuAnchor}
+        canDelete={Boolean(selectedMessage?.isOwnMessage)}
         onClose={() => {
           setSelectedMessage(null);
           setMessageMenuAnchor(null);
@@ -303,27 +366,28 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
             void handleDeleteMessage(selectedMessage);
           }
         }}
+        onReply={() => {
+          if (selectedMessage) {
+            setReplyingToMessage(selectedMessage);
+          }
+        }}
       />
 
       {chat ? (
-        <KeyboardAvoidingView
-          pointerEvents="box-none"
-          style={styles.composerKeyboardFrame}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-          <View pointerEvents="box-none" style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom - 12, 8) }]}>
-            <FriendChatComposer
-              value={draft}
-              onChangeText={setDraft}
-              onSubmit={handleSend}
-              onOpenTools={() => {
-                toolsSheetRef.current?.snapToIndex(0);
-              }}
-              placeholder={chat.composer.placeholder}
-              isSending={isSending}
-            />
-          </View>
-        </KeyboardAvoidingView>
+        <CallHistorySheet
+          callCard={selectedCallCard}
+          contextLabel={chat.title}
+          isBusy={isCallBusy}
+          onStartVideoCall={() => {
+            callHistorySheetRef.current?.close();
+            void handleStartCall('video');
+          }}
+          onStartVoiceCall={() => {
+            callHistorySheetRef.current?.close();
+            void handleStartCall('voice');
+          }}
+          sheetRef={callHistorySheetRef}
+        />
       ) : null}
 
       {chat ? (
@@ -342,6 +406,8 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
           onShareRoute={() => {}}
           quickActions={[]}
           onQuickAction={() => {}}
+          onGifAction={handleSendMedia}
+          onStickerAction={handleSendMedia}
           showRouteButton={false}
         />
       ) : null}
@@ -351,13 +417,6 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: designSystem.spacing.lg,
-    gap: designSystem.spacing.xl,
-  },
-  messageScroller: {
     flex: 1,
   },
   hero: {
@@ -378,19 +437,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: designSystem.colors.copper,
-  },
-  messageStack: {
-    gap: 16,
-  },
-  composerKeyboardFrame: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-  },
-  composerDock: {
-    zIndex: 20,
-    paddingTop: 10,
-    paddingHorizontal: designSystem.spacing.lg,
-    backgroundColor: 'transparent',
   },
 });

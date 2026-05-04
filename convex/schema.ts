@@ -25,6 +25,7 @@ import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
 import { tripInvitesTable } from './tables/tripInvites';
 import { tripsTable } from './tables/trips';
+import { userSettingsTable } from './tables/userSettings';
 
 export default defineSchema({
   regions: regionsTable,
@@ -56,6 +57,7 @@ export default defineSchema({
     travelerSlug: v.string(),
     name: v.string(),
     avatarUri: v.optional(v.string()),
+    avatarStorageId: v.optional(v.id('_storage')),
     regionCode: v.string(), // e.g. "DE", "ZA", "NA"
     regionName: v.string(), // e.g. "Germany", "South Africa"
   }).index('by_slug', ['travelerSlug']),
@@ -76,6 +78,7 @@ export default defineSchema({
   friendCalls: friendCallsTable,
 
   appUsers: appUsersTable,
+  userSettings: userSettingsTable,
   phoneOtps: phoneOtpsTable,
   phoneOtpVerifications: phoneOtpVerificationsTable,
   experienceBookings: experienceBookingsTable,
@@ -89,8 +92,11 @@ export default defineSchema({
     source: v.union(v.literal('user'), v.literal('host')),
     status: v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected')),
     createdAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.string()),
   })
     .index('by_location_and_status', ['locationKind', 'locationSlug', 'status'])
+    .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_travelerSlug_and_createdAt', ['travelerSlug', 'createdAt']),
   tripVisits: defineTable({
     bookingId: v.id('experienceBookings'),
@@ -132,6 +138,7 @@ export default defineSchema({
     ),
   })
     .index('by_staySlug', ['staySlug'])
+    .index('by_status_and_bookedAt', ['status', 'bookedAt'])
     .index('by_travelerSlug', ['travelerSlug'])
     .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt']),
 });

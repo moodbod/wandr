@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import ActiveFriendCallOverlay from '@/components/wandr/friends/active-friend-call-overlay';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
@@ -65,7 +64,6 @@ function ActiveCallRouteBridge() {
   return (
     <ThemedView style={styles.routeHost}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ActiveFriendCallOverlay />
     </ThemedView>
   );
 }

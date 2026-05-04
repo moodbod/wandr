@@ -36,8 +36,8 @@ export function FriendChatComposer({
     ? (isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised)
     : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)');
   const composerBorderColor = isAndroid
-    ? (isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt)
-    : (isDark ? designSystem.colors.whiteOverlayBarely : 'rgba(255,255,255,0.54)');
+    ? (isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15,20,13,0.14)')
+    : (isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15,20,13,0.14)');
   const handleOpenTools = () => {
     Keyboard.dismiss();
     onOpenTools();
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
   composerTint: {
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   composerContent: {
     minHeight: 52,

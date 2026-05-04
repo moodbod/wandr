@@ -1,4 +1,4 @@
-import type { Camera, MapState } from '@rnmapbox/maps';
+import type { Camera } from '@rnmapbox/maps';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
@@ -7,18 +7,10 @@ import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchRoutePath } from '@/lib/routing';
 
-import { MapboxClusterMarker, MapboxPlaceMarker } from './mapbox/mapbox-marker';
+import { MapboxPlaceMarker } from './mapbox/mapbox-marker';
 import { getMapboxModule } from './mapbox/mapbox-module';
 import { MapRouteOverlays } from './mapbox/mapbox-routes';
-import {
-  buildMarkerDisplayItems,
-  filterMarkersForZoom,
-  regionFromCoordinate,
-  regionFromMapboxBounds,
-  regionsAreClose,
-  regionToZoomLevel,
-} from './mapbox/marker-clustering';
-import type { MapMarker, MapPreviewProps, MapRegion } from './mapbox/types';
+import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 
@@ -26,10 +18,12 @@ function MapPreviewComponent({
   centerCoordinate,
   userCoordinate = null,
   userHeading = null,
+  viewportPadding,
   markers = [],
   routeCoordinates,
   zoomLevel = 14,
   showRoutes = true,
+  recenterToUserSignal = 0,
   colorSchemeMode = 'system',
   markerVariant = 'default',
   onInteract,
@@ -40,7 +34,6 @@ function MapPreviewComponent({
   const hasSettledOnUserRef = useRef(false);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
-  const [visibleRegion, setVisibleRegion] = useState<MapRegion | null>(null);
   const isWeb = Platform.OS === 'web';
   const MapboxGL = getMapboxModule();
   const colorScheme = useColorScheme();
@@ -48,28 +41,10 @@ function MapPreviewComponent({
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const styleURL = MapboxGL ? (isDark ? MapboxGL.StyleURL.Dark : MapboxGL.StyleURL.Outdoors) : null;
+  const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate =
     centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
-  const region = useMemo(
-    () => regionFromCoordinate(resolvedCenterCoordinate, zoomLevel),
-    [resolvedCenterCoordinate, zoomLevel]
-  );
-  const effectiveRegion = visibleRegion ?? region;
-  const effectiveZoomLevel = useMemo(
-    () => regionToZoomLevel(effectiveRegion),
-    [effectiveRegion]
-  );
-  const visibleMarkers = useMemo(
-    () => filterMarkersForZoom(normalizedMarkers, effectiveZoomLevel),
-    [effectiveZoomLevel, normalizedMarkers]
-  );
-  const markerDisplayItems = useMemo(
-    () => buildMarkerDisplayItems(visibleMarkers, effectiveRegion, effectiveZoomLevel),
-    [effectiveRegion, effectiveZoomLevel, visibleMarkers]
-  );
-  const previousClusterOriginsRef = useRef(new Map<string, readonly [number, number]>());
-  const previousClusterOrigins = previousClusterOriginsRef.current;
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -166,31 +141,16 @@ function MapPreviewComponent({
   }, [isWeb, stayMarkers, showRoutes, userCoordinate]);
 
   useEffect(() => {
-    const nextClusterOrigins = new Map<string, readonly [number, number]>();
-
-    markerDisplayItems.forEach((displayItem) => {
-      if (displayItem.kind !== 'cluster') {
-        return;
-      }
-
-      displayItem.cluster.markers.forEach((marker) => {
-        nextClusterOrigins.set(marker.id, displayItem.cluster.coordinate);
-      });
-    });
-
-    previousClusterOriginsRef.current = nextClusterOrigins;
-  }, [markerDisplayItems]);
-
-  useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !resolvedCenterCoordinate) return;
 
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(resolvedCenterCoordinate),
+      padding: cameraPadding,
       zoomLevel,
       animationDuration: 1000,
       animationMode: 'easeTo',
     });
-  }, [MapboxGL, isWeb, resolvedCenterCoordinate, zoomLevel]);
+  }, [MapboxGL, cameraPadding, isWeb, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || hasSettledOnUserRef.current) return;
@@ -199,12 +159,27 @@ function MapPreviewComponent({
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(userCoordinate),
       heading: userHeading ?? 0,
+      padding: cameraPadding,
       pitch: 45,
       zoomLevel: 17,
       animationDuration: 1000,
       animationMode: 'easeTo',
     });
-  }, [MapboxGL, isWeb, userCoordinate, userHeading]);
+  }, [MapboxGL, cameraPadding, isWeb, userCoordinate, userHeading]);
+
+  useEffect(() => {
+    if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || recenterToUserSignal === 0) return;
+
+    cameraRef.current.setCamera({
+      centerCoordinate: toMapboxPosition(userCoordinate),
+      heading: userHeading ?? 0,
+      padding: cameraPadding,
+      pitch: 45,
+      zoomLevel: 17,
+      animationDuration: 650,
+      animationMode: 'easeTo',
+    });
+  }, [MapboxGL, cameraPadding, isWeb, recenterToUserSignal, userCoordinate, userHeading]);
 
   useEffect(() => {
     if (!MapboxGL || !MAPBOX_ACCESS_TOKEN) return;
@@ -239,19 +214,19 @@ function MapPreviewComponent({
         >
            <MapboxGL.Camera
               centerCoordinate={resolvedCenterCoordinate ? (toMapboxPosition(resolvedCenterCoordinate) as [number, number]) : undefined}
+              padding={cameraPadding}
               zoomLevel={zoomLevel}
             />
             <MapRouteOverlays 
                 upcomingRouteCoords={upcomingRouteCoords}
                 stayBranchCoords={stayBranchCoords}
             />
-            {markerDisplayItems.map((displayItem) => {
-                if (displayItem.kind !== 'marker') return null;
+            {normalizedMarkers.map((marker) => {
                 return (
                     <MapboxPlaceMarker
                         isDark={isDark}
-                        marker={displayItem.marker}
-                        key={displayItem.marker.id}
+                        marker={marker}
+                        key={marker.id}
                         onPress={onMarkerPress}
                         variant={markerVariant}
                     />
@@ -300,11 +275,6 @@ function MapPreviewComponent({
           }
         }}
         onMapIdle={(state) => {
-          setVisibleRegion((currentRegion) => {
-            const nextRegion = mapStateToRegion(state);
-
-            return currentRegion && regionsAreClose(currentRegion, nextRegion) ? currentRegion : nextRegion;
-          });
           if (state.gestures.isGestureActive) {
             onInteract?.();
           }
@@ -322,49 +292,29 @@ function MapPreviewComponent({
           ref={cameraRef}
           defaultSettings={{
             centerCoordinate: toMapboxPosition(resolvedCenterCoordinate),
+            padding: cameraPadding,
             zoomLevel,
           }}
           centerCoordinate={toMapboxPosition(resolvedCenterCoordinate)}
+          padding={cameraPadding}
           zoomLevel={zoomLevel}
           animationMode="none"
         />
         <MapboxGL.UserLocation visible animated showsUserHeadingIndicator />
 
-        {markerDisplayItems.map((displayItem) => {
-          if (displayItem.kind === 'cluster') {
-            const cluster = displayItem.cluster;
-
-            return (
-              <MapboxClusterMarker
-                key={`cluster-${cluster.id}`}
-                cluster={cluster}
-                isDark={isDark}
-                onPress={() => {
-                  onInteract?.();
-                  cameraRef.current?.setCamera({
-                    centerCoordinate: toMapboxPosition(cluster.coordinate),
-                    zoomLevel: Math.min(14, Math.max(effectiveZoomLevel + 2.4, 8.5)),
-                    animationDuration: 900,
-                    animationMode: 'easeTo',
-                  });
-                }}
-              />
-            );
-          }
-
+        {normalizedMarkers.map((marker) => {
           return (
             <MapboxPlaceMarker
               key={`marker-${[
-                displayItem.marker.id,
-                displayItem.marker.coordinate[0],
-                displayItem.marker.coordinate[1],
-                displayItem.marker.priceLabel ?? '',
-                displayItem.marker.status ?? '',
+                marker.id,
+                marker.coordinate[0],
+                marker.coordinate[1],
+                marker.priceLabel ?? '',
+                marker.status ?? '',
               ].join('-')}`}
               isDark={isDark}
-              marker={displayItem.marker}
+              marker={marker}
               variant={markerVariant}
-              transitionFromCoordinate={previousClusterOrigins.get(displayItem.marker.id)}
               onPress={onMarkerPress}
             />
           );
@@ -398,12 +348,17 @@ function normalizeMarkers(markers: readonly MapMarker[]) {
   });
 }
 
-function mapStateToRegion(state: MapState): MapRegion {
-  return regionFromMapboxBounds(state.properties.center, state.properties.bounds);
-}
-
 function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
   return [coordinate[0], coordinate[1]];
+}
+
+function normalizeCameraPadding(viewportPadding: MapPreviewProps['viewportPadding']) {
+  return {
+    paddingBottom: viewportPadding?.paddingBottom ?? 0,
+    paddingLeft: viewportPadding?.paddingLeft ?? 0,
+    paddingRight: viewportPadding?.paddingRight ?? 0,
+    paddingTop: viewportPadding?.paddingTop ?? 0,
+  };
 }
 
 const styles = StyleSheet.create({

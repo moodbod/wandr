@@ -11,6 +11,7 @@ import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
+import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -95,7 +96,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const travelerSlug = traveler?.slug;
   const notifications = useQuery(listNotificationsRef, travelerSlug ? { travelerSlug } : 'skip');
@@ -270,23 +271,11 @@ export default function NotificationsScreen() {
   if (isLargeScreen) {
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
+        <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
+          <LargeScreenPanel kind="main">
             {content}
-          </View>
-          <View style={styles.mapColumn}>
-            <AppMapWorkspace />
-          </View>
-        </View>
+          </LargeScreenPanel>
+        </LargeScreenWorkspace>
       </ThemedView>
     );
   }
@@ -374,6 +363,7 @@ function NotificationRow({
       {showActorAvatar ? (
         <FaceHashAvatar
           name={notification.actorName ?? notification.actorSlug ?? 'Wandr'}
+          seed={notification.actorSlug}
           size={52}
           uri={notification.actorAvatarUri}
           style={styles.actorAvatar}
@@ -445,28 +435,6 @@ function NotificationRow({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  largeBody: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  mainColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    minWidth: 340,
-    borderRightWidth: 1,
-  },
-  mainColumnTablet: {
-    width: 360,
-  },
-  mainColumnDesktop: {
-    width: 420,
-  },
-  mapColumn: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    position: 'relative',
   },
   content: {
     paddingHorizontal: designSystem.spacing.lg,

@@ -623,6 +623,90 @@ function normalizePhoneNumber(value: string) {
   return `${hasPlus ? '+' : ''}${digits}`;
 }
 
+function getMessageReplyPreview(message: {
+  kind?: string;
+  body?: string;
+  routeTitle?: string;
+  callTitle?: string;
+  callMode?: 'voice' | 'video';
+}) {
+  if (message.kind === 'route') {
+    return message.routeTitle ?? 'Trip map';
+  }
+
+  if (message.kind === 'call' || message.kind === 'scheduled_call') {
+    return message.callTitle ?? `${formatCallMode(message.callMode ?? 'voice')} call`;
+  }
+
+  if (message.body?.startsWith('wandr:sticker:')) {
+    return 'Sticker';
+  }
+
+  if (message.body?.startsWith('wandr:gif:')) {
+    return 'GIF';
+  }
+
+  if (message.body?.startsWith('wandr:media:')) {
+    try {
+      const media = JSON.parse(decodeURIComponent(message.body.replace('wandr:media:', ''))) as {
+        kind?: string;
+        title?: string;
+      };
+      return media.title ?? (media.kind === 'gif' ? 'GIF' : 'Sticker');
+    } catch {
+      return 'Media';
+    }
+  }
+
+  return (message.body ?? 'Message').slice(0, 140);
+}
+
+async function getGroupReplySnapshot(
+  ctx: MutationCtx,
+  circleId: Id<'friendCircles'>,
+  replyToMessageId?: Id<'friendMessages'>
+) {
+  if (!replyToMessageId) {
+    return null;
+  }
+
+  const replyMessage = await ctx.db.get(replyToMessageId);
+  if (!replyMessage || replyMessage.circleId !== circleId) {
+    return null;
+  }
+
+  const sender = await getAppUser(ctx, replyMessage.senderSlug);
+  return {
+    replyToMessageId,
+    replyToSenderName: sender?.name ?? replyMessage.senderSlug,
+    replyToPreview: getMessageReplyPreview(replyMessage),
+    replyToKind: replyMessage.kind,
+  };
+}
+
+async function getDirectReplySnapshot(
+  ctx: MutationCtx,
+  threadId: Id<'friendDirectThreads'>,
+  replyToMessageId?: Id<'friendDirectMessages'>
+) {
+  if (!replyToMessageId) {
+    return null;
+  }
+
+  const replyMessage = await ctx.db.get(replyToMessageId);
+  if (!replyMessage || replyMessage.threadId !== threadId) {
+    return null;
+  }
+
+  const sender = await getAppUser(ctx, replyMessage.senderSlug);
+  return {
+    replyToMessageId,
+    replyToSenderName: sender?.name ?? replyMessage.senderSlug,
+    replyToPreview: getMessageReplyPreview(replyMessage),
+    replyToKind: replyMessage.kind ?? 'text',
+  };
+}
+
 async function getJoinableCirclesForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const memberships = await ctx.db
     .query('friendCircleMembers')
@@ -2150,6 +2234,15 @@ export const getFriendChat = query({
           senderName: sender?.name ?? message.senderSlug,
           senderAvatarUri: senderProfile?.avatarUri ?? null,
           isOwnMessage: message.senderSlug === args.travelerSlug,
+          replyTo:
+            message.replyToMessageId && message.replyToSenderName && message.replyToPreview
+              ? {
+                  messageId: message.replyToMessageId,
+                  senderName: message.replyToSenderName,
+                  preview: message.replyToPreview,
+                  kind: message.replyToKind ?? 'text',
+                }
+              : null,
           routeCard:
             message.kind === 'route'
               ? {
@@ -2248,6 +2341,15 @@ export const getDirectChat = query({
           senderName: sender?.name ?? message.senderSlug,
           senderAvatarUri: senderProfile?.avatarUri ?? null,
           isOwnMessage: message.senderSlug === args.travelerSlug,
+          replyTo:
+            message.replyToMessageId && message.replyToSenderName && message.replyToPreview
+              ? {
+                  messageId: message.replyToMessageId,
+                  senderName: message.replyToSenderName,
+                  preview: message.replyToPreview,
+                  kind: message.replyToKind ?? 'text',
+                }
+              : null,
           callCard:
             message.kind === 'call' || message.kind === 'scheduled_call'
               ? {
@@ -2475,6 +2577,7 @@ export const sendFriendMessage = mutation({
     circleId: v.id('friendCircles'),
     travelerSlug: v.string(),
     body: v.string(),
+    replyToMessageId: v.optional(v.id('friendMessages')),
   },
   handler: async (ctx, args) => {
     const trimmedBody = args.body.trim();
@@ -2482,11 +2585,13 @@ export const sendFriendMessage = mutation({
       return null;
     }
 
+    const replySnapshot = await getGroupReplySnapshot(ctx, args.circleId, args.replyToMessageId);
     const messageId = await ctx.db.insert('friendMessages', {
       circleId: args.circleId,
       senderSlug: args.travelerSlug,
       kind: 'text',
       body: trimmedBody,
+      ...(replySnapshot ?? {}),
       createdAt: Date.now(),
     });
 
@@ -2522,6 +2627,7 @@ export const sendDirectFriendMessage = mutation({
     threadId: v.id('friendDirectThreads'),
     travelerSlug: v.string(),
     body: v.string(),
+    replyToMessageId: v.optional(v.id('friendDirectMessages')),
   },
   handler: async (ctx, args) => {
     const trimmedBody = args.body.trim();
@@ -2538,10 +2644,12 @@ export const sendDirectFriendMessage = mutation({
       return null;
     }
 
+    const replySnapshot = await getDirectReplySnapshot(ctx, args.threadId, args.replyToMessageId);
     const messageId = await ctx.db.insert('friendDirectMessages', {
       threadId: args.threadId,
       senderSlug: args.travelerSlug,
       body: trimmedBody,
+      ...(replySnapshot ?? {}),
       createdAt: Date.now(),
     });
 

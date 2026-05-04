@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   },
   shellRoot: {
     flex: 1,
-    flexDirection: 'row',
+    position: 'relative',
   },
 });
 
@@ -77,8 +77,7 @@ function AppShell({
   const { isLoading, session } = useAuthSession();
   const { isLargeScreen } = useResponsive();
   const canUseNativeCalls = Platform.OS !== 'web' && !isRunningInExpoGo();
-  const segments = useSegments();
-  const isCallRoute = segments[0] === 'friends' && segments[1] === 'call';
+  const canUseCallOverlay = Platform.OS === 'web' || canUseNativeCalls;
   const isSignedIn = Boolean(session);
 
   useEffect(() => {
@@ -88,14 +87,6 @@ function AppShell({
 
     const root = document.getElementById('root');
     if (!root) {
-      return;
-    }
-
-    if (!isLargeScreen) {
-      root.style.width = '';
-      root.style.height = '';
-      root.style.overflow = '';
-      (root.style as any).zoom = '';
       return;
     }
 
@@ -110,7 +101,48 @@ function AppShell({
       root.style.overflow = '';
       (root.style as any).zoom = '';
     };
-  }, [isLargeScreen]);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    const styleId = 'wandr-web-input-outline-reset';
+    if (document.getElementById(styleId)) {
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      input,
+      textarea,
+      [contenteditable="true"],
+      [role="button"] {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      input:focus,
+      input:focus-visible,
+      textarea:focus,
+      textarea:focus-visible,
+      [contenteditable="true"]:focus,
+      [contenteditable="true"]:focus-visible,
+      [role="button"]:focus,
+      [role="button"]:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      style.remove();
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -127,21 +159,23 @@ function AppShell({
         <View style={styles.shellRoot}>
           {isSignedIn && isLargeScreen && <AppSidebar />}
           <View style={styles.content}>
-            <Stack screenOptions={stackScreenOptions}>
-              <Stack.Protected guard={!isSignedIn}>
+            <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
+              {!isSignedIn ? (
                 <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              </Stack.Protected>
-
-              <Stack.Protected guard={isSignedIn}>
+              ) : (
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="explore" options={{ headerShown: false }} />
-                <Stack.Screen name="trip" options={{ headerShown: false }} />
-                <Stack.Screen name="stays" options={{ headerShown: false }} />
-                <Stack.Screen name="friends" options={{ headerShown: false }} />
-                <Stack.Screen name="notifications" options={{ headerShown: false }} />
-                <Stack.Screen name="profile" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              </Stack.Protected>
+              )}
+              {isSignedIn && (
+                <>
+                  <Stack.Screen name="explore" options={{ headerShown: false }} />
+                  <Stack.Screen name="trip" options={{ headerShown: false }} />
+                  <Stack.Screen name="stays" options={{ headerShown: false }} />
+                  <Stack.Screen name="friends" options={{ headerShown: false }} />
+                  <Stack.Screen name="notifications" options={{ headerShown: false }} />
+                  <Stack.Screen name="profile" options={{ headerShown: false }} />
+                  <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                </>
+              )}
             </Stack>
           </View>
         </View>
@@ -150,7 +184,7 @@ function AppShell({
       <AuthRouteGate />
       {convexClient && isSignedIn ? <TripNotificationCenter /> : null}
       {convexClient && isSignedIn && canUseNativeCalls ? <IncomingFriendCallCenter /> : null}
-      {convexClient && isSignedIn && canUseNativeCalls && !isCallRoute ? (
+      {convexClient && isSignedIn && canUseCallOverlay ? (
         <Suspense fallback={null}>
           <ActiveFriendCallOverlay />
         </Suspense>

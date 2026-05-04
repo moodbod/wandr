@@ -99,7 +99,7 @@ export function PlanningLocationSheet({
   return (
     <GlassBottomSheet
       ref={sheetRef}
-      index={-1}
+      index={0}
       snapPoints={snapPoints}
       enableDynamicSizing={false}
       enablePanDownToClose
@@ -114,7 +114,7 @@ export function PlanningLocationSheet({
         }
       }}
       backdropComponent={(props) => (
-        <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} />
+        <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} pressBehavior="close" />
       )}
     >
       <BottomSheetFlatList
@@ -160,7 +160,7 @@ export function PlanningLocationSheet({
           ) : null
         }
         renderItem={({ item: location }) => {
-          const selected = location.label.toLowerCase() === selectedLocation.label.toLowerCase();
+          const selected = location.id === selectedLocation.id;
           const isCurrent = currentLocation?.id === location.id;
           const isSearchPrompt = location.isSearchPrompt === true;
           const isDisabled = location.isSupported === false && !isSearchPrompt;

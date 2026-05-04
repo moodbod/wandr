@@ -1,18 +1,17 @@
 import { useQuery } from 'convex/react';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { useRouter, useSegments } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { listIncomingFriendCallsRef } from '@/lib/convex';
+import { answerNativeCall, endNativeCall, showNativeIncomingCall } from '@/lib/native-calls';
 import {
   FRIEND_CALL_ANSWER_ACTION_ID,
   FRIEND_CALL_DECLINE_ACTION_ID,
-  presentIncomingFriendCallNotification,
 } from '@/lib/notifications';
 
 type IncomingFriendCall = {
@@ -30,7 +29,6 @@ export function IncomingFriendCallCenter() {
   const traveler = useCurrentTraveler();
   const { activeCallId, openCall } = useActiveFriendCall();
   const [presentedCallIds, setPresentedCallIds] = useState<Set<string>>(() => new Set());
-  const [ringingCall, setRingingCall] = useState<IncomingFriendCall | null>(null);
   const incomingCalls = useQuery(
     listIncomingFriendCallsRef,
     traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
@@ -42,6 +40,23 @@ export function IncomingFriendCallCenter() {
         (call) => call._id !== activeCallId && !presentedCallIds.has(call._id)
       ) ?? null,
     [activeCallId, incomingCalls, presentedCallIds]
+  );
+
+  const answerCall = useCallback(
+    (callId: Id<'friendCalls'>) => {
+      setPresentedCallIds((value) => new Set(value).add(callId));
+      answerNativeCall(callId);
+      openCall(callId);
+    },
+    [openCall]
+  );
+
+  const declineCall = useCallback(
+    (callId: Id<'friendCalls'>) => {
+      setPresentedCallIds((value) => new Set(value).add(callId));
+      endNativeCall(callId);
+    },
+    []
   );
 
   useEffect(() => {
@@ -62,16 +77,15 @@ export function IncomingFriendCallCenter() {
       }
 
       const callId = data.callId as Id<'friendCalls'>;
+      void Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(() => {});
       if (response.actionIdentifier === FRIEND_CALL_DECLINE_ACTION_ID) {
+        declineCall(callId);
         Notifications.clearLastNotificationResponse();
         return;
       }
 
-      if (
-        response.actionIdentifier === FRIEND_CALL_ANSWER_ACTION_ID ||
-        response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
-      ) {
-        openCall(callId);
+      if (response.actionIdentifier === FRIEND_CALL_ANSWER_ACTION_ID) {
+        answerCall(callId);
       }
       Notifications.clearLastNotificationResponse();
     };
@@ -86,24 +100,24 @@ export function IncomingFriendCallCenter() {
     return () => {
       responseSubscription.remove();
     };
-  }, [openCall, router]);
+  }, [answerCall, declineCall, router]);
 
   useEffect(() => {
     if (!incomingCall || activeCallId || isCallRoute || Platform.OS === 'web') {
       return;
     }
 
+    const currentIncomingCall = incomingCall;
     let cancelled = false;
     async function showIncomingCall() {
-      setRingingCall(incomingCall);
-      await presentIncomingFriendCallNotification({
-        callId: incomingCall!._id,
-        callerName: incomingCall!.createdByName,
-        circleName: incomingCall!.circleName,
-        mode: incomingCall!.mode,
+      await showNativeIncomingCall({
+        callId: currentIncomingCall._id,
+        callerName: currentIncomingCall.createdByName,
+        groupName: currentIncomingCall.circleName,
+        mode: currentIncomingCall.mode,
       });
       if (!cancelled) {
-        setPresentedCallIds((value) => new Set(value).add(incomingCall!._id));
+        setPresentedCallIds((value) => new Set(value).add(currentIncomingCall._id));
       }
     }
 
@@ -112,57 +126,6 @@ export function IncomingFriendCallCenter() {
       cancelled = true;
     };
   }, [activeCallId, incomingCall, isCallRoute]);
-
-  useEffect(() => {
-    if (!ringingCall) {
-      return;
-    }
-    if (activeCallId || isCallRoute || !incomingCalls?.some((call) => call._id === ringingCall._id)) {
-      setRingingCall(null);
-    }
-  }, [activeCallId, incomingCalls, isCallRoute, ringingCall]);
-
-  return <IncomingCallRingtone mode={ringingCall?.mode ?? null} />;
-}
-
-function IncomingCallRingtone({ mode }: { mode: IncomingFriendCall['mode'] | null }) {
-  useEffect(() => {
-    if (!mode || Platform.OS === 'web') {
-      return;
-    }
-
-    let player: ReturnType<typeof createAudioPlayer> | null = null;
-    let stopped = false;
-    try {
-      player = createAudioPlayer(
-        mode === 'video'
-          ? require('../../../assets/sounds/video_call_ring.wav')
-          : require('../../../assets/sounds/voice_call_ring.wav'),
-        { keepAudioSessionActive: true }
-      );
-      player.loop = true;
-      player.volume = 1;
-      void setAudioModeAsync({
-        playsInSilentMode: true,
-        shouldPlayInBackground: false,
-        interruptionMode: 'duckOthers',
-      }).catch(() => {});
-      player.play();
-    } catch (error) {
-      console.warn('Unable to start incoming call ringtone', error);
-    }
-
-    return () => {
-      stopped = true;
-      try {
-        player?.remove();
-      } catch (error) {
-        if (!stopped) {
-          console.warn('Unable to stop incoming call ringtone', error);
-        }
-      }
-    };
-  }, [mode]);
 
   return null;
 }

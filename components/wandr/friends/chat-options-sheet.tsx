@@ -1,7 +1,7 @@
-import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, type BottomSheetProps } from '@gorhom/bottom-sheet';
 import { PencilSimple } from 'phosphor-react-native';
 import { type ReactNode, type RefObject, useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
@@ -18,7 +18,7 @@ type ChatOptionsSheetProps = {
   onChange?: (index: number) => void;
   onRename: (value: string) => void;
   sheetRef: RefObject<BottomSheet | null>;
-  snapPoints: string[];
+  snapPoints: BottomSheetProps['snapPoints'];
   title: string;
 };
 
@@ -37,6 +37,8 @@ export function ChatOptionsSheet({
   const insets = useSafeAreaInsets();
   const [renameDraft, setRenameDraft] = useState(title);
   const [isEditingName, setIsEditingName] = useState(false);
+  const firstSnapPoint = Array.isArray(snapPoints) ? snapPoints[0] : undefined;
+  const desktopHeight = Platform.OS === 'web' && typeof firstSnapPoint === 'number' ? firstSnapPoint : undefined;
 
   useEffect(() => {
     setRenameDraft(title);
@@ -58,9 +60,13 @@ export function ChatOptionsSheet({
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
-      onChange={onChange}>
+      onChange={onChange}
+      desktopPopupHostStyle={desktopHeight ? { height: desktopHeight } : undefined}>
       <BottomSheetScrollView
-        contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 16) + 20 }]}
+        contentContainerStyle={[
+          styles.sheetContent,
+          { paddingBottom: Platform.OS === 'web' ? 12 : Math.max(insets.bottom, 16) + 20 },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.sheetGrabber} />
         <View style={styles.sheetHeader}>

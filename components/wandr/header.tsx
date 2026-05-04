@@ -65,6 +65,7 @@ type WandrHeaderProps = {
   bottomContent?: React.ReactNode;
   bottomContentHeight?: number;
   bottomContentVisible?: boolean;
+  extraTopInset?: number;
   weatherCoords?: readonly [number, number] | null;
 };
 
@@ -74,6 +75,7 @@ export function WandrHeader({
   bottomContent,
   bottomContentHeight = 0,
   bottomContentVisible = false,
+  extraTopInset = 0,
   weatherCoords,
 }: WandrHeaderProps) {
   const router = useRouter();
@@ -132,13 +134,13 @@ export function WandrHeader({
 
   const HeaderContainer = config.overlay || isButtonOnlyHeader ? View : BlurView;
   const containerProps = config.overlay
-    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingTop: insets.top }] }
+    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingTop: insets.top + extraTopInset }] }
     : isButtonOnlyHeader
-      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingTop: insets.top }] }
+      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingTop: insets.top + extraTopInset }] }
     : {
         intensity: 80,
         tint: isDark ? 'dark' as const : 'light' as const,
-        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top, backgroundColor: blurBackgroundColor }]
+        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top + extraTopInset, backgroundColor: blurBackgroundColor }]
       };
 
   useEffect(() => {

@@ -80,6 +80,12 @@ export type FriendChatMessage = {
   senderName: string;
   senderAvatarUri: string | null;
   isOwnMessage: boolean;
+  replyTo: {
+    messageId: Id<'friendMessages'>;
+    senderName: string;
+    preview: string;
+    kind: string;
+  } | null;
   routeCard: {
     title: string;
     summary: string;
@@ -176,6 +182,12 @@ export type DirectChatMessage = {
   senderName: string;
   senderAvatarUri: string | null;
   isOwnMessage: boolean;
+  replyTo: {
+    messageId: Id<'friendDirectMessages'>;
+    senderName: string;
+    preview: string;
+    kind: string;
+  } | null;
   callCard: {
     callId: Id<'friendCalls'> | null;
     mode: 'voice' | 'video';

@@ -5,6 +5,7 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { ExperienceDetailContent } from '@/components/wandr/explore/experience-detail-content';
 import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
+import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
@@ -457,7 +458,13 @@ function ConnectedTripScreen({
                           <View key={friend.slug} style={styles.friendRow}>
                             <View style={styles.friendIdentity}>
                               <View style={styles.avatarWrap}>
-                                <FaceHashAvatar name={friend.slug ?? friend.name} size={38} uri={friend.avatarUri} style={styles.avatarImage} />
+                                <FaceHashAvatar
+                                  name={friend.name || friend.slug || 'Traveler'}
+                                  seed={friend.slug}
+                                  size={38}
+                                  uri={friend.avatarUri}
+                                  style={styles.avatarImage}
+                                />
                               </View>
                               <View style={styles.friendCopy}>
                                 <ThemedText style={styles.friendName}>{friend.name}</ThemedText>
@@ -553,7 +560,7 @@ function TripScreenView({
   removingItemId: string | null;
   useSkeletons: boolean;
 }) {
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
   const [detailItem, setDetailItem] = useState<TripDashboardItem | null>(null);
   const items = trip.items;
   const mapMarkers = useMemo(() => buildTripMapMarkers(trip.items, 10), [trip.items]);
@@ -634,30 +641,22 @@ function TripScreenView({
   if (isLargeScreen) {
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
+        <LargeScreenWorkspace
+          mapContent={
+            <MapPreview
+              centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? null}
+              markers={mapMarkers}
+              routeCoordinates={routeCoordinates}
+              showRoutes={routeCoordinates.length > 1}
+              zoomLevel={12}
+            />
+          }
+        >
+          <LargeScreenPanel kind="main">
             {mainContent}
-          </View>
+          </LargeScreenPanel>
           {detailItem ? (
-            <View
-              style={[
-                styles.detailColumn,
-                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
-                {
-                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-                },
-              ]}
-            >
+            <LargeScreenPanel kind="detail">
               {detailItem.kind === 'stay' ? (
                 <StayDetailScreen onClose={() => setDetailItem(null)} slug={detailItem.experienceSlug} />
               ) : (
@@ -666,18 +665,9 @@ function TripScreenView({
                   slug={detailItem.experience.slug}
                 />
               )}
-            </View>
+            </LargeScreenPanel>
           ) : null}
-          <View style={styles.mapColumn}>
-            <MapPreview
-              centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? null}
-              markers={mapMarkers}
-              routeCoordinates={routeCoordinates}
-              showRoutes={routeCoordinates.length > 1}
-              zoomLevel={12}
-            />
-          </View>
-        </View>
+        </LargeScreenWorkspace>
       </ThemedView>
     );
   }

@@ -2,7 +2,7 @@ import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -20,6 +20,7 @@ import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   bookExperienceRef,
   createTripRef,
@@ -48,6 +49,8 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const largeDetailTopInset = isLargeScreen && !hideHeader ? 16 : 0;
   const traveler = useCurrentTraveler();
   const travelerSlug = traveler?.slug ?? '';
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
@@ -96,17 +99,44 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   }, [slug]);
 
   if (page === undefined || itinerary === undefined || trip === undefined) {
-    return <ExperienceDetailLoadingContent insetsTop={insets.top} isDark={isDark} />;
+    return (
+      <ExperienceDetailLoadingContent
+        hideHeader={hideHeader}
+        insetsBottom={insets.bottom}
+        insetsTop={insets.top}
+        isDark={isDark}
+        largeDetailTopInset={largeDetailTopInset}
+        onClose={onClose}
+      />
+    );
   }
 
   if (page === null || !slug) {
-    return <ExperienceDetailLoadingContent insetsTop={insets.top} isDark={isDark} />;
+    return (
+      <ExperienceDetailLoadingContent
+        hideHeader={hideHeader}
+        insetsBottom={insets.bottom}
+        insetsTop={insets.top}
+        isDark={isDark}
+        largeDetailTopInset={largeDetailTopInset}
+        onClose={onClose}
+      />
+    );
   }
 
   const experience = page.experiences.find((item) => item.slug === slug);
 
   if (!experience) {
-    return <ExperienceDetailLoadingContent insetsTop={insets.top} isDark={isDark} />;
+    return (
+      <ExperienceDetailLoadingContent
+        hideHeader={hideHeader}
+        insetsBottom={insets.bottom}
+        insetsTop={insets.top}
+        isDark={isDark}
+        largeDetailTopInset={largeDetailTopInset}
+        onClose={onClose}
+      />
+    );
   }
 
   const bookedTrips = (itinerary || []).filter((item) => item.experienceSlug === slug);
@@ -279,6 +309,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         travelerSlug,
         storageId,
       });
+      Alert.alert('Photo submitted', 'A manager will approve it before it appears in the gallery.');
     } catch {
       Alert.alert('Photo upload failed', 'Could not share that picture. Please try again.');
     } finally {
@@ -304,6 +335,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     <ThemedView style={[styles.root, isDark && styles.rootDark]}>
       {!hideHeader && (
         <WandrHeader
+          extraTopInset={largeDetailTopInset}
             config={{
             overlay: true,
             leadingAction: onClose ? { kind: 'back', accessibilityLabel: 'Close', onPress: onClose } : { kind: 'back', accessibilityLabel: 'Go back' },
@@ -332,7 +364,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: hideHeader ? 20 : insets.top + 72, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
+          { paddingTop: hideHeader ? 20 : insets.top + 72 + largeDetailTopInset, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
         ]}>
         
         <View style={styles.carouselContainer}>
@@ -405,7 +437,12 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
                           {joinable.memberCount} members
                         </ThemedText>
                       </View>
-                      <TravelerAvatarStack avatars={joinable.avatarUris} totalCount={joinable.memberCount} />
+                      <TravelerAvatarStack
+                        avatars={joinable.avatarUris}
+                        fallbackName={joinable.groupName}
+                        fallbackSeed={joinable.circleId}
+                        totalCount={joinable.memberCount}
+                      />
                       <View style={[styles.joinButton, (isRequested || isRequesting) && styles.joinButtonDisabled]}>
                         <ThemedText style={styles.joinButtonText}>
                           {isRequested ? 'Requested' : isRequesting ? '...' : 'Join'}
@@ -420,7 +457,10 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         </View>
       </ScrollView>
 
-      <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['60%', '90%']}>
+      <GlassBottomSheet
+        ref={tripSheetRef}
+        index={-1}
+        snapPoints={['60%', '90%']}>
         <BottomSheetView style={styles.sheetContainer}>
           <View style={styles.sheetHeader}>
             <ThemedText style={styles.sheetTitle}>Add to trip</ThemedText>
@@ -443,24 +483,89 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   );
 }
 
-function ExperienceDetailLoadingContent({ insetsTop, isDark }: { insetsTop: number; isDark: boolean }) {
+function ExperienceDetailLoadingContent({
+  hideHeader,
+  insetsBottom,
+  insetsTop,
+  isDark,
+  largeDetailTopInset,
+  onClose,
+}: {
+  hideHeader: boolean;
+  insetsBottom: number;
+  insetsTop: number;
+  isDark: boolean;
+  largeDetailTopInset: number;
+  onClose?: () => void;
+}) {
   return (
-    <ThemedView style={styles.root}>
-      <View style={[styles.loadingHeader, { paddingTop: insetsTop + 20 }]}>
-        <ActivityIndicator color={isDark ? designSystem.colors.white : designSystem.colors.ink} />
-      </View>
-      <View style={styles.loadingBody}>
-        <SkeletonBlock style={{ height: 300, width: '100%', borderRadius: 0 }} />
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
+      {!hideHeader ? (
+        <WandrHeader
+          extraTopInset={largeDetailTopInset}
+          config={{
+            overlay: true,
+            leadingAction: onClose
+              ? { kind: 'back', accessibilityLabel: 'Close', onPress: onClose }
+              : { kind: 'back', accessibilityLabel: 'Go back' },
+            trailingActions: [
+              { kind: 'plus', accessibilityLabel: 'Share photo' },
+              { kind: 'favorite', accessibilityLabel: 'Save experience' },
+            ],
+          }}
+        />
+      ) : null}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: hideHeader ? 20 : insetsTop + 72 + largeDetailTopInset, paddingBottom: insetsBottom + designSystem.spacing.xxxl },
+        ]}
+      >
+        <View style={styles.loadingCarouselContainer}>
+          <SkeletonBlock style={styles.loadingHeroFrame} />
+        </View>
+
         <View style={styles.paddedContent}>
-          <SkeletonBlock style={{ height: 40, width: '80%', borderRadius: 8 }} />
-          <SkeletonBlock style={{ height: 20, width: '40%', borderRadius: 4 }} />
-          <View style={{ gap: 12, marginTop: 24 }}>
-            <SkeletonBlock style={{ height: 16, width: '100%', borderRadius: 4 }} />
-            <SkeletonBlock style={{ height: 16, width: '100%', borderRadius: 4 }} />
-            <SkeletonBlock style={{ height: 16, width: '90%', borderRadius: 4 }} />
+          <View style={styles.titleBlock}>
+            <SkeletonBlock style={styles.loadingBadge} />
+            <View style={styles.titleStack}>
+              <SkeletonBlock style={styles.loadingTitle} />
+              <SkeletonBlock style={styles.loadingLocation} />
+            </View>
+          </View>
+
+          <View style={styles.loadingParagraph}>
+            <SkeletonBlock style={styles.loadingParagraphLine} />
+            <SkeletonBlock style={styles.loadingParagraphLine} />
+            <SkeletonBlock style={styles.loadingParagraphShortLine} />
+          </View>
+
+          <View style={styles.loadingFitStack}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <View
+                key={`experience-detail-fit-skeleton-${index}`}
+                style={[styles.loadingFitRow, index < 2 ? styles.loadingFitRowBorder : null]}
+              >
+                <View style={styles.loadingFitCopy}>
+                  <SkeletonBlock style={styles.loadingFitLabel} />
+                  <SkeletonBlock style={styles.loadingFitValue} />
+                </View>
+                <SkeletonBlock style={styles.loadingFitIcon} />
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.loadingSpendSection}>
+            <SkeletonBlock style={styles.loadingSpendLead} />
+            <SkeletonBlock style={styles.loadingSpendAmount} />
+            <View style={styles.loadingSpendNote}>
+              <SkeletonBlock style={styles.loadingParagraphLine} />
+              <SkeletonBlock style={styles.loadingParagraphShortLine} />
+            </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -593,12 +698,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: designSystem.colors.gray,
   },
-  loadingHeader: {
-    paddingHorizontal: 24,
-    alignItems: 'center',
+  loadingCarouselContainer: {
+    height: 420,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: '100%',
   },
-  loadingBody: {
+  loadingHeroFrame: {
+    alignSelf: 'center',
+    borderRadius: 34,
+    height: 420,
+    maxWidth: 344,
+    width: '82%',
+  },
+  loadingBadge: {
+    borderRadius: 20,
+    height: 28,
+    width: 118,
+  },
+  loadingTitle: {
+    borderRadius: 12,
+    height: 38,
+    width: '88%',
+  },
+  loadingLocation: {
+    borderRadius: 9,
+    height: 18,
+    width: '44%',
+  },
+  loadingParagraph: {
+    gap: 9,
+  },
+  loadingParagraphLine: {
+    borderRadius: 8,
+    height: 17,
+    width: '100%',
+  },
+  loadingParagraphShortLine: {
+    borderRadius: 8,
+    height: 17,
+    width: '78%',
+  },
+  loadingFitStack: {
+    borderBottomWidth: 1,
+    borderColor: designSystem.colors.border,
+    borderTopWidth: 1,
+  },
+  loadingFitRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: designSystem.spacing.md,
+    paddingVertical: 16,
+  },
+  loadingFitRowBorder: {
+    borderBottomWidth: 1,
+    borderColor: designSystem.colors.border,
+  },
+  loadingFitCopy: {
     flex: 1,
-    gap: 24,
+    gap: 6,
+  },
+  loadingFitLabel: {
+    borderRadius: 7,
+    height: 14,
+    width: 82,
+  },
+  loadingFitValue: {
+    borderRadius: 9,
+    height: 20,
+    width: 128,
+  },
+  loadingFitIcon: {
+    borderRadius: 9,
+    height: 18,
+    width: 18,
+  },
+  loadingSpendSection: {
+    gap: 10,
+    paddingVertical: designSystem.spacing.xl,
+  },
+  loadingSpendLead: {
+    borderRadius: 10,
+    height: 22,
+    width: 178,
+  },
+  loadingSpendAmount: {
+    borderRadius: 14,
+    height: 34,
+    width: 128,
+  },
+  loadingSpendNote: {
+    gap: 8,
+    maxWidth: '88%',
   },
 });

@@ -294,6 +294,7 @@ function ConnectedExploreExperienceScreen() {
         travelerSlug,
         storageId,
       });
+      Alert.alert('Photo submitted', 'A manager will approve it before it appears in the gallery.');
     } catch {
       Alert.alert('Photo upload failed', 'Could not share that picture. Please try again.');
     } finally {
@@ -444,7 +445,12 @@ function ConnectedExploreExperienceScreen() {
                         <ThemedText style={[styles.publicTripMeta, isDark && styles.sheetSubtitleDark]}>
                           {joinableTrip.hostName} • {joinableTrip.memberCount} travelers • {joinableTrip.destinationLabel}
                         </ThemedText>
-                        <TravelerAvatarStack avatars={joinableTrip.avatarUris} totalCount={joinableTrip.memberCount} />
+                        <TravelerAvatarStack
+                          avatars={joinableTrip.avatarUris}
+                          fallbackName={joinableTrip.hostName || joinableTrip.groupName}
+                          fallbackSeed={joinableTrip.circleId}
+                          totalCount={joinableTrip.memberCount}
+                        />
                       </View>
                       <Pressable
                         accessibilityLabel={hasRequested ? 'Join request sent' : `Join ${joinableTrip.groupName}`}

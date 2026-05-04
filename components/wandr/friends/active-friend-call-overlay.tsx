@@ -3,17 +3,19 @@ import { ConnectionState, VideoPresets, type RoomOptions } from 'livekit-client'
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallControls } from '@/components/wandr/friends/call/call-controls';
 import { FullCallLoading, MiniCallLoading } from '@/components/wandr/friends/call/call-loading';
-import { CallVideoGrid, MiniCallContent } from '@/components/wandr/friends/call/call-video-grid';
+import { CallVideoGrid, MiniCallContent, type CallVideoGridHandle } from '@/components/wandr/friends/call/call-video-grid';
 import { DraggableMiniCall } from '@/components/wandr/friends/call/draggable-mini-call';
 import { FullCallLayout } from '@/components/wandr/friends/call/full-call-layout';
 import { VoiceCallStage } from '@/components/wandr/friends/call/voice-call-stage';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { enterAndroidCallPictureInPicture } from '@/lib/mobile-picture-in-picture';
 import { endNativeCall, markNativeCallConnected } from '@/lib/native-calls';
 import type { FriendCircleMember } from '@/types/friends';
 import {
@@ -64,6 +66,7 @@ export default function ActiveFriendCallOverlay() {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
   const [remoteParticipantCount, setRemoteParticipantCount] = useState(0);
+  const videoGridRef = useRef<CallVideoGridHandle>(null);
   const preparedCallKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -158,8 +161,19 @@ export default function ActiveFriendCallOverlay() {
   const callMembers = (call?.members ?? []) as FriendCircleMember[];
   const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
   const callMode = call?.mode ?? 'voice';
+  const handleMinimize = async () => {
+    if (Platform.OS === 'ios' && shouldSendVideo && videoGridRef.current?.startPictureInPicture()) {
+      return;
+    }
+
+    if (Platform.OS === 'android' && shouldSendVideo && (await enterAndroidCallPictureInPicture())) {
+      return;
+    }
+
+    minimizeCall();
+  };
   const fullRoomContent = shouldSendVideo ? (
-    <CallVideoGrid />
+    <CallVideoGrid ref={videoGridRef} />
   ) : (
     <VoiceCallStage members={callMembers} title={callTitle} />
   );
@@ -175,7 +189,7 @@ export default function ActiveFriendCallOverlay() {
   ) : (
     <FullCallLayout
       bottomInset={insets.bottom}
-      onMinimize={minimizeCall}
+      onMinimize={handleMinimize}
       subtitle={call?.circleId ? 'Call is active' : 'Waiting for others...'}
       title={callTitle}
       topInset={insets.top}
@@ -225,7 +239,7 @@ export default function ActiveFriendCallOverlay() {
   return (
     <FullCallLayout
       bottomInset={insets.bottom}
-      onMinimize={minimizeCall}
+      onMinimize={handleMinimize}
       subtitle={loadError ?? 'Connecting...'}
       title={callTitle}
       topInset={insets.top}

@@ -18,6 +18,7 @@ export function TripGroupPanel({
     .filter((member) => member.status === 'active')
     .map((member) => member.avatarUri)
     .filter(Boolean) as string[];
+  const firstActiveMember = group.members.find((member) => member.status === 'active');
 
   return (
     <View style={[styles.wrap, isDark ? styles.wrapDark : null]}>
@@ -25,7 +26,12 @@ export function TripGroupPanel({
         <View style={styles.copy}>
           <ThemedText style={styles.title}>{group.name}</ThemedText>
         </View>
-        <TravelerAvatarStack avatars={avatars} totalCount={group.memberCount} />
+        <TravelerAvatarStack
+          avatars={avatars}
+          fallbackName={firstActiveMember?.name ?? group.name}
+          fallbackSeed={firstActiveMember?.travelerSlug ?? group.circleId}
+          totalCount={group.memberCount}
+        />
       </View>
 
       <View style={styles.inlineRow}>

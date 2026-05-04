@@ -7,18 +7,19 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ProfileHeroProps = {
   avatarUri?: string | null;
+  avatarSeed?: string | null;
   baseLabel: string;
   displayName: string;
   planningLabel?: string | null;
 };
 
-export function ProfileHero({ avatarUri, baseLabel, displayName, planningLabel }: ProfileHeroProps) {
+export function ProfileHero({ avatarUri, avatarSeed, baseLabel, displayName, planningLabel }: ProfileHeroProps) {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
 
   return (
     <View style={styles.hero}>
-      <FaceHashAvatar name={displayName} size={88} uri={avatarUri} style={[styles.avatar, { backgroundColor: colors.surface }]} />
+      <FaceHashAvatar name={displayName} seed={avatarSeed} size={88} uri={avatarUri} style={[styles.avatar, { backgroundColor: colors.surface }]} />
       <View style={styles.copy}>
         <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.name}>
           {displayName}

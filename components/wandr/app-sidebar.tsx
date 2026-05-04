@@ -6,6 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useManagerMode } from '@/hooks/use-manager-mode';
+import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
+import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 
 const NAV_ITEMS: readonly {
   label: string;
@@ -26,11 +30,14 @@ export function AppSidebar() {
   const pathname = usePathname();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
+  const traveler = useCurrentTraveler();
+  const { isManagerMode } = useManagerMode();
+  const { mode: managerResourceMode, openManager, setSurface, surface: managerSurface } = useManagerResourceMode();
 
   const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.darkGreen;
   const inactiveColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
-  const backgroundColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
-  const borderColor = isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft;
+  const surfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassStrong;
+  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
   const activeBackground = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.limeSoft;
   const activeHref = getActiveNavHref(pathname);
 
@@ -39,14 +46,12 @@ export function AppSidebar() {
       style={[
         styles.sidebar,
         {
-          backgroundColor,
-          borderRightColor: borderColor,
           paddingBottom: Math.max(insets.bottom, 16),
           paddingTop: Math.max(insets.top, 16),
         },
       ]}
     >
-      <View style={styles.navSection}>
+      <View style={[styles.navSection, { backgroundColor: surfaceColor, borderColor }]}>
         {NAV_ITEMS.map((item) => {
           const isActive = String(item.href) === activeHref;
           return (
@@ -68,17 +73,68 @@ export function AppSidebar() {
         })}
       </View>
 
-      <View style={styles.bottomSection}>
+      <View style={styles.bottomStack}>
+        {isManagerMode ? (
+          <View style={[styles.managerSection, { backgroundColor: surfaceColor, borderColor }]}>
+            <Pressable
+              accessibilityLabel="Manage experiences and groups"
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' }}
+              onPress={() => {
+                openManager('experiences');
+                router.push('/profile');
+              }}
+              style={[
+                styles.navItem,
+                activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' && { backgroundColor: activeBackground },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="map-marker-path"
+                size={22}
+                color={activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' ? activeColor : inactiveColor}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Manage rooms"
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' }}
+              onPress={() => {
+                openManager('rooms');
+                router.push('/profile');
+              }}
+              style={[
+                styles.navItem,
+                activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' && { backgroundColor: activeBackground },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="bed-king"
+                size={22}
+                color={activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' ? activeColor : inactiveColor}
+              />
+            </Pressable>
+          </View>
+        ) : null}
+        <View style={[styles.bottomSection, { backgroundColor: surfaceColor, borderColor }]}>
         <Pressable
           accessibilityLabel="Profile"
           accessibilityRole="button"
-          onPress={() => router.push('/profile')}
-          style={styles.navItem}
+          onPress={() => {
+            setSurface('profile');
+            router.push('/profile');
+          }}
+          style={[styles.navItem, activeHref === '/profile' && managerSurface === 'profile' && { backgroundColor: activeBackground }]}
         >
-          <View style={[styles.avatarCircle, { borderColor }]}>
-            <MaterialCommunityIcons name="account-circle-outline" size={22} color={inactiveColor} />
-          </View>
+          <FaceHashAvatar
+            name={traveler?.name || 'Traveler'}
+            seed={traveler?.slug}
+            size={32}
+            uri={traveler?.avatarUri}
+            style={[styles.avatarCircle, { borderColor }]}
+          />
         </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -116,23 +172,39 @@ function getActiveNavHref(pathname: string) {
 
 const styles = StyleSheet.create({
   sidebar: {
-    width: 64,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    top: 0,
+    width: 76,
     height: '100%',
-    borderRightWidth: 1,
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 12,
     zIndex: 100,
   },
   navSection: {
-    gap: 10,
-    marginTop: 8,
+    gap: 8,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 6,
   },
   navItem: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bottomStack: {
+    gap: 10,
+  },
+  managerSection: {
+    alignItems: 'center',
+    borderRadius: 28,
+    borderWidth: 1,
+    gap: 8,
+    padding: 6,
   },
   avatarCircle: {
     width: 32,
@@ -144,5 +216,8 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     alignItems: 'center',
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 6,
   },
 });

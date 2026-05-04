@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { FriendCircleBanner, FriendCircleBannerSkeleton } from '@/components/wandr/friends/friend-circle-banner';
 import { FriendMatchCard, FriendMatchCardSkeleton } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
+import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -24,7 +25,7 @@ export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
   const { width: screenWidth } = useWindowDimensions();
   const horizontalGutter = Math.max(designSystem.spacing.lg, insets.left, insets.right);
   const groupCardWidth = Math.min(312, Math.max(260, screenWidth - horizontalGutter * 3));
@@ -198,40 +199,19 @@ export default function FriendsScreen() {
   if (isLargeScreen) {
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
+        <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
+          <LargeScreenPanel kind="main">
             {mainContent}
-          </View>
+          </LargeScreenPanel>
           {selectedProfileSlug ? (
-            <View
-              style={[
-                styles.detailColumn,
-                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
-                {
-                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-                },
-              ]}
-            >
+            <LargeScreenPanel kind="detail">
               <FriendViewerProfileScreen
                 onClose={() => setSelectedProfileSlug(null)}
                 travelerSlug={selectedProfileSlug}
               />
-            </View>
+            </LargeScreenPanel>
           ) : null}
-          <View style={styles.mapColumn}>
-            <AppMapWorkspace />
-          </View>
-        </View>
+        </LargeScreenWorkspace>
       </ThemedView>
     );
   }

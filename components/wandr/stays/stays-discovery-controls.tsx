@@ -29,6 +29,7 @@ type StaysDiscoveryControlsProps = {
   onResetMap: () => void;
   onSelectTrip?: (tripId: string) => void;
   onTogglePriceSort: () => void;
+  variant?: 'default' | 'desktopMap';
 };
 
 export function StaysDiscoveryControls({
@@ -46,15 +47,34 @@ export function StaysDiscoveryControls({
   onResetMap,
   onSelectTrip,
   onTogglePriceSort,
+  variant = 'default',
 }: StaysDiscoveryControlsProps) {
   const isDark = useColorScheme() === 'dark';
   const iconColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
+  const isDesktopMap = variant === 'desktopMap';
+  const desktopSurfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassHigh;
+  const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const desktopInputSurfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassMax;
+  const desktopDockSurfaceColor = isDark ? 'rgba(8, 11, 8, 0.38)' : designSystem.colors.whiteGlassMedium;
+  const desktopInactivePillColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
+  const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
 
   return (
-    <View style={styles.discoveryBar}>
-      <View style={styles.searchRow}>
+    <View
+      style={[
+        styles.discoveryBar,
+        isDesktopMap && styles.desktopDiscoveryBar,
+        isDesktopMap && {
+          backgroundColor: desktopSurfaceColor,
+          borderColor: desktopBorderColor,
+        },
+      ]}
+    >
+      <View style={[styles.searchRow, isDesktopMap && styles.desktopSearchRow]}>
         {leadingSearchAccessory ? (
-          <View style={styles.searchAccessory}>{leadingSearchAccessory}</View>
+          <View style={[styles.searchAccessory, isDesktopMap && styles.desktopLeadingAccessory]}>
+            {leadingSearchAccessory}
+          </View>
         ) : showMapButtons ? (
           <GlassButton
             accessibilityLabel="Change planning location"
@@ -68,14 +88,35 @@ export function StaysDiscoveryControls({
           </GlassButton>
         ) : null}
         <GlassInput
-          containerStyle={styles.searchGlass}
+          containerStyle={[styles.searchGlass, isDesktopMap && styles.desktopSearchGlass]}
+          contentStyle={
+            isDesktopMap
+              ? [
+                  styles.desktopSearchContent,
+                  {
+                    backgroundColor: desktopInputSurfaceColor,
+                    borderColor: desktopBorderColor,
+                  },
+                ]
+              : undefined
+          }
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
           placeholder="Search stays or towns"
+          placeholderTextColor={
+            isDesktopMap
+              ? isDark
+                ? designSystem.colors.darkPlaceholderTextSoft
+                : designSystem.colors.placeholderTextSoft
+              : undefined
+          }
           intensity={70}
+          style={isDesktopMap ? [styles.desktopSearchText, { color: desktopInactiveTextColor }] : undefined}
         />
         {trailingSearchAccessory ? (
-          <View style={styles.searchAccessory}>{trailingSearchAccessory}</View>
+          <View style={[styles.searchAccessory, isDesktopMap && styles.desktopTrailingAccessory]}>
+            {trailingSearchAccessory}
+          </View>
         ) : showMapButtons ? (
           <GlassButton
             accessibilityLabel="Reset map position"
@@ -91,17 +132,65 @@ export function StaysDiscoveryControls({
       </View>
 
       {onSelectTrip && trips.length > 0 ? (
-        <TripFilterTabs trips={trips} selectedTripId={selectedTripId} onSelectTrip={onSelectTrip}>
-          <FilterPill active={discoveryMode === 'nearby'} label="Near me" onPress={() => onChangeDiscoveryMode('nearby')} />
-          <FilterPill active={sortMode === 'price'} label="Lowest price" onPress={onTogglePriceSort} />
-        </TripFilterTabs>
+        <View
+          style={
+            isDesktopMap
+              ? [
+                  styles.desktopFilterDock,
+                  {
+                    backgroundColor: desktopDockSurfaceColor,
+                    borderColor: desktopBorderColor,
+                  },
+                ]
+              : undefined
+          }
+        >
+          <TripFilterTabs
+            trips={trips}
+            selectedTripId={selectedTripId}
+            variant={isDesktopMap ? 'desktopMap' : 'default'}
+            onSelectTrip={onSelectTrip}
+          >
+            <FilterPill
+              active={discoveryMode === 'nearby'}
+              label="Near me"
+              inactiveBackgroundColor={desktopInactivePillColor}
+              inactiveTextColor={desktopInactiveTextColor}
+              variant={variant}
+              onPress={() => onChangeDiscoveryMode('nearby')}
+            />
+            <FilterPill
+              active={sortMode === 'price'}
+              label="Lowest price"
+              inactiveBackgroundColor={desktopInactivePillColor}
+              inactiveTextColor={desktopInactiveTextColor}
+              variant={variant}
+              onPress={onTogglePriceSort}
+            />
+          </TripFilterTabs>
+        </View>
       ) : null}
     </View>
   );
 }
 
-function FilterPill({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+function FilterPill({
+  active,
+  inactiveBackgroundColor,
+  inactiveTextColor,
+  label,
+  onPress,
+  variant = 'default',
+}: {
+  active: boolean;
+  inactiveBackgroundColor?: string;
+  inactiveTextColor?: string;
+  label: string;
+  onPress: () => void;
+  variant?: 'default' | 'desktopMap';
+}) {
   const isDark = useColorScheme() === 'dark';
+  const isDesktopMap = variant === 'desktopMap';
 
   return (
     <Pressable onPress={onPress} style={styles.filterPressable}>
@@ -117,12 +206,22 @@ function FilterPill({ active, label, onPress }: { active: boolean; label: string
                 ? designSystem.colors.darkBorderSoft
                 : designSystem.colors.borderSoft,
           },
+          isDesktopMap && styles.desktopFilterPill,
+          isDesktopMap &&
+            !active && {
+              backgroundColor: inactiveBackgroundColor,
+            },
+          isDesktopMap && active && styles.desktopFilterPillActive,
         ]}
       >
         <ThemedText
           lightColor={active ? designSystem.colors.darkGreen : designSystem.colors.ink}
           darkColor={active ? designSystem.colors.darkGreen : designSystem.colors.darkText}
-          style={styles.filterLabel}
+          style={[
+            styles.filterLabel,
+            isDesktopMap && styles.desktopFilterLabel,
+            isDesktopMap && !active && inactiveTextColor ? { color: inactiveTextColor } : null,
+          ]}
         >
           {label}
         </ThemedText>
@@ -135,22 +234,54 @@ const styles = StyleSheet.create({
   discoveryBar: {
     gap: 12,
   },
+  desktopDiscoveryBar: {
+    width: '100%',
+    maxWidth: 860,
+    gap: 8,
+    padding: 8,
+    borderRadius: 32,
+    borderWidth: 1,
+  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+  desktopSearchRow: {
+    gap: 8,
+  },
   searchGlass: {
     flex: 1,
   },
+  desktopSearchGlass: {
+    minWidth: 280,
+  },
+  desktopSearchContent: {
+  },
+  desktopSearchText: {
+    color: designSystem.colors.darkTextWarm,
+  },
   searchAccessory: {
     flexShrink: 0,
+  },
+  desktopLeadingAccessory: {
+    minWidth: 148,
+  },
+  desktopTrailingAccessory: {
+    width: 52,
   },
   locationButton: {
     flexShrink: 0,
   },
   resetButton: {
     flexShrink: 0,
+  },
+  desktopFilterDock: {
+    gap: 6,
+    paddingVertical: 6,
+    borderRadius: 26,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   filterPressable: {
     borderRadius: designSystem.radii.pill,
@@ -163,7 +294,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  desktopFilterPill: {
+    minHeight: 36,
+    borderRadius: 18,
+    borderWidth: 0,
+    paddingHorizontal: 14,
+  },
+  desktopFilterPillActive: {
+    backgroundColor: designSystem.colors.lime,
+  },
   filterLabel: {
     ...designSystem.type.bodySmallStrong,
+  },
+  desktopFilterLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
   },
 });

@@ -63,7 +63,7 @@ export function buildTripMapMarkers(
     .map((item, index) => ({
       id: item._id,
       coordinate: item.coordinate,
-      experienceSlug: item.experience.slug,
+      experienceSlug: item.kind === 'stay' ? item.stay?.slug ?? item.experience.slug : item.experience.slug,
       itemKind: item.kind,
       imageUri: item.stay?.imageUri ?? item.experience.imageUri,
       label: item.stay?.name ?? item.experience.title,

@@ -52,7 +52,7 @@ let unsupportedModuleWarningShown = false;
 let nativeCallKeep: NativeCallKeepModule | null | undefined;
 
 export function canUseNativeCallSystem() {
-  return false;
+  return Platform.OS === 'android';
 }
 
 function getNativeCallKeep() {

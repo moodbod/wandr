@@ -43,6 +43,7 @@ export function FriendChatListRow({
             <TravelerAvatarStack
               avatars={groupAvatarUris}
               fallbackName={item.title}
+              fallbackSeed={item.id}
               maxVisible={3}
               totalCount={item.memberCount ?? groupAvatarUris.length}
             />
@@ -57,7 +58,13 @@ export function FriendChatListRow({
               onAvatarPress?.();
             }}
             style={styles.avatarButton}>
-            <FaceHashAvatar name={item.travelerSlug ?? item.title} size={44} uri={item.avatarUri} style={styles.avatar} />
+            <FaceHashAvatar
+              name={item.title || item.travelerSlug || 'Traveler'}
+              seed={item.travelerSlug}
+              size={44}
+              uri={item.avatarUri}
+              style={styles.avatar}
+            />
           </Pressable>
         )}
       </View>

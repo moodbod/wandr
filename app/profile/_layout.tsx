@@ -9,7 +9,9 @@ export default function ProfileLayout() {
   return (
     <Stack screenOptions={{ ...getStackScreenOptions(isDark), headerShown: false }}>
       <Stack.Screen name="overview" options={{ title: 'Profile overview' }} />
-      <Stack.Screen name="edit" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="edit" options={{ title: 'Account' }} />
+      <Stack.Screen name="preferences" options={{ title: 'Preferences' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
       <Stack.Screen name="account" options={{ title: 'Account' }} />
     </Stack>

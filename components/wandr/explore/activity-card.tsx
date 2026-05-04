@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { type Href, useRouter } from 'expo-router';
+import { Diamond } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,11 +13,12 @@ const CARD_RADIUS = 28;
 
 export type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
+  marker?: 'gem';
   href?: Href;
   onPress?: () => void;
 };
 
-export function ExploreActivityCard({ card, href, onPress }: ExploreActivityCardProps) {
+export function ExploreActivityCard({ card, marker, href, onPress }: ExploreActivityCardProps) {
   const router = useRouter();
   const { isLargeScreen } = useResponsive();
 
@@ -40,6 +42,11 @@ export function ExploreActivityCard({ card, href, onPress }: ExploreActivityCard
           contentFit="cover"
           style={styles.image}
         />
+        {marker === 'gem' ? (
+          <View style={styles.gemMarker}>
+            <Diamond color={designSystem.colors.white} size={18} weight="fill" />
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.body, isLargeScreen && styles.bodyLarge]}>
@@ -79,6 +86,17 @@ const styles = StyleSheet.create({
     height: 280,
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
+  },
+  gemMarker: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.darkGreen,
   },
   image: {
     width: '100%',

@@ -152,14 +152,18 @@ function TripMapScreenView({
   onSelectTrip: (tripId: string) => void;
   useSkeletons: boolean;
 }) {
-  const [mapResetKey, setMapResetKey] = useState(0);
-  const items = trip?.items ?? [];
-  const markers = trip ? buildTripMapMarkers(items, 10) : [];
-  const routeCoordinates = trip
-    ? buildTripRouteCoordinates(trip, {
-        onlyRemaining: true,
-      })
-    : [];
+  const [recenterToUserSignal, setRecenterToUserSignal] = useState(0);
+  const items = useMemo(() => trip?.items ?? [], [trip?.items]);
+  const markers = useMemo(() => (trip ? buildTripMapMarkers(items, 10) : []), [items, trip]);
+  const routeCoordinates = useMemo(
+    () =>
+      trip
+        ? buildTripRouteCoordinates(trip, {
+            onlyRemaining: true,
+          })
+        : [],
+    [trip]
+  );
   const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? fallbackCenterCoordinate;
 
   const handleMapInteract = () => {
@@ -172,7 +176,6 @@ function TripMapScreenView({
         {centerCoordinate ? (
           <View style={styles.mapLayer}>
             <ExploreMapHero
-              key={mapResetKey}
               centerCoordinate={centerCoordinate}
               userCoordinate={currentLocation}
               userHeading={currentHeading}
@@ -182,7 +185,8 @@ function TripMapScreenView({
               showRoutes={routeCoordinates.length > 1}
               topInset={insetsTop}
               onInteract={handleMapInteract}
-              onLocateMe={() => setMapResetKey((prev) => prev + 1)}
+              recenterToUserSignal={recenterToUserSignal}
+              onLocateMe={() => setRecenterToUserSignal((prev) => prev + 1)}
               showBackButton
             />
           </View>
@@ -217,7 +221,6 @@ function TripMapScreenView({
                 selectedTripId={selectedTripId}
                 onSelectTrip={(tripId) => {
                   onSelectTrip(tripId);
-                  setMapResetKey((prev) => prev + 1);
                 }}
               />
             )}

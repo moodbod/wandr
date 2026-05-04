@@ -7,10 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
-import { ExploreActivityCardSkeleton, ExploreHiddenGemCardSkeleton } from '@/components/wandr/explore/card-skeletons';
+import { ExploreActivityCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
-import { ExploreHiddenGemCard } from '@/components/wandr/explore/hidden-gem-card';
 import { WandrHeader } from '@/components/wandr/header';
 import {
   coordinateIsInPlanningLocation,
@@ -337,12 +336,24 @@ function ExploreSearchScreenView({
             </View>
             <View style={styles.cardStack}>
               {isLoading
-                ? Array.from({ length: 2 }).map((_, index) => <ExploreHiddenGemCardSkeleton key={`search-gem-skeleton-${index}`} />)
+                ? Array.from({ length: 2 }).map((_, index) => <ExploreActivityCardSkeleton key={`search-gem-skeleton-${index}`} />)
                 : filteredHiddenGems.map((item) => (
-                    <ExploreHiddenGemCard
+                    <ExploreActivityCard
                       key={item.title}
-                      card={item}
+                      card={{
+                        badge: item.badge ?? 'Hidden gem',
+                        badgeTone: 'soft',
+                        ctaLabel: item.primaryLabel ?? 'Open gem',
+                        experienceSlug: getHiddenGemSlug(item.title),
+                        imageUri: item.imageUri,
+                        price: '',
+                        priceSuffix: '',
+                        subtitle: item.locationLabel ?? item.summary ?? item.description,
+                        title: item.title,
+                        countryLabel: item.countryLabel,
+                      }}
                       href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
+                      marker="gem"
                     />
                   ))}
             </View>

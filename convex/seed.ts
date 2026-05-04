@@ -32,6 +32,7 @@ const TABLES_TO_CLEAR = [
   'trips',
   'friendProfiles',
   'travelerProfiles',
+  'userSettings',
   'appUsers',
   'stays',
   'hiddenGems',

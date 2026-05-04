@@ -79,7 +79,12 @@ export function ExploreGroupTripCard({
             {card.hostName} • {card.memberCount} travelers • {card.locationLabel}
           </ThemedText>
           <View style={styles.footer}>
-            <TravelerAvatarStack avatars={card.avatarUris} totalCount={card.memberCount} />
+            <TravelerAvatarStack
+              avatars={card.avatarUris}
+              fallbackName={card.hostName || card.groupName}
+              fallbackSeed={card.circleId}
+              totalCount={card.memberCount}
+            />
             <Pressable
               accessibilityLabel={hasRequested ? 'Join request sent' : `Join ${card.groupName}`}
               disabled={hasRequested || isRequesting}

@@ -80,6 +80,7 @@ export type ExploreActivityCard = {
 
 export type ExploreExperience = {
   slug: string;
+  itemKind?: 'experience' | 'hiddenGem';
   badge: string;
   badgeTone?: 'accent' | 'soft' | 'dark';
   ctaLabel: string;

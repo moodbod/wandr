@@ -48,6 +48,7 @@ if (Platform.OS !== 'web') {
         shouldShowList: true,
         shouldPlaySound: isIncomingCall || isChatMessage,
         shouldSetBadge: false,
+        priority: isIncomingCall ? Notifications.AndroidNotificationPriority.MAX : undefined,
       };
     },
   });
@@ -290,7 +291,11 @@ export async function presentIncomingFriendCallNotification({
       },
       categoryIdentifier: FRIEND_CALL_CATEGORY_ID,
       ...(Platform.OS === 'android'
-        ? { channelId: mode === 'video' ? VIDEO_CALL_CHANNEL_ID : VOICE_CALL_CHANNEL_ID }
+        ? {
+            channelId: mode === 'video' ? VIDEO_CALL_CHANNEL_ID : VOICE_CALL_CHANNEL_ID,
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            sticky: true,
+          }
         : null),
     },
     trigger: null,

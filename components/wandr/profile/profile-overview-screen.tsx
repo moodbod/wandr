@@ -12,10 +12,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { WandrHeader } from '@/components/wandr/header';
+import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useManagerMode } from '@/hooks/use-manager-mode';
+import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   getFriendsDashboardRef,
@@ -23,10 +27,12 @@ import {
   listTravelerBookingsRef,
   listTravelerHistoryRef,
 } from '@/lib/convex';
+import { formatUsdAsCurrency } from '@/lib/currency';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
+import { ProfileManagementDashboard } from './profile-management-dashboard';
 import { ProfileSettingsSidebar } from './profile-settings-sidebar';
 import { RecentExpeditions } from './recent-expeditions';
 
@@ -45,10 +51,13 @@ const generatedPlanningLabels = new Set(['Open to the next good route']);
 export function ProfileOverviewScreen({ showBackButton = false }: ProfileOverviewScreenProps) {
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
+  const settings = useCurrentUserSettings();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
+  const { isManagerMode } = useManagerMode();
+  const { surface: managerSurface } = useManagerResourceMode();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const history = useQuery(listTravelerHistoryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
@@ -93,6 +102,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
 
       <ProfileSettingsSidebar
         avatarUri={avatarUri}
+        avatarSeed={traveler?.slug}
         baseLabel={baseLabel}
         isOpen={isSidebarOpen}
         name={traveler?.name ?? 'Traveler'}
@@ -110,6 +120,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
         showsVerticalScrollIndicator={false}>
         <ProfileHero
           avatarUri={avatarUri}
+          avatarSeed={traveler?.slug}
           baseLabel={baseLabel}
           displayName={displayName || 'Traveler'}
           planningLabel={planningLabel}
@@ -129,7 +140,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
         {activeTab === 'gallery' ? (
           <ProfileGallery colors={colors} items={isLoading ? [] : galleryItems} />
         ) : (
-          <ProfileBookings bookings={isLoading ? [] : bookings ?? []} colors={colors} />
+          <ProfileBookings bookings={isLoading ? [] : bookings ?? []} colors={colors} preferredCurrency={settings?.preferredCurrency ?? 'USD'} />
         )}
       </ScrollView>
     </>
@@ -138,23 +149,15 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   if (isLargeScreen) {
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
-            {mainContent}
-          </View>
-          <View style={styles.mapColumn}>
-            <AppMapWorkspace />
-          </View>
-        </View>
+        <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
+          {isManagerMode && managerSurface === 'manager' ? (
+            <ProfileManagementDashboard travelerSlug={traveler?.slug} />
+          ) : (
+            <LargeScreenPanel kind="main">
+              {mainContent}
+            </LargeScreenPanel>
+          )}
+        </LargeScreenWorkspace>
       </ThemedView>
     );
   }
@@ -297,7 +300,15 @@ function GalleryTitleGlass({
   );
 }
 
-function ProfileBookings({ bookings, colors }: { bookings: TravelerBookingItem[]; colors: ProfileSemanticColors }) {
+function ProfileBookings({
+  bookings,
+  colors,
+  preferredCurrency,
+}: {
+  bookings: TravelerBookingItem[];
+  colors: ProfileSemanticColors;
+  preferredCurrency: string;
+}) {
   const stayBookings = bookings.filter((booking) => booking.kind === 'stay');
   const experienceBookings = bookings.filter((booking) => booking.kind === 'experience');
 
@@ -325,6 +336,7 @@ function ProfileBookings({ bookings, colors }: { bookings: TravelerBookingItem[]
         <BookingGroupSection
           bookings={stayBookings}
           colors={colors}
+          preferredCurrency={preferredCurrency}
           title="Rooms & stays"
         />
       ) : null}
@@ -332,6 +344,7 @@ function ProfileBookings({ bookings, colors }: { bookings: TravelerBookingItem[]
         <BookingGroupSection
           bookings={experienceBookings}
           colors={colors}
+          preferredCurrency={preferredCurrency}
           title="Places & experiences"
         />
       ) : null}
@@ -342,10 +355,12 @@ function ProfileBookings({ bookings, colors }: { bookings: TravelerBookingItem[]
 function BookingGroupSection({
   bookings,
   colors,
+  preferredCurrency,
   title,
 }: {
   bookings: TravelerBookingItem[];
   colors: ProfileSemanticColors;
+  preferredCurrency: string;
   title: string;
 }) {
   return (
@@ -360,6 +375,7 @@ function BookingGroupSection({
             booking={booking}
             colors={colors}
             key={`${booking.source}-${booking._id}`}
+            preferredCurrency={preferredCurrency}
             showDivider={index < bookings.length - 1}
           />
         ))}
@@ -371,16 +387,18 @@ function BookingGroupSection({
 function BookingRow({
   booking,
   colors,
+  preferredCurrency,
   showDivider,
 }: {
   booking: TravelerBookingItem;
   colors: ProfileSemanticColors;
+  preferredCurrency: string;
   showDivider: boolean;
 }) {
   const router = useRouter();
   const isPending = booking.status === 'pending';
   const dateLabel = getBookingDateLabel(booking);
-  const contextLabel = getBookingContextLabel(booking);
+  const contextLabel = getBookingContextLabel(booking, preferredCurrency);
 
   return (
     <Pressable
@@ -439,15 +457,13 @@ function getBookingDateLabel(booking: TravelerBookingItem) {
   return formatter.format(new Date(booking.bookedAt));
 }
 
-function getBookingContextLabel(booking: TravelerBookingItem) {
+function getBookingContextLabel(booking: TravelerBookingItem, preferredCurrency: string) {
   const typeLabel = booking.kind === 'stay' ? 'Room' : 'Place';
   const locationLabel = booking.subtitle;
+  const priceLabel = typeof booking.totalPrice === 'number' ? formatUsdAsCurrency(booking.totalPrice, preferredCurrency) : null;
+  const parts = [typeLabel, booking.tripName, locationLabel, priceLabel].filter(Boolean);
 
-  if (booking.tripName) {
-    return `${typeLabel} · ${booking.tripName} · ${locationLabel}`;
-  }
-
-  return `${typeLabel} · ${locationLabel}`;
+  return parts.join(' · ');
 }
 
 function navigateToPlace(router: ReturnType<typeof useRouter>, item: ProfilePlaceItem) {
@@ -476,28 +492,6 @@ function navigateToBooking(router: ReturnType<typeof useRouter>, booking: Travel
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  largeBody: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  mainColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    minWidth: 340,
-    borderRightWidth: 1,
-  },
-  mainColumnTablet: {
-    width: 360,
-  },
-  mainColumnDesktop: {
-    width: 420,
-  },
-  mapColumn: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    position: 'relative',
   },
   content: {
     gap: 20,

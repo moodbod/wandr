@@ -20,6 +20,7 @@ import { ThemedView } from '@/components/themed-view';
 import { WandrHeader } from '@/components/wandr/header';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { GlassButton } from '@/components/ui/glass-button';
+import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { PlanningLocationSheet } from '@/components/wandr/planning-country-sheet';
 import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery-controls';
@@ -279,7 +280,11 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       discoveryMode={discoveryMode}
       leadingSearchAccessory={
         isLargeScreen ? (
-          <HeaderLocationSelector location={planningLocation} onPress={() => setLocationSheetVisible(true)} />
+          <HeaderLocationSelector
+            location={planningLocation}
+            onPress={() => setLocationSheetVisible(true)}
+            variant="desktopMap"
+          />
         ) : undefined
       }
       showMapButtons={!isLargeScreen}
@@ -326,23 +331,28 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         setSortMode((current) => (current === 'price' ? 'best' : 'price'));
         resetToStart();
       }}
+      variant={isLargeScreen ? 'desktopMap' : 'default'}
     />
   );
 
   if (isLargeScreen) {
+    const hasDetailColumn = Boolean(selectedStaySlug);
+    const mainColumnWidth = isTablet ? largeScreenWorkspace.mainColumnTabletWidth : largeScreenWorkspace.mainColumnWidth;
+    const detailColumnWidth = isTablet ? largeScreenWorkspace.detailColumnTabletWidth : largeScreenWorkspace.detailColumnWidth;
+    const controlsLeft =
+      largeScreenWorkspace.inset +
+      mainColumnWidth +
+      largeScreenWorkspace.gap +
+      (hasDetailColumn ? detailColumnWidth + largeScreenWorkspace.gap : 0);
+
     return (
       <ThemedView style={styles.root}>
-        <View style={styles.largeBody}>
-          <View
-            style={[
-              styles.mainColumn,
-              isTablet ? styles.mainColumnTablet : styles.mainColumnDesktop,
-              {
-                backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-              },
-            ]}
-          >
+        <LargeScreenWorkspace
+          mapContent={mapContent}
+          mapControls={discoveryControls}
+          mapControlsStyle={{ left: controlsLeft }}
+        >
+          <LargeScreenPanel kind="main">
             <ScrollView
               contentContainerStyle={[styles.mainColumnContent, { paddingTop: insets.top + 24 }]}
               showsVerticalScrollIndicator={false}
@@ -393,28 +403,13 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                 })}
               </View>
             </ScrollView>
-          </View>
+          </LargeScreenPanel>
           {selectedStaySlug ? (
-            <View
-              style={[
-                styles.detailColumn,
-                isTablet ? styles.detailColumnTablet : styles.detailColumnDesktop,
-                {
-                  backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-                  borderRightColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-                },
-              ]}
-            >
+            <LargeScreenPanel kind="detail">
               <StayDetailScreen onClose={() => setSelectedStaySlug(null)} slug={selectedStaySlug} />
-            </View>
+            </LargeScreenPanel>
           ) : null}
-          <View style={styles.mapColumn}>
-            {mapContent}
-            <View pointerEvents="box-none" style={styles.mapControlsOverlay}>
-              {discoveryControls}
-            </View>
-          </View>
-        </View>
+        </LargeScreenWorkspace>
         <PlanningLocationSheet
           currentCoordinate={currentLocation.coordinate}
           selectedLocation={planningLocation}
@@ -557,6 +552,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                       isSelected={index === selectedIndex}
                       locationLabel={discoveryMode === 'nearby' ? stay.town : stay.matchedStopLabel}
                       name={stay.name}
+                      presentation="floating"
                       priceLabel={stay.priceLabel || `$${stay.pricePerNight}`}
                       rating={stay.rating}
                     />
@@ -736,10 +732,10 @@ const styles = StyleSheet.create({
   },
   mapControlsOverlay: {
     position: 'absolute',
-    top: 28,
+    top: 24,
     left: 24,
     right: 24,
-    maxWidth: 760,
+    alignItems: 'center',
   },
   carouselWrap: {
     position: 'absolute',

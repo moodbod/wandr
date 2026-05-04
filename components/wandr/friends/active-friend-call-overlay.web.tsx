@@ -1,12 +1,13 @@
 import { useAction, useMutation, useQuery } from 'convex/react';
-import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack, type LocalTrack, type RemoteParticipant, type RemoteTrackPublication, type RemoteTrack } from 'livekit-client';
-import { createContext, useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRouter, useSegments } from 'expo-router';
+import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack, type LocalTrack, type Participant, type RemoteTrackPublication, type RemoteTrack } from 'livekit-client';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { CallControls } from '@/components/wandr/friends/call/call-controls';
-import { FullCallLoading } from '@/components/wandr/friends/call/call-loading';
+import { FullCallLoading, MiniCallLoading } from '@/components/wandr/friends/call/call-loading';
 import { FullCallLayout } from '@/components/wandr/friends/call/full-call-layout';
 import { VoiceCallStage } from '@/components/wandr/friends/call/voice-call-stage';
 import { designSystem } from '@/constants/design-system';
@@ -28,8 +29,10 @@ type LiveKitConnection = {
 
 export default function ActiveFriendCallOverlay() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const segments = useSegments();
   const traveler = useCurrentTraveler();
-  const { activeCallId, clearCall, minimizeCall } = useActiveFriendCall();
+  const { activeCallId, clearCall, expandCall, isMinimized, minimizeCall } = useActiveFriendCall();
   const call = useQuery(
     getFriendCallRef,
     activeCallId && traveler?.slug
@@ -47,6 +50,7 @@ export default function ActiveFriendCallOverlay() {
   const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [remoteParticipantCount, setRemoteParticipantCount] = useState(0);
   const preparedCallKeyRef = useRef<string | null>(null);
 
@@ -107,6 +111,21 @@ export default function ActiveFriendCallOverlay() {
     }
   }, [activeCallId, call, clearCall]);
 
+  const shouldSendVideo = call?.mode === 'video' && isVideoEnabled;
+  const callMembers = (call?.members ?? []) as FriendCircleMember[];
+  const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
+  const callMode = call?.mode ?? 'voice';
+  const isCallRoute = segments[0] === 'friends' && segments[1] === 'call';
+  const shouldShowMiniCall = isMinimized || !isCallRoute;
+  const handleExpand = useCallback(() => {
+    if (!activeCallId) {
+      return;
+    }
+
+    expandCall();
+    router.push(`/friends/call/${activeCallId}`);
+  }, [activeCallId, expandCall, router]);
+
   if (!activeCallId) {
     return null;
   }
@@ -125,42 +144,52 @@ export default function ActiveFriendCallOverlay() {
     }
   };
 
-  const shouldSendVideo = call?.mode === 'video' && isVideoEnabled;
-  const callMembers = (call?.members ?? []) as FriendCircleMember[];
-  const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
-  const callMode = call?.mode ?? 'voice';
-
   if (connection) {
     return (
       <WebLiveKitRoom
         connection={connection}
+        onMediaError={setMediaError}
         onRemoteParticipantCountChange={setRemoteParticipantCount}
         shouldSendAudio={isMicEnabled}
         shouldSendVideo={shouldSendVideo}>
-        <FullCallLayout
-          bottomInset={insets.bottom}
-          onMinimize={minimizeCall}
-          subtitle={remoteParticipantCount > 0 ? 'Call is active' : call?.circleId ? 'Call is active' : 'Waiting for others...'}
-          title={callTitle}
-          topInset={insets.top}
-          controls={
-            <CallControls
-              isMicEnabled={isMicEnabled}
-              isLeaving={isLeaving}
-              mode={call?.mode}
-              onEnd={handleLeave}
-              onToggleMic={() => setIsMicEnabled((value) => !value)}
-              onToggleVideo={() => setIsVideoEnabled((value) => !value)}
-              shouldSendVideo={shouldSendVideo}
-            />
-          }>
-          {shouldSendVideo ? (
-            <WebVideoStage callTitle={callTitle} mode={callMode} />
-          ) : (
-            <VoiceCallStage members={callMembers} title={callTitle} />
-          )}
-        </FullCallLayout>
+        {shouldShowMiniCall ? (
+          <WebMiniCall callTitle={callTitle} mode={callMode} onExpand={handleExpand} />
+        ) : (
+          <FullCallLayout
+            bottomInset={insets.bottom}
+            onMinimize={minimizeCall}
+            subtitle={
+              mediaError ?? (remoteParticipantCount > 0 ? 'Call is active' : call?.circleId ? 'Call is active' : 'Waiting for others...')
+            }
+            title={callTitle}
+            topInset={insets.top}
+            controls={
+              <CallControls
+                isMicEnabled={isMicEnabled}
+                isLeaving={isLeaving}
+                mode={call?.mode}
+                onEnd={handleLeave}
+                onToggleMic={() => setIsMicEnabled((value) => !value)}
+                onToggleVideo={() => setIsVideoEnabled((value) => !value)}
+                shouldSendVideo={shouldSendVideo}
+              />
+            }>
+            {shouldSendVideo ? (
+              <WebVideoStage callTitle={callTitle} mode={callMode} />
+            ) : (
+              <VoiceCallStage members={callMembers} title={callTitle} />
+            )}
+          </FullCallLayout>
+        )}
       </WebLiveKitRoom>
+    );
+  }
+
+  if (shouldShowMiniCall) {
+    return (
+      <WebMiniCallFrame onExpand={handleExpand}>
+        <MiniCallLoading label={loadError ?? 'Connecting'} />
+      </WebMiniCallFrame>
     );
   }
 
@@ -180,12 +209,14 @@ export default function ActiveFriendCallOverlay() {
 function WebLiveKitRoom({
   children,
   connection,
+  onMediaError,
   onRemoteParticipantCountChange,
   shouldSendAudio,
   shouldSendVideo,
 }: {
   children: ReactNode;
   connection: LiveKitConnection;
+  onMediaError: (error: string | null) => void;
   onRemoteParticipantCountChange: (count: number) => void;
   shouldSendAudio: boolean;
   shouldSendVideo: boolean;
@@ -206,12 +237,30 @@ function WebLiveKitRoom({
     roomRef.current = room;
 
     async function connectRoom() {
-      await room.connect(connection.serverUrl, connection.token);
-      if (cancelled) {
-        return;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await room.connect(connection.serverUrl, connection.token);
+          if (cancelled) {
+            return;
+          }
+          setIsConnected(true);
+          onMediaError(null);
+          onRemoteParticipantCountChange(room.remoteParticipants.size);
+          return;
+        } catch (error) {
+          if (cancelled || isClientInitiatedDisconnect(error)) {
+            return;
+          }
+
+          if (isLiveKitSignalAbort(error) && attempt === 0) {
+            await delay(250);
+            continue;
+          }
+
+          onMediaError(formatConnectionError(error));
+          return;
+        }
       }
-      setIsConnected(true);
-      onRemoteParticipantCountChange(room.remoteParticipants.size);
     }
 
     const reportParticipants = () => onRemoteParticipantCountChange(room.remoteParticipants.size);
@@ -265,9 +314,10 @@ function WebLiveKitRoom({
       room.disconnect();
       roomRef.current = null;
       setIsConnected(false);
+      onMediaError(null);
       onRemoteParticipantCountChange(0);
     };
-  }, [connection.serverUrl, connection.token, onRemoteParticipantCountChange]);
+  }, [connection.serverUrl, connection.token, onMediaError, onRemoteParticipantCountChange]);
 
   useEffect(() => {
     const room = roomRef.current;
@@ -277,45 +327,222 @@ function WebLiveKitRoom({
     const liveRoom = room;
 
     let cancelled = false;
-    async function syncLocalTracks() {
+    async function enableAudio() {
       const existingAudio = localTracksRef.current.find((track) => track.source === Track.Source.Microphone);
-      const existingVideo = localTracksRef.current.find((track) => track.source === Track.Source.Camera);
+      if (existingAudio) {
+        return;
+      }
 
-      if (shouldSendAudio && !existingAudio) {
+      try {
         const audioTrack = await createLocalAudioTrack();
-        if (!cancelled) {
-          localTracksRef.current.push(audioTrack);
-          await liveRoom.localParticipant.publishTrack(audioTrack);
+        if (cancelled) {
+          audioTrack.stop();
+          return;
         }
-      } else if (!shouldSendAudio && existingAudio) {
-        liveRoom.localParticipant.unpublishTrack(existingAudio);
-        existingAudio.stop();
-        localTracksRef.current = localTracksRef.current.filter((track) => track !== existingAudio);
+        localTracksRef.current.push(audioTrack);
+        await liveRoom.localParticipant.publishTrack(audioTrack);
+      } catch (error) {
+        if (!cancelled) {
+          onMediaError(formatMediaError(error, 'microphone'));
+        }
+      }
+    }
+
+    async function disableAudio() {
+      const existingAudio = localTracksRef.current.find((track) => track.source === Track.Source.Microphone);
+      if (!existingAudio) {
+        return;
       }
 
-      if (shouldSendVideo && !existingVideo) {
-        const videoTrack = await createLocalVideoTrack();
-        if (!cancelled) {
-          localTracksRef.current.push(videoTrack);
-          await liveRoom.localParticipant.publishTrack(videoTrack);
-        }
-      } else if (!shouldSendVideo && existingVideo) {
-        liveRoom.localParticipant.unpublishTrack(existingVideo);
-        existingVideo.stop();
-        localTracksRef.current = localTracksRef.current.filter((track) => track !== existingVideo);
+      liveRoom.localParticipant.unpublishTrack(existingAudio);
+      existingAudio.stop();
+      localTracksRef.current = localTracksRef.current.filter((track) => track !== existingAudio);
+    }
+
+    async function enableVideo() {
+      const existingVideo = localTracksRef.current.find((track) => track.source === Track.Source.Camera);
+      if (existingVideo) {
+        onMediaError(null);
+        return;
       }
+
+      try {
+        assertCameraCanStart();
+        const videoTrack = await createLocalVideoTrack(getWebCameraCaptureOptions());
+        if (cancelled) {
+          videoTrack.stop();
+          return;
+        }
+        localTracksRef.current.push(videoTrack);
+        await liveRoom.localParticipant.publishTrack(videoTrack);
+        onMediaError(null);
+      } catch (error) {
+        if (!cancelled) {
+          onMediaError(formatMediaError(error, 'camera'));
+        }
+      }
+    }
+
+    async function disableVideo() {
+      const existingVideo = localTracksRef.current.find((track) => track.source === Track.Source.Camera);
+      if (!existingVideo) {
+        return;
+      }
+
+      liveRoom.localParticipant.unpublishTrack(existingVideo);
+      existingVideo.stop();
+      localTracksRef.current = localTracksRef.current.filter((track) => track !== existingVideo);
+      onMediaError(null);
+    }
+
+    async function syncLocalTracks() {
+      const tasks = [
+        shouldSendVideo ? enableVideo() : disableVideo(),
+        shouldSendAudio ? enableAudio() : disableAudio(),
+      ];
+
+      await Promise.all(tasks);
     }
 
     void syncLocalTracks();
     return () => {
       cancelled = true;
     };
-  }, [isConnected, shouldSendAudio, shouldSendVideo]);
+  }, [isConnected, onMediaError, shouldSendAudio, shouldSendVideo]);
 
   return <LiveKitWebRoomContext.Provider value={roomRef}>{children}</LiveKitWebRoomContext.Provider>;
 }
 
+function isClientInitiatedDisconnect(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message === 'Client initiated disconnect' || error.name === 'AbortError';
+}
+
+function isLiveKitSignalAbort(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.includes('Signal connection aborted') || error.message.includes('Abort handler called');
+}
+
+function formatConnectionError(error: unknown) {
+  if (isLiveKitSignalAbort(error)) {
+    return 'Call connection was interrupted. Trying again should reconnect.';
+  }
+
+  return error instanceof Error ? error.message : 'Unable to connect to this call.';
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function assertCameraCanStart() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera capture is not supported in this browser.');
+  }
+
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    throw new Error('Camera requires HTTPS on mobile browsers. Open Wandr over HTTPS or localhost.');
+  }
+}
+
+function getWebCameraCaptureOptions() {
+  return isMobileWebRuntime() ? { facingMode: 'user' as const } : undefined;
+}
+
+function isMobileWebRuntime() {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent;
+  const hasMobileUserAgent = /Android|iPhone|iPad|iPod/i.test(userAgent);
+  const hasTouchOnlyViewport = navigator.maxTouchPoints > 1 && typeof window !== 'undefined' && window.innerWidth < 900;
+
+  return hasMobileUserAgent || hasTouchOnlyViewport;
+}
+
+function formatMediaError(error: unknown, deviceName: 'camera' | 'microphone') {
+  if (error instanceof Error) {
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      return `Allow ${deviceName} access to show your ${deviceName === 'camera' ? 'camera' : 'audio'}.`;
+    }
+
+    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+      return `No ${deviceName} was found for this browser.`;
+    }
+
+    if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+      return `Your ${deviceName} is being used by another app.`;
+    }
+
+    return error.message;
+  }
+
+  return `Unable to start the ${deviceName}.`;
+}
+
 const LiveKitWebRoomContext = createContext<MutableRefObject<Room | null> | null>(null);
+
+function WebMiniCall({
+  callTitle,
+  mode,
+  onExpand,
+}: {
+  callTitle: string;
+  mode: 'voice' | 'video';
+  onExpand: () => void;
+}) {
+  const roomContext = useContext(LiveKitWebRoomContext);
+  const [version, setVersion] = useState(0);
+  const room = roomContext?.current ?? null;
+  const participant = room ? room.localParticipant : null;
+  void version;
+
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
+    const refresh = () => setVersion((value) => value + 1);
+    room.on(RoomEvent.LocalTrackPublished, refresh);
+    room.on(RoomEvent.LocalTrackUnpublished, refresh);
+
+    return () => {
+      room.off(RoomEvent.LocalTrackPublished, refresh);
+      room.off(RoomEvent.LocalTrackUnpublished, refresh);
+    };
+  }, [room]);
+
+  return (
+    <WebMiniCallFrame onExpand={onExpand}>
+      {mode === 'video' && participant ? (
+        <ParticipantVideo participant={participant} fallbackName={participant.name || participant.identity || callTitle} />
+      ) : (
+        <View style={styles.miniVoice}>
+          <ThemedText style={styles.miniInitial}>{callTitle.charAt(0).toUpperCase()}</ThemedText>
+        </View>
+      )}
+    </WebMiniCallFrame>
+  );
+}
+
+function WebMiniCallFrame({ children, onExpand }: { children: ReactNode; onExpand: () => void }) {
+  return (
+    <View style={styles.miniCallWrap}>
+      <Pressable accessibilityLabel="Expand call" accessibilityRole="button" onPress={onExpand} style={styles.miniCallPressable}>
+        {children}
+      </Pressable>
+    </View>
+  );
+}
 
 function WebVideoStage({ callTitle, mode }: { callTitle: string; mode: 'voice' | 'video' }) {
   const roomContext = useContext(LiveKitWebRoomContext);
@@ -355,14 +582,14 @@ function WebVideoStage({ callTitle, mode }: { callTitle: string; mode: 'voice' |
     <View style={styles.videoGrid}>
       {participants.slice(0, 9).map((participant) => (
         <View key={participant.identity} style={styles.videoTile}>
-          <ParticipantVideo participant={participant as RemoteParticipant} fallbackName={participant.name || participant.identity || callTitle} />
+          <ParticipantVideo participant={participant} fallbackName={participant.name || participant.identity || callTitle} />
         </View>
       ))}
     </View>
   );
 }
 
-function ParticipantVideo({ fallbackName, participant }: { fallbackName: string; participant: RemoteParticipant }) {
+function ParticipantVideo({ fallbackName, participant }: { fallbackName: string; participant: Participant }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const publication = Array.from(participant.videoTrackPublications.values()).find((item) => item.track) as RemoteTrackPublication | undefined;
   const initial = fallbackName.charAt(0).toUpperCase();
@@ -381,7 +608,7 @@ function ParticipantVideo({ fallbackName, participant }: { fallbackName: string;
   }, [publication?.track]);
 
   return publication?.track ? (
-    <video autoPlay muted={participant.isLocal} playsInline ref={videoRef} style={videoStyle} />
+    <video autoPlay data-wandr-call-video="true" muted={participant.isLocal} playsInline ref={videoRef} style={videoStyle} />
   ) : (
     <View style={styles.videoPlaceholder}>
       <ThemedText style={styles.videoPlaceholderInitial}>{initial}</ThemedText>
@@ -422,6 +649,33 @@ const styles = StyleSheet.create({
   videoPlaceholderInitial: {
     fontSize: 28,
     lineHeight: 32,
+    fontWeight: '600',
+    color: designSystem.colors.white,
+  },
+  miniCallWrap: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    zIndex: 1001,
+    width: 120,
+    height: 144,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+    boxShadow: '0 18px 40px rgba(0,0,0,0.32)',
+  },
+  miniCallPressable: {
+    flex: 1,
+  },
+  miniVoice: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111',
+  },
+  miniInitial: {
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '600',
     color: designSystem.colors.white,
   },
