@@ -1,50 +1,120 @@
-# Welcome to your Expo app 👋
+# Wandr
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Wandr is an Expo app for travel discovery, stays, trips, friends, and real-time planning. The same codebase supports iOS, Android, web, and a Convex backend, so changes should be made with care: a web-only tweak can still affect the mobile app if it touches shared files.
 
-## Get started
+## Tech Stack
 
-1. Install dependencies
+- Expo and React Native
+- Expo Router for file-based routing
+- React Native Web for browser support
+- Convex for backend functions and data
+- Mapbox and native map integrations
+- LiveKit for calls and real-time experiences
 
-   ```bash
-   npm install
-   ```
+## Getting Started
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Start the Expo dev server:
 
-## Learn more
+```bash
+npm run start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Run a specific target:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm run ios
+npm run android
+npm run web
+```
 
-## Join the community
+Start Convex locally:
 
-Join our community of developers creating universal apps.
+```bash
+npm run convex:dev
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Project Map
+
+- `app/` contains Expo Router screens and layouts.
+- `components/` contains shared UI and Wandr feature components.
+- `hooks/` contains shared app hooks, including platform-specific variants.
+- `lib/` contains app services, helpers, routing, notifications, maps, and Convex client setup.
+- `constants/` contains design tokens and app content.
+- `types/` contains shared TypeScript models.
+- `convex/` contains backend schema, tables, queries, mutations, actions, and seed scripts.
+- `public/`, `app/+html.tsx`, `*.web.tsx`, and `vercel.json` are web-facing surfaces.
+
+## Working Safely
+
+This is a mobile app first, with web support layered in. If you are working on the web version, prefer web-specific files:
+
+```text
+*.web.tsx
+public/
+app/+html.tsx
+vercel.json
+```
+
+Be careful with shared files such as:
+
+```text
+app/
+components/
+hooks/
+lib/
+constants/
+types/
+app.json
+package.json
+metro.config.js
+```
+
+If a web change needs shared code, keep the edit small and test the affected app flow. Avoid broad refactors, dependency changes, and app configuration changes unless they are required for the task.
+
+## Convex Notes
+
+Before editing anything in `convex/`, read:
+
+```text
+convex/_generated/ai/guidelines.md
+```
+
+Those project guidelines override generic Convex advice. Schema and data model changes should be treated as app-wide changes, because they can affect mobile, web, and backend behavior at the same time.
+
+## Checks Before a PR
+
+Run these before asking for review:
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build:web
+```
+
+For native app changes, also run the affected platform:
+
+```bash
+npm run ios
+# or
+npm run android
+```
+
+For UI changes, include screenshots or a short recording. For backend changes, describe the data impact and whether a migration or seed update is needed.
+
+## Useful Scripts
+
+```bash
+npm run start       # Start Expo
+npm run ios         # Run iOS
+npm run android     # Run Android
+npm run web         # Run web
+npm run build:web   # Export web build
+npm run lint        # Run Expo lint
+npm run convex:dev  # Start Convex dev
+```
