@@ -55,7 +55,7 @@ export function GroupChatOptionsSheet({
           <TravelerAvatarStack
             avatars={chat.circle.avatarUris}
             fallbackName={chat.members[0]?.name ?? chat.circle.name}
-            fallbackSeed={chat.members[0]?.travelerSlug ?? chat.circle.slug}
+            fallbackPaletteKey={chat.members[0]?.travelerSlug ?? chat.circle.slug}
             size={Platform.OS === 'web' ? 'compact' : 'default'}
             totalCount={chat.circle.memberCount}
           />
@@ -176,7 +176,7 @@ function MemberAvatar({ member, size }: { member: FriendCircleMember; size: numb
       ]}>
       <FaceHashAvatar
         name={member.name || member.travelerSlug || 'Traveler'}
-        seed={member.travelerSlug}
+        paletteKey={member.travelerSlug}
         size={size}
         uri={member.avatarUri}
         style={StyleSheet.absoluteFill}

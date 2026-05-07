@@ -33,6 +33,7 @@ export const submitLocationPhoto = mutation({
 
 export const listManagedLocationPhotos = query({
   args: {
+    managerSlug: v.string(),
     status: v.optional(v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected'))),
   },
   handler: async (ctx, args) => {
@@ -47,6 +48,21 @@ export const listManagedLocationPhotos = query({
 
     const resolved = await Promise.all(
       photos.map(async (photo) => {
+        const location =
+          photo.locationKind === 'experience'
+            ? await ctx.db
+                .query('experiences')
+                .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+                .unique()
+            : await ctx.db
+                .query('stays')
+                .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+                .unique();
+
+        if (location?.managerSlug !== args.managerSlug) {
+          return null;
+        }
+
         const imageUri = await ctx.storage.getUrl(photo.storageId);
 
         if (!imageUri) {

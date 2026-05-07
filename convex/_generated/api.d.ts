@@ -8,23 +8,14 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
 import type * as calls from "../calls.js";
 import type * as explore from "../explore.js";
 import type * as friends from "../friends.js";
+import type * as http from "../http.js";
 import type * as locationPhotos from "../locationPhotos.js";
-import type * as maintenance from "../maintenance.js";
 import type * as notifications from "../notifications.js";
 import type * as profile from "../profile.js";
-import type * as sedd from "../sedd.js";
-import type * as seed from "../seed.js";
-import type * as seeds_constants from "../seeds/constants.js";
-import type * as seeds_demoExploreBookings from "../seeds/demoExploreBookings.js";
-import type * as seeds_demoExploreTravelers from "../seeds/demoExploreTravelers.js";
-import type * as seeds_seedExperiences from "../seeds/seedExperiences.js";
-import type * as seeds_seedFriends from "../seeds/seedFriends.js";
-import type * as seeds_seedHiddenGems from "../seeds/seedHiddenGems.js";
-import type * as seeds_seedRegions from "../seeds/seedRegions.js";
-import type * as seeds_seedStays from "../seeds/seedStays.js";
 import type * as tables_appNotifications from "../tables/appNotifications.js";
 import type * as tables_appUsers from "../tables/appUsers.js";
 import type * as tables_devicePushTokens from "../tables/devicePushTokens.js";
@@ -59,23 +50,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   calls: typeof calls;
   explore: typeof explore;
   friends: typeof friends;
+  http: typeof http;
   locationPhotos: typeof locationPhotos;
-  maintenance: typeof maintenance;
   notifications: typeof notifications;
   profile: typeof profile;
-  sedd: typeof sedd;
-  seed: typeof seed;
-  "seeds/constants": typeof seeds_constants;
-  "seeds/demoExploreBookings": typeof seeds_demoExploreBookings;
-  "seeds/demoExploreTravelers": typeof seeds_demoExploreTravelers;
-  "seeds/seedExperiences": typeof seeds_seedExperiences;
-  "seeds/seedFriends": typeof seeds_seedFriends;
-  "seeds/seedHiddenGems": typeof seeds_seedHiddenGems;
-  "seeds/seedRegions": typeof seeds_seedRegions;
-  "seeds/seedStays": typeof seeds_seedStays;
   "tables/appNotifications": typeof tables_appNotifications;
   "tables/appUsers": typeof tables_appUsers;
   "tables/devicePushTokens": typeof tables_devicePushTokens;
@@ -130,4 +112,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+};

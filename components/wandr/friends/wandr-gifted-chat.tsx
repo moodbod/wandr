@@ -94,7 +94,14 @@ export function WandrGiftedChat<TMessage extends WandrMessageBase>({
       keyboardShouldPersistTaps="handled"
       maxComposerHeight={144}
       messages={giftedMessages}
-      messagesContainerStyle={styles.messagesContainer}
+      messagesContainerStyle={[
+        styles.messagesContainer,
+        styles.content,
+        {
+          paddingTop: topInset,
+          paddingBottom: designSystem.spacing.xl,
+        },
+      ]}
       minComposerHeight={52}
       minInputToolbarHeight={72 + bottomOffset}
       onInputTextChanged={onChangeText}
@@ -154,15 +161,8 @@ export function WandrGiftedChat<TMessage extends WandrMessageBase>({
       text={text}
       user={{ _id: userSlug ?? 'wandr-user' }}
       listViewProps={{
-        contentContainerStyle: [
-          styles.content,
-          {
-            paddingTop: topInset,
-            paddingBottom: designSystem.spacing.xl,
-          },
-        ],
         ListHeaderComponent: header ? <View style={styles.header}>{header}</View> : null,
-      }}
+      } as any}
     />
   );
 }

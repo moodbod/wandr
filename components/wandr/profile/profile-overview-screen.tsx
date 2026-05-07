@@ -27,12 +27,12 @@ import {
   listTravelerBookingsRef,
   listTravelerHistoryRef,
 } from '@/lib/convex';
-import { formatUsdAsCurrency } from '@/lib/currency';
+import { formatUsdConversion } from '@/lib/currency';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
+import { ManagerDashboard } from '../manager/manager-dashboard';
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
-import { ProfileManagementDashboard } from './profile-management-dashboard';
 import { ProfileSettingsSidebar } from './profile-settings-sidebar';
 import { RecentExpeditions } from './recent-expeditions';
 
@@ -102,7 +102,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
 
       <ProfileSettingsSidebar
         avatarUri={avatarUri}
-        avatarSeed={traveler?.slug}
+        avatarPaletteKey={traveler?.slug}
         baseLabel={baseLabel}
         isOpen={isSidebarOpen}
         name={traveler?.name ?? 'Traveler'}
@@ -120,7 +120,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
         showsVerticalScrollIndicator={false}>
         <ProfileHero
           avatarUri={avatarUri}
-          avatarSeed={traveler?.slug}
+          avatarPaletteKey={traveler?.slug}
           baseLabel={baseLabel}
           displayName={displayName || 'Traveler'}
           planningLabel={planningLabel}
@@ -151,7 +151,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
       <ThemedView style={styles.root}>
         <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
           {isManagerMode && managerSurface === 'manager' ? (
-            <ProfileManagementDashboard travelerSlug={traveler?.slug} />
+            <ManagerDashboard travelerSlug={traveler?.slug} />
           ) : (
             <LargeScreenPanel kind="main">
               {mainContent}
@@ -460,7 +460,7 @@ function getBookingDateLabel(booking: TravelerBookingItem) {
 function getBookingContextLabel(booking: TravelerBookingItem, preferredCurrency: string) {
   const typeLabel = booking.kind === 'stay' ? 'Room' : 'Place';
   const locationLabel = booking.subtitle;
-  const priceLabel = typeof booking.totalPrice === 'number' ? formatUsdAsCurrency(booking.totalPrice, preferredCurrency) : null;
+  const priceLabel = typeof booking.totalPrice === 'number' ? formatUsdConversion(booking.totalPrice, preferredCurrency) : null;
   const parts = [typeLabel, booking.tripName, locationLabel, priceLabel].filter(Boolean);
 
   return parts.join(' · ');

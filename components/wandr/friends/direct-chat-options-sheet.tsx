@@ -34,7 +34,7 @@ export function DirectChatOptionsSheet({
       avatar={
         <FaceHashAvatar
           name={chat.participant.name || chat.participant.slug || 'Traveler'}
-          seed={chat.participant.slug}
+          paletteKey={chat.participant.slug}
           size={Platform.OS === 'web' ? 38 : 48}
           uri={chat.participant.avatarUri}
         />

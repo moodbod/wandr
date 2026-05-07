@@ -1,19 +1,35 @@
 import type { PlanningLocation } from '@/constants/planning-countries';
 
-type MapboxFeature = {
-  id: string;
-  text?: string;
-  place_name?: string;
-  center?: [number, number];
-  bbox?: [number, number, number, number];
-  context?: readonly { text?: string }[];
+type MapboxSearchBoxFeature = {
+  geometry?: {
+    coordinates?: [number, number];
+  };
   properties?: {
-    short_code?: string;
+    address?: string;
+    feature_type?: string;
+    full_address?: string;
+    mapbox_id?: string;
+    name?: string;
+    name_preferred?: string;
+    place_formatted?: string;
+    context?: Record<string, { name?: string; country_code?: string; region_code?: string } | undefined>;
   };
 };
 
-type MapboxGeocodeResponse = {
-  features?: MapboxFeature[];
+type MapboxSearchBoxResponse = {
+  features?: MapboxSearchBoxFeature[];
+};
+
+type OpenStreetMapSearchResult = {
+  address?: Record<string, string | undefined>;
+  class?: string;
+  display_name?: string;
+  lat?: string;
+  lon?: string;
+  name?: string;
+  osm_id?: number;
+  osm_type?: string;
+  type?: string;
 };
 
 export async function fetchMapboxLocationSuggestions({
@@ -28,62 +44,122 @@ export async function fetchMapboxLocationSuggestions({
   const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const trimmedQuery = query.trim();
 
-  if (!token || trimmedQuery.length < 2) {
+  if (trimmedQuery.length < 2) {
+    return [];
+  }
+
+  const openStreetMapSuggestions = await fetchOpenStreetMapSuggestions({ query: trimmedQuery, signal });
+  if (openStreetMapSuggestions.length > 0) {
+    return openStreetMapSuggestions;
+  }
+
+  if (!token) {
     return [];
   }
 
   const params = new URLSearchParams({
     access_token: token,
-    autocomplete: 'true',
     language: 'en',
-    limit: '6',
-    types: 'country,region,place,locality,neighborhood,address,poi',
+    limit: '10',
   });
 
   if (currentCoordinate) {
     params.set('proximity', `${currentCoordinate[0]},${currentCoordinate[1]}`);
   }
 
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(trimmedQuery)}.json?${params.toString()}`;
+  const url = `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(trimmedQuery)}&${params.toString()}`;
   const response = await fetch(url, { signal });
 
   if (!response.ok) {
-    throw new Error(`Mapbox geocoding failed with ${response.status}`);
+    throw new Error(`Mapbox Search Box failed with ${response.status}`);
   }
 
-  const data = (await response.json()) as MapboxGeocodeResponse;
+  const data = (await response.json()) as MapboxSearchBoxResponse;
 
   return (data.features ?? []).flatMap((feature) => {
-    if (!feature.center || !feature.place_name) {
+    const coordinate = feature.geometry?.coordinates;
+    const properties = feature.properties;
+    if (!coordinate || !properties?.name) {
       return [];
     }
 
-    const detailParts = (feature.context ?? [])
-      .map((item) => item.text)
+    const contextParts = Object.values(properties.context ?? {})
+      .map((item) => item?.name)
       .filter((value): value is string => Boolean(value));
-    const detail = detailParts.length > 0 ? detailParts.join(', ') : 'Map location';
-    const bounds = feature.bbox
-      ? {
-          minLng: feature.bbox[0],
-          minLat: feature.bbox[1],
-          maxLng: feature.bbox[2],
-          maxLat: feature.bbox[3],
-        }
-      : undefined;
+    const detail = properties.full_address ?? properties.place_formatted ?? contextParts.join(', ') ?? 'Map location';
     const aliases = [
-      feature.text,
-      feature.place_name,
-      feature.properties?.short_code,
-      ...detailParts,
+      properties.name,
+      properties.name_preferred,
+      properties.full_address,
+      properties.place_formatted,
+      properties.address,
+      properties.feature_type,
+      ...contextParts,
     ].filter((value): value is string => Boolean(value));
 
     return [{
-      id: `mapbox-${feature.id}`,
-      label: feature.text ?? feature.place_name,
+      id: `mapbox-${properties.mapbox_id ?? `${coordinate[0]},${coordinate[1]}`}`,
+      label: properties.name_preferred ?? properties.name,
       detail,
-      centerCoordinate: feature.center,
-      bounds,
-      radiusKm: bounds ? undefined : 80,
+      centerCoordinate: coordinate,
+      radiusKm: 80,
+      isSupported: false,
+      searchAliases: aliases.map((alias) => alias.toLowerCase()),
+    }];
+  });
+}
+
+async function fetchOpenStreetMapSuggestions({
+  query,
+  signal,
+}: {
+  query: string;
+  signal?: AbortSignal;
+}): Promise<PlanningLocation[]> {
+  const params = new URLSearchParams({
+    addressdetails: '1',
+    format: 'jsonv2',
+    limit: '10',
+    q: query,
+  });
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, { signal });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const data = (await response.json()) as OpenStreetMapSearchResult[];
+
+  return data.flatMap((result) => {
+    const longitude = Number(result.lon);
+    const latitude = Number(result.lat);
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      return [];
+    }
+
+    const addressParts = [
+      result.address?.house_number && result.address?.road ? `${result.address.house_number} ${result.address.road}` : result.address?.road,
+      result.address?.suburb ?? result.address?.neighbourhood ?? result.address?.quarter,
+      result.address?.city ?? result.address?.town ?? result.address?.village,
+      result.address?.state,
+      result.address?.country,
+    ].filter((value): value is string => Boolean(value));
+    const label = result.name || result.address?.road || result.display_name?.split(',')[0]?.trim() || 'OpenStreetMap result';
+    const detail = result.display_name ?? (addressParts.join(', ') || 'OpenStreetMap location');
+    const aliases = [
+      result.name,
+      result.display_name,
+      result.type,
+      result.class,
+      ...addressParts,
+    ].filter((value): value is string => Boolean(value));
+
+    return [{
+      id: `osm-${result.osm_type ?? 'node'}-${result.osm_id ?? `${longitude},${latitude}`}`,
+      label,
+      detail,
+      centerCoordinate: [longitude, latitude] as const,
+      radiusKm: 80,
       isSupported: false,
       searchAliases: aliases.map((alias) => alias.toLowerCase()),
     }];

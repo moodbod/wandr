@@ -120,7 +120,7 @@ function ConnectedTripScreen({
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [settingsName, setSettingsName] = useState('');
   const [settingsVisibility, setSettingsVisibility] = useState<'private' | 'public'>('private');
-  const [settingsSeedTripId, setSettingsSeedTripId] = useState<string | null>(null);
+  const [settingsLoadedTripId, setSettingsLoadedTripId] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [invitingFriendSlug, setInvitingFriendSlug] = useState<string | null>(null);
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
@@ -142,14 +142,14 @@ function ConnectedTripScreen({
   }, [orderedTrips, routeTripId, selectedTripId]);
 
   useEffect(() => {
-    if (!tripSettings || tripSettings.tripId === settingsSeedTripId) {
+    if (!tripSettings || tripSettings.tripId === settingsLoadedTripId) {
       return;
     }
 
     setSettingsName(tripSettings.name);
     setSettingsVisibility(tripSettings.visibility);
-    setSettingsSeedTripId(tripSettings.tripId);
-  }, [settingsSeedTripId, tripSettings]);
+    setSettingsLoadedTripId(tripSettings.tripId);
+  }, [settingsLoadedTripId, tripSettings]);
 
   useEffect(() => {
     if (trip) {
@@ -191,7 +191,7 @@ function ConnectedTripScreen({
     if (tripSettings) {
       setSettingsName(tripSettings.name);
       setSettingsVisibility(tripSettings.visibility);
-      setSettingsSeedTripId(tripSettings.tripId);
+      setSettingsLoadedTripId(tripSettings.tripId);
     }
     settingsSheetRef.current?.snapToIndex(0);
   };
@@ -460,7 +460,7 @@ function ConnectedTripScreen({
                               <View style={styles.avatarWrap}>
                                 <FaceHashAvatar
                                   name={friend.name || friend.slug || 'Traveler'}
-                                  seed={friend.slug}
+                                  paletteKey={friend.slug}
                                   size={38}
                                   uri={friend.avatarUri}
                                   style={styles.avatarImage}

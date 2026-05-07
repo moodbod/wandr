@@ -58,6 +58,7 @@ export type ExploreMapMarker = {
   itemKind?: 'experience' | 'stay' | 'hiddenGem';
   imageUri?: string;
   label?: string;
+  priceLabel?: string;
   popularityScore?: number;
   tone?: 'accent' | 'dark';
   status?: 'completed' | 'active' | 'upcoming';
@@ -91,6 +92,7 @@ export type ExploreExperience = {
   price: string;
   priceSuffix: string;
   category?: string;
+  reviewCount?: number;
   countryCode?: string;
   countryLabel?: string;
   planningLocationId?: string;

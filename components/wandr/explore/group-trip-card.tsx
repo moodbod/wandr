@@ -82,7 +82,7 @@ export function ExploreGroupTripCard({
             <TravelerAvatarStack
               avatars={card.avatarUris}
               fallbackName={card.hostName || card.groupName}
-              fallbackSeed={card.circleId}
+              fallbackPaletteKey={card.circleId}
               totalCount={card.memberCount}
             />
             <Pressable

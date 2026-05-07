@@ -124,7 +124,7 @@ export default function ExploreGroupTripDetailScreen({
             <TravelerAvatarStack
               avatars={detail.avatarUris}
               fallbackName={detail.hostName || detail.groupName}
-              fallbackSeed={detail.circleId}
+              fallbackPaletteKey={detail.circleId}
               totalCount={detail.memberCount}
             />
           </View>

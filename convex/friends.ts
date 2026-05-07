@@ -3,8 +3,6 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
-import { demoExploreTravelers } from './seeds/demoExploreTravelers';
-import { seedFriendProfiles } from './seeds/seedFriends';
 
 type FriendProfileDoc = Doc<'friendProfiles'>;
 type FriendCircleDoc = Doc<'friendCircles'>;
@@ -707,6 +705,26 @@ async function getDirectReplySnapshot(
   };
 }
 
+async function getLatestGroupMessages(ctx: QueryCtx, circleId: Id<'friendCircles'>, limit: number) {
+  const messages = await ctx.db
+    .query('friendMessages')
+    .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circleId))
+    .order('desc')
+    .take(limit);
+
+  return messages.reverse();
+}
+
+async function getLatestDirectMessages(ctx: QueryCtx, threadId: Id<'friendDirectThreads'>, limit: number) {
+  const messages = await ctx.db
+    .query('friendDirectMessages')
+    .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', threadId))
+    .order('desc')
+    .take(limit);
+
+  return messages.reverse();
+}
+
 async function getJoinableCirclesForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const memberships = await ctx.db
     .query('friendCircleMembers')
@@ -800,128 +818,6 @@ async function buildCandidates(
     });
 
   return typeof limit === 'number' ? sorted.slice(0, limit) : sorted;
-}
-
-async function ensureBaseTravelers(ctx: MutationCtx) {
-  for (const traveler of demoExploreTravelers) {
-    const existingUser = await getAppUser(ctx, traveler.slug);
-    if (!existingUser) {
-      await ctx.db.insert('appUsers', {
-        slug: traveler.slug,
-        name: traveler.name,
-        countryCode: traveler.countryCode,
-        countryLabel: traveler.countryLabel,
-        phoneNumber: traveler.phoneNumber,
-      });
-    } else if (!existingUser.phoneNumber && traveler.phoneNumber) {
-      await ctx.db.patch(existingUser._id, {
-        phoneNumber: traveler.phoneNumber,
-      });
-    }
-
-    const existingProfile = await getTravelerProfile(ctx, traveler.slug);
-    if (!existingProfile) {
-      const region = buildRegionFromCountry(traveler.countryCode, traveler.countryLabel);
-      await ctx.db.insert('travelerProfiles', {
-        travelerSlug: traveler.slug,
-        name: traveler.name,
-        regionCode: region.regionCode,
-        regionName: region.regionName,
-      });
-    }
-  }
-
-  for (const profile of seedFriendProfiles) {
-    const existing = await getFriendProfile(ctx, profile.travelerSlug);
-    if (!existing) {
-      await ctx.db.insert('friendProfiles', {
-        ...profile,
-        interests: [...profile.interests],
-      });
-    }
-  }
-}
-
-async function ensureSeedDirectChats(ctx: MutationCtx, travelerSlug: string) {
-  const defaultFriendSlugs = seedFriendProfiles
-    .map((profile) => profile.travelerSlug)
-    .filter((slug) => slug !== travelerSlug)
-    .slice(0, 2);
-
-  for (const friendSlug of defaultFriendSlugs) {
-    const existingConnection = await ctx.db
-      .query('friendConnections')
-      .withIndex('by_travelerSlug_and_friendSlug', (q) =>
-        q.eq('travelerSlug', travelerSlug).eq('friendSlug', friendSlug)
-      )
-      .unique();
-
-    if (!existingConnection) {
-      await ctx.db.insert('friendConnections', {
-        travelerSlug,
-        friendSlug,
-        createdAt: Date.now(),
-        source: 'manual',
-      });
-    }
-
-    const existingReverseConnection = await ctx.db
-      .query('friendConnections')
-      .withIndex('by_travelerSlug_and_friendSlug', (q) =>
-        q.eq('travelerSlug', friendSlug).eq('friendSlug', travelerSlug)
-      )
-      .unique();
-
-    if (!existingReverseConnection) {
-      await ctx.db.insert('friendConnections', {
-        travelerSlug: friendSlug,
-        friendSlug: travelerSlug,
-        createdAt: Date.now(),
-        source: 'manual',
-      });
-    }
-
-    const thread = await getOrCreateDirectThread(ctx, travelerSlug, friendSlug);
-    if (!thread) {
-      continue;
-    }
-
-    const messages = await ctx.db
-      .query('friendDirectMessages')
-      .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
-      .take(1);
-
-    if (messages.length > 0) {
-      continue;
-    }
-
-    const now = Date.now();
-    const seededMessages = [
-      {
-        senderSlug: friendSlug,
-        body: 'Landing later. Send me the meeting point once your route firms up.',
-        createdAt: now - 1000 * 60 * 33,
-      },
-      {
-        senderSlug: travelerSlug,
-        body: 'Perfect. I will ping you after the coast stop so we sync cleanly.',
-        createdAt: now - 1000 * 60 * 18,
-      },
-    ];
-
-    for (const message of seededMessages) {
-      await ctx.db.insert('friendDirectMessages', {
-        threadId: thread._id,
-        senderSlug: message.senderSlug,
-        body: message.body,
-        createdAt: message.createdAt,
-      });
-    }
-
-    await ctx.db.patch(thread._id, {
-      updatedAt: seededMessages[seededMessages.length - 1].createdAt,
-    });
-  }
 }
 
 function isCoordinate(value: readonly number[] | undefined): value is readonly [number, number] {
@@ -1075,115 +971,6 @@ async function createGroupTripCopy(
   await cloneTripBookingsToTrip(ctx, args.sourceTripId, tripId, args.travelerSlug);
   return tripId;
 }
-
-export const ensureFriendsSeed = mutation({
-  args: {
-    travelerSlug: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    await ensureBaseTravelers(ctx);
-
-    const resolvedTravelerSlug = await resolveCurrentTravelerSlug(ctx, args.travelerSlug);
-    if (!resolvedTravelerSlug) {
-      return false;
-    }
-
-    await ensureSeedDirectChats(ctx, resolvedTravelerSlug);
-
-    const existingCircle = await getActiveCircleForTraveler(ctx, resolvedTravelerSlug);
-    if (existingCircle) {
-      return true;
-    }
-
-    const hostUser = await getAppUser(ctx, resolvedTravelerSlug);
-    if (!hostUser) {
-      return false;
-    }
-
-    const trips = await ctx.db
-      .query('trips')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', resolvedTravelerSlug))
-      .order('desc')
-      .collect();
-
-    const now = Date.now();
-    const firstName = hostUser.name.split(' ')[0] ?? hostUser.name;
-    const circleId = await ctx.db.insert('friendCircles', {
-      slug: `${resolvedTravelerSlug}-friends`,
-      name: `${firstName}'s Namibia Friends`,
-      destinationLabel: 'Namibia loop',
-      heroLabel: 'Road-plan crew',
-      status: 'active',
-      visibility: 'open',
-      createdBySlug: resolvedTravelerSlug,
-      tripId: trips[0]?._id,
-      createdAt: now - 1000 * 60 * 30,
-      updatedAt: now,
-    });
-
-    const fallbackMembers = seedFriendProfiles
-      .map((profile) => profile.travelerSlug)
-      .filter((slug) => slug !== resolvedTravelerSlug)
-      .slice(0, 3);
-
-    const activeMembers = [resolvedTravelerSlug, ...fallbackMembers];
-    for (const [index, travelerSlug] of activeMembers.entries()) {
-      await ctx.db.insert('friendCircleMembers', {
-        circleId,
-        travelerSlug,
-        role: index === 0 ? 'host' : 'member',
-        status: 'active',
-        joinedAt: now - (activeMembers.length - index) * 1000 * 60 * 60,
-      });
-    }
-
-    const routeShare = await buildRouteShare(ctx, resolvedTravelerSlug);
-    const initialMessages = [
-      {
-        senderSlug: fallbackMembers[0] ?? resolvedTravelerSlug,
-        kind: 'text' as const,
-        body: 'I checked the dunes timing and we should leave before sunrise if we want the light to feel clean.',
-        createdAt: now - 1000 * 60 * 40,
-      },
-      {
-        senderSlug: resolvedTravelerSlug,
-        kind: 'route' as const,
-        body: 'Shared the route update.',
-        createdAt: now - 1000 * 60 * 25,
-        ...routeShare,
-      },
-      {
-        senderSlug: fallbackMembers[1] ?? resolvedTravelerSlug,
-        kind: 'text' as const,
-        body: 'That route looks good to me. I can take the first driving leg if we want a quieter start.',
-        createdAt: now - 1000 * 60 * 16,
-      },
-      {
-        senderSlug: resolvedTravelerSlug,
-        kind: 'text' as const,
-        body: 'Perfect. Let us keep one slow breakfast stop on the coast before we head inland again.',
-        createdAt: now - 1000 * 60 * 8,
-      },
-    ];
-
-    for (const message of initialMessages) {
-      await ctx.db.insert('friendMessages', {
-        circleId,
-        senderSlug: message.senderSlug,
-        kind: message.kind,
-        body: message.body,
-        routeTitle: 'routeTitle' in message ? message.routeTitle : undefined,
-        routeSummary: 'routeSummary' in message ? message.routeSummary : undefined,
-        routeDistanceLabel: 'routeDistanceLabel' in message ? message.routeDistanceLabel : undefined,
-        routeStopCount: 'routeStopCount' in message ? message.routeStopCount : undefined,
-        routeStopsPreview: 'routeStopsPreview' in message ? message.routeStopsPreview : undefined,
-        createdAt: message.createdAt,
-      });
-    }
-
-    return true;
-  },
-});
 
 export const getFriendsDashboard = query({
   args: {
@@ -1443,9 +1230,11 @@ export const getFriendChatList = query({
         .sort((a, b) => b.updatedAt - a.updatedAt),
       joinableGroups: joinableCircles.map((circle) => ({
         id: circle._id,
+        kind: 'group' as const,
         title: circle.name,
         subtitle: `${circle.memberCount} active in ${circle.destinationLabel}`,
         preview: circle.latestMessagePreview,
+        updatedAt: circle.latestActivityAt,
         avatarUris: circle.avatarUris,
         memberCount: circle.memberCount,
         href: `/friends/group/${circle._id}`,
@@ -2200,11 +1989,7 @@ export const getFriendChat = query({
     const [summary, memberships, messages] = await Promise.all([
       buildCircleSummary(ctx, circle),
       getCircleMembers(ctx, circle._id),
-      ctx.db
-        .query('friendMessages')
-        .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circle._id))
-        .order('asc')
-        .take(80),
+      getLatestGroupMessages(ctx, circle._id, 80),
     ]);
 
     const routeShareBySender = new Map<string, Awaited<ReturnType<typeof buildRouteShare>>>();
@@ -2314,11 +2099,7 @@ export const getDirectChat = query({
     const [otherUser, otherProfile, messages] = await Promise.all([
       getAppUser(ctx, otherSlug),
       getTravelerProfile(ctx, otherSlug),
-      ctx.db
-        .query('friendDirectMessages')
-        .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
-        .order('asc')
-        .take(100),
+      getLatestDirectMessages(ctx, thread._id, 100),
     ]);
 
     if (!otherUser) {

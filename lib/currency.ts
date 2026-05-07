@@ -1,12 +1,21 @@
+import currency from 'currency.js';
+
+const LIVE_RATE_SOURCE = 'fxapi.app';
+const RATE_UNAVAILABLE_LABEL = 'Live rate unavailable';
+
 export const supportedCurrencies = [
-  { code: 'USD', label: 'US dollar', rateFromUsd: 1 },
-  { code: 'NAD', label: 'Namibian dollar', rateFromUsd: 18.6 },
-  { code: 'ZAR', label: 'South African rand', rateFromUsd: 18.6 },
-  { code: 'EUR', label: 'Euro', rateFromUsd: 0.92 },
-  { code: 'GBP', label: 'British pound', rateFromUsd: 0.78 },
+  { code: 'USD', label: 'US dollar' },
+  { code: 'NAD', label: 'Namibian dollar' },
+  { code: 'ZAR', label: 'South African rand' },
+  { code: 'EUR', label: 'Euro' },
+  { code: 'GBP', label: 'British pound' },
 ] as const;
 
 export type SupportedCurrencyCode = (typeof supportedCurrencies)[number]['code'];
+export type UsdExchangeRates = Partial<Record<SupportedCurrencyCode, number>>;
+
+let liveUsdRates: UsdExchangeRates | null = null;
+let liveUsdRatesSource = LIVE_RATE_SOURCE;
 
 const countryCurrencyMap: Record<string, SupportedCurrencyCode> = {
   NA: 'NAD',
@@ -40,17 +49,104 @@ export function orderCurrenciesForCountry(countryCode?: string | null) {
 }
 
 export function convertUsd(amountUsd: number, currencyCode: string) {
-  const currency = supportedCurrencies.find((candidate) => candidate.code === currencyCode) ?? supportedCurrencies[0];
-  return amountUsd * currency.rateFromUsd;
+  const selectedCurrency = getCurrency(currencyCode);
+  return convertUsdToCurrency(amountUsd, selectedCurrency.code);
+}
+
+function getCurrency(currencyCode: string) {
+  const normalizedCode = isSupportedCurrencyCode(currencyCode) ? currencyCode : 'USD';
+  return supportedCurrencies.find((candidate) => candidate.code === normalizedCode) ?? supportedCurrencies[0];
+}
+
+function getRateFromUsd(currencyCode: string) {
+  const selectedCurrency = getCurrency(currencyCode);
+  const liveRate = liveUsdRates?.[selectedCurrency.code];
+  return Number.isFinite(liveRate) && typeof liveRate === 'number' ? liveRate : null;
+}
+
+export function setLiveUsdRates(rates: UsdExchangeRates, source = LIVE_RATE_SOURCE) {
+  liveUsdRates = {
+    USD: 1,
+    ...rates,
+  };
+  liveUsdRatesSource = source;
+}
+
+export function clearLiveUsdRates() {
+  liveUsdRates = null;
+  liveUsdRatesSource = LIVE_RATE_SOURCE;
+}
+
+function formatCurrencyAmount(amount: number, currencyCode: string) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: currencyCode,
+    maximumFractionDigits: amount >= 100 ? 0 : 2,
+  }).format(amount);
+}
+
+export function convertUsdToCurrency(amountUsd: number, currencyCode = 'USD') {
+  const selectedCurrency = getCurrency(currencyCode);
+  const rate = getRateFromUsd(selectedCurrency.code);
+  return rate === null ? null : currency(amountUsd).multiply(rate).value;
 }
 
 export function formatUsdAsCurrency(amountUsd: number, currencyCode = 'USD') {
-  const normalizedCode = isSupportedCurrencyCode(currencyCode) ? currencyCode : 'USD';
-  const convertedAmount = convertUsd(amountUsd, normalizedCode);
+  const selectedCurrency = getCurrency(currencyCode);
+  const convertedAmount = convertUsdToCurrency(amountUsd, selectedCurrency.code);
+  return convertedAmount === null ? RATE_UNAVAILABLE_LABEL : formatCurrencyAmount(convertedAmount, selectedCurrency.code);
+}
 
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: normalizedCode,
-    maximumFractionDigits: convertedAmount >= 100 ? 0 : 2,
-  }).format(convertedAmount);
+export function formatUsdRate(currencyCode = 'USD') {
+  const selectedCurrency = getCurrency(currencyCode);
+  const rate = getRateFromUsd(selectedCurrency.code);
+  return rate === null ? RATE_UNAVAILABLE_LABEL : `1 USD = ${formatCurrencyAmount(rate, selectedCurrency.code)} ${selectedCurrency.code}`;
+}
+
+export function formatUsdConversion(amountUsd: number, currencyCode = 'USD') {
+  return `${formatUsdAsCurrency(amountUsd, currencyCode)} · ${formatUsdRate(currencyCode)}`;
+}
+
+export function formatUsdConversionParts(amountUsd: number, currencyCode = 'USD') {
+  return {
+    amountLabel: formatUsdAsCurrency(amountUsd, currencyCode),
+    rateLabel: formatUsdRate(currencyCode),
+  };
+}
+
+export function parseUsdAmount(value: number | string | null | undefined) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.replace(/,/g, '').match(/\d+(\.\d+)?/);
+  return normalized ? Number.parseFloat(normalized[0]) : null;
+}
+
+export function formatUsdPrice(value: number | string | null | undefined, currencyCode = 'USD') {
+  return formatUsdPriceParts(value, currencyCode).amountLabel;
+}
+
+export function formatUsdPriceParts(value: number | string | null | undefined, currencyCode = 'USD') {
+  const amountUsd = parseUsdAmount(value);
+
+  if (amountUsd === null) {
+    return {
+      amountLabel: typeof value === 'string' ? value.trim() : '',
+      rateLabel: '',
+    };
+  }
+
+  if (amountUsd <= 0) {
+    return {
+      amountLabel: 'Free',
+      rateLabel: '',
+    };
+  }
+
+  return formatUsdConversionParts(amountUsd, currencyCode);
 }

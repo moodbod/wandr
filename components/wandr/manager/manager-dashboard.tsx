@@ -4,7 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Bed, Check, MapTrifold, Plus, Star, UsersThree, X } from 'phosphor-react-native';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import { ThemedText } from '@/components/themed-text';
@@ -13,19 +13,23 @@ import { LargeScreenPanel } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import {
+  createManagedExperienceRef,
+  createManagedStayRef,
   getExploreJoinableTripCardsRef,
-  getExplorePageContentRef,
-  listAllStaysRef,
+  listManagedExperiencesRef,
+  listManagedStaysRef,
   listManagedBookingsRef,
   listManagedLocationPhotosRef,
   updateLocationPhotoStatusRef,
   updateManagedBookingStatusRef,
 } from '@/lib/convex';
+import { formatUsdConversion, formatUsdConversionParts } from '@/lib/currency';
 import { fetchMapboxLocationSuggestions } from '@/lib/mapbox-geocoding';
 import type { ExploreExperience } from '@/constants/explore-content';
-import type { ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
+import type { ExploreJoinableTripCard } from '@/types/explore';
 import type { StayProperty, StayRoomOption } from '@/types/stays';
 
 type ResourceMode = 'experiences' | 'rooms';
@@ -83,7 +87,103 @@ const PUBLIC_AVAILABILITY_OPTIONS = [
   'Fully booked',
 ] as const;
 
-type ProfileManagementDashboardProps = {
+const DEFAULT_MANAGER_MAP_CENTER = [17.0832, -22.57] as const;
+
+const MANAGER_IMPORT_PROMPTS: Record<ResourceMode, string> = {
+  experiences: `Generate one valid Wandr manager import JSON file for an experience.
+
+Return ONLY raw JSON. Do not wrap it in markdown. Do not add comments.
+
+The JSON must match this shape exactly. Replace every example value with real content:
+
+{
+  "kind": "experience",
+  "fields": {
+    "itemKind": "Experience",
+    "title": "Windhoek Craft Walk",
+    "subtitle": "Old brewery, design studios, and coffee stops",
+    "description": "A guided city-first route with contemporary Namibian design, easy food stops, and enough structure to feel curated.",
+    "category": "Adventure | Culture | Food & Drink | Gastronomy | Nature | Wildlife | Wellness",
+    "durationLabel": "45 minutes | 2 hours | 2-3 hours | 3 hours | 3-4 hours | 4 hours | Half day | Full day | Overnight",
+    "groupCapacity": 10,
+    "priceUsd": 120,
+    "mapLocation": {
+      "longitude": 17.0832,
+      "latitude": -22.5609
+    },
+    "imageUri": "https://example.com/images/windhoek-craft-walk-cover.jpg",
+    "galleryImages": [
+      "https://example.com/images/windhoek-craft-walk-1.jpg",
+      "https://example.com/images/windhoek-craft-walk-2.jpg"
+    ],
+    "booking": {
+      "availabilityLabel": "Available today | Open daily | Morning departures | Morning and afternoon departures | Next opening this week | Fully booked",
+      "confirmMode": "Instant confirmation | Host confirmation within 1 hour | Host confirmation within 2 hours | Host confirmation within 4 hours | Manual confirmation"
+    },
+    "includes": ["Local guide", "Coffee stop", "Studio visits"]
+  }
+}
+
+Rules:
+- Every field shown above is required.
+- All strings must be useful real content, not placeholders like "string", "...", or "https://...".
+- imageUri and galleryImages must be valid public image URLs.
+- Do not use markdown links. Put bare image URLs only in imageUri and galleryImages.
+- Bad image URL: "[https://example.com/photo.jpg"
+- Bad text: "Ask](https://example.com/photo.jpg) for a room"
+- Notes/descriptions must be plain human text and must not contain JSON fragments, encoded JSON, or image URLs.
+- Never put text like "%22galleryImages%22", "\\"imageUri\\"", "\\"bookingNote\\"", or any copied JSON fragment inside a description or note.
+- mapLocation must use longitude first and latitude second.
+- priceUsd and groupCapacity must be numbers.
+- Return one JSON object only.`,
+  rooms: `Generate one valid Wandr manager import JSON file for a room.
+
+Return ONLY raw JSON. Do not wrap it in markdown. Do not add comments.
+
+The JSON must match this shape exactly. Replace every example value with real content:
+
+{
+  "kind": "room",
+  "fields": {
+    "stay": {
+      "name": "Avani Windhoek Hotel & Casino",
+      "bookingPhone": "+264 61 280 0000",
+      "summary": "Modern city hotel in central Windhoek, close to shops, craft markets, monuments, and rooftop views across the capital.",
+      "imageUri": "https://example.com/images/avani-windhoek-cover.jpg",
+      "galleryImages": [
+        "https://example.com/images/avani-windhoek-1.jpg",
+        "https://example.com/images/avani-windhoek-2.jpg"
+      ],
+      "priceUsd": 140,
+      "bookingNote": "Ask for a city-view room and confirm parking or airport transfer at least 24 hours ahead if needed.",
+      "stayStyle": "design | lodge | roadside | wellness",
+      "routeVibe": "city reset | coast base | wildlife stop | desert night",
+      "idealFor": ["Windhoek overnight reset", "Business travelers", "Self-drive Namibia starters"],
+      "amenities": ["Free WiFi", "Rooftop restaurant and bar", "Rooftop pool", "On-site parking"],
+      "nearbyHighlights": ["Christuskirche", "Namibia Craft Centre", "Zoo Park"]
+    },
+    "mapLocation": {
+      "longitude": 17.0832,
+      "latitude": -22.5609
+    }
+  }
+}
+
+Rules:
+- Every field shown above is required.
+- All strings must be useful real content, not placeholders like "string", "...", or "https://...".
+- imageUri and galleryImages must be valid public image URLs.
+- Do not use markdown links. Put bare image URLs only in imageUri and galleryImages.
+- Bad image URL: "[https://example.com/photo.jpg"
+- Bad bookingNote: "Ask](https://example.com/photo.jpg) for a room"
+- bookingNote must be plain human text and must not contain JSON fragments, encoded JSON, or image URLs.
+- Never put text like "%22galleryImages%22", "\\"imageUri\\"", "\\"bookingNote\\"", or any copied JSON fragment inside bookingNote.
+- mapLocation must use longitude first and latitude second.
+- priceUsd must be a number.
+- Return one JSON object only.`,
+};
+
+type ManagerDashboardProps = {
   travelerSlug?: string | null;
 };
 
@@ -152,26 +252,43 @@ type DraftResource =
   | { kind: 'experience'; rows: SchemaRow[] }
   | { kind: 'room'; rows: SchemaRow[] };
 
-export function ProfileManagementDashboard({ travelerSlug }: ProfileManagementDashboardProps) {
+type JsonImportReport = {
+  fileName: string;
+  messages: string[];
+  status: 'error' | 'success';
+};
+
+type JsonEditorDiagnostic = {
+  line?: number;
+  message: string;
+  severity: 'error' | 'info' | 'warning';
+};
+
+export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
-  const { mode, setMode } = useManagerResourceMode();
+  const { mode } = useManagerResourceMode();
+  const settings = useCurrentUserSettings();
+  const preferredCurrency = settings?.preferredCurrency ?? 'USD';
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
   const [bookingFilter, setBookingFilter] = useState<BookingFilter>('pending');
   const [busyBookingId, setBusyBookingId] = useState<string | null>(null);
   const [draftResource, setDraftResource] = useState<DraftResource | null>(null);
+  const [isCreatingDraft, setIsCreatingDraft] = useState(false);
+  const createManagedExperience = useMutation(createManagedExperienceRef);
+  const createManagedStay = useMutation(createManagedStayRef);
   const updateLocationPhotoStatus = useMutation(updateLocationPhotoStatusRef);
   const updateManagedBookingStatus = useMutation(updateManagedBookingStatusRef);
 
-  const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: travelerSlug ?? undefined });
+  const experiencesQuery = useQuery(listManagedExperiencesRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
   const groups = useQuery(getExploreJoinableTripCardsRef, travelerSlug ? { travelerSlug } : 'skip');
-  const stays = useQuery(listAllStaysRef, {});
-  const bookings = useQuery(listManagedBookingsRef, {});
-  const locationPhotos = useQuery(listManagedLocationPhotosRef, {});
+  const stays = useQuery(listManagedStaysRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
+  const bookings = useQuery(listManagedBookingsRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
+  const locationPhotos = useQuery(listManagedLocationPhotosRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
 
-  const experiences = (page as ExplorePageContent | null | undefined)?.experiences ?? [];
+  const experiences = (experiencesQuery as ExploreExperience[] | undefined) ?? [];
   const stayItems = (stays as StayProperty[] | undefined) ?? [];
   const managedBookings = (bookings as ManagedBooking[] | undefined) ?? [];
   const photos = (locationPhotos as ManagedLocationPhoto[] | undefined) ?? [];
@@ -214,6 +331,30 @@ export function ProfileManagementDashboard({ travelerSlug }: ProfileManagementDa
     setDraftResource(null);
     setSelectedId(resource.id);
     setDetailTab('overview');
+  }
+
+  async function handleCreateDraft() {
+    if (!draftResource || !travelerSlug) {
+      Alert.alert('Manager account needed', 'Turn on manager mode from your profile settings, then create the draft again.');
+      return;
+    }
+
+    setIsCreatingDraft(true);
+    try {
+      if (draftResource.kind === 'experience') {
+        const result = await createManagedExperience(buildExperienceCreateArgs(draftResource, travelerSlug));
+        setSelectedId(result.slug);
+      } else {
+        const result = await createManagedStay(buildStayCreateArgs(draftResource, travelerSlug));
+        setSelectedId(`${result.slug}:${result.roomId}`);
+      }
+      setDetailTab('overview');
+      setDraftResource(null);
+    } catch (error) {
+      Alert.alert('Could not create draft', error instanceof Error ? error.message : 'Check the required fields and try again.');
+    } finally {
+      setIsCreatingDraft(false);
+    }
   }
 
   const currentCount = mode === 'experiences' ? experiences.length : rooms.length;
@@ -266,6 +407,8 @@ export function ProfileManagementDashboard({ travelerSlug }: ProfileManagementDa
                 setSelectedId(resources[0]?.id ?? null);
               }}
               onChange={setDraftResource}
+              onCreate={handleCreateDraft}
+              isCreating={isCreatingDraft}
             />
           ) : selectedResource ? (
             <ResourceDetail
@@ -296,6 +439,7 @@ export function ProfileManagementDashboard({ travelerSlug }: ProfileManagementDa
                 }
               }}
               photos={activePhotos}
+              preferredCurrency={preferredCurrency}
               resource={selectedResource}
               totalBookings={activeBookings}
             />
@@ -357,6 +501,113 @@ function createDraftRoom(): DraftResource {
       { editor: 'list', label: 'stay.amenities', multiline: true, value: '' },
       { editor: 'list', label: 'stay.nearbyHighlights', multiline: true, value: '' },
     ],
+  };
+}
+
+function getDraftValue(draft: DraftResource, label: string) {
+  return draft.rows.find((row) => row.label === label)?.value.trim() ?? '';
+}
+
+function formatDraftLabel(label: string) {
+  return label
+    .replace(/^stay\./, '')
+    .replace(/^booking\./, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\./g, ' ')
+    .toLowerCase();
+}
+
+function requireDraftValue(draft: DraftResource, label: string) {
+  const value = getDraftValue(draft, label);
+  if (!value) {
+    throw new Error(`${formatDraftLabel(label)} is required.`);
+  }
+  return value;
+}
+
+function parseDraftList(value: string) {
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function requireDraftList(draft: DraftResource, label: string) {
+  const values = parseDraftList(requireDraftValue(draft, label));
+  if (values.length === 0) {
+    throw new Error(`${formatDraftLabel(label)} needs at least one item.`);
+  }
+  return values;
+}
+
+function requireDraftNumber(draft: DraftResource, label: string) {
+  const value = Number(requireDraftValue(draft, label));
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${formatDraftLabel(label)} must be a number above 0.`);
+  }
+  return value;
+}
+
+function requireDraftCoordinate(draft: DraftResource, label: string) {
+  const coordinate = parseCoordinateValue(requireDraftValue(draft, label));
+  if (!coordinate) {
+    throw new Error(`${formatDraftLabel(label)} must be longitude, latitude.`);
+  }
+  return [coordinate[0], coordinate[1]];
+}
+
+function buildExperienceCreateArgs(draft: DraftResource, managerSlug: string) {
+  const itemKindValue = requireDraftValue(draft, 'itemKind');
+  return {
+    managerSlug,
+    itemKind: itemKindValue === 'Hidden gem' ? 'hiddenGem' as const : 'experience' as const,
+    title: requireDraftValue(draft, 'title'),
+    subtitle: requireDraftValue(draft, 'subtitle'),
+    description: requireDraftValue(draft, 'description'),
+    category: requireDraftValue(draft, 'category'),
+    durationLabel: requireDraftValue(draft, 'durationLabel'),
+    groupCapacity: requireDraftNumber(draft, 'groupCapacity'),
+    priceUsd: requireDraftNumber(draft, 'priceUsd'),
+    coordinate: requireDraftCoordinate(draft, 'mapLocation'),
+    imageUri: requireDraftValue(draft, 'imageUri'),
+    galleryImages: requireDraftList(draft, 'galleryImages'),
+    availabilityLabel: requireDraftValue(draft, 'booking.availabilityLabel'),
+    confirmMode: requireDraftValue(draft, 'booking.confirmMode'),
+    includes: requireDraftList(draft, 'includes'),
+  };
+}
+
+function normalizeStayStyle(value: string): 'design' | 'lodge' | 'roadside' | 'wellness' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'design' || normalized === 'lodge' || normalized === 'roadside' || normalized === 'wellness') {
+    return normalized;
+  }
+  throw new Error('Stay style must be design, lodge, roadside, or wellness.');
+}
+
+function normalizeRouteVibe(value: string): 'city reset' | 'coast base' | 'wildlife stop' | 'desert night' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'city reset' || normalized === 'coast base' || normalized === 'wildlife stop' || normalized === 'desert night') {
+    return normalized;
+  }
+  throw new Error('Route vibe must be city reset, coast base, wildlife stop, or desert night.');
+}
+
+function buildStayCreateArgs(draft: DraftResource, managerSlug: string) {
+  return {
+    managerSlug,
+    name: requireDraftValue(draft, 'stay.name'),
+    summary: requireDraftValue(draft, 'stay.summary'),
+    coordinate: requireDraftCoordinate(draft, 'mapLocation'),
+    imageUri: requireDraftValue(draft, 'stay.imageUri'),
+    galleryImages: requireDraftList(draft, 'stay.galleryImages'),
+    priceUsd: requireDraftNumber(draft, 'stay.priceUsd'),
+    bookingNote: requireDraftValue(draft, 'stay.bookingNote'),
+    stayStyle: normalizeStayStyle(requireDraftValue(draft, 'stay.stayStyle')),
+    routeVibe: normalizeRouteVibe(requireDraftValue(draft, 'stay.routeVibe')),
+    idealFor: requireDraftList(draft, 'stay.idealFor'),
+    amenities: requireDraftList(draft, 'stay.amenities'),
+    nearbyHighlights: requireDraftList(draft, 'stay.nearbyHighlights'),
   };
 }
 
@@ -425,6 +676,7 @@ function ResourceDetail({
   onRejectPhoto,
   onUpdateStatus,
   photos,
+  preferredCurrency,
   resource,
   totalBookings,
 }: {
@@ -440,6 +692,7 @@ function ResourceDetail({
   onRejectPhoto: (photoId: Id<'locationPhotos'>) => void;
   onUpdateStatus: (booking: ManagedBooking, status: 'confirmed' | 'cancelled') => void;
   photos: ManagedLocationPhoto[];
+  preferredCurrency: string;
   resource: ManagedResource;
   totalBookings: ManagedBooking[];
 }) {
@@ -484,7 +737,7 @@ function ResourceDetail({
 
       <ScrollView style={styles.detailScroller} contentContainerStyle={styles.detailBody} showsVerticalScrollIndicator={false}>
         {detailTab === 'overview' ? (
-          <OverviewEditor colors={colors} resource={resource} totalBookings={totalBookings} />
+          <OverviewEditor colors={colors} preferredCurrency={preferredCurrency} resource={resource} totalBookings={totalBookings} />
         ) : detailTab === 'bookings' ? (
           <BookingsTable
             bookingFilter={bookingFilter}
@@ -493,6 +746,7 @@ function ResourceDetail({
             colors={colors}
             onChangeFilter={onChangeBookingFilter}
             onUpdateStatus={onUpdateStatus}
+            preferredCurrency={preferredCurrency}
           />
         ) : detailTab === 'visits' ? (
           <VisitsTable bookings={confirmedVisits} colors={colors} groups={groups} resource={resource} />
@@ -508,17 +762,19 @@ function ResourceDetail({
 
 function OverviewEditor({
   colors,
+  preferredCurrency,
   resource,
   totalBookings,
 }: {
   colors: DashboardColors;
+  preferredCurrency: string;
   resource: ManagedResource;
   totalBookings: ManagedBooking[];
 }) {
   return resource.kind === 'experience' ? (
-    <ExperienceManagerForm colors={colors} resource={resource} totalBookings={totalBookings} />
+    <ExperienceManagerForm colors={colors} preferredCurrency={preferredCurrency} resource={resource} totalBookings={totalBookings} />
   ) : (
-    <RoomManagerForm colors={colors} resource={resource} totalBookings={totalBookings} />
+    <RoomManagerForm colors={colors} preferredCurrency={preferredCurrency} resource={resource} totalBookings={totalBookings} />
   );
 }
 
@@ -609,14 +865,18 @@ function AvailabilityTable({
 
 function ExperienceManagerForm({
   colors,
+  preferredCurrency,
   resource,
   totalBookings,
 }: {
   colors: DashboardColors;
+  preferredCurrency: string;
   resource: Extract<ManagedResource, { kind: 'experience' }>;
   totalBookings: ManagedBooking[];
 }) {
   const experience = resource.experience;
+  const priceUsd = parsePriceAmount(experience.price);
+  const travelerPrice = formatUsdConversionParts(priceUsd, preferredCurrency);
 
   return (
     <View style={styles.editorStack}>
@@ -646,8 +906,8 @@ function ExperienceManagerForm({
       </FriendlySection>
 
       <FriendlySection title="Pricing">
-        <FriendlyUsdPriceField colors={colors} label="USD price" value={parsePriceAmount(experience.price)} />
-        <FriendlyDerivedValue colors={colors} label="Traveler price" value="Converted by app currency settings" />
+        <FriendlyUsdPriceField colors={colors} label="USD price" preferredCurrency={preferredCurrency} value={priceUsd} />
+        <FriendlyDerivedValue colors={colors} label="Traveler price" rateLabel={travelerPrice.rateLabel} value={travelerPrice.amountLabel} />
       </FriendlySection>
 
       <FriendlySection title="Includes">
@@ -663,14 +923,17 @@ function ExperienceManagerForm({
 
 function RoomManagerForm({
   colors,
+  preferredCurrency,
   resource,
   totalBookings,
 }: {
   colors: DashboardColors;
+  preferredCurrency: string;
   resource: Extract<ManagedResource, { kind: 'room' }>;
   totalBookings: ManagedBooking[];
 }) {
   const { stay } = resource.room;
+  const travelerPrice = formatUsdConversionParts(stay.pricePerNight, preferredCurrency);
 
   return (
     <View style={styles.editorStack}>
@@ -690,8 +953,8 @@ function RoomManagerForm({
       </FriendlySection>
 
       <FriendlySection title="Pricing and policy">
-        <FriendlyUsdPriceField colors={colors} label="USD nightly price" value={stay.pricePerNight} />
-        <FriendlyDerivedValue colors={colors} label="Traveler price" value="Converted by app currency settings" />
+        <FriendlyUsdPriceField colors={colors} label="USD nightly price" preferredCurrency={preferredCurrency} value={stay.pricePerNight} />
+        <FriendlyDerivedValue colors={colors} label="Traveler price" rateLabel={travelerPrice.rateLabel} value={travelerPrice.amountLabel} />
         <FriendlyField colors={colors} label="Booking note" multiline value={stay.bookingNote} />
       </FriendlySection>
 
@@ -710,13 +973,15 @@ function RoomManagerForm({
   );
 }
 
-function PricingEditor({ colors, resource }: { colors: DashboardColors; resource: ManagedResource }) {
+function PricingEditor({ colors, preferredCurrency, resource }: { colors: DashboardColors; preferredCurrency: string; resource: ManagedResource }) {
   if (resource.kind === 'experience') {
+    const priceUsd = parsePriceAmount(resource.experience.price);
+
     return (
       <SectionBlock colors={colors} title="Pricing">
         <View style={styles.formGrid}>
-          <ManagerField colors={colors} label="USD price" value={String(parsePriceAmount(resource.experience.price))} />
-          <ManagerField colors={colors} label="Traveler price" value="Converted by app currency settings" />
+          <ManagerField colors={colors} label="USD price" value={String(priceUsd)} />
+          <ManagerField colors={colors} label="Traveler price" value={formatUsdConversion(priceUsd, preferredCurrency)} />
         </View>
       </SectionBlock>
     );
@@ -726,7 +991,7 @@ function PricingEditor({ colors, resource }: { colors: DashboardColors; resource
     <SectionBlock colors={colors} title="Pricing">
       <View style={styles.formGrid}>
         <ManagerField colors={colors} label="USD nightly price" value={String(resource.room.stay.pricePerNight)} />
-        <ManagerField colors={colors} label="Traveler price" value="Converted by app currency settings" />
+        <ManagerField colors={colors} label="Traveler price" value={formatUsdConversion(resource.room.stay.pricePerNight, preferredCurrency)} />
         <ManagerTextArea colors={colors} label="Booking note" value={resource.room.stay.bookingNote} />
         <ManagerField colors={colors} label="Default room option" value={resource.room.stay.bookingProfile?.defaultRoomOptionId ?? resource.room.room.id} />
         <ManagerField colors={colors} label="Default arrival option" value={resource.room.stay.bookingProfile?.defaultArrivalOptionId ?? ''} />
@@ -892,11 +1157,14 @@ function FriendlyField({
   );
 }
 
-function FriendlyDerivedValue({ colors, label, value }: { colors: DashboardColors; label: string; value: string }) {
+function FriendlyDerivedValue({ colors, label, rateLabel, value }: { colors: DashboardColors; label: string; rateLabel?: string; value: string }) {
   return (
     <View style={[styles.friendlyRow, { borderColor: colors.borderSoft }]}>
       <ThemedText style={styles.friendlyLabel}>{label}</ThemedText>
-      <ThemedText style={styles.derivedValueText}>{value || 'Derived when value is set'}</ThemedText>
+      <View style={styles.derivedValueStack}>
+        <ThemedText style={styles.derivedValueText}>{value || 'Derived when value is set'}</ThemedText>
+        {rateLabel ? <ThemedText style={styles.derivedRateText}>{rateLabel}</ThemedText> : null}
+      </View>
     </View>
   );
 }
@@ -950,7 +1218,17 @@ function FriendlyNumberField({
   );
 }
 
-function FriendlyUsdPriceField({ colors, label, value }: { colors: DashboardColors; label: string; value: number }) {
+function FriendlyUsdPriceField({
+  colors,
+  label,
+  preferredCurrency,
+  value,
+}: {
+  colors: DashboardColors;
+  label: string;
+  preferredCurrency: string;
+  value: number;
+}) {
   const [draftValue, setDraftValue] = useState(Number.isFinite(value) ? String(value) : '');
 
   useEffect(() => {
@@ -970,8 +1248,19 @@ function FriendlyUsdPriceField({ colors, label, value }: { colors: DashboardColo
           style={[styles.friendlyInput, styles.priceInput, { color: colors.text }]}
           value={draftValue}
         />
-        <ThemedText style={styles.derivedValueText}>{formatUsdPrice(draftValue)}</ThemedText>
+        <DraftPricePreview currencyCode={preferredCurrency} value={draftValue} />
       </View>
+    </View>
+  );
+}
+
+function DraftPricePreview({ currencyCode, value }: { currencyCode: string; value: string }) {
+  const price = formatDraftUsdPrice(value, currencyCode);
+
+  return (
+    <View style={styles.derivedValueStack}>
+      <ThemedText style={styles.derivedValueText}>{price.amountLabel}</ThemedText>
+      {price.rateLabel ? <ThemedText style={styles.derivedRateText}>{price.rateLabel}</ThemedText> : null}
     </View>
   );
 }
@@ -1238,6 +1527,7 @@ function BookingsTable({
   colors,
   onChangeFilter,
   onUpdateStatus,
+  preferredCurrency,
 }: {
   bookingFilter: BookingFilter;
   bookings: ManagedBooking[];
@@ -1245,6 +1535,7 @@ function BookingsTable({
   colors: DashboardColors;
   onChangeFilter: (filter: BookingFilter) => void;
   onUpdateStatus: (booking: ManagedBooking, status: 'confirmed' | 'cancelled') => void;
+  preferredCurrency: string;
 }) {
   return (
     <View style={styles.sectionStack}>
@@ -1274,6 +1565,7 @@ function BookingsTable({
               colors={colors}
               key={`${booking.source}-${booking._id}`}
               onUpdateStatus={onUpdateStatus}
+              preferredCurrency={preferredCurrency}
             />
           ))
         )}
@@ -1287,14 +1579,16 @@ function BookingRow({
   busy,
   colors,
   onUpdateStatus,
+  preferredCurrency,
 }: {
   booking: ManagedBooking;
   busy: boolean;
   colors: DashboardColors;
   onUpdateStatus: (booking: ManagedBooking, status: 'confirmed' | 'cancelled') => void;
+  preferredCurrency: string;
 }) {
   const dateLabel = getManagedBookingDateLabel(booking);
-  const moneyLabel = typeof booking.totalPrice === 'number' ? `$${booking.totalPrice}` : null;
+  const moneyLabel = typeof booking.totalPrice === 'number' ? formatUsdConversion(booking.totalPrice, preferredCurrency) : null;
 
   return (
     <View style={[styles.tableRow, { borderColor: colors.borderSoft }]}>
@@ -1672,16 +1966,16 @@ function CoordinatePickerModal({
   const parsedCoordinate = parseCoordinateValue(initialValue);
   const [searchQuery, setSearchQuery] = useState('');
   const [coordinate, setCoordinate] = useState<readonly [number, number] | null>(parsedCoordinate);
-  const [selectedLabel, setSelectedLabel] = useState('');
   const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof fetchMapboxLocationSuggestions>>>([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
     if (visible) {
       const nextCoordinate = parseCoordinateValue(initialValue);
       setCoordinate(nextCoordinate);
-      setSelectedLabel('');
       setSearchQuery('');
       setSuggestions([]);
+      setHasSearched(false);
     }
   }, [initialValue, visible]);
 
@@ -1692,15 +1986,14 @@ function CoordinatePickerModal({
     }
 
     try {
-      const results = await fetchMapboxLocationSuggestions({ query: trimmedQuery });
+      const results = await fetchMapboxLocationSuggestions({
+        currentCoordinate: coordinate ?? DEFAULT_MANAGER_MAP_CENTER,
+        query: trimmedQuery,
+      });
+      setHasSearched(true);
       setSuggestions(results);
-      const firstResult = results[0];
-      if (!firstResult?.centerCoordinate) {
-        return;
-      }
-      setCoordinate(firstResult.centerCoordinate);
-      setSelectedLabel(firstResult.label);
     } catch {
+      setHasSearched(true);
       // Keep the current pin if search is unavailable.
     }
   }
@@ -1711,7 +2004,6 @@ function CoordinatePickerModal({
       return;
     }
     setCoordinate(suggestion.centerCoordinate);
-    setSelectedLabel(suggestion.label);
   }
 
   return (
@@ -1721,54 +2013,64 @@ function CoordinatePickerModal({
           <View style={styles.coordinateModalHeader}>
             <View>
               <ThemedText style={styles.sectionBlockTitle}>Pick coordinate</ThemedText>
-              <ThemedText style={styles.sectionBlockSubtitle}>Search Mapbox and choose the correct place. Location fields are derived from that selection.</ThemedText>
+              <ThemedText style={styles.sectionBlockSubtitle}>Search the exact place, or click the map to drop the pin yourself.</ThemedText>
             </View>
             <Pressable accessibilityRole="button" onPress={onClose} style={styles.secondaryButton}>
               <ThemedText style={styles.secondaryButtonText}>Close</ThemedText>
             </Pressable>
           </View>
-          <View style={styles.coordinateSearchRow}>
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search city, place, or address"
-              placeholderTextColor={colors.placeholder}
-              style={[styles.coordinateSearchInput, { color: colors.text, borderColor: colors.borderSoft }]}
-              returnKeyType="search"
-              onSubmitEditing={searchPlace}
-            />
-            <Pressable accessibilityRole="button" onPress={searchPlace} style={styles.cellActionButton}>
-              <ThemedText style={styles.cellActionText}>Search</ThemedText>
-            </Pressable>
-          </View>
-          {suggestions.length ? (
-            <View style={styles.mapboxSuggestionList}>
-              {suggestions.map((suggestion, index) => (
-                <Pressable key={suggestion.id} accessibilityRole="button" onPress={() => selectSuggestion(index)} style={styles.mapboxSuggestionRow}>
-                  <ThemedText style={styles.rowTitle}>{suggestion.label}</ThemedText>
-                  <ThemedText style={styles.rowMeta}>{suggestion.detail}</ThemedText>
+          <View style={styles.coordinatePickerLayout}>
+            <View style={styles.coordinateSearchPane}>
+              <View style={styles.coordinateSearchRow}>
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search exact place or address"
+                  placeholderTextColor={colors.placeholder}
+                  style={[styles.coordinateSearchInput, { color: colors.text, borderColor: colors.borderSoft }]}
+                  returnKeyType="search"
+                  onSubmitEditing={searchPlace}
+                />
+                <Pressable accessibilityRole="button" onPress={searchPlace} style={styles.cellActionButton}>
+                  <ThemedText style={styles.cellActionText}>Search</ThemedText>
                 </Pressable>
-              ))}
+              </View>
+              <ScrollView style={styles.mapboxSuggestionList} showsVerticalScrollIndicator={false}>
+                {suggestions.length ? (
+                  suggestions.map((suggestion, index) => (
+                    <Pressable key={suggestion.id} accessibilityRole="button" onPress={() => selectSuggestion(index)} style={styles.mapboxSuggestionRow}>
+                      <ThemedText style={styles.rowTitle}>{suggestion.label}</ThemedText>
+                      <ThemedText style={styles.rowMeta}>{suggestion.detail}</ThemedText>
+                    </Pressable>
+                  ))
+                ) : (
+                  <View style={styles.emptyTableRow}>
+                    <ThemedText style={styles.emptyText}>
+                      {hasSearched ? 'No Mapbox results. Click the map to place the pin.' : 'Search for a place or click the map to place the pin.'}
+                    </ThemedText>
+                  </View>
+                )}
+              </ScrollView>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => coordinate ? onSelect(formatCoordinateValue(coordinate)) : undefined}
+                style={[styles.saveButton, !coordinate && styles.actionButtonDisabled]}
+              >
+                <ThemedText style={styles.saveButtonText}>Use selected coordinate</ThemedText>
+              </Pressable>
             </View>
-          ) : null}
-          <View style={styles.coordinateMapFrame}>
-            <MapPreview
-              centerCoordinate={coordinate ?? [17.0832, -22.57]}
-              markers={coordinate ? [{ id: 'selected', coordinate, label: 'Selected point' }] : []}
-              style={styles.coordinateMap}
-            />
+            <View style={styles.coordinateMapFrame}>
+              <MapPreview
+                centerCoordinate={coordinate ?? DEFAULT_MANAGER_MAP_CENTER}
+                markers={coordinate ? [{ id: 'selected', coordinate, label: 'Selected point', priceLabel: 'Pin', status: 'active' }] : []}
+                onMapPress={(nextCoordinate) => {
+                  setCoordinate(nextCoordinate);
+                }}
+                zoomLevel={coordinate ? 16 : 13}
+                style={styles.coordinateMap}
+              />
+            </View>
           </View>
-          <View style={[styles.derivedLocationBox, { borderColor: colors.borderSoft }]}>
-            <ThemedText style={styles.derivedLocationTitle}>{selectedLabel || 'No Mapbox place selected'}</ThemedText>
-            <ThemedText style={styles.derivedLocationMeta}>{coordinate ? formatCoordinateValue(coordinate) : 'Search and select a Mapbox result.'}</ThemedText>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => coordinate ? onSelect(formatCoordinateValue(coordinate)) : undefined}
-            style={[styles.saveButton, !coordinate && styles.actionButtonDisabled]}
-          >
-            <ThemedText style={styles.saveButtonText}>Use Mapbox location</ThemedText>
-          </Pressable>
         </View>
       </View>
     </Modal>
@@ -1778,20 +2080,99 @@ function CoordinatePickerModal({
 function DraftResourceEditor({
   colors,
   draft,
+  isCreating,
   onCancel,
   onChange,
+  onCreate,
 }: {
   colors: DashboardColors;
   draft: DraftResource;
+  isCreating: boolean;
   onCancel: () => void;
   onChange: (draft: DraftResource) => void;
+  onCreate: () => void;
 }) {
   const groupedRows = groupSchemaRows(draft.rows);
+  const [importReport, setImportReport] = useState<JsonImportReport | null>(null);
+  const [isPromptOpen, setIsPromptOpen] = useState(false);
+  const [pastedJson, setPastedJson] = useState('');
+  const promptText = MANAGER_IMPORT_PROMPTS[draft.kind === 'experience' ? 'experiences' : 'rooms'];
+  const editorDiagnostics = useMemo(() => analyzeDraftJsonText(pastedJson, draft), [draft, pastedJson]);
+  const editorHasErrors = editorDiagnostics.some((diagnostic) => diagnostic.severity === 'error');
+  const lineNumbers = useMemo(
+    () => Array.from({ length: Math.max(8, pastedJson.split('\n').length) }, (_, index) => index + 1),
+    [pastedJson]
+  );
   const updateRow = (label: string, value: string) => {
     onChange({
       ...draft,
       rows: draft.rows.map((row) => (row.label === label ? { ...row, value } : row)),
     });
+  };
+  const handleImportJson = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      Alert.alert('JSON import needs desktop web', 'Open the manager dashboard on a large web screen to upload a JSON file.');
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const compiled = compileDraftJson(text, draft);
+        onChange(compiled.draft);
+        setImportReport({
+          fileName: file.name,
+          messages: compiled.messages.length ? compiled.messages : ['JSON compiled and populated the form.'],
+          status: 'success',
+        });
+      } catch (error) {
+        setImportReport({
+          fileName: file.name,
+          messages: splitCompilerMessage(error instanceof Error ? error.message : 'Could not compile JSON.'),
+          status: 'error',
+        });
+      }
+    };
+    input.click();
+  };
+  const handleCopyPrompt = async () => {
+    if (Platform.OS === 'web' && globalThis.navigator?.clipboard?.writeText) {
+      await globalThis.navigator.clipboard.writeText(promptText);
+      setImportReport({
+        fileName: 'schema prompt',
+        messages: ['Prompt copied. Paste it into your AI tool, then upload the JSON it returns.'],
+        status: 'success',
+      });
+      return;
+    }
+
+    setIsPromptOpen(true);
+  };
+  const handleCompilePastedJson = () => {
+    try {
+      const compiled = compileDraftJson(pastedJson, draft);
+      onChange(compiled.draft);
+      setImportReport({
+        fileName: 'pasted JSON',
+        messages: compiled.messages.length ? compiled.messages : ['JSON compiled and populated the form.'],
+        status: 'success',
+      });
+      setIsPromptOpen(false);
+    } catch (error) {
+      setImportReport({
+        fileName: 'pasted JSON',
+        messages: splitCompilerMessage(error instanceof Error ? error.message : 'Could not compile JSON.'),
+        status: 'error',
+      });
+    }
   };
 
   return (
@@ -1803,15 +2184,127 @@ function DraftResourceEditor({
           <ThemedText style={styles.detailSubtitle}>Fill the sections and create when ready.</ThemedText>
         </View>
         <View style={styles.draftHeaderActions}>
+          <Pressable accessibilityRole="button" onPress={() => setIsPromptOpen(true)} style={styles.secondaryButton}>
+            <ThemedText style={styles.secondaryButtonText}>Schema prompt</ThemedText>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={handleImportJson} style={styles.secondaryButton}>
+            <ThemedText style={styles.secondaryButtonText}>Import JSON</ThemedText>
+          </Pressable>
           <Pressable accessibilityRole="button" onPress={onCancel} style={styles.secondaryButton}>
             <ThemedText style={styles.secondaryButtonText}>Cancel</ThemedText>
           </Pressable>
-          <Pressable accessibilityRole="button" style={styles.saveButton}>
-            <ThemedText style={styles.saveButtonText}>Create draft</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isCreating}
+            onPress={onCreate}
+            style={[styles.saveButton, isCreating ? styles.disabledButton : null]}
+          >
+            <ThemedText style={styles.saveButtonText}>{isCreating ? 'Creating...' : 'Create draft'}</ThemedText>
           </Pressable>
         </View>
       </View>
+      <Modal transparent animationType="fade" visible={isPromptOpen} onRequestClose={() => setIsPromptOpen(false)}>
+        <View style={styles.promptModalBackdrop}>
+          <View style={[styles.promptModal, { backgroundColor: colors.background, borderColor: colors.borderSoft }]}>
+            <View style={styles.promptModalHeader}>
+              <View>
+                <ThemedText style={styles.detailEyebrow}>AI schema</ThemedText>
+                <ThemedText style={styles.promptModalTitle}>Prompt and paste JSON</ThemedText>
+              </View>
+              <View style={styles.draftHeaderActions}>
+                <Pressable accessibilityRole="button" onPress={handleCopyPrompt} style={styles.saveButton}>
+                  <ThemedText style={styles.saveButtonText}>Copy</ThemedText>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setIsPromptOpen(false)} style={styles.secondaryButton}>
+                  <ThemedText style={styles.secondaryButtonText}>Close</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+            <TextInput
+              editable={false}
+              multiline
+              scrollEnabled
+              value={promptText}
+              style={[styles.promptTextArea, { borderColor: colors.borderSoft, color: colors.text }]}
+            />
+            <View style={[styles.pasteCompilerBox, { borderColor: colors.borderSoft }]}>
+              <View style={styles.pasteCompilerHeader}>
+                <View>
+                  <ThemedText style={styles.importReportTitle}>Paste generated JSON</ThemedText>
+                  <ThemedText style={styles.importReportMessage}>Compile it here and the create form will fill in automatically.</ThemedText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!pastedJson.trim() || editorHasErrors}
+                  onPress={handleCompilePastedJson}
+                  style={[styles.saveButton, (!pastedJson.trim() || editorHasErrors) && styles.actionButtonDisabled]}>
+                  <ThemedText style={styles.saveButtonText}>Compile JSON</ThemedText>
+                </Pressable>
+              </View>
+              <View style={[styles.jsonEditorFrame, { borderColor: colors.borderSoft }]}>
+                <ScrollView style={styles.lineNumberGutter} showsVerticalScrollIndicator={false}>
+                  {lineNumbers.map((lineNumber) => {
+                    const hasLineError = editorDiagnostics.some((diagnostic) => diagnostic.line === lineNumber && diagnostic.severity === 'error');
+                    return (
+                      <ThemedText key={lineNumber} style={[styles.lineNumberText, hasLineError && styles.lineNumberTextError]}>
+                        {lineNumber}
+                      </ThemedText>
+                    );
+                  })}
+                </ScrollView>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  multiline
+                  onChangeText={setPastedJson}
+                  placeholder="Paste the AI-generated JSON here"
+                  placeholderTextColor={colors.placeholder}
+                  scrollEnabled
+                  spellCheck={false}
+                  style={[styles.jsonEditorInput, { color: colors.text }]}
+                  textAlignVertical="top"
+                  value={pastedJson}
+                />
+              </View>
+              <View style={styles.diagnosticsPanel}>
+                {editorDiagnostics.map((diagnostic, index) => (
+                  <View
+                    key={`${diagnostic.severity}-${diagnostic.line ?? 'global'}-${diagnostic.message}-${index}`}
+                    style={[
+                      styles.diagnosticRow,
+                      diagnostic.severity === 'error'
+                        ? styles.diagnosticError
+                        : diagnostic.severity === 'warning'
+                          ? styles.diagnosticWarning
+                          : styles.diagnosticInfo,
+                    ]}>
+                    <ThemedText style={styles.diagnosticLine}>{diagnostic.line ? `L${diagnostic.line}` : '--'}</ThemedText>
+                    <ThemedText style={styles.diagnosticMessage}>{diagnostic.message}</ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <ScrollView style={styles.detailScroller} contentContainerStyle={styles.detailBody} showsVerticalScrollIndicator={false}>
+        {importReport ? (
+          <View
+            style={[
+              styles.importReport,
+              {
+                backgroundColor: importReport.status === 'success' ? designSystem.colors.limeSoft : colors.surface,
+                borderColor: importReport.status === 'success' ? designSystem.colors.lime : colors.borderSoft,
+              },
+            ]}>
+            <ThemedText style={styles.importReportTitle}>
+              {importReport.status === 'success' ? 'JSON compiled' : 'JSON compiler errors'} · {importReport.fileName}
+            </ThemedText>
+            {importReport.messages.map((message) => (
+              <ThemedText key={message} style={styles.importReportMessage}>{message}</ThemedText>
+            ))}
+          </View>
+        ) : null}
         {groupedRows.map((group) => (
           <SectionBlock colors={colors} key={group.title} title={group.title}>
             <View style={[styles.table, { borderColor: colors.borderSoft }]}>
@@ -2240,6 +2733,468 @@ async function pickSchemaImage(editor: 'image' | 'images', currentValue: string,
   onChange([...existingUris, ...nextUris].join(', '));
 }
 
+function compileDraftJson(jsonText: string, draft: DraftResource): { draft: DraftResource; messages: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`Invalid JSON syntax: ${error instanceof Error ? error.message : 'parse failed'}`);
+  }
+
+  if (!isPlainRecord(parsed)) {
+    throw new Error('Root must be a JSON object.');
+  }
+
+  const kind = typeof parsed.kind === 'string' ? parsed.kind : null;
+  if (kind !== draft.kind) {
+    errors.push(`kind must be "${draft.kind}".`);
+  }
+
+  const fields = isPlainRecord(parsed.fields) ? parsed.fields : null;
+  if (!fields) {
+    errors.push('fields object is required.');
+  }
+
+  if (!fields) {
+    throw new Error(errors.join('\n'));
+  }
+
+  const usedFieldKeys = new Set<string>();
+  const rows = draft.rows.map((row) => {
+    const importedValue = readImportedField(fields, row.label, usedFieldKeys);
+    if (importedValue === undefined || importedValue === null || importedValue === '') {
+      errors.push(`${row.label} is required.`);
+      return row;
+    }
+
+    const compiledValue = compileSchemaValue(row, importedValue, errors);
+    return { ...row, value: compiledValue };
+  });
+
+  const knownRoots = new Set(draft.rows.map((row) => row.label.split('.')[0]));
+  Object.keys(fields).forEach((key) => {
+    if (!usedFieldKeys.has(key) && !knownRoots.has(key)) {
+      warnings.push(`Ignored unknown field "${key}".`);
+    }
+  });
+
+  if (errors.length) {
+    throw new Error(errors.join('\n'));
+  }
+
+  return {
+    draft: { ...draft, rows } as DraftResource,
+    messages: warnings,
+  };
+}
+
+function analyzeDraftJsonText(jsonText: string, draft: DraftResource): JsonEditorDiagnostic[] {
+  const trimmedText = jsonText.trim();
+  if (!trimmedText) {
+    return [{ message: 'Paste generated JSON to start live validation.', severity: 'info' }];
+  }
+
+  const diagnostics: JsonEditorDiagnostic[] = [];
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    const syntax = getJsonSyntaxDiagnostic(jsonText, error);
+    return [{ line: syntax.line, message: syntax.message, severity: 'error' }];
+  }
+
+  if (!isPlainRecord(parsed)) {
+    return [{ line: 1, message: 'Root must be a JSON object.', severity: 'error' }];
+  }
+
+  if (parsed.kind !== draft.kind) {
+    diagnostics.push({
+      line: findJsonLine(jsonText, 'kind'),
+      message: `kind must be "${draft.kind}".`,
+      severity: 'error',
+    });
+  }
+
+  if (!isPlainRecord(parsed.fields)) {
+    diagnostics.push({
+      line: findJsonLine(jsonText, 'fields'),
+      message: 'fields object is required.',
+      severity: 'error',
+    });
+    return diagnostics;
+  }
+
+  const validLabels = draft.rows.map((row) => row.label);
+  const flattenedFields = flattenImportedFields(parsed.fields);
+  flattenedFields.forEach((field) => {
+    if (validLabels.includes(field.path)) {
+      return;
+    }
+
+    const suggestion = findClosestFieldLabel(field.path, validLabels);
+    diagnostics.push({
+      line: findJsonLine(jsonText, field.key),
+      message: suggestion ? `Unknown field "${field.path}". Did you mean "${suggestion}"?` : `Unknown field "${field.path}".`,
+      severity: 'warning',
+    });
+  });
+
+  try {
+    const compiled = compileDraftJson(jsonText, draft);
+    compiled.messages.forEach((message) => {
+      diagnostics.push({ message, severity: 'warning' });
+    });
+  } catch (error) {
+    splitCompilerMessage(error instanceof Error ? error.message : 'Could not compile JSON.').forEach((message) => {
+      diagnostics.push({
+        line: findDiagnosticLine(jsonText, message),
+        message,
+        severity: 'error',
+      });
+    });
+  }
+
+  getPlaceholderDiagnostics(jsonText, flattenedFields).forEach((diagnostic) => diagnostics.push(diagnostic));
+
+  if (diagnostics.length === 0) {
+    return [{ message: 'Ready to compile. JSON matches the manager schema.', severity: 'info' }];
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+function flattenImportedFields(value: Record<string, unknown>, prefix = ''): { key: string; path: string; value: unknown }[] {
+  const fields: { key: string; path: string; value: unknown }[] = [];
+
+  Object.entries(value).forEach(([key, fieldValue]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isPlainRecord(fieldValue) && !isCoordinateLikeRecord(fieldValue)) {
+      fields.push(...flattenImportedFields(fieldValue, path));
+      return;
+    }
+
+    fields.push({ key, path, value: fieldValue });
+  });
+
+  return fields;
+}
+
+function getPlaceholderDiagnostics(jsonText: string, fields: { key: string; path: string; value: unknown }[]): JsonEditorDiagnostic[] {
+  return fields.flatMap((field) => {
+    const values = Array.isArray(field.value) ? field.value : [field.value];
+    const diagnostics: JsonEditorDiagnostic[] = [];
+    if (values.some((value) => {
+      if (typeof value !== 'string') {
+        return false;
+      }
+      const normalized = value.trim().toLowerCase();
+      return normalized === 'string' || normalized === 'https://...' || normalized === '...' || normalized.includes('placeholder');
+    })) {
+      diagnostics.push({
+        line: findJsonLine(jsonText, field.key),
+        message: `${field.path} still looks like placeholder text.`,
+        severity: 'warning',
+      });
+    }
+
+    const isImageField = field.path === 'imageUri' || field.path.endsWith('.imageUri') || field.path === 'galleryImages' || field.path.endsWith('.galleryImages');
+
+    if (!isImageField && values.some((value) => typeof value === 'string' && looksLikeCorruptedImportedText(value))) {
+      diagnostics.push({
+        line: findJsonLine(jsonText, field.key),
+        message: `${field.path} looks corrupted with markdown, URLs, or JSON fragments.`,
+        severity: 'error',
+      });
+    }
+
+    if (isImageField && values.some((value) => typeof value !== 'string' || !isValidPublicImageUrl(value.trim()))) {
+      diagnostics.push({
+        line: findJsonLine(jsonText, field.key),
+        message: `${field.path} must contain bare public image URL strings only.`,
+        severity: 'error',
+      });
+    }
+
+    return diagnostics;
+  });
+}
+
+function getJsonSyntaxDiagnostic(jsonText: string, error: unknown) {
+  const message = error instanceof Error ? error.message : 'Invalid JSON syntax.';
+  const positionMatch = message.match(/position\s+(\d+)/i);
+  if (!positionMatch) {
+    return { line: 1, message: `Invalid JSON syntax: ${message}` };
+  }
+
+  const position = Number(positionMatch[1]);
+  const line = jsonText.slice(0, position).split('\n').length;
+  return { line, message: `Invalid JSON syntax near line ${line}: ${message}` };
+}
+
+function findDiagnosticLine(jsonText: string, message: string) {
+  const fieldMatch = message.match(/^([A-Za-z0-9_.]+)\s/);
+  if (!fieldMatch) {
+    return undefined;
+  }
+
+  const parts = fieldMatch[1].split('.');
+  return findJsonLine(jsonText, parts[parts.length - 1] ?? fieldMatch[1]);
+}
+
+function findJsonLine(jsonText: string, key: string) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`"${escapedKey}"\\s*:`);
+  const lines = jsonText.split('\n');
+  const lineIndex = lines.findIndex((line) => pattern.test(line));
+  return lineIndex >= 0 ? lineIndex + 1 : undefined;
+}
+
+function findClosestFieldLabel(fieldPath: string, validLabels: string[]) {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestLabel = '';
+
+  validLabels.forEach((label) => {
+    const distance = levenshteinDistance(fieldPath.toLowerCase(), label.toLowerCase());
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestLabel = label;
+    }
+  });
+
+  if (!bestLabel || bestDistance > Math.max(3, Math.floor(bestLabel.length / 3))) {
+    return null;
+  }
+
+  return bestLabel;
+}
+
+function levenshteinDistance(first: string, second: string) {
+  const previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+  const current = Array.from({ length: second.length + 1 }, () => 0);
+
+  for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+    current[0] = firstIndex;
+    for (let secondIndex = 1; secondIndex <= second.length; secondIndex += 1) {
+      const cost = first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1;
+      current[secondIndex] = Math.min(
+        current[secondIndex - 1] + 1,
+        previous[secondIndex] + 1,
+        previous[secondIndex - 1] + cost
+      );
+    }
+    for (let index = 0; index <= second.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[second.length];
+}
+
+function isCoordinateLikeRecord(value: Record<string, unknown>) {
+  return 'longitude' in value || 'latitude' in value || 'lng' in value || 'lat' in value;
+}
+
+function dedupeDiagnostics(diagnostics: JsonEditorDiagnostic[]) {
+  const seen = new Set<string>();
+  return diagnostics.filter((diagnostic) => {
+    const key = `${diagnostic.line ?? ''}:${diagnostic.severity}:${diagnostic.message}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function compileSchemaValue(row: SchemaRow, value: unknown, errors: string[]) {
+  const editor = row.editor ?? getSchemaEditor(row.label, row.multiline);
+
+  if (editor === 'number') {
+    const numberValue = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(numberValue)) {
+      errors.push(`${row.label} must be a number.`);
+      return '';
+    }
+    return String(numberValue);
+  }
+
+  if (editor === 'select') {
+    const textValue = String(value).trim();
+    const options = row.options ?? getSchemaOptions(row.label);
+    if (!options.some((option) => option === textValue)) {
+      errors.push(`${row.label} must be one of: ${options.map((option) => option || 'Not set').join(', ')}.`);
+    }
+    return textValue;
+  }
+
+  if (editor === 'coordinate') {
+    const coordinate = normalizeImportedCoordinate(value);
+    if (!coordinate) {
+      errors.push(`${row.label} must be "longitude, latitude", [longitude, latitude], or { "longitude": number, "latitude": number }.`);
+      return '';
+    }
+    return formatCoordinateValue(coordinate);
+  }
+
+  if (editor === 'image') {
+    if (typeof value !== 'string' || !value.trim()) {
+      errors.push(`${row.label} must be an image URL string.`);
+      return '';
+    }
+    const imageUri = value.trim();
+    if (!isValidPublicImageUrl(imageUri)) {
+      errors.push(`${row.label} must be a bare public image URL starting with http:// or https://. Do not include markdown brackets or extra text.`);
+    }
+    return imageUri;
+  }
+
+  if (editor === 'images') {
+    if (Array.isArray(value)) {
+      const items = value.map((item) => String(item).trim()).filter(Boolean);
+      if (items.length === 0) {
+        errors.push(`${row.label} must include at least one item.`);
+      }
+      items.forEach((item) => {
+        if (!isValidPublicImageUrl(item)) {
+          errors.push(`${row.label} contains an invalid image URL: ${item}`);
+        }
+      });
+      return items.join(', ');
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const items = value.split(',').map((item) => item.trim()).filter(Boolean);
+      items.forEach((item) => {
+        if (!isValidPublicImageUrl(item)) {
+          errors.push(`${row.label} contains an invalid image URL: ${item}`);
+        }
+      });
+      return items.join(', ');
+    }
+    errors.push(`${row.label} must be a non-empty array or comma-separated string.`);
+    return '';
+  }
+
+  if (editor === 'list') {
+    if (Array.isArray(value)) {
+      const items = value.map((item) => String(item).trim()).filter(Boolean);
+      if (items.length === 0) {
+        errors.push(`${row.label} must include at least one item.`);
+      }
+      return items.join(', ');
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    errors.push(`${row.label} must be a non-empty array or comma-separated string.`);
+    return '';
+  }
+
+  if (editor === 'json') {
+    if (typeof value === 'string') {
+      try {
+        JSON.parse(value);
+        return value;
+      } catch {
+        errors.push(`${row.label} must be valid JSON.`);
+        return value;
+      }
+    }
+    return JSON.stringify(value, null, 2);
+  }
+
+  const textValue = String(value).trim();
+  if (!textValue) {
+    errors.push(`${row.label} must be populated.`);
+  }
+  if (looksLikeCorruptedImportedText(textValue)) {
+    errors.push(`${row.label} looks corrupted. Keep this as plain text only; move image URLs into imageUri/galleryImages and remove JSON or markdown fragments.`);
+  }
+  return textValue;
+}
+
+function isValidPublicImageUrl(value: string) {
+  if (value.includes('[') || value.includes(']') || value.includes('(') || value.includes(')') || value.includes('%22')) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeCorruptedImportedText(value: string) {
+  const normalized = value.toLowerCase();
+  return (
+    /\[[^\]]*\]\(https?:\/\//i.test(value) ||
+    /https?:\/\//i.test(value) ||
+    normalized.includes('%22') ||
+    normalized.includes('"galleryimages"') ||
+    normalized.includes('"imageuri"') ||
+    normalized.includes('"bookingnote"') ||
+    normalized.includes('galleryimages%22') ||
+    normalized.includes('imageuri%22') ||
+    normalized.includes('bookingnote%22')
+  );
+}
+
+function readImportedField(fields: Record<string, unknown>, label: string, usedFieldKeys: Set<string>) {
+  if (Object.prototype.hasOwnProperty.call(fields, label)) {
+    usedFieldKeys.add(label);
+    return fields[label];
+  }
+
+  const path = label.split('.');
+  let value: unknown = fields;
+  let consumedRoot: string | null = null;
+  for (const segment of path) {
+    if (!isPlainRecord(value) || !Object.prototype.hasOwnProperty.call(value, segment)) {
+      return undefined;
+    }
+    consumedRoot = consumedRoot ?? segment;
+    value = value[segment];
+  }
+
+  if (consumedRoot) {
+    usedFieldKeys.add(consumedRoot);
+  }
+  return value;
+}
+
+function normalizeImportedCoordinate(value: unknown): readonly [number, number] | null {
+  if (typeof value === 'string') {
+    return parseCoordinateValue(value);
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const longitude = Number(value[0]);
+    const latitude = Number(value[1]);
+    return Number.isFinite(longitude) && Number.isFinite(latitude) ? ([longitude, latitude] as const) : null;
+  }
+
+  if (isPlainRecord(value)) {
+    const longitude = Number(value.longitude ?? value.lng);
+    const latitude = Number(value.latitude ?? value.lat);
+    return Number.isFinite(longitude) && Number.isFinite(latitude) ? ([longitude, latitude] as const) : null;
+  }
+
+  return null;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function splitCompilerMessage(message: string) {
+  return message.split('\n').map((item) => item.trim()).filter(Boolean);
+}
+
 function parseCoordinateValue(value: string): readonly [number, number] | null {
   const [longitudeRaw, latitudeRaw] = value.split(',').map((part) => Number(part.trim()));
 
@@ -2453,13 +3408,13 @@ function parsePriceAmount(value: string) {
   return normalized ? Number.parseFloat(normalized[0]) : 0;
 }
 
-function formatUsdPrice(value: string) {
+function formatDraftUsdPrice(value: string, currencyCode: string) {
   const amount = Number.parseFloat(value);
   if (!Number.isFinite(amount) || amount <= 0) {
-    return 'Converted for each traveler';
+    return { amountLabel: 'Converted for each traveler', rateLabel: '' };
   }
 
-  return `$${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} base`;
+  return formatUsdConversionParts(amount, currencyCode);
 }
 
 function getManagedBookingDateLabel(booking: ManagedBooking) {
@@ -2731,6 +3686,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 16,
   },
+  disabledButton: {
+    opacity: 0.55,
+  },
   secondaryButton: {
     alignItems: 'center',
     backgroundColor: designSystem.colors.scrimFaint,
@@ -2841,6 +3799,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 18,
     minHeight: 22,
+  },
+  derivedValueStack: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  derivedRateText: {
+    color: designSystem.colors.gray,
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 15,
   },
   priceCell: {
     alignItems: 'center',
@@ -3534,7 +4503,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     gap: 12,
-    maxWidth: 760,
+    maxWidth: 1120,
     padding: 16,
     width: '100%',
   },
@@ -3549,6 +4518,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  coordinatePickerLayout: {
+    flexDirection: 'row',
+    gap: 14,
+    minHeight: 460,
+  },
+  coordinateSearchPane: {
+    flexBasis: 360,
+    flexGrow: 0,
+    flexShrink: 0,
+    gap: 10,
+  },
   coordinateSearchInput: {
     borderRadius: 10,
     borderWidth: 1,
@@ -3559,21 +4539,16 @@ const styles = StyleSheet.create({
   },
   coordinateMapFrame: {
     borderRadius: 12,
-    height: 300,
+    flex: 1,
+    minHeight: 460,
     overflow: 'hidden',
   },
   coordinateMap: {
     flex: 1,
   },
-  coordinateManualInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    fontSize: 13,
-    minHeight: 38,
-    paddingHorizontal: 12,
-  },
   mapboxSuggestionList: {
     borderRadius: 10,
+    flex: 1,
     overflow: 'hidden',
   },
   mapboxSuggestionRow: {
@@ -3626,6 +4601,145 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 360,
     textAlign: 'center',
+  },
+  importReport: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 5,
+    padding: 12,
+  },
+  importReportTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 17,
+  },
+  importReportMessage: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  promptModalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.scrim,
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  promptModal: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+    maxHeight: '86%',
+    maxWidth: 920,
+    padding: 16,
+    width: '100%',
+  },
+  promptModalHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  promptModalTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  promptTextArea: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    fontFamily: 'Courier',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    minHeight: 260,
+    padding: 12,
+    textAlignVertical: 'top',
+  },
+  pasteCompilerBox: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+    padding: 12,
+  },
+  pasteCompilerHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  jsonEditorFrame: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    minHeight: 220,
+    overflow: 'hidden',
+  },
+  lineNumberGutter: {
+    backgroundColor: designSystem.colors.scrimFaint,
+    flexGrow: 0,
+    paddingHorizontal: 8,
+    paddingTop: 11,
+    width: 44,
+  },
+  lineNumberText: {
+    color: designSystem.colors.gray,
+    fontFamily: 'Courier',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+  lineNumberTextError: {
+    color: designSystem.colors.copper,
+  },
+  jsonEditorInput: {
+    flex: 1,
+    fontFamily: 'Courier',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    minHeight: 220,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  diagnosticsPanel: {
+    gap: 6,
+  },
+  diagnosticRow: {
+    alignItems: 'flex-start',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  diagnosticError: {
+    backgroundColor: 'rgba(161, 75, 26, 0.14)',
+  },
+  diagnosticWarning: {
+    backgroundColor: designSystem.colors.scrimFaint,
+  },
+  diagnosticInfo: {
+    backgroundColor: designSystem.colors.limeSoft,
+  },
+  diagnosticLine: {
+    color: designSystem.colors.gray,
+    fontFamily: 'Courier',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 16,
+    width: 34,
+  },
+  diagnosticMessage: {
+    color: designSystem.colors.ink,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   draftHeader: {
     alignItems: 'flex-start',

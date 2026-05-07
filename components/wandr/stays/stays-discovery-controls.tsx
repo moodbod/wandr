@@ -6,8 +6,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
+import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
+import type { PlanningLocation } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { TripListItem } from '@/types/trip';
 
@@ -17,6 +19,7 @@ type SortMode = 'best' | 'price';
 type StaysDiscoveryControlsProps = {
   discoveryMode: DiscoveryMode;
   leadingSearchAccessory?: React.ReactNode;
+  planningLocation?: PlanningLocation;
   showMapButtons?: boolean;
   searchQuery: string;
   selectedTripId?: string;
@@ -35,6 +38,7 @@ type StaysDiscoveryControlsProps = {
 export function StaysDiscoveryControls({
   discoveryMode,
   leadingSearchAccessory,
+  planningLocation,
   showMapButtons = true,
   searchQuery,
   selectedTripId,
@@ -84,7 +88,11 @@ export function StaysDiscoveryControls({
             width={52}
             radius={designSystem.radii.pill}
           >
-            <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
+            {planningLocation?.countryCode ? (
+              <CountryFlagAvatar countryCode={planningLocation.countryCode} size={28} />
+            ) : (
+              <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
+            )}
           </GlassButton>
         ) : null}
         <GlassInput
@@ -102,7 +110,7 @@ export function StaysDiscoveryControls({
           }
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
-          placeholder="Search stays or towns"
+          placeholder="Search hotels or towns"
           placeholderTextColor={
             isDesktopMap
               ? isDark

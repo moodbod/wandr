@@ -40,6 +40,7 @@ import {
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreJoinableTripCardsRef, getExplorePageContentRef, getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
@@ -58,6 +59,7 @@ import { MagnifyingGlass, NavigationArrow, Plus } from 'phosphor-react-native';
 
 const EMPTY_TRIPS: readonly TripListItem[] = [];
 const EMPTY_JOINABLE_TRIP_CARDS: readonly ExploreJoinableTripCard[] = [];
+const TRENDING_PLACE_LIMIT = 10;
 const INTENT_OPTIONS: readonly DiscoveryOption[] = [
   { key: 'all', label: 'Everything' },
   { key: 'adventure', label: 'Adventure' },
@@ -277,6 +279,8 @@ function ExploreScreenView({
   }>();
   const router = useRouter();
   const { isLargeScreen, isTablet, width: viewportWidth } = useResponsive();
+  const settings = useCurrentUserSettings();
+  const preferredCurrency = settings?.preferredCurrency ?? 'USD';
   const [recenterToUserSignal, setRecenterToUserSignal] = useState(0);
   const [selectedExperienceSlug, setSelectedExperienceSlug] = useState<string | null>(null);
   const [selectedGroupCircleId, setSelectedGroupCircleId] = useState<string | null>(null);
@@ -297,7 +301,10 @@ function ExploreScreenView({
     ? params.hiddenGemSlug[0]
     : params.hiddenGemSlug;
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
-  const planningCopy = useMemo(() => getPlanningLocationCopy(planningLocation.id), [planningLocation.id]);
+  const planningCopy = useMemo(
+    () => getPlanningLocationCopy(planningLocation.id, planningLocation.label),
+    [planningLocation.id, planningLocation.label]
+  );
   const locationTrips = useMemo(
     () => trips.filter((candidate) => coordinateIsInPlanningLocation(candidate.centerCoordinate, planningLocation)),
     [planningLocation, trips]
@@ -309,7 +316,7 @@ function ExploreScreenView({
     () => (currentLocationInPlanningLocation ? null : getPlanningLocationRouteStart(planningLocation)),
     [currentLocationInPlanningLocation, planningLocation]
   );
-  const tripMarkers = useMemo(() => (trip ? buildTripMapMarkers(trip.items, 10) : []), [trip]);
+  const tripMarkers = useMemo(() => (trip ? buildTripMapMarkers(trip.items, 10, preferredCurrency) : []), [preferredCurrency, trip]);
   const tripRouteCoordinates = useMemo(
     () =>
       buildTripRouteCoordinates(trip, {
@@ -378,29 +385,6 @@ function ExploreScreenView({
       ...markers,
     ];
   }, [fallbackRouteStart, locationExploreMarkers, locationTripMarkers, planningLocation.id]);
-  const locationActivities = useMemo(
-    () =>
-      content.activities.filter((activity) => {
-        const experience = experienceBySlug.get(activity.experienceSlug);
-
-        return destinationMatchesPlanningLocation({
-          coordinate: experience?.coordinate,
-          countryCode: experience?.countryCode,
-          countryLabel: experience?.countryLabel,
-          location: planningLocation,
-          planningLocationId: experience?.planningLocationId,
-          labels: [
-            experience?.locationLabel,
-            experience?.geography?.region,
-            experience?.geography?.town,
-            experience?.title,
-            activity.title,
-            activity.subtitle,
-          ],
-        });
-      }),
-    [content.activities, experienceBySlug, planningLocation]
-  );
   const locationExperienceBySlug = useMemo(() => {
     const locationExperiences = pageContent.experiences.filter((experience) =>
       destinationMatchesPlanningLocation({
@@ -421,6 +405,14 @@ function ExploreScreenView({
 
     return new Map(locationExperiences.map((experience) => [experience.slug, experience]));
   }, [pageContent.experiences, planningLocation]);
+  const locationActivities = useMemo(
+    () =>
+      Array.from(locationExperienceBySlug.values())
+        .sort(compareExperiencesByPopularity)
+        .slice(0, TRENDING_PLACE_LIMIT)
+        .map(toTrendingActivityCard),
+    [locationExperienceBySlug]
+  );
   const locationJoinableTripCards = useMemo(
     () =>
       joinableTripCards.filter((card) => {
@@ -574,17 +566,9 @@ function ExploreScreenView({
         .filter((experience) =>
           matchesExperienceFilters(experience, resolvedDiscoveryRegion, activeDiscoveryIntent, searchQuery)
         )
-        .map((experience) => ({
-          badge: experience.badge,
-          badgeTone: experience.badgeTone,
-          ctaLabel: experience.ctaLabel,
-          experienceSlug: experience.slug,
-          imageUri: experience.imageUri,
-          price: experience.price,
-          priceSuffix: experience.priceSuffix,
-          subtitle: experience.locationLabel ?? experience.subtitle,
-          title: experience.title,
-        })),
+        .sort(compareExperiencesByPopularity)
+        .slice(0, TRENDING_PLACE_LIMIT)
+        .map(toTrendingActivityCard),
     [activeDiscoveryIntent, locationExperienceBySlug, resolvedDiscoveryRegion, searchQuery]
   );
   const discoveryHiddenGems = useMemo(
@@ -969,7 +953,6 @@ const ExploreContent = memo(function ExploreContent({
         .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
     });
   }, [contentActivities, discoveryActivities, normalizedSearchQuery]);
-
   const { isLargeScreen } = useResponsive();
   const ScrollComponent = isLargeScreen ? ScrollView : BottomSheetScrollView;
 
@@ -1158,6 +1141,14 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
         <Animated.View style={headerAnimatedStyle ? [styles.mobileSectionHeader, headerAnimatedStyle] : styles.mobileSectionHeader}>
           <View style={styles.sectionCopy}>
             <ThemedText style={styles.mobileSectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+            <ThemedText
+              style={[
+                styles.mobileSectionSubtitle,
+                { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
+              ]}
+            >
+              Nearby plans, open groups, and places worth saving.
+            </ThemedText>
           </View>
           <Link href="/explore/search" asChild>
             <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
@@ -1360,8 +1351,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionTitle: {
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '600',
   },
   mobileSectionHeader: {
@@ -1374,6 +1365,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '600',
+  },
+  mobileSectionSubtitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '500',
+    maxWidth: 260,
   },
   createTripButtonContent: {
     flexDirection: 'row',
@@ -1485,15 +1482,47 @@ const styles = StyleSheet.create({
   },
 });
 
-function getPlanningLocationCopy(locationId: string) {
-  if (locationId === 'south-africa') {
-    return {
-      exploreTitle: 'Start with Cape Town, then branch out',
-    };
+function getExperiencePopularityCount(experience: ExplorePageContent['experiences'][number]) {
+  return Math.max(
+    experience.travelerMomentum?.visitorCount ?? 0,
+    experience.reviewCount ?? 0
+  );
+}
+
+function compareExperiencesByPopularity(
+  a: ExplorePageContent['experiences'][number],
+  b: ExplorePageContent['experiences'][number]
+) {
+  const popularityDelta = getExperiencePopularityCount(b) - getExperiencePopularityCount(a);
+
+  if (popularityDelta !== 0) {
+    return popularityDelta;
   }
 
+  return a.title.localeCompare(b.title);
+}
+
+function toTrendingActivityCard(
+  experience: ExplorePageContent['experiences'][number]
+): ExplorePageContent['home']['activities'][number] {
   return {
-    exploreTitle: 'Start with a popular place, then branch out',
+    badge: experience.badge,
+    badgeTone: experience.badgeTone,
+    ctaLabel: experience.ctaLabel,
+    experienceSlug: experience.slug,
+    imageUri: experience.imageUri,
+    price: experience.price,
+    priceSuffix: experience.priceSuffix,
+    subtitle: experience.locationLabel ?? experience.subtitle,
+    title: experience.title,
+    visitorCount: getExperiencePopularityCount(experience),
+    countryLabel: experience.countryLabel ?? experience.locationLabel,
+  };
+}
+
+function getPlanningLocationCopy(_locationId: string, locationLabel: string) {
+  return {
+    exploreTitle: `Top 10 places in ${locationLabel}`,
   };
 }
 

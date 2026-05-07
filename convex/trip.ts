@@ -57,6 +57,7 @@ export const getCurrentTravelerProfile = query({
     return {
       slug: user.slug,
       name: user.name,
+      email: user.email ?? null,
       countryCode: user.countryCode,
       countryLabel: user.countryLabel,
       phoneNumber: user.phoneNumber ?? null,
@@ -70,6 +71,55 @@ export const getCurrentTravelerProfile = query({
   },
 });
 
+async function requireIdentity(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+
+  if (!identity) {
+    throw new Error('Not authenticated');
+  }
+
+  return identity;
+}
+
+function getIdentityEmail(identity: { email?: string | null }) {
+  return typeof identity.email === 'string' ? identity.email.trim().toLowerCase() : '';
+}
+
+async function findAppUserForIdentity(
+  ctx: QueryCtx | MutationCtx,
+  tokenIdentifier: string,
+  options?: { phoneNumber?: string; email?: string }
+) {
+  const userByToken = await ctx.db
+    .query('appUsers')
+    .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', tokenIdentifier))
+    .unique();
+
+  if (userByToken) {
+    return userByToken;
+  }
+
+  if (options?.email) {
+    const userByEmail = await ctx.db
+      .query('appUsers')
+      .withIndex('by_email', (q) => q.eq('email', options.email!))
+      .unique();
+
+    if (userByEmail) {
+      return userByEmail;
+    }
+  }
+
+  if (!options?.phoneNumber) {
+    return null;
+  }
+
+  return await ctx.db
+    .query('appUsers')
+    .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', options.phoneNumber!))
+    .unique();
+}
+
 function normalizePhoneNumber(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -79,6 +129,10 @@ function normalizePhoneNumber(value: string) {
   const hasPlus = trimmed.startsWith('+');
   const digits = trimmed.replace(/\D/g, '');
   return digits ? `${hasPlus ? '+' : ''}${digits}` : '';
+}
+
+function getIdentityPhoneNumber(identity: { phoneNumber?: string | null }) {
+  return normalizePhoneNumber(identity.phoneNumber ?? '');
 }
 
 function slugFromNameAndPhone(name: string, phoneNumber: string) {
@@ -498,7 +552,6 @@ export const verifyPhoneOtp = mutation({
 export const completePhoneOnboarding = mutation({
   args: {
     phoneNumber: v.string(),
-    verificationToken: v.string(),
     name: v.string(),
     countryCode: v.string(),
     countryLabel: v.string(),
@@ -506,7 +559,9 @@ export const completePhoneOnboarding = mutation({
     travelStyle: v.union(v.literal('solo'), v.literal('couple'), v.literal('friends'), v.literal('family')),
   },
   handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
     const phoneNumber = normalizePhoneNumber(args.phoneNumber);
+    const email = getIdentityEmail(identity);
     const name = args.name.trim();
     const homeCity = args.homeCity?.trim();
 
@@ -518,21 +573,20 @@ export const completePhoneOnboarding = mutation({
       throw new Error('Enter your name.');
     }
 
-    await consumePhoneVerification(ctx, phoneNumber, args.verificationToken);
-
     const now = Date.now();
-    const existingUser = await ctx.db
-      .query('appUsers')
-      .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', phoneNumber))
-      .unique();
+    const existingUser = await findAppUserForIdentity(ctx, identity.tokenIdentifier, { phoneNumber, email });
 
     const slug = existingUser?.slug ?? slugFromNameAndPhone(name, phoneNumber);
 
     if (existingUser) {
       await ctx.db.patch(existingUser._id, {
+        tokenIdentifier: identity.tokenIdentifier,
+        authUserId: identity.subject,
+        email: email || existingUser.email,
         name,
         countryCode: args.countryCode,
         countryLabel: args.countryLabel,
+        phoneNumber,
         homeCity: homeCity || undefined,
         travelStyle: args.travelStyle,
         onboardingCompletedAt: existingUser.onboardingCompletedAt ?? now,
@@ -540,6 +594,9 @@ export const completePhoneOnboarding = mutation({
     } else {
       await ctx.db.insert('appUsers', {
         slug,
+        tokenIdentifier: identity.tokenIdentifier,
+        authUserId: identity.subject,
+        email: email || undefined,
         name,
         countryCode: args.countryCode,
         countryLabel: args.countryLabel,
@@ -601,37 +658,26 @@ export const completePhoneOnboarding = mutation({
   },
 });
 
-export const getPhoneAuthSession = mutation({
-  args: {
-    phoneNumber: v.string(),
-    verificationToken: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const phoneNumber = normalizePhoneNumber(args.phoneNumber);
+export const getCurrentAuthSession = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
 
-    if (!phoneNumber || phoneNumber.length < 8) {
-      throw new Error('Enter a valid phone number.');
+    if (!identity) {
+      return null;
     }
 
-    const existingUser = await ctx.db
-      .query('appUsers')
-      .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', phoneNumber))
-      .unique();
+    const phoneNumber = getIdentityPhoneNumber(identity);
+    const email = getIdentityEmail(identity);
+    const existingUser = await findAppUserForIdentity(ctx, identity.tokenIdentifier, { phoneNumber, email });
 
     if (!existingUser) {
       return null;
     }
 
-    await consumePhoneVerification(ctx, phoneNumber, args.verificationToken);
-
     return {
-      slug: existingUser.slug,
-      name: existingUser.name,
-      countryCode: existingUser.countryCode,
-      countryLabel: existingUser.countryLabel,
-      phoneNumber,
-      homeCity: existingUser.homeCity ?? null,
-      travelStyle: existingUser.travelStyle ?? null,
+      travelerSlug: existingUser.slug,
+      phoneNumber: existingUser.phoneNumber ?? phoneNumber,
     };
   },
 });
@@ -1203,6 +1249,7 @@ export const listTravelerBookings = query({
 
 export const listManagedBookings = query({
   args: {
+    managerSlug: v.string(),
     status: v.optional(v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'))),
   },
   handler: async (ctx, args) => {
@@ -1235,6 +1282,10 @@ export const listManagedBookings = query({
         ]);
         const bookingStatus = booking.status ?? 'confirmed';
 
+        if (experience?.managerSlug !== args.managerSlug) {
+          return null;
+        }
+
         return {
           _id: booking._id,
           source: 'experienceBooking' as const,
@@ -1264,6 +1315,10 @@ export const listManagedBookings = query({
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
           .unique();
 
+        if (stay?.managerSlug !== args.managerSlug) {
+          return null;
+        }
+
         return {
           _id: booking._id,
           source: 'stayBooking' as const,
@@ -1287,7 +1342,10 @@ export const listManagedBookings = query({
       })
     );
 
-    return [...experiences, ...stays].sort((a, b) => b.bookedAt - a.bookedAt).slice(0, 100);
+    const ownedExperiences = experiences.filter((booking): booking is NonNullable<typeof booking> => Boolean(booking));
+    const ownedStays = stays.filter((booking): booking is NonNullable<typeof booking> => Boolean(booking));
+
+    return [...ownedExperiences, ...ownedStays].sort((a, b) => b.bookedAt - a.bookedAt).slice(0, 100);
   },
 });
 
@@ -1638,6 +1696,113 @@ export const listAllStays = query({
       id: stay.slug,
       priceLabel: `$${stay.pricePerNight}`,
     }));
+  },
+});
+
+export const listManagedStays = query({
+  args: { managerSlug: v.string() },
+  handler: async (ctx, args) => {
+    const stays = await ctx.db
+      .query('stays')
+      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', args.managerSlug))
+      .take(100);
+
+    return stays.map((stay) => ({
+      ...stay,
+      id: stay.slug,
+      priceLabel: `$${stay.pricePerNight}`,
+    }));
+  },
+});
+
+async function createUniqueStaySlug(ctx: MutationCtx, name: string) {
+  const base =
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'stay';
+  let slug = base;
+  let suffix = 2;
+
+  while (
+    await ctx.db
+      .query('stays')
+      .withIndex('by_slug', (q) => q.eq('slug', slug))
+      .unique()
+  ) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+export const createManagedStay = mutation({
+  args: {
+    managerSlug: v.string(),
+    name: v.string(),
+    summary: v.string(),
+    coordinate: v.array(v.number()),
+    imageUri: v.string(),
+    galleryImages: v.array(v.string()),
+    priceUsd: v.number(),
+    bookingNote: v.string(),
+    stayStyle: v.union(v.literal('design'), v.literal('lodge'), v.literal('roadside'), v.literal('wellness')),
+    routeVibe: v.union(v.literal('city reset'), v.literal('coast base'), v.literal('wildlife stop'), v.literal('desert night')),
+    idealFor: v.array(v.string()),
+    amenities: v.array(v.string()),
+    nearbyHighlights: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const slug = await createUniqueStaySlug(ctx, args.name);
+    const roomId = 'standard-room';
+    const arrivalId = 'standard-arrival';
+
+    await ctx.db.insert('stays', {
+      slug,
+      managerSlug: args.managerSlug,
+      name: args.name,
+      locationLabel: 'Map location',
+      town: 'Windhoek',
+      region: 'Khomas',
+      countryCode: 'NA',
+      countryLabel: 'Namibia',
+      coordinate: args.coordinate,
+      imageUri: args.imageUri,
+      galleryImages: args.galleryImages.length ? args.galleryImages : [args.imageUri],
+      pricePerNight: args.priceUsd,
+      currencyCode: 'USD',
+      rating: 0,
+      reviewCount: 0,
+      stayStyle: args.stayStyle,
+      routeVibe: args.routeVibe,
+      sleepSignal: 'New listing',
+      summary: args.summary,
+      idealFor: args.idealFor,
+      amenities: args.amenities,
+      nearbyHighlights: args.nearbyHighlights,
+      bookingProfile: {
+        roomOptions: [
+          {
+            id: roomId,
+            label: 'Standard room',
+            detail: 'Default room option',
+            maxAdults: 2,
+            maxChildren: 1,
+            maxRooms: 1,
+            bedOptions: [{ id: 'standard-bed', label: 'Standard bed' }],
+          },
+        ],
+        arrivalOptions: [{ id: arrivalId, label: 'Standard arrival' }],
+        defaultRoomOptionId: roomId,
+        defaultArrivalOptionId: arrivalId,
+      },
+      bookingNote: args.bookingNote,
+      bookingProvider: 'manager',
+    });
+
+    return { roomId, slug };
   },
 });
 

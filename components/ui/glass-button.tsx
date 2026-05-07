@@ -56,8 +56,8 @@ export function GlassButton({
   const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
   const isAndroid = Platform.OS === 'android';
   const tintColor = isPrimary ? designSystem.colors.limeSoft : designSystem.colors.transparentWhite;
-  const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
-  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const surfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong;
+  const borderColor = isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.whiteBorder;
   const androidSurfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
   const androidDisabledSurfaceColor = isDark ? designSystem.colors.darkCard : designSystem.colors.surface;
   const androidBorderColor = isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;

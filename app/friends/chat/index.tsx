@@ -25,6 +25,7 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createOpenFriendGroupRef, getFriendChatListRef, listUserTripsRef } from '@/lib/convex';
+import type { FriendChatListItem, JoinableFriendGroup } from '@/types/friends';
 
 type ChatFilter = 'primary' | 'groups' | 'chats';
 type ChatDetail =
@@ -49,7 +50,7 @@ export default function FriendsChatListScreen() {
   const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
-  const chatList = useQuery(getFriendChatListRef, { travelerSlug: traveler?.slug ?? '' });
+  const chatList = useQuery(getFriendChatListRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const createGroup = useMutation(createOpenFriendGroupRef);
   const sheetRef = useRef<BottomSheet>(null);
@@ -76,6 +77,18 @@ export default function FriendsChatListScreen() {
       )
     );
   }, [chatList?.groups, normalizedSearchQuery]);
+  const filteredJoinableGroups = useMemo(() => {
+    const groups = chatList?.joinableGroups ?? [];
+    if (!normalizedSearchQuery) {
+      return groups;
+    }
+
+    return groups.filter((item: JoinableFriendGroup) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearchQuery)
+      )
+    );
+  }, [chatList?.joinableGroups, normalizedSearchQuery]);
   const filteredDirects = useMemo(() => {
     const directs = chatList?.directs ?? [];
     if (!normalizedSearchQuery) {
@@ -127,7 +140,7 @@ export default function FriendsChatListScreen() {
   };
 
   const handleSubmitCreateGroup = async () => {
-    if (!traveler?.slug || selectedFriendSlugs.length === 0) {
+    if (!traveler?.slug) {
       return;
     }
 
@@ -258,7 +271,18 @@ export default function FriendsChatListScreen() {
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
             <View style={styles.rowList}>
-              {filteredGroups.map((item: any) => (
+              {filteredGroups.map((item: FriendChatListItem) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {showGroups && filteredJoinableGroups.length ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Open groups</ThemedText>
+            <View style={styles.rowList}>
+              {filteredJoinableGroups.map((item: JoinableFriendGroup) => (
                 <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
               ))}
             </View>
@@ -285,7 +309,7 @@ export default function FriendsChatListScreen() {
           </View>
         ) : null}
 
-        {(showGroups ? filteredGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
+        {(showGroups ? filteredGroups.length + filteredJoinableGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyTitle}>No chats yet</ThemedText>
             <ThemedText style={styles.emptyDescription}>
@@ -326,7 +350,7 @@ export default function FriendsChatListScreen() {
         <BottomSheetView style={styles.sheetContent}>
           <View style={styles.sheetHeader}>
             <ThemedText style={styles.sheetTitle}>Create group</ThemedText>
-            <ThemedText style={styles.sheetDescription}>Choose at least one friend to start with.</ThemedText>
+            <ThemedText style={styles.sheetDescription}>Invite friends now or start an open group.</ThemedText>
           </View>
           <BottomSheetTextInput
             style={[styles.sheetInput, isDark ? styles.sheetInputDark : null]}
@@ -353,7 +377,7 @@ export default function FriendsChatListScreen() {
                     style={[styles.friendOption, isSelected ? styles.friendOptionActive : null]}>
                     <FaceHashAvatar
                       name={friend.name || friend.travelerSlug || 'Traveler'}
-                      seed={friend.travelerSlug}
+                      paletteKey={friend.travelerSlug}
                       size={44}
                       uri={friend.avatarUri}
                       style={styles.friendAvatar}
@@ -408,17 +432,17 @@ export default function FriendsChatListScreen() {
           </View>
           <Pressable
             accessibilityLabel="Create group"
-            onPress={isCreatingGroup || selectedFriendSlugs.length === 0 ? undefined : handleSubmitCreateGroup}
+            onPress={isCreatingGroup || !traveler?.slug ? undefined : handleSubmitCreateGroup}
             style={[
               styles.createButton,
-              isCreatingGroup || selectedFriendSlugs.length === 0 ? styles.createButtonDisabled : null,
+              isCreatingGroup || !traveler?.slug ? styles.createButtonDisabled : null,
             ]}>
             <ThemedText style={styles.createButtonText}>
               {isCreatingGroup
                 ? 'Creating...'
-                : selectedFriendSlugs.length === 0
-                  ? 'Select friends'
-                  : `Create group (${selectedFriendSlugs.length})`}
+                : selectedFriendSlugs.length > 0
+                  ? `Create group (${selectedFriendSlugs.length})`
+                  : 'Create open group'}
             </ThemedText>
           </Pressable>
         </BottomSheetView>

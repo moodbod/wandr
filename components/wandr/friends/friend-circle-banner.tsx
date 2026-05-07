@@ -46,7 +46,7 @@ export function FriendCircleBanner({
         <TravelerAvatarStack
           avatars={circle.avatarUris}
           fallbackName={circle.name}
-          fallbackSeed={circle._id}
+          fallbackPaletteKey={circle._id}
           totalCount={circle.memberCount}
         />
       </View>

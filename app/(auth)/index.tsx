@@ -1,17 +1,11 @@
-import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useAction, useMutation } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AsYouType, parsePhoneNumberFromString, type CountryCode as PhoneCountryCode } from 'libphonenumber-js/min';
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
-import { FlagType, getAllCountries, type Country, type CountryCode } from 'react-native-country-picker-modal';
-import { OtpInput, type OtpInputRef } from 'react-native-otp-entry';
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  type LayoutChangeEvent,
-  type NativeSyntheticEvent,
-  type NativeScrollEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -19,23 +13,27 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { type CountryCode } from 'react-native-country-picker-modal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { PhoneCountrySheet, type PhoneCountrySelection } from '@/components/wandr/phone-country-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassInput } from '@/components/ui/glass-input';
 import { Input } from '@/components/ui/input';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
-import { completePhoneOnboardingRef, getPhoneAuthSessionRef, requestPhoneOtpRef, verifyPhoneOtpRef } from '@/lib/convex';
+import { authClient } from '@/lib/auth-client';
+import { completePhoneOnboardingRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
 type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 type IntroSlide = { icon: MaterialIconName; title: string; body: string };
 type TravelStyleOption = { value: 'solo' | 'couple' | 'friends' | 'family'; label: string; icon: MaterialIconName };
+type FlowStep = 'intro' | 'auth' | 'profile' | 'done';
+type AuthMode = 'signIn' | 'signUp';
+type TravelStyle = (typeof travelStyles)[number]['value'];
 
 const introSlides: IntroSlide[] = [
   {
@@ -57,14 +55,10 @@ const introSlides: IntroSlide[] = [
 
 const travelStyles: TravelStyleOption[] = [
   { value: 'solo', label: 'Solo', icon: 'account' },
-  { value: 'couple', label: 'Couple', icon: 'heart-outline' },
-  { value: 'friends', label: 'Friends', icon: 'account-group-outline' },
+  { value: 'couple', label: 'Couple', icon: 'heart' },
+  { value: 'friends', label: 'Friends', icon: 'account-group' },
   { value: 'family', label: 'Family', icon: 'home-heart' },
 ] as const;
-
-type FlowStep = 'intro' | 'phone' | 'verify' | 'profile' | 'done';
-type TravelStyle = (typeof travelStyles)[number]['value'];
-type AuthPalette = ReturnType<typeof createAuthPalette>;
 
 const AUTH_LAYOUT = {
   artIconSize: 108,
@@ -76,11 +70,6 @@ const AUTH_LAYOUT = {
   artStageMaxWidth: 360,
   backButtonSize: 44,
   checkIconSize: 112,
-  codeBoxHeight: designSystem.layout.inputHeight + 2,
-  codeBoxWidth: 48,
-  countryFlagCircleSize: 32,
-  countryRowFlagWidth: 32,
-  countrySheetSnapPoints: ['58%'] as (string | number)[],
   desktopMaxWidth: 560,
   doneCheckRadius: 42,
   doneCheckRotation: '-10deg',
@@ -88,13 +77,11 @@ const AUTH_LAYOUT = {
   disabledOpacity: 0.45,
   formTitleFontSize: 31,
   iconSize: 24,
-  iconSizeSm: 20,
   iconSizeMd: 22,
   introCopyMaxWidth: 320,
   introSlideHorizontalPadding: designSystem.spacing.xl,
   primaryButtonHeight: designSystem.layout.inputHeight + designSystem.spacing.xs / 2,
   progressHeight: 5,
-  sheetBackdropOpacity: 0.28,
   skipButtonHeight: 42,
   skipButtonWidth: 76,
   travelStyleWidth: '47%',
@@ -104,117 +91,72 @@ function createAuthPalette(isDark: boolean) {
   return {
     background: isDark ? designSystem.semantic.dark.background : designSystem.semantic.light.background,
     surface: isDark ? designSystem.semantic.dark.surfaceRaised : designSystem.colors.white,
-    surfaceMuted: isDark ? designSystem.semantic.dark.surface : designSystem.colors.surface,
     text: isDark ? designSystem.semantic.dark.text : designSystem.semantic.light.text,
     textMuted: isDark ? designSystem.semantic.dark.textMuted : designSystem.semantic.light.textMuted,
-    textSubtle: isDark ? designSystem.semantic.dark.textSubtle : designSystem.semantic.light.textSubtle,
     border: isDark ? designSystem.semantic.dark.borderSoft : designSystem.semantic.light.border,
     borderStrong: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen,
     placeholder: isDark ? designSystem.semantic.dark.placeholder : designSystem.semantic.light.placeholder,
     primary: designSystem.colors.lime,
     primaryText: designSystem.colors.darkGreen,
     error: designSystem.colors.liked,
-    countryPickerTheme: {
-      primaryColor: designSystem.colors.lime,
-      primaryColorVariant: isDark ? designSystem.colors.darkGreen : designSystem.colors.mint,
-      backgroundColor: isDark ? designSystem.semantic.dark.surfaceRaised : designSystem.colors.white,
-      onBackgroundTextColor: isDark ? designSystem.semantic.dark.text : designSystem.semantic.light.text,
-      filterPlaceholderTextColor: isDark ? designSystem.semantic.dark.placeholder : designSystem.semantic.light.placeholder,
-    },
   };
 }
 
-export default function PhoneOnboardingScreen() {
-  const { signIn } = useAuthSession();
+export default function AuthScreen() {
   const completeOnboarding = useMutation(completePhoneOnboardingRef);
-  const getPhoneAuthSession = useMutation(getPhoneAuthSessionRef);
-  const requestPhoneOtp = useAction(requestPhoneOtpRef);
-  const verifyPhoneOtp = useMutation(verifyPhoneOtpRef);
+  const { session } = useAuthSession();
+  const { data: betterSession, isPending: isSessionPending } = authClient.useSession();
   const { width } = useWindowDimensions();
   const { isLargeScreen } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
-  const countrySheetRef = useRef<BottomSheet>(null);
-  const codeInputRef = useRef<OtpInputRef>(null);
   const [step, setStep] = useState<FlowStep>('intro');
+  const [mode, setMode] = useState<AuthMode>('signIn');
   const [slideIndex, setSlideIndex] = useState(0);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [homeCity, setHomeCity] = useState('');
   const [countryCode, setCountryCode] = useState<CountryCode>('NA');
   const [callingCode, setCallingCode] = useState('264');
   const [countryLabel, setCountryLabel] = useState('Namibia');
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [countrySearch, setCountrySearch] = useState('');
-  const [countrySheetVisible, setCountrySheetVisible] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [homeCity, setHomeCity] = useState('');
   const [travelStyle, setTravelStyle] = useState<TravelStyle>('solo');
   const [error, setError] = useState<string | null>(null);
-  const [otpHint, setOtpHint] = useState<string | null>(null);
-  const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const shouldConstrainAuthWidth = isLargeScreen;
+  const authFrameWidth = shouldConstrainAuthWidth ? Math.min(width, AUTH_LAYOUT.desktopMaxWidth) : width;
   const formattedPhone = useMemo(() => new AsYouType(countryCode as PhoneCountryCode).input(phone), [countryCode, phone]);
   const parsedPhoneNumber = useMemo(
     () => parsePhoneNumberFromString(phone, countryCode as PhoneCountryCode),
     [countryCode, phone]
   );
   const fullPhoneNumber = parsedPhoneNumber?.number ?? `+${callingCode}${phone.replace(/\D/g, '')}`;
-
-  const canContinuePhone = parsedPhoneNumber?.isValid() ?? false;
-  const canContinueProfile = name.trim().length >= 2;
-  const shouldConstrainAuthWidth = isLargeScreen;
-  const authFrameWidth = shouldConstrainAuthWidth ? Math.min(width, AUTH_LAYOUT.desktopMaxWidth) : width;
-  const filteredCountries = useMemo(() => {
-    const query = normalizeSearch(countrySearch);
-    if (!query) {
-      return countries;
-    }
-
-    return countries.filter((country) => {
-      const name = normalizeSearch(getCountryName(country));
-      const code = country.cca2.toLowerCase();
-      const dialCode = country.callingCode[0] ?? '';
-      const dialQuery = query.replace(/\D/g, '');
-      return name.includes(query) || code.includes(query) || (dialQuery.length > 0 && dialCode.includes(dialQuery));
-    });
-  }, [countries, countrySearch]);
+  const canContinueProfile = name.trim().length >= 2 && Boolean(parsedPhoneNumber?.isValid());
 
   useEffect(() => {
-    let isMounted = true;
+    if (session) {
+      setStep('done');
+      return;
+    }
 
-    getAllCountries(FlagType.EMOJI)
-      .then((nextCountries) => {
-        if (!isMounted) {
-          return;
-        }
+    if (betterSession?.session) {
+      setEmail(betterSession.user.email ?? '');
+      setStep('profile');
+      return;
+    }
 
-        setCountries(nextCountries);
-        const currentCountry = nextCountries.find((country) => country.cca2 === countryCode);
-        if (currentCountry) {
-          setCountryLabel(getCountryName(currentCountry));
-          setCallingCode(currentCountry.callingCode[0] ?? callingCode);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setCountries([]);
-        }
-      });
+    setStep((current) => (current === 'done' ? 'auth' : current === 'profile' ? 'auth' : current));
+  }, [betterSession?.session, betterSession?.user.email, session]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [callingCode, countryCode]);
+  function getErrorMessage(cause: unknown, fallback: string) {
+    if (cause && typeof cause === 'object' && 'message' in cause && typeof (cause as { message?: unknown }).message === 'string') {
+      return (cause as { message: string }).message;
+    }
 
-  function handleSelectCountry(nextCountry: Country) {
-    setCountryCode(nextCountry.cca2);
-    setCallingCode(nextCountry.callingCode[0] ?? '');
-    setCountryLabel(getCountryName(nextCountry));
-    setCountrySearch('');
-    setPhone('');
-    setError(null);
-    setCountrySheetVisible(false);
-    countrySheetRef.current?.close();
+    return fallback;
   }
 
   function handleIntroNext() {
@@ -223,83 +165,56 @@ export default function PhoneOnboardingScreen() {
       return;
     }
 
-    setStep('phone');
+    setStep('auth');
   }
 
-  async function handlePhoneNext() {
-    if (!canContinuePhone) {
-      setError('Enter a valid mobile number.');
+  async function handleAuthSubmit() {
+    if (!email.trim() || !password.trim()) {
+      setError('Enter your email and password.');
+      return;
+    }
+
+    if (password.trim().length < 8) {
+      setError('Use at least 8 characters for your password.');
       return;
     }
 
     setError(null);
-    setOtpHint(null);
-    setVerificationToken(null);
-    setCode('');
     setIsSubmitting(true);
 
     try {
-      const result = await requestPhoneOtp({ phoneNumber: fullPhoneNumber });
-      setOtpHint(result.devCode ? `Dev build code: ${result.devCode}` : null);
-      setStep('verify');
-      setTimeout(() => codeInputRef.current?.focus(), 150);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send that code.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function handleCodeChange(value: string) {
-    setCode(value.replace(/\D/g, '').slice(0, 6));
-    setError(null);
-  }
-
-  async function handleVerifyCode() {
-    if (code.length !== 6) {
-      setError('Enter the 6-digit code.');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const result = await verifyPhoneOtp({
-        phoneNumber: fullPhoneNumber,
-        code,
-      });
-      setVerificationToken(result.verificationToken);
-
-      const traveler = await getPhoneAuthSession({
-        phoneNumber: fullPhoneNumber,
-        verificationToken: result.verificationToken,
-      });
-
-      if (traveler) {
-        await signIn({
-          travelerSlug: traveler.slug,
-          phoneNumber: traveler.phoneNumber,
+      if (mode === 'signIn') {
+        const result = await authClient.signIn.email({
+          email: email.trim().toLowerCase(),
+          password,
         });
-        setStep('done');
+
+        if (result.error) {
+          throw new Error(result.error.message ?? 'Could not sign in.');
+        }
+
         return;
       }
 
-      setStep('profile');
+      const result = await authClient.signUp.email({
+        name: '',
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Could not create your account.');
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not verify that phone number.');
+      setError(getErrorMessage(cause, mode === 'signIn' ? 'Could not sign in.' : 'Could not create your account.'));
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleFinish() {
-    if (!verificationToken) {
-      setError('Verify your phone number first.');
-      return;
-    }
-
     if (!canContinueProfile) {
-      setError('Enter your name.');
+      setError('Add your name and a valid phone number.');
       return;
     }
 
@@ -307,25 +222,36 @@ export default function PhoneOnboardingScreen() {
     setIsSubmitting(true);
 
     try {
-      const traveler = await completeOnboarding({
+      await completeOnboarding({
         phoneNumber: fullPhoneNumber,
-        verificationToken,
         name: name.trim(),
         countryCode,
         countryLabel,
         homeCity: homeCity.trim() || undefined,
         travelStyle,
       });
-      await signIn({
-        travelerSlug: traveler.slug,
-        phoneNumber: traveler.phoneNumber,
-      });
       setStep('done');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not finish onboarding.');
+      setError(getErrorMessage(cause, 'Could not finish onboarding.'));
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleBackFromProfile() {
+    setError(null);
+    if (betterSession?.session) {
+      await authClient.signOut();
+    }
+    setStep('auth');
+  }
+
+  function handleSelectCountry(country: PhoneCountrySelection) {
+    setCountryCode(country.countryCode as CountryCode);
+    setCountryLabel(country.countryLabel);
+    setCallingCode(country.callingCode);
+    setPhone('');
+    setIsCountryPickerOpen(false);
   }
 
   return (
@@ -341,311 +267,210 @@ export default function PhoneOnboardingScreen() {
             onBack={() => setSlideIndex((current) => Math.max(current - 1, 0))}
             onNext={handleIntroNext}
             onSlideChange={setSlideIndex}
-            onSkip={() => setStep('phone')}
+            onSkip={() => setStep('auth')}
           />
         ) : null}
 
-        {step === 'phone' ? (
+        {step === 'auth' ? (
           <FormShell
-            title="Verify your phone number with a code"
-            subtitle="We will use your mobile number as your secure Wandr sign-in."
+            title={mode === 'signIn' ? 'Sign in to Wandr' : 'Create your account'}
+            subtitle={mode === 'signIn' ? 'Use your email and password to continue.' : 'Start with your email, then finish your traveler details.'}
             footer={
               <PrimaryButton
-                disabled={!canContinuePhone || isSubmitting}
-                label={isSubmitting ? 'Sending...' : 'Send code'}
+                disabled={isSubmitting || isSessionPending}
+                label={isSubmitting ? 'Working...' : mode === 'signIn' ? 'Sign in' : 'Continue'}
                 loading={isSubmitting}
                 palette={palette}
-                onPress={handlePhoneNext}
+                onPress={handleAuthSubmit}
               />
             }
             onBack={() => setStep('intro')}
-            palette={palette}
-          >
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              Your phone number
-            </ThemedText>
-            <View style={styles.phoneInputRow}>
-              <Pressable
-                accessibilityLabel={`Change country, currently ${countryLabel}`}
-                accessibilityRole="button"
-                style={[styles.phoneCountryButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
-                onPress={() => setCountrySheetVisible(true)}>
-                <CountryFlagAvatar countryCode={countryCode} size={AUTH_LAYOUT.countryFlagCircleSize} />
-                <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.countryDial}>
-                  +{callingCode}
-                </ThemedText>
-                <MaterialCommunityIcons color={palette.borderStrong} name="chevron-down" size={AUTH_LAYOUT.iconSizeSm} />
-              </Pressable>
-              <Input
-                keyboardType="number-pad"
-                placeholder="Phone number"
-                containerStyle={[styles.authInputContainer, styles.phoneNumberInput]}
-                textContentType="telephoneNumber"
-                value={formattedPhone}
-                onChangeText={(value) => {
-                  setPhone(value);
-                  setError(null);
-                }}
-              />
+            palette={palette}>
+            <View style={styles.modeRow}>
+              <ModeButton active={mode === 'signIn'} label="Sign in" onPress={() => setMode('signIn')} palette={palette} />
+              <ModeButton active={mode === 'signUp'} label="Create account" onPress={() => setMode('signUp')} palette={palette} />
             </View>
-            {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>{error}</ThemedText> : null}
-          </FormShell>
-        ) : null}
 
-        {step === 'verify' ? (
-          <FormShell
-            title="We just sent you an SMS"
-            subtitle={`Enter the security code for ${fullPhoneNumber}.`}
-            footer={
-              <PrimaryButton
-                disabled={code.length !== 6 || isSubmitting}
-                label={isSubmitting ? 'Checking...' : 'Next'}
-                loading={isSubmitting}
-                palette={palette}
-                onPress={handleVerifyCode}
-              />
-            }
-            onBack={() => setStep('phone')}
-            palette={palette}
-          >
-            <OtpInput
-              ref={codeInputRef}
-              autoFocus={false}
-              blurOnFilled
-              focusColor={palette.borderStrong}
-              numberOfDigits={6}
-              type="numeric"
-              onTextChange={handleCodeChange}
-              textInputProps={{
-                accessibilityLabel: 'Six-digit verification code',
-                autoComplete: Platform.OS === 'ios' ? 'sms-otp' : 'one-time-code',
-                keyboardType: 'number-pad',
-                textContentType: 'oneTimeCode',
-              }}
-              textProps={{
-                allowFontScaling: false,
-              }}
-              theme={{
-                containerStyle: styles.codeRow,
-                pinCodeContainerStyle: styles.codeBox,
-                focusedPinCodeContainerStyle: { borderColor: palette.borderStrong, borderWidth: 2 },
-                pinCodeTextStyle: styles.codeBoxInput,
-                focusStickStyle: { backgroundColor: palette.borderStrong },
+            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+              Email
+            </ThemedText>
+            <Input
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              containerStyle={styles.authInputContainer}
+              keyboardType="email-address"
+              placeholder="you@example.com"
+              textContentType="emailAddress"
+              value={email}
+              onChangeText={(value) => {
+                setEmail(value);
+                setError(null);
               }}
             />
-            {otpHint ? (
-              <ThemedText lightColor={designSystem.colors.darkGreen} darkColor={designSystem.colors.lime} style={styles.helpText}>
-                {otpHint}
+
+            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+              Password
+            </ThemedText>
+            <Input
+              autoCapitalize="none"
+              autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
+              autoCorrect={false}
+              containerStyle={styles.authInputContainer}
+              placeholder="At least 8 characters"
+              secureTextEntry
+              textContentType={mode === 'signIn' ? 'password' : 'newPassword'}
+              value={password}
+              onChangeText={(value) => {
+                setPassword(value);
+                setError(null);
+              }}
+            />
+
+            {error ? (
+              <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>
+                {error}
               </ThemedText>
             ) : null}
-            {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>{error}</ThemedText> : null}
           </FormShell>
         ) : null}
 
         {step === 'profile' ? (
-          <FormShell
-            title="A few details for your trips"
-            subtitle="Just enough to personalize stays, friends, and trip planning."
-            footer={
-              <PrimaryButton
-                disabled={!canContinueProfile || isSubmitting}
-                label={isSubmitting ? 'Saving...' : 'Finish'}
-                loading={isSubmitting}
-                palette={palette}
-                onPress={handleFinish}
+          <>
+            <FormShell
+              title="A few details for your trips"
+              subtitle="This keeps your traveler profile, stays, and friend matching useful."
+              footer={
+                <PrimaryButton
+                  disabled={!canContinueProfile || isSubmitting}
+                  label={isSubmitting ? 'Saving...' : 'Finish'}
+                  loading={isSubmitting}
+                  palette={palette}
+                  onPress={handleFinish}
+                />
+              }
+              onBack={() => {
+                void handleBackFromProfile();
+              }}
+              palette={palette}>
+              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+                Email
+              </ThemedText>
+              <Input containerStyle={styles.authInputContainer} editable={false} placeholder="Email" value={email} />
+
+              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+                Your name
+              </ThemedText>
+              <Input
+                autoCapitalize="words"
+                autoComplete="off"
+                autoCorrect={false}
+                containerStyle={styles.authInputContainer}
+                importantForAutofill="no"
+                placeholder="Tuyoleni"
+                textContentType="none"
+                value={name}
+                onChangeText={(value) => {
+                  setName(value);
+                  setError(null);
+                }}
               />
-            }
-            onBack={() => setStep('verify')}
-            palette={palette}
-          >
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              Your name
-            </ThemedText>
-            <Input
-              autoCapitalize="words"
-              placeholder="Tuyoleni"
-              containerStyle={styles.authInputContainer}
-              value={name}
-              onChangeText={setName}
-            />
 
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              Home city
-            </ThemedText>
-            <Input
-              autoCapitalize="words"
-              placeholder="Windhoek"
-              containerStyle={styles.authInputContainer}
-              value={homeCity}
-              onChangeText={setHomeCity}
-            />
-
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              How do you usually travel?
-            </ThemedText>
-            <View style={styles.travelStyleGrid}>
-              {travelStyles.map((item) => (
+              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+                Your phone number
+              </ThemedText>
+              <View style={styles.phoneInputRow}>
                 <Pressable
-                  key={item.value}
-                  style={[
-                    styles.travelStyleChip,
-                    { backgroundColor: palette.surface, borderColor: palette.border },
-                    travelStyle === item.value && { backgroundColor: palette.primary, borderColor: palette.borderStrong },
-                  ]}
-                  onPress={() => setTravelStyle(item.value)}
-                >
-                  <MaterialCommunityIcons
-                    color={travelStyle === item.value ? palette.primaryText : palette.borderStrong}
-                    name={item.icon}
-                    size={AUTH_LAYOUT.iconSizeMd}
-                  />
-                  <ThemedText
-                    lightColor={travelStyle === item.value ? palette.primaryText : designSystem.colors.ink}
-                    darkColor={travelStyle === item.value ? palette.primaryText : designSystem.colors.darkText}
-                    style={styles.travelStyleLabel}>
-                    {item.label}
+                  accessibilityLabel={`Change country, currently ${countryLabel}`}
+                  accessibilityRole="button"
+                  style={[styles.phoneCountryButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  onPress={() => setIsCountryPickerOpen(true)}>
+                  <CountryFlagAvatar countryCode={countryCode} size={32} />
+                  <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.countryDial}>
+                    +{callingCode}
                   </ThemedText>
+                  <MaterialCommunityIcons color={palette.borderStrong} name="chevron-down" size={20} />
                 </Pressable>
-              ))}
-            </View>
-            {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>{error}</ThemedText> : null}
-          </FormShell>
+                <Input
+                  keyboardType="number-pad"
+                  placeholder="Phone number"
+                  containerStyle={[styles.authInputContainer, styles.phoneNumberInput]}
+                  textContentType="telephoneNumber"
+                  value={formattedPhone}
+                  onChangeText={(value) => {
+                    setPhone(value);
+                    setError(null);
+                  }}
+                />
+              </View>
+
+              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+                Home city
+              </ThemedText>
+              <Input
+                autoCapitalize="words"
+                containerStyle={styles.authInputContainer}
+                placeholder="Windhoek"
+                value={homeCity}
+                onChangeText={setHomeCity}
+              />
+
+              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+                How do you usually travel?
+              </ThemedText>
+              <View style={styles.travelStyleGrid}>
+                {travelStyles.map((item) => {
+                  const selected = travelStyle === item.value;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={item.value}
+                      style={[
+                        styles.travelStyleBox,
+                        {
+                          backgroundColor: selected
+                            ? isDark
+                              ? designSystem.colors.darkSurface
+                              : designSystem.colors.limeMist
+                            : isDark
+                              ? designSystem.colors.darkSurfaceOverlay
+                              : designSystem.colors.surface,
+                          borderColor: designSystem.colors.borderFaint,
+                        },
+                      ]}
+                      onPress={() => setTravelStyle(item.value)}>
+                      <View style={styles.travelStyleBoxContent}>
+                        <MaterialCommunityIcons color={palette.borderStrong} name={item.icon} size={AUTH_LAYOUT.iconSizeMd} />
+                        <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.travelStyleLabel}>
+                          {item.label}
+                        </ThemedText>
+                      </View>
+                      {selected ? <MaterialCommunityIcons color={palette.borderStrong} name="check" size={AUTH_LAYOUT.iconSizeMd} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {error ? (
+                <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>
+                  {error}
+                </ThemedText>
+              ) : null}
+            </FormShell>
+            <PhoneCountrySheet
+              selectedCountryCode={countryCode as PhoneCountryCode}
+              visible={isCountryPickerOpen}
+              onClose={() => setIsCountryPickerOpen(false)}
+              onSelectCountry={handleSelectCountry}
+            />
+          </>
         ) : null}
 
         {step === 'done' ? <DoneStep palette={palette} /> : null}
       </KeyboardAvoidingView>
-      {countrySheetVisible ? (
-        <CountrySelectorSheet
-          countries={filteredCountries}
-          countrySearch={countrySearch}
-          palette={palette}
-          selectedCountryCode={countryCode}
-          sheetRef={countrySheetRef}
-          onChangeSearch={setCountrySearch}
-          onClose={() => {
-            setCountrySearch('');
-            setCountrySheetVisible(false);
-          }}
-          onSelectCountry={handleSelectCountry}
-        />
-      ) : null}
     </SafeAreaView>
-  );
-}
-
-function getCountryName(country: Country) {
-  return typeof country.name === 'string' ? country.name : country.name.common;
-}
-
-function normalizeSearch(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-function CountrySelectorSheet({
-  countries,
-  countrySearch,
-  palette,
-  selectedCountryCode,
-  sheetRef,
-  onChangeSearch,
-  onClose,
-  onSelectCountry,
-}: {
-  countries: Country[];
-  countrySearch: string;
-  palette: AuthPalette;
-  selectedCountryCode: CountryCode;
-  sheetRef: RefObject<BottomSheet | null>;
-  onChangeSearch: (value: string) => void;
-  onClose: () => void;
-  onSelectCountry: (country: Country) => void;
-}) {
-  return (
-    <GlassBottomSheet
-      ref={sheetRef}
-      index={0}
-      snapPoints={AUTH_LAYOUT.countrySheetSnapPoints}
-      enableDynamicSizing={false}
-      enablePanDownToClose
-      onChange={(index) => {
-        if (index === -1) {
-          onClose();
-        }
-      }}
-      backdropComponent={(props) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={AUTH_LAYOUT.sheetBackdropOpacity}
-          pressBehavior="close"
-        />
-      )}
-    >
-      <View style={styles.countrySheet}>
-        <View style={styles.countrySheetHeader}>
-          <View>
-            <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.countrySheetTitle}>
-              Select country
-            </ThemedText>
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.countrySheetSubtitle}>
-              Choose the mobile country code for verification.
-            </ThemedText>
-          </View>
-        </View>
-
-        <GlassInput
-          placeholder="Search country or code"
-          value={countrySearch}
-          onChangeText={onChangeSearch}
-          containerStyle={styles.countrySearchBox}
-        />
-
-        <BottomSheetFlatList
-          data={countries}
-          extraData={countrySearch}
-          keyExtractor={(country) => country.cca2}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.countryListContent}
-          renderItem={({ item }) => {
-            const isSelected = item.cca2 === selectedCountryCode;
-            return (
-              <Pressable
-                accessibilityRole="button"
-                style={[
-                  styles.countryRow,
-                  isSelected && { backgroundColor: palette.primary },
-                ]}
-                onPress={() => onSelectCountry(item)}
-              >
-                <CountryFlagAvatar countryCode={item.cca2} size={AUTH_LAYOUT.countryRowFlagWidth} />
-                <View style={styles.countryRowText}>
-                  <ThemedText
-                    lightColor={isSelected ? palette.primaryText : designSystem.colors.ink}
-                    darkColor={isSelected ? palette.primaryText : designSystem.colors.darkText}
-                    style={styles.countryRowName}>
-                    {getCountryName(item)}
-                  </ThemedText>
-                  <ThemedText
-                    lightColor={isSelected ? palette.primaryText : designSystem.colors.warmDark}
-                    darkColor={isSelected ? palette.primaryText : designSystem.colors.darkMutedText}
-                    style={styles.countryRowMeta}>
-                    {item.cca2} · +{item.callingCode[0] ?? ''}
-                  </ThemedText>
-                </View>
-                {isSelected ? (
-                  <MaterialCommunityIcons color={palette.primaryText} name="check-bold" size={AUTH_LAYOUT.iconSizeSm} />
-                ) : null}
-              </Pressable>
-            );
-          }}
-        />
-      </View>
-    </GlassBottomSheet>
   );
 }
 
@@ -658,7 +483,7 @@ function IntroStep({
   onSlideChange,
   onSkip,
 }: {
-  palette: AuthPalette;
+  palette: ReturnType<typeof createAuthPalette>;
   slideIndex: number;
   width: number;
   onBack: () => void;
@@ -666,34 +491,7 @@ function IntroStep({
   onSlideChange: (index: number) => void;
   onSkip: () => void;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
-  const [visibleSlideIndex, setVisibleSlideIndex] = useState(slideIndex);
-  const [pagerWidth, setPagerWidth] = useState(0);
-  const fallbackSlideWidth = Math.max(width - AUTH_LAYOUT.introSlideHorizontalPadding * 2, 1);
-  const slideWidth = pagerWidth > 0 ? pagerWidth : fallbackSlideWidth;
-
-  useEffect(() => {
-    setVisibleSlideIndex(slideIndex);
-    scrollRef.current?.scrollTo({ x: slideIndex * slideWidth, animated: true });
-  }, [slideIndex, slideWidth]);
-
-  function getSlideIndex(offsetX: number) {
-    const nextIndex = Math.round(offsetX / slideWidth);
-    return Math.min(Math.max(nextIndex, 0), introSlides.length - 1);
-  }
-
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    setVisibleSlideIndex(getSlideIndex(event.nativeEvent.contentOffset.x));
-  }
-
-  function handleMomentumEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    onSlideChange(getSlideIndex(event.nativeEvent.contentOffset.x));
-  }
-
-  function handlePagerLayout(event: LayoutChangeEvent) {
-    const nextWidth = Math.max(event.nativeEvent.layout.width, 1);
-    setPagerWidth((current) => (Math.abs(current - nextWidth) < 1 ? current : nextWidth));
-  }
+  const slide = introSlides[slideIndex];
 
   return (
     <View style={styles.introFrame}>
@@ -704,78 +502,53 @@ function IntroStep({
             style={[
               styles.progressTrack,
               { backgroundColor: palette.border },
-              index <= visibleSlideIndex && { backgroundColor: palette.borderStrong },
+              index <= slideIndex && { backgroundColor: palette.borderStrong },
             ]}
           />
         ))}
       </View>
+
       <View style={styles.introTopControls}>
         {slideIndex > 0 ? (
-          <GlassButton
-            accessibilityLabel="Go back to previous onboarding intro"
-            height={AUTH_LAYOUT.backButtonSize}
-            width={AUTH_LAYOUT.backButtonSize}
-            onPress={onBack}>
+          <GlassButton accessibilityLabel="Go back to previous onboarding intro" height={AUTH_LAYOUT.backButtonSize} width={AUTH_LAYOUT.backButtonSize} onPress={onBack}>
             <MaterialCommunityIcons color={palette.borderStrong} name="arrow-left" size={AUTH_LAYOUT.iconSize} />
           </GlassButton>
         ) : (
           <View style={styles.introControlSpacer} />
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Skip onboarding intro"
-          style={({ pressed }) => [
-            styles.skipButton,
-            { backgroundColor: palette.primary },
-            pressed && styles.filledButtonPressed,
-          ]}
-          onPress={onSkip}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Skip onboarding intro" style={({ pressed }) => [styles.skipButton, { backgroundColor: palette.primary }, pressed && styles.filledButtonPressed]} onPress={onSkip}>
           <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.skipText}>
             Skip
           </ThemedText>
         </Pressable>
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        bounces={false}
-        decelerationRate="fast"
-        scrollEventThrottle={designSystem.spacing.md}
-        showsHorizontalScrollIndicator={false}
-        style={styles.introPager}
-        onLayout={handlePagerLayout}
-        onScroll={handleScroll}
-        onMomentumScrollEnd={handleMomentumEnd}
-      >
-        {introSlides.map((item) => (
-          <View key={item.title} style={[styles.introPage, { width: slideWidth }]}>
-            <View style={[styles.artStage, { width: Math.min(width - designSystem.spacing.xxl * 2, AUTH_LAYOUT.artStageMaxWidth) }]}>
-              <LinearGradient
-                colors={['#9fe870', '#f8e67a', '#78d6ff']}
-                start={{ x: 0.1, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.artOrb}
-              />
-              <View style={[styles.artIconShell, { backgroundColor: palette.surface }]}>
-                <MaterialCommunityIcons color={palette.borderStrong} name={item.icon} size={AUTH_LAYOUT.artIconSize} />
-              </View>
-            </View>
-
-            <View style={styles.introCopy}>
-              <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.introTitle}>
-                {item.title}
-              </ThemedText>
-              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.introBody}>
-                {item.body}
-              </ThemedText>
-            </View>
+      <View style={styles.introPage}>
+        <View style={[styles.artStage, { width: Math.min(width - designSystem.spacing.xxl * 2, AUTH_LAYOUT.artStageMaxWidth) }]}>
+          <LinearGradient colors={['#9fe870', '#f8e67a', '#78d6ff']} start={{ x: 0.1, y: 0 }} end={{ x: 1, y: 1 }} style={styles.artOrb} />
+          <View style={[styles.artIconShell, { backgroundColor: palette.surface }]}>
+            <MaterialCommunityIcons color={palette.borderStrong} name={slide.icon} size={AUTH_LAYOUT.artIconSize} />
           </View>
-        ))}
-      </ScrollView>
+        </View>
 
-      <PrimaryButton label={slideIndex === introSlides.length - 1 ? 'Get started' : 'Next'} palette={palette} onPress={onNext} />
+        <View style={styles.introCopy}>
+          <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.introTitle}>
+            {slide.title}
+          </ThemedText>
+          <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.introBody}>
+            {slide.body}
+          </ThemedText>
+        </View>
+      </View>
+
+      <View style={styles.introFooter}>
+        <View style={styles.slideDots}>
+          {introSlides.map((_, index) => (
+            <Pressable key={index} accessibilityRole="button" onPress={() => onSlideChange(index)} style={[styles.slideDot, { backgroundColor: index === slideIndex ? palette.borderStrong : palette.border }]} />
+          ))}
+        </View>
+        <PrimaryButton label={slideIndex === introSlides.length - 1 ? 'Get started' : 'Next'} palette={palette} onPress={onNext} />
+      </View>
     </View>
   );
 }
@@ -791,18 +564,14 @@ function FormShell({
   children: React.ReactNode;
   footer: ReactNode;
   onBack: () => void;
-  palette: AuthPalette;
+  palette: ReturnType<typeof createAuthPalette>;
   subtitle: string;
   title: string;
 }) {
   return (
     <View style={styles.formFrame}>
       <View style={styles.formHeader}>
-        <GlassButton
-          accessibilityLabel="Go back"
-          height={AUTH_LAYOUT.backButtonSize}
-          width={AUTH_LAYOUT.backButtonSize}
-          onPress={onBack}>
+        <GlassButton accessibilityLabel="Go back" height={AUTH_LAYOUT.backButtonSize} width={AUTH_LAYOUT.backButtonSize} onPress={onBack}>
           <MaterialCommunityIcons color={palette.borderStrong} name="arrow-left" size={AUTH_LAYOUT.iconSize} />
         </GlassButton>
       </View>
@@ -820,6 +589,38 @@ function FormShell({
   );
 }
 
+function ModeButton({
+  active,
+  label,
+  onPress,
+  palette,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+  palette: ReturnType<typeof createAuthPalette>;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.modeButton,
+        {
+          backgroundColor: active ? palette.primary : palette.surface,
+          borderColor: active ? palette.borderStrong : palette.border,
+        },
+      ]}>
+      <ThemedText
+        lightColor={active ? palette.primaryText : designSystem.colors.ink}
+        darkColor={active ? palette.primaryText : designSystem.colors.darkText}
+        style={styles.modeButtonText}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
 function PrimaryButton({
   disabled,
   label,
@@ -830,7 +631,7 @@ function PrimaryButton({
   disabled?: boolean;
   label: string;
   loading?: boolean;
-  palette: AuthPalette;
+  palette: ReturnType<typeof createAuthPalette>;
   onPress: () => void;
 }) {
   return (
@@ -843,8 +644,7 @@ function PrimaryButton({
         disabled && styles.primaryButtonDisabled,
         pressed && styles.filledButtonPressed,
       ]}
-      onPress={onPress}
-    >
+      onPress={onPress}>
       {loading ? (
         <ActivityIndicator color={palette.primaryText} />
       ) : (
@@ -856,7 +656,7 @@ function PrimaryButton({
   );
 }
 
-function DoneStep({ palette }: { palette: AuthPalette }) {
+function DoneStep({ palette }: { palette: ReturnType<typeof createAuthPalette> }) {
   return (
     <View style={[styles.doneFrame, { backgroundColor: palette.background }]}>
       <View style={styles.doneCheck}>
@@ -898,17 +698,9 @@ const styles = StyleSheet.create({
     paddingTop: designSystem.spacing.xs,
   },
   progressTrack: {
-    backgroundColor: designSystem.colors.border,
     borderRadius: designSystem.radii.pill,
     flex: 1,
     height: AUTH_LAYOUT.progressHeight,
-  },
-  progressTrackActive: {
-    backgroundColor: designSystem.colors.darkGreen,
-  },
-  skipText: {
-    ...designSystem.type.bodyStrong,
-    color: designSystem.colors.darkGreen,
   },
   introTopControls: {
     alignItems: 'center',
@@ -919,11 +711,9 @@ const styles = StyleSheet.create({
     height: AUTH_LAYOUT.backButtonSize,
     width: AUTH_LAYOUT.backButtonSize,
   },
-  introPager: {
-    flexGrow: 0,
-  },
   introPage: {
     alignItems: 'center',
+    flex: 1,
     gap: designSystem.layout.sectionGap + designSystem.spacing.xxs / 2,
     justifyContent: 'center',
     paddingHorizontal: AUTH_LAYOUT.introSlideHorizontalPadding,
@@ -944,7 +734,6 @@ const styles = StyleSheet.create({
   },
   artIconShell: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.whiteGlassHigh,
     borderRadius: designSystem.radii.sheet - designSystem.spacing.xxs / 2,
     height: AUTH_LAYOUT.artSize,
     justifyContent: 'center',
@@ -956,7 +745,6 @@ const styles = StyleSheet.create({
     gap: designSystem.layout.compactPadding,
   },
   introTitle: {
-    color: designSystem.colors.ink,
     fontSize: designSystem.type.pageTitle.fontSize,
     fontWeight: '600',
     lineHeight: designSystem.type.pageTitle.lineHeight,
@@ -964,9 +752,22 @@ const styles = StyleSheet.create({
   },
   introBody: {
     ...designSystem.type.body,
-    color: designSystem.colors.warmDark,
     maxWidth: AUTH_LAYOUT.introCopyMaxWidth,
     textAlign: 'center',
+  },
+  introFooter: {
+    gap: designSystem.spacing.lg,
+  },
+  slideDots: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: designSystem.spacing.xs,
+    justifyContent: 'center',
+  },
+  slideDot: {
+    borderRadius: 999,
+    height: 8,
+    width: 8,
   },
   formFrame: {
     flex: 1,
@@ -981,23 +782,37 @@ const styles = StyleSheet.create({
     paddingTop: designSystem.spacing.xxl,
   },
   formTitle: {
-    color: designSystem.colors.ink,
     fontSize: AUTH_LAYOUT.formTitleFontSize,
     fontWeight: '600',
     lineHeight: designSystem.type.pageTitle.lineHeight,
   },
   formSubtitle: {
     ...designSystem.type.body,
-    color: designSystem.colors.warmDark,
     marginTop: designSystem.layout.compactPadding,
   },
   formFields: {
     gap: designSystem.spacing.sm,
     marginTop: designSystem.radii.sheet - designSystem.spacing.xxs / 2,
   },
+  modeRow: {
+    flexDirection: 'row',
+    gap: designSystem.spacing.sm,
+    marginBottom: designSystem.spacing.sm,
+  },
+  modeButton: {
+    alignItems: 'center',
+    borderRadius: designSystem.radii.pill,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: designSystem.layout.inputHeight,
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  modeButtonText: {
+    ...designSystem.type.bodyStrong,
+  },
   fieldLabel: {
     ...designSystem.type.label,
-    color: designSystem.colors.warmDark,
     marginTop: designSystem.spacing.xs,
   },
   authInputContainer: {
@@ -1014,113 +829,45 @@ const styles = StyleSheet.create({
     borderRadius: designSystem.radii.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: designSystem.spacing.xs - designSystem.spacing.xxs / 2,
+    gap: designSystem.spacing.xs,
     height: designSystem.layout.inputHeight,
     paddingHorizontal: designSystem.spacing.xs,
   },
   countryDial: {
     ...designSystem.type.bodyStrong,
-    color: designSystem.colors.warmDark,
   },
   phoneNumberInput: {
     flex: 1,
     marginBottom: 0,
-  },
-  countrySheet: {
-    flex: 1,
-    paddingHorizontal: designSystem.spacing.md,
-    paddingTop: designSystem.spacing.lg,
-  },
-  countrySheetHeader: {
-    alignItems: 'flex-start',
-    marginBottom: designSystem.type.subtitle.fontSize,
-  },
-  countrySheetTitle: {
-    ...designSystem.type.title,
-    fontWeight: '600',
-  },
-  countrySheetSubtitle: {
-    ...designSystem.type.bodySmall,
-    marginTop: designSystem.spacing.xxs,
-    maxWidth: designSystem.spacing.xxxl * 7,
-  },
-  countrySearchBox: {
-    marginBottom: 0,
-  },
-  countryListContent: {
-    paddingBottom: designSystem.spacing.xxl,
-    paddingTop: designSystem.spacing.sm,
-  },
-  countryRow: {
-    alignItems: 'center',
-    borderRadius: designSystem.radii.card - designSystem.spacing.sm / 2,
-    flexDirection: 'row',
-    gap: designSystem.spacing.sm,
-    minHeight: designSystem.layout.inputHeight + designSystem.spacing.xxs,
-    paddingHorizontal: designSystem.spacing.xs,
-  },
-  countryRowText: {
-    flex: 1,
-    gap: designSystem.spacing.xxs / 2,
-  },
-  countryRowName: {
-    ...designSystem.type.bodyStrong,
-  },
-  countryRowMeta: {
-    ...designSystem.type.caption,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    gap: designSystem.spacing.xs,
-    justifyContent: 'space-between',
-  },
-  codeBox: {
-    borderColor: designSystem.colors.border,
-    borderRadius: designSystem.radii.card - designSystem.spacing.sm / 2,
-    borderWidth: 1,
-    height: AUTH_LAYOUT.codeBoxHeight,
-    paddingHorizontal: 0,
-    width: AUTH_LAYOUT.codeBoxWidth,
-  },
-  codeBoxInput: {
-    ...designSystem.type.title,
-    height: designSystem.type.title.lineHeight,
-    textAlign: 'center',
-  },
-  helpText: {
-    ...designSystem.type.bodyStrong,
-    color: designSystem.colors.darkGreen,
-    marginTop: designSystem.spacing.xl,
-    textAlign: 'center',
-    textDecorationLine: 'underline',
   },
   travelStyleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: designSystem.spacing.xs + designSystem.spacing.xxs / 2,
   },
-  travelStyleChip: {
+  travelStyleBox: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.white,
-    borderColor: designSystem.colors.border,
-    borderRadius: designSystem.radii.card - designSystem.spacing.xxs / 2,
+    borderRadius: designSystem.radii.card,
     borderWidth: 1,
     flexBasis: AUTH_LAYOUT.travelStyleWidth,
     flexDirection: 'row',
-    gap: designSystem.spacing.xs + designSystem.spacing.xxs / 2,
-    minHeight: designSystem.layout.inputHeight + designSystem.spacing.xs - StyleSheet.hairlineWidth * 2,
+    justifyContent: 'space-between',
+    minHeight: designSystem.layout.inputHeight + designSystem.spacing.md,
     paddingHorizontal: designSystem.layout.compactPadding,
+  },
+  travelStyleBoxContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: designSystem.spacing.xs + designSystem.spacing.xxs / 2,
   },
   travelStyleLabel: {
     ...designSystem.type.bodyStrong,
-    color: designSystem.colors.ink,
   },
   errorText: {
     ...designSystem.type.bodySmallStrong,
     color: designSystem.colors.liked,
   },
   footer: {
-    borderColor: designSystem.colors.borderSoft,
     borderTopWidth: 1,
     padding: designSystem.spacing.lg,
   },
@@ -1153,9 +900,12 @@ const styles = StyleSheet.create({
     minWidth: AUTH_LAYOUT.skipButtonWidth,
     paddingHorizontal: designSystem.spacing.md,
   },
+  skipText: {
+    ...designSystem.type.bodyStrong,
+    color: designSystem.colors.darkGreen,
+  },
   doneFrame: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.darkGreen,
     flex: 1,
     gap: designSystem.spacing.xl - designSystem.spacing.xxs / 2,
     justifyContent: 'center',
@@ -1179,7 +929,6 @@ const styles = StyleSheet.create({
   },
   doneBody: {
     ...designSystem.type.body,
-    color: designSystem.colors.darkText,
     textAlign: 'center',
   },
 });

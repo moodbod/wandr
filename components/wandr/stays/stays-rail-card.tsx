@@ -12,6 +12,7 @@ type StaysRailCardProps = {
   name: string;
   presentation?: 'list' | 'floating';
   priceLabel: string;
+  priceRateLabel?: string;
   rating: number;
 };
 
@@ -23,6 +24,7 @@ export function StaysRailCard({
   name,
   presentation = 'list',
   priceLabel,
+  priceRateLabel,
   rating,
 }: StaysRailCardProps) {
   const isFloating = presentation === 'floating';
@@ -79,6 +81,11 @@ export function StaysRailCard({
           <ThemedText numberOfLines={2} style={[styles.propertyTitle, isDark && styles.propertyTitleDark]}>
             {name}
           </ThemedText>
+          {priceRateLabel ? (
+            <ThemedText numberOfLines={1} style={[styles.priceRateText, isDark && styles.priceRateTextDark]}>
+              {priceRateLabel}
+            </ThemedText>
+          ) : null}
         </View>
       </View>
     </View>
@@ -127,6 +134,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 12,
     fontWeight: '600',
+  },
+  priceRateText: {
+    color: designSystem.colors.gray,
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 15,
+  },
+  priceRateTextDark: {
+    color: designSystem.colors.darkMutedText,
   },
   propertyBody: {
     flex: 1,

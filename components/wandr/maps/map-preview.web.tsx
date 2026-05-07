@@ -28,6 +28,7 @@ function MapPreviewWebComponent({
   colorSchemeMode = 'system',
   markerVariant = 'default',
   onInteract,
+  onMapPress,
   onMarkerPress,
   style,
 }: MapPreviewProps) {
@@ -35,6 +36,9 @@ function MapPreviewWebComponent({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markerRefs = useRef<mapboxgl.Marker[]>([]);
   const onInteractRef = useRef(onInteract);
+  const onMapPressRef = useRef(onMapPress);
+  const hasUserInteractedRef = useRef(false);
+  const lastCameraTargetKeyRef = useRef<string | null>(null);
   const initialMapConfigRef = useRef<{
     centerCoordinate: readonly [number, number] | null;
     isDark: boolean;
@@ -76,6 +80,10 @@ function MapPreviewWebComponent({
   useEffect(() => {
     onInteractRef.current = onInteract;
   }, [onInteract]);
+
+  useEffect(() => {
+    onMapPressRef.current = onMapPress;
+  }, [onMapPress]);
 
   useEffect(() => {
     initialMapConfigRef.current = {
@@ -122,15 +130,23 @@ function MapPreviewWebComponent({
       logoPosition: 'bottom-left',
       pitch: 0,
       pitchWithRotate: false,
-      style: initialConfig.isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/outdoors-v12',
+      style: initialConfig.isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
       touchPitch: false,
       zoom: initialConfig.zoomLevel,
     });
 
     mapRef.current = map;
     map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
-    map.on('dragstart', () => onInteractRef.current?.());
-    map.on('zoomstart', () => onInteractRef.current?.());
+    const handleUserInteract = () => {
+      hasUserInteractedRef.current = true;
+      onInteractRef.current?.();
+    };
+    map.on('dragstart', handleUserInteract);
+    map.on('zoomstart', handleUserInteract);
+    map.on('click', (event) => {
+      onMapPressRef.current?.([event.lngLat.lng, event.lngLat.lat]);
+      handleUserInteract();
+    });
 
     let hasLoaded = false;
     let resizeFrame: number | null = null;
@@ -178,7 +194,7 @@ function MapPreviewWebComponent({
       return;
     }
 
-    mapRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/outdoors-v12');
+    mapRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12');
   }, [isDark, isMapReady]);
 
   useEffect(() => {
@@ -186,6 +202,17 @@ function MapPreviewWebComponent({
       return;
     }
 
+    const cameraTargetKey = getCameraTargetKey(resolvedCenterCoordinate, zoomLevel);
+    if (cameraTargetKey === lastCameraTargetKeyRef.current) {
+      return;
+    }
+
+    if (hasUserInteractedRef.current && !centerCoordinate) {
+      return;
+    }
+
+    lastCameraTargetKeyRef.current = cameraTargetKey;
+    hasUserInteractedRef.current = false;
     mapRef.current.easeTo({
       bearing: 0,
       center: resolvedCenterCoordinate as [number, number],
@@ -194,13 +221,15 @@ function MapPreviewWebComponent({
       pitch: 0,
       zoom: zoomLevel,
     });
-  }, [cameraPadding, resolvedCenterCoordinate, zoomLevel]);
+  }, [cameraPadding, centerCoordinate, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
       return;
     }
 
+    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, 17);
+    hasUserInteractedRef.current = false;
     mapRef.current.easeTo({
       bearing: userHeading ?? 0,
       center: userCoordinate as [number, number],
@@ -520,6 +549,10 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number) {
+  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}`;
 }
 
 const webMapStyle = {

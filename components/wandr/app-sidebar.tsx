@@ -34,11 +34,11 @@ export function AppSidebar() {
   const { isManagerMode } = useManagerMode();
   const { mode: managerResourceMode, openManager, setSurface, surface: managerSurface } = useManagerResourceMode();
 
-  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.darkGreen;
-  const inactiveColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
-  const surfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassStrong;
-  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
-  const activeBackground = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.limeSoft;
+  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
+  const inactiveColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
+  const surfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassHigh;
+  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteBorder;
+  const activeBackground = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.limeMist;
   const activeHref = getActiveNavHref(pathname);
 
   return (
@@ -51,26 +51,28 @@ export function AppSidebar() {
         },
       ]}
     >
-      <View style={[styles.navSection, { backgroundColor: surfaceColor, borderColor }]}>
-        {NAV_ITEMS.map((item) => {
-          const isActive = String(item.href) === activeHref;
-          return (
-            <Pressable
-              accessibilityLabel={item.label}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              key={item.label}
-              onPress={() => router.push(item.href)}
-              style={[styles.navItem, isActive && { backgroundColor: activeBackground }]}
-            >
-              <MaterialCommunityIcons
-                name={isActive ? item.icon : item.outlineIcon}
-                size={22}
-                color={isActive ? activeColor : inactiveColor}
-              />
-            </Pressable>
-          );
-        })}
+      <View style={styles.topStack}>
+        <View style={[styles.navSection, { backgroundColor: surfaceColor, borderColor }]}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = String(item.href) === activeHref;
+            return (
+              <Pressable
+                accessibilityLabel={item.label}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                key={item.label}
+                onPress={() => router.push(item.href)}
+                style={[styles.navItem, isActive && { backgroundColor: activeBackground }]}
+              >
+                <MaterialCommunityIcons
+                  name={isActive ? item.icon : item.outlineIcon}
+                  size={22}
+                  color={isActive ? activeColor : inactiveColor}
+                />
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <View style={styles.bottomStack}>
@@ -128,7 +130,7 @@ export function AppSidebar() {
         >
           <FaceHashAvatar
             name={traveler?.name || 'Traveler'}
-            seed={traveler?.slug}
+            paletteKey={traveler?.slug}
             size={32}
             uri={traveler?.avatarUri}
             style={[styles.avatarCircle, { borderColor }]}
@@ -184,17 +186,21 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   navSection: {
-    gap: 8,
-    borderRadius: 28,
+    gap: 10,
+    borderRadius: 30,
     borderWidth: 1,
-    padding: 6,
+    padding: 7,
   },
   navItem: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topStack: {
+    alignItems: 'center',
+    gap: 14,
   },
   bottomStack: {
     gap: 10,

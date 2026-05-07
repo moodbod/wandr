@@ -43,7 +43,7 @@ export function FriendChatListRow({
             <TravelerAvatarStack
               avatars={groupAvatarUris}
               fallbackName={item.title}
-              fallbackSeed={item.id}
+              fallbackPaletteKey={item.id}
               maxVisible={3}
               totalCount={item.memberCount ?? groupAvatarUris.length}
             />
@@ -60,7 +60,7 @@ export function FriendChatListRow({
             style={styles.avatarButton}>
             <FaceHashAvatar
               name={item.title || item.travelerSlug || 'Traveler'}
-              seed={item.travelerSlug}
+              paletteKey={item.travelerSlug}
               size={44}
               uri={item.avatarUri}
               style={styles.avatar}

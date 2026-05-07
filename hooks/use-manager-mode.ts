@@ -3,6 +3,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 const MANAGER_MODE_STORAGE_KEY = 'wandr.manager-mode.v1';
+const listeners = new Set<(state: { isLoading: boolean; isManagerMode: boolean }) => void>();
+
+let isManagerModeSnapshot = false;
+let isLoadingSnapshot = true;
+let managerModeLoadPromise: Promise<void> | null = null;
+
+function emitManagerModeState() {
+  const state = { isLoading: isLoadingSnapshot, isManagerMode: isManagerModeSnapshot };
+  listeners.forEach((listener) => listener(state));
+}
 
 async function readManagerMode() {
   const value =
@@ -31,31 +41,36 @@ async function writeManagerMode(isEnabled: boolean) {
 }
 
 export function useManagerMode() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isManagerMode, setIsManagerMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(isLoadingSnapshot);
+  const [isManagerMode, setIsManagerMode] = useState(isManagerModeSnapshot);
 
   useEffect(() => {
-    let isMounted = true;
+    const listener = (state: { isLoading: boolean; isManagerMode: boolean }) => {
+      setIsLoading(state.isLoading);
+      setIsManagerMode(state.isManagerMode);
+    };
 
-    readManagerMode()
-      .then((storedValue) => {
-        if (isMounted) {
-          setIsManagerMode(storedValue);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
+    listeners.add(listener);
+
+    if (!managerModeLoadPromise) {
+      managerModeLoadPromise = readManagerMode()
+        .then((storedValue) => {
+          isManagerModeSnapshot = storedValue;
+        })
+        .finally(() => {
+          isLoadingSnapshot = false;
+          emitManagerModeState();
+        });
+    }
 
     return () => {
-      isMounted = false;
+      listeners.delete(listener);
     };
   }, []);
 
   const setManagerMode = useCallback(async (nextValue: boolean) => {
-    setIsManagerMode(nextValue);
+    isManagerModeSnapshot = nextValue;
+    emitManagerModeState();
     await writeManagerMode(nextValue);
   }, []);
 

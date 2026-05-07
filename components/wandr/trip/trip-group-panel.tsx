@@ -29,7 +29,7 @@ export function TripGroupPanel({
         <TravelerAvatarStack
           avatars={avatars}
           fallbackName={firstActiveMember?.name ?? group.name}
-          fallbackSeed={firstActiveMember?.travelerSlug ?? group.circleId}
+          fallbackPaletteKey={firstActiveMember?.travelerSlug ?? group.circleId}
           totalCount={group.memberCount}
         />
       </View>

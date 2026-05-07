@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 
 export const experiencesTable = defineTable({
   slug: v.string(),
+  managerSlug: v.optional(v.string()),
   itemKind: v.optional(v.union(v.literal('experience'), v.literal('hiddenGem'))),
   badge: v.string(),
   badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'), v.literal('dark'))),
@@ -75,4 +76,6 @@ export const experiencesTable = defineTable({
   isFeaturedHero: v.optional(v.boolean()),
   isFeaturedDetail: v.optional(v.boolean()),
   isActivityCard: v.optional(v.boolean()),
-}).index('by_slug', ['slug']);
+})
+  .index('by_slug', ['slug'])
+  .index('by_managerSlug', ['managerSlug']);

@@ -1,5 +1,6 @@
 import type { ExploreExperience, ExploreMapMarker } from '@/constants/explore-content';
 import type { TripDashboardItem } from '@/types/trip';
+import { formatUsdPrice } from '@/lib/currency';
 
 const DEFAULT_EXPERIENCE_COORDINATES: Record<string, readonly [number, number]> = {
   'tandem-skydive': [14.513, -22.682],
@@ -48,7 +49,8 @@ export function buildExperienceMapMarkers(
 
 export function buildTripMapMarkers(
   items: readonly TripDashboardItem[],
-  limit = 4
+  limit = 4,
+  preferredCurrency = 'USD'
 ): ExploreMapMarker[] {
   return items
     .map((item) => ({
@@ -67,6 +69,7 @@ export function buildTripMapMarkers(
       itemKind: item.kind,
       imageUri: item.stay?.imageUri ?? item.experience.imageUri,
       label: item.stay?.name ?? item.experience.title,
+      priceLabel: item.kind === 'stay' ? formatUsdPrice(item.stay?.pricePerNight, preferredCurrency) : undefined,
       popularityScore: 1000 - index,
       tone: index % 2 === 0 ? 'accent' : 'dark',
       status: item.status,

@@ -31,6 +31,7 @@ export type MapPreviewProps = {
   colorSchemeMode?: 'system' | 'dark' | 'light';
   markerVariant?: 'default' | 'routeWidget';
   onInteract?: () => void;
+  onMapPress?: (coordinate: readonly [number, number]) => void;
   onMarkerPress?: (marker: MapMarker) => void;
   style?: StyleProp<ViewStyle>;
 };

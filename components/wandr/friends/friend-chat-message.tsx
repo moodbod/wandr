@@ -309,7 +309,7 @@ export function FriendChatMessageBubble({
         <View style={styles.senderRow}>
           <FaceHashAvatar
             name={message.senderName || message.senderSlug || 'Traveler'}
-            seed={message.senderSlug}
+            paletteKey={message.senderSlug}
             size={24}
             uri={message.senderAvatarUri}
             style={styles.senderAvatar}
@@ -562,7 +562,7 @@ export function DirectChatMessageBubble({
         <View style={styles.senderRow}>
           <FaceHashAvatar
             name={message.senderName || message.senderSlug || 'Traveler'}
-            seed={message.senderSlug}
+            paletteKey={message.senderSlug}
             size={24}
             uri={message.senderAvatarUri}
             style={styles.senderAvatar}

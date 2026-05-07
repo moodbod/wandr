@@ -28,30 +28,150 @@ export type TripNotificationPayload =
       imageUri?: string;
     };
 
-export function parseTripNotificationPayload() {
-  return null;
+const scheduledNotifications = new Map<string, ReturnType<typeof setTimeout>>();
+
+function canUseBrowserNotifications() {
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+function serializeNotificationPayload(payload: TripNotificationPayload) {
+  return {
+    kind: payload.kind,
+    bookingId: payload.bookingId,
+    experienceSlug: payload.experienceSlug,
+    title: payload.title,
+    locationLabel: payload.locationLabel ?? '',
+    imageUri: payload.imageUri ?? '',
+  };
+}
+
+function getNotificationTag(payload: TripNotificationPayload) {
+  return `wandr-${payload.kind}-${payload.bookingId}`;
+}
+
+function presentBrowserNotification({
+  body,
+  payload,
+  title,
+}: {
+  body: string;
+  payload: TripNotificationPayload;
+  title: string;
+}) {
+  if (!canUseBrowserNotifications() || window.Notification.permission !== 'granted') {
+    return null;
+  }
+
+  return new window.Notification(title, {
+    body,
+    data: serializeNotificationPayload(payload),
+    icon: '/wandr-favicon.png',
+    tag: getNotificationTag(payload),
+  });
+}
+
+export function parseTripNotificationPayload(data?: Record<string, unknown> | null): TripNotificationPayload | null {
+  if (!data) {
+    return null;
+  }
+
+  const kind = data.kind;
+  const bookingId = data.bookingId;
+  const experienceSlug = data.experienceSlug;
+  const title = data.title;
+
+  if (
+    (kind !== 'arrival' && kind !== 'rating') ||
+    typeof bookingId !== 'string' ||
+    typeof experienceSlug !== 'string' ||
+    typeof title !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    kind,
+    bookingId,
+    experienceSlug,
+    title,
+    locationLabel: typeof data.locationLabel === 'string' && data.locationLabel.length > 0 ? data.locationLabel : undefined,
+    imageUri: typeof data.imageUri === 'string' && data.imageUri.length > 0 ? data.imageUri : undefined,
+  };
 }
 
 export async function ensureNotificationSetupAsync() {
-  return false;
+  if (!canUseBrowserNotifications()) {
+    return false;
+  }
+
+  if (window.Notification.permission === 'granted') {
+    return true;
+  }
+
+  if (window.Notification.permission === 'denied') {
+    return false;
+  }
+
+  const permission = await window.Notification.requestPermission();
+  return permission === 'granted';
 }
 
 export async function getDevicePushRegistrationAsync() {
   return null;
 }
 
-export async function presentArrivalNotification() {
-  return null;
+export async function presentArrivalNotification(payload: Extract<TripNotificationPayload, { kind: 'arrival' }>) {
+  const hasPermission = await ensureNotificationSetupAsync();
+  if (!hasPermission) {
+    return null;
+  }
+
+  return presentBrowserNotification({
+    title: 'You made it',
+    body: `${payload.title} is right here. Open Wandr to keep the day moving.`,
+    payload,
+  });
 }
 
 export async function presentIncomingFriendCallNotification() {
   return null;
 }
 
-export async function scheduleRatingNotification() {
-  return null;
+export async function scheduleRatingNotification(payload: Extract<TripNotificationPayload, { kind: 'rating' }>) {
+  const hasPermission = await ensureNotificationSetupAsync();
+  if (!hasPermission) {
+    return null;
+  }
+
+  const tag = getNotificationTag(payload);
+  const existingTimeout = scheduledNotifications.get(tag);
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  const timeout = setTimeout(() => {
+    void presentBrowserNotification({
+      title: `How was ${payload.title}?`,
+      body: 'Leave a quick star rating and an optional note for your trip memory.',
+      payload,
+    });
+    scheduledNotifications.delete(tag);
+  }, RATING_DELAY_SECONDS * 1000);
+
+  scheduledNotifications.set(tag, timeout);
+  return tag;
 }
 
-export async function cancelScheduledRatingNotification() {
+export async function cancelScheduledRatingNotification(identifier?: string | null) {
+  if (!identifier) {
+    return null;
+  }
+
+  const timeout = scheduledNotifications.get(identifier);
+  if (timeout) {
+    clearTimeout(timeout);
+    scheduledNotifications.delete(identifier);
+  }
+
   return null;
 }

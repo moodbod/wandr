@@ -46,7 +46,7 @@ import {
   submitLocationPhotoRef,
   submitStayRatingRef,
 } from '@/lib/convex';
-import { formatUsdAsCurrency } from '@/lib/currency';
+import { formatUsdConversionParts } from '@/lib/currency';
 import type {
   StayArrivalOption,
   StayBedOption,
@@ -281,10 +281,10 @@ export function StayDetailScreen({
       : `${roomCount} room`;
   const totalPrice = bookingTotalOverride ?? stay.pricePerNight * nights * roomCount;
   const hasExistingStayBooking = !!existingStayBooking;
-  const bookingBarTotalPrice = existingStayBooking?.totalPrice ?? totalPrice;
-  const nightlyPriceLabel = formatUsdAsCurrency(stay.pricePerNight, preferredCurrency);
-  const totalPriceLabel = formatUsdAsCurrency(totalPrice, preferredCurrency);
-  const bookingBarTotalPriceLabel = formatUsdAsCurrency(bookingBarTotalPrice, preferredCurrency);
+  const bookingBarTotalAmount = existingStayBooking?.totalPrice ?? totalPrice;
+  const nightlyPrice = formatUsdConversionParts(stay.pricePerNight, preferredCurrency);
+  const totalPriceDisplay = formatUsdConversionParts(totalPrice, preferredCurrency);
+  const bookingBarTotalPrice = formatUsdConversionParts(bookingBarTotalAmount, preferredCurrency);
   const bookingBarNights = existingStayBooking
     ? getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut)
     : nights;
@@ -636,7 +636,8 @@ export function StayDetailScreen({
         isLoading={!hasExistingStayBooking && isBooking}
         nights={bookingBarNights}
         onPress={hasExistingStayBooking ? handleExistingBookingPress : handleBookPress}
-        totalPriceLabel={bookingBarTotalPriceLabel}
+        totalPriceLabel={bookingBarTotalPrice.amountLabel}
+        totalPriceRateLabel={bookingBarTotalPrice.rateLabel}
       />
 
       <GlassBottomSheet
@@ -803,10 +804,13 @@ export function StayDetailScreen({
                     {nights} night{nights === 1 ? '' : 's'} · {roomCount} room{roomCount === 1 ? '' : 's'}
                   </ThemedText>
                   <ThemedText style={[styles.priceRate, isDark && styles.priceRateDark]}>
-                    {nightlyPriceLabel}
+                    {nightlyPrice.amountLabel} nightly
                   </ThemedText>
                 </View>
-                <ThemedText style={[styles.priceValue, isDark && styles.priceValueDark]}>{totalPriceLabel}</ThemedText>
+                <View style={styles.priceValueStack}>
+                  <ThemedText style={[styles.priceValue, isDark && styles.priceValueDark]}>{totalPriceDisplay.amountLabel}</ThemedText>
+                  <ThemedText style={[styles.priceValueRate, isDark && styles.priceValueRateDark]}>{totalPriceDisplay.rateLabel}</ThemedText>
+                </View>
               </View>
               <ThemedText style={[styles.priceMeta, isDark && styles.priceMetaDark]}>
                 {formatDateLabel(checkIn)} - {formatDateLabel(checkOut)}
@@ -914,6 +918,7 @@ function BookingGlassBar({
   nights,
   onPress,
   totalPriceLabel,
+  totalPriceRateLabel,
 }: {
   buttonLabel: string;
   containerStyle?: StyleProp<ViewStyle>;
@@ -922,6 +927,7 @@ function BookingGlassBar({
   nights: number;
   onPress: () => void;
   totalPriceLabel: string;
+  totalPriceRateLabel?: string;
 }) {
   const isAndroid = Platform.OS === 'android';
 
@@ -947,12 +953,29 @@ function BookingGlassBar({
         )}
         <View style={styles.bottomBarContent}>
           <View style={styles.bottomBarPriceBlock}>
-            <ThemedText style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
-              {totalPriceLabel}
-              <ThemedText style={[styles.bottomBarSuffix, isDark && styles.bottomBarSuffixDark]}>
-                {' '}for {nights} night{nights === 1 ? '' : 's'}
+            <View style={styles.bottomBarPriceRow}>
+              <ThemedText
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                style={[styles.bottomBarPrice, isDark && styles.bottomBarPriceDark]}>
+                {totalPriceLabel}
               </ThemedText>
+              <ThemedText
+                numberOfLines={1}
+                style={[styles.bottomBarSuffix, isDark && styles.bottomBarSuffixDark]}>
+                for {nights}
+              </ThemedText>
+            </View>
+            <ThemedText
+              numberOfLines={1}
+              style={[styles.bottomBarSuffix, styles.bottomBarNightSuffix, isDark && styles.bottomBarSuffixDark]}>
+              night{nights === 1 ? '' : 's'}
             </ThemedText>
+            {totalPriceRateLabel ? (
+              <ThemedText style={[styles.bottomBarRate, isDark && styles.bottomBarRateDark]}>
+                {totalPriceRateLabel}
+              </ThemedText>
+            ) : null}
           </View>
           <Pressable
             style={[
@@ -1651,17 +1674,23 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.nativeDarkWash,
   },
   bottomBarContent: {
-    minHeight: 78,
+    minHeight: 76,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'stretch',
     padding: 8,
-    paddingLeft: 22,
-    gap: 10,
+    paddingLeft: 20,
+    gap: 8,
   },
   bottomBarPriceBlock: {
     flex: 1,
     justifyContent: 'center',
+    minWidth: 0,
+  },
+  bottomBarPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
     minWidth: 0,
   },
   bottomBarLabel: {
@@ -1675,8 +1704,9 @@ const styles = StyleSheet.create({
   },
   bottomBarPrice: {
     marginTop: 6,
-    fontSize: 24,
-    lineHeight: 26,
+    flexShrink: 1,
+    fontSize: 23,
+    lineHeight: 25,
     fontWeight: '600',
     color: designSystem.colors.lightTextDeep,
   },
@@ -1684,21 +1714,36 @@ const styles = StyleSheet.create({
     color: darkSheetPalette.text,
   },
   bottomBarSuffix: {
-    fontSize: 14,
+    flexShrink: 0,
+    fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
     color: designSystem.colors.lightMutedWarm,
   },
+  bottomBarNightSuffix: {
+    marginTop: 4,
+  },
   bottomBarSuffixDark: {
     color: darkSheetPalette.mutedText,
   },
+  bottomBarRate: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '400',
+    color: designSystem.colors.lightMutedWarm,
+  },
+  bottomBarRateDark: {
+    color: darkSheetPalette.mutedText,
+  },
   bookNearbyButton: {
-    minWidth: 160,
+    minWidth: 132,
+    flexBasis: '43%',
     borderRadius: 32,
     backgroundColor: designSystem.colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     alignSelf: 'stretch',
   },
   bookNearbyButtonDisabled: {
@@ -2022,7 +2067,7 @@ const styles = StyleSheet.create({
   priceRate: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '600',
+    fontWeight: '400',
     color: designSystem.colors.lightMutedWarm,
   },
   priceRateDark: {
@@ -2036,6 +2081,22 @@ const styles = StyleSheet.create({
   },
   priceValueDark: {
     color: darkSheetPalette.text,
+  },
+  priceValueStack: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 2,
+  },
+  priceValueRate: {
+    maxWidth: 180,
+    textAlign: 'right',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '400',
+    color: designSystem.colors.lightMutedWarm,
+  },
+  priceValueRateDark: {
+    color: darkSheetPalette.mutedText,
   },
   priceMeta: {
     fontSize: 13,

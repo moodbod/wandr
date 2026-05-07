@@ -24,15 +24,59 @@ export const getExplorePageContentRef = makeFunctionReference<
   ExplorePageContent | null
 >;
 
-export const ensureExploreCommunitySeedRef = makeFunctionReference<'mutation', Record<string, never>, boolean>(
-  'explore:ensureExploreCommunitySeed'
-) as FunctionReference<'mutation', 'public', Record<string, never>, boolean>;
+export const listManagedExperiencesRef = makeFunctionReference<
+  'query',
+  { managerSlug: string },
+  any[]
+>('explore:listManagedExperiences') as FunctionReference<
+  'query',
+  'public',
+  { managerSlug: string },
+  any[]
+>;
 
-export const seedExplorePageContentRef = makeFunctionReference<'mutation', Record<string, never>, string>(
-  'explore:seedExplorePageContent'
-) as FunctionReference<'mutation', 'public', Record<string, never>, string>;
-
-export const seedDefaultPageContentRef = seedExplorePageContentRef;
+export const createManagedExperienceRef = makeFunctionReference<
+  'mutation',
+  {
+    managerSlug: string;
+    itemKind: 'experience' | 'hiddenGem';
+    title: string;
+    subtitle: string;
+    description: string;
+    category: string;
+    durationLabel: string;
+    groupCapacity: number;
+    priceUsd: number;
+    coordinate: number[];
+    imageUri: string;
+    galleryImages: string[];
+    availabilityLabel: string;
+    confirmMode: string;
+    includes: string[];
+  },
+  { slug: string }
+>('explore:createManagedExperience') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    managerSlug: string;
+    itemKind: 'experience' | 'hiddenGem';
+    title: string;
+    subtitle: string;
+    description: string;
+    category: string;
+    durationLabel: string;
+    groupCapacity: number;
+    priceUsd: number;
+    coordinate: number[];
+    imageUri: string;
+    galleryImages: string[];
+    availabilityLabel: string;
+    confirmMode: string;
+    includes: string[];
+  },
+  { slug: string }
+>;
 
 export const getExploreJoinableTripCardsRef = makeFunctionReference<
   'query',
@@ -282,49 +326,6 @@ export const updateNotificationSettingsRef = makeFunctionReference<
   boolean
 >;
 
-export const completePhoneOnboardingRef = makeFunctionReference<
-  'mutation',
-  {
-    phoneNumber: string;
-    verificationToken: string;
-    name: string;
-    countryCode: string;
-    countryLabel: string;
-    homeCity?: string;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-  },
-  {
-    slug: string;
-    name: string;
-    countryCode: string;
-    countryLabel: string;
-    phoneNumber: string;
-    homeCity: string | null;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-  }
->('trip:completePhoneOnboarding') as FunctionReference<
-  'mutation',
-  'public',
-  {
-    phoneNumber: string;
-    verificationToken: string;
-    name: string;
-    countryCode: string;
-    countryLabel: string;
-    homeCity?: string;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-  },
-  {
-    slug: string;
-    name: string;
-    countryCode: string;
-    countryLabel: string;
-    phoneNumber: string;
-    homeCity: string | null;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-  }
->;
-
 export const requestPhoneOtpRef = makeFunctionReference<
   'action',
   { phoneNumber: string },
@@ -365,11 +366,15 @@ export const verifyPhoneOtpRef = makeFunctionReference<
   { verified: boolean; verificationToken: string }
 >;
 
-export const getPhoneAuthSessionRef = makeFunctionReference<
+export const completePhoneOnboardingRef = makeFunctionReference<
   'mutation',
   {
     phoneNumber: string;
-    verificationToken: string;
+    name: string;
+    countryCode: string;
+    countryLabel: string;
+    homeCity?: string;
+    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
   },
   {
     slug: string;
@@ -378,14 +383,18 @@ export const getPhoneAuthSessionRef = makeFunctionReference<
     countryLabel: string;
     phoneNumber: string;
     homeCity: string | null;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family' | null;
-  } | null
->('trip:getPhoneAuthSession') as FunctionReference<
+    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
+  }
+>('trip:completePhoneOnboarding') as FunctionReference<
   'mutation',
   'public',
   {
     phoneNumber: string;
-    verificationToken: string;
+    name: string;
+    countryCode: string;
+    countryLabel: string;
+    homeCity?: string;
+    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
   },
   {
     slug: string;
@@ -394,7 +403,24 @@ export const getPhoneAuthSessionRef = makeFunctionReference<
     countryLabel: string;
     phoneNumber: string;
     homeCity: string | null;
-    travelStyle: 'solo' | 'couple' | 'friends' | 'family' | null;
+    travelStyle: 'solo' | 'couple' | 'friends' | 'family';
+  }
+>;
+
+export const getCurrentAuthSessionRef = makeFunctionReference<
+  'query',
+  Record<string, never>,
+  {
+    travelerSlug: string;
+    email: string;
+  } | null
+>('auth:getCurrentAuthSession') as FunctionReference<
+  'query',
+  'public',
+  Record<string, never>,
+  {
+    travelerSlug: string;
+    email: string;
   } | null
 >;
 
@@ -528,6 +554,49 @@ export const listAllStaysRef = makeFunctionReference<'query', Record<string, nev
   'trip:listAllStays'
 ) as FunctionReference<'query', 'public', Record<string, never>, any[]>;
 
+export const listManagedStaysRef = makeFunctionReference<'query', { managerSlug: string }, any[]>(
+  'trip:listManagedStays'
+) as FunctionReference<'query', 'public', { managerSlug: string }, any[]>;
+
+export const createManagedStayRef = makeFunctionReference<
+  'mutation',
+  {
+    managerSlug: string;
+    name: string;
+    summary: string;
+    coordinate: number[];
+    imageUri: string;
+    galleryImages: string[];
+    priceUsd: number;
+    bookingNote: string;
+    stayStyle: 'design' | 'lodge' | 'roadside' | 'wellness';
+    routeVibe: 'city reset' | 'coast base' | 'wildlife stop' | 'desert night';
+    idealFor: string[];
+    amenities: string[];
+    nearbyHighlights: string[];
+  },
+  { slug: string; roomId: string }
+>('trip:createManagedStay') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    managerSlug: string;
+    name: string;
+    summary: string;
+    coordinate: number[];
+    imageUri: string;
+    galleryImages: string[];
+    priceUsd: number;
+    bookingNote: string;
+    stayStyle: 'design' | 'lodge' | 'roadside' | 'wellness';
+    routeVibe: 'city reset' | 'coast base' | 'wildlife stop' | 'desert night';
+    idealFor: string[];
+    amenities: string[];
+    nearbyHighlights: string[];
+  },
+  { slug: string; roomId: string }
+>;
+
 export const getStayBySlugRef = makeFunctionReference<'query', { slug: string }, any | null>(
   'trip:getStayBySlug'
 ) as FunctionReference<'query', 'public', { slug: string }, any | null>;
@@ -595,12 +664,12 @@ export const listTravelerBookingsRef = makeFunctionReference<'query', { traveler
 
 export const listManagedBookingsRef = makeFunctionReference<
   'query',
-  { status?: 'pending' | 'confirmed' | 'cancelled' },
+  { managerSlug: string; status?: 'pending' | 'confirmed' | 'cancelled' },
   any[]
 >('trip:listManagedBookings') as FunctionReference<
   'query',
   'public',
-  { status?: 'pending' | 'confirmed' | 'cancelled' },
+  { managerSlug: string; status?: 'pending' | 'confirmed' | 'cancelled' },
   any[]
 >;
 
@@ -689,12 +758,12 @@ export const listLocationPhotosRef = makeFunctionReference<
 
 export const listManagedLocationPhotosRef = makeFunctionReference<
   'query',
-  { status?: 'approved' | 'pending' | 'rejected' },
+  { managerSlug: string; status?: 'approved' | 'pending' | 'rejected' },
   any[]
 >('locationPhotos:listManagedLocationPhotos') as FunctionReference<
   'query',
   'public',
-  { status?: 'approved' | 'pending' | 'rejected' },
+  { managerSlug: string; status?: 'approved' | 'pending' | 'rejected' },
   any[]
 >;
 
@@ -708,10 +777,6 @@ export const updateLocationPhotoStatusRef = makeFunctionReference<
   { photoId: Id<'locationPhotos'>; status: 'approved' | 'rejected'; reviewerSlug?: string },
   boolean
 >;
-
-export const ensureFriendsSeedRef = makeFunctionReference<'mutation', { travelerSlug?: string }, boolean>(
-  'friends:ensureFriendsSeed'
-) as FunctionReference<'mutation', 'public', { travelerSlug?: string }, boolean>;
 
 export const getFriendsDashboardRef = makeFunctionReference<'query', { travelerSlug: string }, any>(
   'friends:getFriendsDashboard'

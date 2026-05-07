@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -30,8 +31,21 @@ export function LargeScreenWorkspace({
   mapControlsStyle,
   style,
 }: LargeScreenWorkspaceProps) {
+  const isDark = useColorScheme() === 'dark';
+
   return (
     <View style={[styles.body, style]}>
+      <LinearGradient
+        colors={
+          isDark
+            ? [designSystem.colors.darkBackground, designSystem.colors.darkSurface, designSystem.colors.darkBackground]
+            : [designSystem.colors.background, designSystem.colors.limeMist, designSystem.colors.cream]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       {mapContent ? (
         <View style={styles.mapUnderlay}>
           {mapContent}
@@ -90,6 +104,7 @@ const styles = StyleSheet.create({
     paddingLeft: largeScreenWorkspace.sidebarWidth,
     paddingRight: largeScreenWorkspace.inset,
     paddingTop: largeScreenWorkspace.inset,
+    backgroundColor: designSystem.colors.background,
   },
   mapUnderlay: {
     ...StyleSheet.absoluteFillObject,

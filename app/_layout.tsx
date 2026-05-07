@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@react-navigation/native';
+import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react';
 import { ConvexProvider } from 'convex/react';
 import { isRunningInExpoGo } from 'expo';
 import { router, Stack, useSegments } from 'expo-router';
@@ -11,11 +12,14 @@ import 'react-native-reanimated';
 import { AppSidebar } from '@/components/wandr/app-sidebar';
 import { IncomingFriendCallCenter } from '@/components/wandr/friends/incoming-friend-call-center';
 import { TripNotificationCenter } from '@/components/wandr/notifications/trip-notification-center';
+import { PwaInstallBanner } from '@/components/wandr/pwa-install-banner';
+import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { ActiveFriendCallProvider } from '@/hooks/use-active-friend-call';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PlanningLocationProvider } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
+import { authClient } from '@/lib/auth-client';
 import { convexClient } from '@/lib/convex';
 import { getNavigationBackground, getNavigationTheme, getStackScreenOptions } from '@/lib/navigation-theme';
 import { AuthSessionProvider, useAuthSession } from '@/providers/auth-session';
@@ -32,21 +36,23 @@ export default function RootLayout() {
   const stackScreenOptions = getStackScreenOptions(isDark);
   const backgroundColor = getNavigationBackground(isDark);
 
+  if (!convexClient) {
+    return <LoadingSessionScreen backgroundColor={backgroundColor} label="Missing EXPO_PUBLIC_CONVEX_URL." />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor }}>
-      <PlanningLocationProvider>
-        <AuthSessionProvider>
-          <ThemeProvider value={navigationTheme}>
-                {convexClient ? (
-                  <ConvexProvider client={convexClient}>
-                    <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-                  </ConvexProvider>
-                ) : (
-                  <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-                )}
-          </ThemeProvider>
-        </AuthSessionProvider>
-      </PlanningLocationProvider>
+      <ConvexProvider client={convexClient}>
+        <ConvexBetterAuthProvider authClient={authClient} client={convexClient}>
+          <PlanningLocationProvider>
+            <AuthSessionProvider>
+              <ThemeProvider value={navigationTheme}>
+                <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
+              </ThemeProvider>
+            </AuthSessionProvider>
+          </PlanningLocationProvider>
+        </ConvexBetterAuthProvider>
+      </ConvexProvider>
     </GestureHandlerRootView>
   );
 }
@@ -90,10 +96,17 @@ function AppShell({
       return;
     }
 
-    root.style.width = '125vw';
-    root.style.height = '125vh';
-    root.style.overflow = 'hidden';
-    (root.style as any).zoom = '0.8';
+    if (isLargeScreen) {
+      root.style.width = '125vw';
+      root.style.height = '125vh';
+      root.style.overflow = 'hidden';
+      (root.style as any).zoom = '0.8';
+    } else {
+      root.style.width = '';
+      root.style.height = '';
+      root.style.overflow = '';
+      (root.style as any).zoom = '';
+    }
 
     return () => {
       root.style.width = '';
@@ -101,14 +114,14 @@ function AppShell({
       root.style.overflow = '';
       (root.style as any).zoom = '';
     };
-  }, []);
+  }, [isLargeScreen]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
       return;
     }
 
-    const styleId = 'wandr-web-input-outline-reset';
+    const styleId = 'wandr-web-document-theme';
     if (document.getElementById(styleId)) {
       return;
     }
@@ -123,6 +136,11 @@ function AppShell({
         outline: none !important;
         box-shadow: none !important;
         -webkit-tap-highlight-color: transparent;
+      }
+
+      input,
+      textarea {
+        font-size: 16px !important;
       }
 
       input:focus,
@@ -143,6 +161,37 @@ function AppShell({
       style.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.getElementById('root');
+    const previousHtmlBackground = document.documentElement.style.backgroundColor;
+    const previousHtmlColorScheme = document.documentElement.style.colorScheme;
+    const previousBodyBackground = document.body.style.backgroundColor;
+    const previousBodyColorScheme = document.body.style.colorScheme;
+    const previousRootBackground = root?.style.backgroundColor;
+
+    document.documentElement.style.backgroundColor = backgroundColor;
+    document.documentElement.style.colorScheme = backgroundColor === designSystem.colors.darkBackground ? 'dark' : 'light';
+    document.body.style.backgroundColor = backgroundColor;
+    document.body.style.colorScheme = document.documentElement.style.colorScheme;
+    if (root) {
+      root.style.backgroundColor = backgroundColor;
+    }
+
+    return () => {
+      document.documentElement.style.backgroundColor = previousHtmlBackground;
+      document.documentElement.style.colorScheme = previousHtmlColorScheme;
+      document.body.style.backgroundColor = previousBodyBackground;
+      document.body.style.colorScheme = previousBodyColorScheme;
+      if (root) {
+        root.style.backgroundColor = previousRootBackground ?? '';
+      }
+    };
+  }, [backgroundColor]);
 
   if (isLoading) {
     return (
@@ -189,6 +238,7 @@ function AppShell({
           <ActiveFriendCallOverlay />
         </Suspense>
       ) : null}
+      <PwaInstallBanner />
       <StatusBar style="auto" />
     </ActiveFriendCallProvider>
   );
@@ -217,7 +267,7 @@ function AuthRouteGate() {
   return null;
 }
 
-function LoadingSessionScreen({ backgroundColor }: { backgroundColor: string }) {
+function LoadingSessionScreen({ backgroundColor, label }: { backgroundColor: string; label?: string }) {
   return (
     <View
       style={{
@@ -228,6 +278,11 @@ function LoadingSessionScreen({ backgroundColor }: { backgroundColor: string }) 
       }}
     >
       <ActivityIndicator color={designSystem.colors.lime} />
+      {label ? (
+        <View style={{ marginTop: designSystem.spacing.md }}>
+          <ThemedText>{label}</ThemedText>
+        </View>
+      ) : null}
     </View>
   );
 }

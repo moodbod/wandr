@@ -1,14 +1,11 @@
 import { mutationGeneric, queryGeneric } from 'convex/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
-import type { QueryCtx } from './_generated/server';
+import type { MutationCtx, QueryCtx } from './_generated/server';
 
 import type { ExploreExperience } from '../constants/explore-content';
-import { demoExploreBookings } from './seeds/demoExploreBookings';
-import { demoExploreTravelers } from './seeds/demoExploreTravelers';
-import { seedExperiences } from './seeds/seedExperiences';
-import { seedHiddenGems } from './seeds/seedHiddenGems';
-import { seedRegions } from './seeds/seedRegions';
+
+const TRENDING_PLACE_LIMIT = 10;
 
 const markerValidator = v.object({
   id: v.string(),
@@ -238,10 +235,42 @@ async function getPersonalizedTravelerAudience(
   };
 }
 
+async function getExperiencePopularityCounts(ctx: QueryCtx) {
+  const [bookings, visits] = await Promise.all([
+    ctx.db.query('experienceBookings').collect(),
+    ctx.db.query('tripVisits').collect(),
+  ]);
+  const counts = new Map<string, number>();
+
+  for (const visit of visits) {
+    counts.set(visit.experienceSlug, (counts.get(visit.experienceSlug) ?? 0) + 1);
+  }
+
+  for (const booking of bookings) {
+    if (booking.status === 'cancelled') {
+      continue;
+    }
+
+    counts.set(booking.experienceSlug, (counts.get(booking.experienceSlug) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+function getExperiencePopularityCount(
+  experience: ExploreExperience & { reviewCount?: number },
+  popularityCounts: Map<string, number>
+) {
+  return Math.max(
+    popularityCounts.get(experience.slug) ?? 0,
+    experience.travelerMomentum?.visitorCount ?? 0,
+    experience.reviewCount ?? 0
+  );
+}
+
 export const getPageContent = queryGeneric({
   args: { slug: v.string(), travelerSlug: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const activities = await ctx.db.query('experiences').filter(q => q.eq(q.field('isActivityCard'), true)).collect();
     const hiddenGems = await ctx.db.query('hiddenGems').collect();
     const allExperiences = await ctx.db.query('experiences').collect();
     
@@ -250,6 +279,32 @@ export const getPageContent = queryGeneric({
     }
 
     const experiences = await enrichExperiencesWithCommunity(ctx, allExperiences as any);
+    const popularityCounts = await getExperiencePopularityCounts(ctx);
+    const experiencesWithPopularity = experiences.map((exp) => {
+      const visitorCount = getExperiencePopularityCount(exp as any, popularityCounts);
+      const countryLabel = exp.countryLabel ?? exp.travelerMomentum?.countryLabel ?? 'travelers';
+
+      return {
+        ...exp,
+        travelerMomentum: {
+          countryCode: exp.countryCode ?? exp.travelerMomentum?.countryCode ?? 'GLOBAL',
+          countryLabel,
+          visitorCount,
+          summary: `${visitorCount} travelers visited this place in ${countryLabel}.`,
+        },
+      };
+    });
+    const rankedExperiences = [...experiencesWithPopularity].sort((a, b) => {
+      const popularityDelta =
+        getExperiencePopularityCount(b as any, popularityCounts) -
+        getExperiencePopularityCount(a as any, popularityCounts);
+
+      if (popularityDelta !== 0) {
+        return popularityDelta;
+      }
+
+      return a.title.localeCompare(b.title);
+    });
 
     const heroExp = allExperiences.find(exp => exp.isFeaturedHero);
     const detailExp = allExperiences.find(exp => exp.isFeaturedDetail);
@@ -290,11 +345,11 @@ export const getPageContent = queryGeneric({
         },
         section: {
           eyebrow: 'Nationwide Picks',
-          title: 'Start in Windhoek, then branch out',
+          title: 'Top 10 most visited places',
         },
         activities: await Promise.all(
-          activities.map(async (exp) => {
-            const personalizedAudience = await getPersonalizedTravelerAudience(ctx, exp.slug, args.travelerSlug);
+          rankedExperiences.slice(0, TRENDING_PLACE_LIMIT).map(async (exp) => {
+            const visitorCount = getExperiencePopularityCount(exp as any, popularityCounts);
 
             return {
               experienceSlug: exp.slug,
@@ -306,10 +361,8 @@ export const getPageContent = queryGeneric({
               priceSuffix: exp.priceSuffix,
               subtitle: exp.subtitle,
               title: exp.title,
-              visitorCount: personalizedAudience?.visitorCount,
-              countryLabel: personalizedAudience?.countryLabel,
-              visitorNames: personalizedAudience?.visitorNames,
-              viewerName: personalizedAudience?.viewerName,
+              visitorCount,
+              countryLabel: exp.countryLabel ?? exp.locationLabel ?? 'travelers',
             };
           })
         ) as any,
@@ -354,93 +407,102 @@ export const getPageContent = queryGeneric({
           markers: dynamicMarkers as any,
         },
       },
-      experiences,
+      experiences: experiencesWithPopularity,
       updatedAt: Date.now(),
     };
   },
 });
 
-export const seedExplorePageContent = mutationGeneric({
-  args: {},
-  handler: async (ctx) => {
-    // Clear existing data to ensure a fresh start
-    const allRegions = await ctx.db.query('regions').collect();
-    for (const r of allRegions) await ctx.db.delete(r._id);
-    
-    const allExperiences = await ctx.db.query('experiences').collect();
-    for (const e of allExperiences) await ctx.db.delete(e._id);
-    
-    const allHiddenGems = await ctx.db.query('hiddenGems').collect();
-    for (const g of allHiddenGems) await ctx.db.delete(g._id);
-    
-    const allUsers = await ctx.db.query('appUsers').collect();
-    for (const u of allUsers) await ctx.db.delete(u._id);
-    
-    const allBookings = await ctx.db.query('experienceBookings').collect();
-    for (const b of allBookings) await ctx.db.delete(b._id);
+export const listManagedExperiences = queryGeneric({
+  args: { managerSlug: v.string() },
+  handler: async (ctx, args) => {
+    const experiences = await ctx.db
+      .query('experiences')
+      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', args.managerSlug))
+      .take(100);
 
-    // Seed regions
-    const regionMap = new Map<string, string>();
-    for (const region of seedRegions) {
-      const id = await ctx.db.insert('regions', region);
-      regionMap.set(region.name, id);
-    }
-
-    // Seed experiences
-    for (const exp of seedExperiences) {
-      const isHero = exp.slug === 'etosha-game-drive';
-      const isDetail = exp.slug === 'windhoek-craft-market-walk';
-      const isActivity = ['windhoek-craft-market-walk', 'naankuse-wildlife-encounter', 'etosha-game-drive', 'sossusvlei-sunrise-drive'].includes(exp.slug);
-      const regionId = exp.geography?.region ? regionMap.get(exp.geography.region) : undefined;
-
-      await ctx.db.insert('experiences', {
-        ...exp,
-        isFeaturedHero: isHero,
-        isFeaturedDetail: isDetail,
-        isActivityCard: isActivity,
-        regionId,
-      } as any);
-    }
-
-    // Seed hidden gems
-    for (const gem of seedHiddenGems) {
-      const regionId = gem.geography?.region ? regionMap.get(gem.geography.region) : undefined;
-      await ctx.db.insert('hiddenGems', { ...gem, regionId } as any);
-    }
-
-    // Seed users / travelers
-    for (const traveler of demoExploreTravelers) {
-      await ctx.db.insert('appUsers', traveler);
-    }
-
-    const seededDemoTripId = await ctx.db.insert('trips', {
-      name: 'Namibia Road Trip',
-      travelerSlug: 'local-demo-traveler',
-      createdAt: Date.now(),
-      status: 'active',
-    });
-
-    // Seed bookings
-    for (const booking of demoExploreBookings) {
-      await ctx.db.insert('experienceBookings', {
-        travelerSlug: booking.travelerSlug,
-        experienceSlug: booking.experienceSlug,
-        tripId: booking.travelerSlug === 'local-demo-traveler' ? seededDemoTripId : undefined,
-        bookedAt: Date.now(),
-      });
-    }
-
-    return true;
+    return await enrichExperiencesWithCommunity(ctx, experiences as any);
   },
 });
 
-export const seedDefaultPageContent = seedExplorePageContent;
+async function createUniqueExperienceSlug(ctx: MutationCtx, title: string) {
+  const base =
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'experience';
+  let slug = base;
+  let suffix = 2;
 
-export const ensureExploreCommunitySeed = mutationGeneric({
-  args: {},
-  handler: async (ctx) => {
-    // Legacy function, replaced by seedExplorePageContent
-    return true;
+  while (
+    await ctx.db
+      .query('experiences')
+      .withIndex('by_slug', (q) => q.eq('slug', slug))
+      .unique()
+  ) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+export const createManagedExperience = mutationGeneric({
+  args: {
+    managerSlug: v.string(),
+    itemKind: v.union(v.literal('experience'), v.literal('hiddenGem')),
+    title: v.string(),
+    subtitle: v.string(),
+    description: v.string(),
+    category: v.string(),
+    durationLabel: v.string(),
+    groupCapacity: v.number(),
+    priceUsd: v.number(),
+    coordinate: v.array(v.number()),
+    imageUri: v.string(),
+    galleryImages: v.array(v.string()),
+    availabilityLabel: v.string(),
+    confirmMode: v.string(),
+    includes: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const slug = await createUniqueExperienceSlug(ctx, args.title);
+    const imageGallery = args.galleryImages.length ? args.galleryImages : [args.imageUri];
+
+    await ctx.db.insert('experiences', {
+      slug,
+      managerSlug: args.managerSlug,
+      itemKind: args.itemKind,
+      badge: args.itemKind === 'hiddenGem' ? 'Hidden gem' : 'Experience',
+      badgeTone: args.itemKind === 'hiddenGem' ? 'soft' : 'accent',
+      ctaLabel: 'View details',
+      title: args.title,
+      subtitle: args.subtitle,
+      description: args.description,
+      imageUri: args.imageUri,
+      price: `USD ${args.priceUsd}`,
+      priceSuffix: 'per person',
+      rating: 0,
+      reviewCount: 0,
+      category: args.category,
+      countryCode: 'NA',
+      countryLabel: 'Namibia',
+      coordinate: args.coordinate,
+      locationLabel: args.subtitle,
+      durationLabel: args.durationLabel,
+      groupSizeLabel: `${args.groupCapacity}`,
+      galleryImages: imageGallery,
+      booking: {
+        availabilityLabel: args.availabilityLabel,
+        confirmMode: args.confirmMode,
+        addToTripLabel: 'Request booking',
+        continueWithoutTripLabel: 'Continue without trip',
+      },
+      includes: args.includes,
+    });
+
+    return { slug };
   },
 });
 
@@ -853,44 +915,5 @@ export const bookExperience = mutationGeneric({
       travelerSlug: args.travelerSlug,
       bookedAt: Date.now(),
     });
-  },
-});
-
-
-export const resetExploreData = mutationGeneric({
-  args: {},
-  handler: async (ctx) => {
-    const bookings = await ctx.db.query('experienceBookings').collect();
-    for (const booking of bookings) {
-      await ctx.db.delete(booking._id);
-    }
-
-    const users = await ctx.db.query('appUsers').collect();
-    for (const user of users) {
-      await ctx.db.delete(user._id);
-    }
-
-    const experiences = await ctx.db.query('experiences').collect();
-    for (const exp of experiences) {
-      await ctx.db.delete(exp._id);
-    }
-
-    const gems = await ctx.db.query('hiddenGems').collect();
-    for (const gem of gems) {
-      await ctx.db.delete(gem._id);
-    }
-
-    const regions = await ctx.db.query('regions').collect();
-    for (const region of regions) {
-      await ctx.db.delete(region._id);
-    }
-
-    return {
-      deletedBookings: bookings.length,
-      deletedUsers: users.length,
-      deletedExperiences: experiences.length,
-      deletedGems: gems.length,
-      deletedRegions: regions.length,
-    };
   },
 });

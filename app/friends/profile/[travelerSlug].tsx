@@ -165,7 +165,7 @@ function ViewerHero({
       <View style={styles.heroTop}>
         <FaceHashAvatar
           name={profile.traveler.name || profile.traveler.slug || 'Traveler'}
-          seed={profile.traveler.slug}
+          paletteKey={profile.traveler.slug}
           size={92}
           uri={avatarUri}
           style={styles.heroAvatar}

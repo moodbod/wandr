@@ -8,7 +8,7 @@ type FaceHashAvatarProps = {
   name: string;
   size: number;
   uri?: string | null;
-  seed?: string | null;
+  paletteKey?: string | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -23,11 +23,11 @@ const AVATAR_PALETTE = [
   { backgroundColor: '#b8eee8', textColor: '#053b38' },
 ] as const;
 
-export function FaceHashAvatar({ name, size, uri, seed, style }: FaceHashAvatarProps) {
+export function FaceHashAvatar({ name, size, uri, paletteKey, style }: FaceHashAvatarProps) {
   const usePlaceholder = shouldUseFaceHashAvatar(uri);
   const avatarStyle = [styles.avatar, { width: size, height: size, borderRadius: size / 2 }, style];
   const fontSize = Math.max(12, size * 0.38);
-  const palette = getAvatarPalette(seed ?? uri ?? name);
+  const palette = getAvatarPalette(paletteKey ?? uri ?? name);
 
   if (usePlaceholder) {
     return (
@@ -66,12 +66,12 @@ function getInitials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-function getAvatarPalette(seed: string) {
-  const normalizedSeed = seed.trim().toLowerCase() || 'wandr';
+function getAvatarPalette(paletteKey: string) {
+  const normalizedKey = paletteKey.trim().toLowerCase() || 'wandr';
   let hash = 0;
 
-  for (let index = 0; index < normalizedSeed.length; index += 1) {
-    hash = (hash * 31 + normalizedSeed.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < normalizedKey.length; index += 1) {
+    hash = (hash * 31 + normalizedKey.charCodeAt(index)) >>> 0;
   }
 
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];

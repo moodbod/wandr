@@ -231,9 +231,11 @@ export type FriendChatListItem = {
 
 export type JoinableFriendGroup = {
   id: Id<'friendCircles'>;
+  kind: 'group';
   title: string;
   subtitle: string;
   preview: string | null;
+  updatedAt: number;
   avatarUris: string[];
   memberCount: number;
   href: string;

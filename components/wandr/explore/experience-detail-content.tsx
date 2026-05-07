@@ -440,7 +440,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
                       <TravelerAvatarStack
                         avatars={joinable.avatarUris}
                         fallbackName={joinable.groupName}
-                        fallbackSeed={joinable.circleId}
+                        fallbackPaletteKey={joinable.circleId}
                         totalCount={joinable.memberCount}
                       />
                       <View style={[styles.joinButton, (isRequested || isRequesting) && styles.joinButtonDisabled]}>

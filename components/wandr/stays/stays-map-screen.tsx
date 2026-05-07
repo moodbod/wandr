@@ -34,9 +34,11 @@ import { rankStayProperties } from '@/constants/stays-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
 import { getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
+import { formatUsdPriceParts } from '@/lib/currency';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { RankedStayProperty } from '@/types/stays';
@@ -53,6 +55,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const { isLargeScreen, isTablet } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
+  const settings = useCurrentUserSettings();
+  const preferredCurrency = settings?.preferredCurrency ?? 'USD';
   const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(undefined);
   const trip = useQuery(
@@ -123,13 +127,20 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         labels: [stay.name, stay.town, stay.region, stay.locationLabel],
       })
     );
+    const locationPool = locationBase.length > 0 ? locationBase : rankedStays;
+    const locationSearchMatches = query
+      ? locationPool.filter((stay) => getStaySearchText(stay).includes(query))
+      : locationPool;
+    const globalSearchMatches = query
+      ? rankedStays.filter((stay) => getStaySearchText(stay).includes(query))
+      : [];
     const base = query
-      ? locationBase.filter((stay) =>
-          [stay.name, stay.town, stay.region, stay.locationLabel].some((value) =>
-            value.toLowerCase().includes(query)
-          )
-        )
-      : locationBase;
+      ? locationSearchMatches.length > 0
+        ? locationSearchMatches
+        : globalSearchMatches.length > 0
+          ? globalSearchMatches
+          : locationPool
+      : locationPool;
 
     const proximityFiltered = filterStaysByDiscoveryMode({
       stays: base,
@@ -139,6 +150,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         ? currentLocation.coordinate
         : null,
     });
+    const relatedStays = proximityFiltered.length > 0 ? proximityFiltered : base;
     const ordered = [...proximityFiltered].sort((a, b) => {
       if (sortMode === 'price') {
         return a.pricePerNight - b.pricePerNight;
@@ -156,7 +168,9 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       return getDistanceFromRoute(a, locationRouteCoordinates) - getDistanceFromRoute(b, locationRouteCoordinates);
     });
 
-    return ordered;
+    return ordered.length > 0
+      ? ordered
+      : [...relatedStays].sort((a, b) => a.matchScore - b.matchScore);
   }, [locationRouteCoordinates, currentLocation.coordinate, discoveryMode, planningLocation, rankedStays, searchQuery, sortMode]);
 
   const featuredStay = filteredStays[selectedIndex] ?? filteredStays[0] ?? null;
@@ -196,7 +210,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     [filteredStays, snapInterval]
   );
   const discoveryControlsHeight = 188;
-  const carouselBottomOffset = 18;
+  const carouselBottomOffset = Platform.OS === 'web' ? 68 : insets.bottom + 64;
   const carouselContentBottomPadding = Platform.OS === 'android' ? 24 : insets.bottom + 54;
 
   const scrollToCard = useCallback((index: number, animated = true) => {
@@ -318,6 +332,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         resetToStart();
       }}
       onOpenLocationSheet={() => setLocationSheetVisible(true)}
+      planningLocation={planningLocation}
       onResetMap={() => {
         scrollX.setValue(0);
       }}
@@ -361,27 +376,20 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                 {filteredStays.length === 0 ? (
                   <View
                     style={[
-                      styles.emptyCard,
+                      styles.emptyNotice,
                       {
                         borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
-                        backgroundColor: isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong,
+                        backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteGlassMedium,
                       },
                     ]}
                   >
-                    <ThemedText style={styles.emptyTitle}>No {planningLocation.label} stays yet</ThemedText>
-                    <ThemedText
-                      style={[
-                        styles.emptyText,
-                        { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
-                      ]}
-                    >
-                      Keep planning in this location and new places will appear here when inventory is added.
-                    </ThemedText>
+                    <ThemedText style={styles.emptyNoticeText}>No hotels here yet</ThemedText>
                   </View>
                 ) : null}
                 {filteredStays.map((stay, index) => {
                   const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
                   const isSelected = stay.slug === selectedStaySlug || index === selectedIndex;
+                  const price = formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
 
                   return (
                     <Pressable
@@ -395,7 +403,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                         isSelected={isSelected}
                         locationLabel={discoveryMode === 'nearby' ? stay.town : stay.matchedStopLabel}
                         name={stay.name}
-                        priceLabel={stay.priceLabel || `$${stay.pricePerNight}`}
+                        priceLabel={price.amountLabel}
+                        priceRateLabel={price.rateLabel}
                         rating={stay.rating}
                       />
                     </Pressable>
@@ -478,27 +487,20 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           {filteredStays.length === 0 ? (
             <View
               style={[
-                styles.emptyCard,
+                styles.emptyNotice,
                 {
-                  width: cardWidth,
+                  width: Math.min(cardWidth, 220),
                   borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
-                  backgroundColor: isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong,
+                  backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteGlassMedium,
                 },
               ]}
             >
-              <ThemedText style={styles.emptyTitle}>No {planningLocation.label} stays yet</ThemedText>
-              <ThemedText
-                style={[
-                  styles.emptyText,
-                  { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
-                ]}
-              >
-                Keep planning in this location and new places will appear here when inventory is added.
-              </ThemedText>
+              <ThemedText style={styles.emptyNoticeText}>No hotels here yet</ThemedText>
             </View>
           ) : null}
           {filteredStays.map((stay, index) => {
             const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
+            const price = formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
             const inputRange = [
               (index - 1) * snapInterval,
               index * snapInterval,
@@ -553,7 +555,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                       locationLabel={discoveryMode === 'nearby' ? stay.town : stay.matchedStopLabel}
                       name={stay.name}
                       presentation="floating"
-                      priceLabel={stay.priceLabel || `$${stay.pricePerNight}`}
+                      priceLabel={price.amountLabel}
+                      priceRateLabel={price.rateLabel}
                       rating={stay.rating}
                     />
                   </View>
@@ -596,6 +599,27 @@ function filterStaysByDiscoveryMode(
   });
 
   return rankedByDistance.filter((stay) => getDistance(stay) <= radius);
+}
+
+function getStaySearchText(stay: RankedStayProperty) {
+  return [
+    stay.name,
+    stay.locationLabel,
+    stay.town,
+    stay.region,
+    stay.countryLabel,
+    stay.stayStyle,
+    stay.routeVibe,
+    stay.sleepSignal,
+    stay.summary,
+    stay.bookingNote,
+    stay.idealFor.join(' '),
+    stay.amenities.join(' '),
+    stay.nearbyHighlights.join(' '),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
 }
 
 function getDistanceFromCurrent(
@@ -766,20 +790,16 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'visible',
   },
-  emptyCard: {
-    minHeight: 164,
-    borderRadius: designSystem.radii.card,
+  emptyNotice: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderRadius: designSystem.radii.pill,
     borderWidth: 1,
-    padding: designSystem.spacing.lg,
     justifyContent: 'center',
-    gap: designSystem.spacing.xs,
+    minHeight: 48,
+    paddingHorizontal: designSystem.spacing.lg,
   },
-  emptyTitle: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  emptyText: {
-    ...designSystem.type.body,
+  emptyNoticeText: {
+    ...designSystem.type.bodySmallStrong,
   },
 });

@@ -8,7 +8,7 @@ type TravelerAvatarStackProps = {
   avatars: readonly string[];
   totalCount: number;
   fallbackName?: string;
-  fallbackSeed?: string | null;
+  fallbackPaletteKey?: string | null;
   maxVisible?: number;
   size?: 'compact' | 'default';
 };
@@ -16,7 +16,7 @@ type TravelerAvatarStackProps = {
 export function TravelerAvatarStack({
   avatars,
   fallbackName = 'Traveler',
-  fallbackSeed,
+  fallbackPaletteKey,
   maxVisible = 2,
   totalCount,
   size = 'default',
@@ -64,7 +64,7 @@ export function TravelerAvatarStack({
               borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
             },
           ]}>
-          <FaceHashAvatar name={fallbackName} seed={fallbackSeed ?? fallbackName} size={avatarSize} uri={null} />
+          <FaceHashAvatar name={fallbackName} paletteKey={fallbackPaletteKey ?? fallbackName} size={avatarSize} uri={null} />
         </View>
       ) : null}
       {hiddenCount > 0 ? (

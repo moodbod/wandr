@@ -363,7 +363,7 @@ function NotificationRow({
       {showActorAvatar ? (
         <FaceHashAvatar
           name={notification.actorName ?? notification.actorSlug ?? 'Wandr'}
-          seed={notification.actorSlug}
+          paletteKey={notification.actorSlug}
           size={52}
           uri={notification.actorAvatarUri}
           style={styles.actorAvatar}

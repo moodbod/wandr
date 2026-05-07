@@ -22,7 +22,7 @@ type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designS
 
 type ProfileSettingsSidebarProps = {
   avatarUri?: string | null;
-  avatarSeed?: string | null;
+  avatarPaletteKey?: string | null;
   baseLabel: string;
   isOpen: boolean;
   name: string;
@@ -31,7 +31,7 @@ type ProfileSettingsSidebarProps = {
 
 export function ProfileSettingsSidebar({
   avatarUri,
-  avatarSeed,
+  avatarPaletteKey,
   baseLabel,
   isOpen,
   name,
@@ -146,7 +146,7 @@ export function ProfileSettingsSidebar({
           <Animated.View style={[styles.sidebar, { backgroundColor: colors.background }, sidebarStyle]}>
             <View style={styles.sidebarHeader}>
               <View style={styles.sidebarIdentity}>
-                <FaceHashAvatar name={name} seed={avatarSeed} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
+                <FaceHashAvatar name={name} paletteKey={avatarPaletteKey} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
                 <View style={styles.sidebarNameWrap}>
                   <ThemedText numberOfLines={1} style={styles.sidebarName}>
                     {name}

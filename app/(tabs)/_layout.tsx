@@ -17,12 +17,11 @@ export default function TabLayout() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { isLargeScreen } = useResponsive();
-  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.darkGreen;
-  const inactiveColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
+  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
+  const inactiveColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
   const tabSurfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
   const selectedTabTint = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteOverlayFaint;
-  const androidBottomInset = Math.max(insets.bottom, 18);
-
+  const tabIconSize = 22;
   const getTabIcon = (
     name: React.ComponentProps<typeof MaterialCommunityIcons>['name']
   ) => (
@@ -34,9 +33,9 @@ export default function TabLayout() {
       outlineName: React.ComponentProps<typeof MaterialCommunityIcons>['name'],
       filledName: React.ComponentProps<typeof MaterialCommunityIcons>['name']
     ) => {
-      function TabIcon({ color, focused, size }: { color: string; focused: boolean; size: number }) {
+      function TabIcon({ color, focused }: { color: string; focused: boolean; size: number }) {
         return (
-          <MaterialCommunityIcons color={color} name={focused ? filledName : outlineName} size={size} />
+          <MaterialCommunityIcons color={color} name={focused ? filledName : outlineName} size={tabIconSize} />
         );
       }
 
@@ -51,17 +50,38 @@ export default function TabLayout() {
         tabBarInactiveTintColor: inactiveColor,
         tabBarLabelPosition: 'below-icon',
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
-          lineHeight: 14,
+          lineHeight: 13,
+          marginTop: 0,
+          paddingBottom: 0,
+        },
+        tabBarIconStyle: {
+          height: 24,
+          marginBottom: 0,
+          marginTop: 0,
+        },
+        tabBarItemStyle: {
+          height: 54,
+          paddingTop: 4,
+          paddingBottom: 4,
         },
         tabBarShowLabel: true,
         tabBarStyle: isLargeScreen ? { display: 'none' } : {
-          backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background,
-          borderTopColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.borderSoft,
-          height: 68 + androidBottomInset,
-          paddingBottom: androidBottomInset,
+          position: 'absolute',
+          left: 14,
+          right: 14,
+          bottom: Platform.OS === 'web' ? 14 : Math.max(insets.bottom, 10) - 2,
+          height: 72,
+          paddingBottom: 8,
           paddingTop: 8,
+          paddingHorizontal: 8,
+          borderTopWidth: 0,
+          borderRadius: 32,
+          borderWidth: 1,
+          backgroundColor: isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong,
+          borderColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.whiteBorder,
+          elevation: 16,
         },
       }}
     >
@@ -70,35 +90,35 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: 'Explore',
-          tabBarIcon: getExpoTabIcon('compass-outline', 'compass'),
+          tabBarIcon: getExpoTabIcon('compass', 'compass'),
         }}
       />
       <Tabs.Screen
         name="trip"
         options={{
           title: 'Trip',
-          tabBarIcon: getExpoTabIcon('map-outline', 'map'),
+          tabBarIcon: getExpoTabIcon('map', 'map'),
         }}
       />
       <Tabs.Screen
         name="stays"
         options={{
           title: 'Stays',
-          tabBarIcon: getExpoTabIcon('bed-outline', 'bed'),
+          tabBarIcon: getExpoTabIcon('bed', 'bed'),
         }}
       />
       <Tabs.Screen
         name="friends"
         options={{
           title: 'Friends',
-          tabBarIcon: getExpoTabIcon('account-group-outline', 'account-group'),
+          tabBarIcon: getExpoTabIcon('account-group', 'account-group'),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: getExpoTabIcon('account-circle-outline', 'account-circle'),
+          tabBarIcon: getExpoTabIcon('account-circle', 'account-circle'),
         }}
       />
     </Tabs>
@@ -134,7 +154,7 @@ export default function TabLayout() {
         <Label>Explore</Label>
         <Icon
           src={{
-            default: getTabIcon('compass-outline'),
+            default: getTabIcon('compass'),
             selected: getTabIcon('compass'),
           }}
           selectedColor={activeColor}
@@ -145,7 +165,7 @@ export default function TabLayout() {
         <Label>Trip</Label>
         <Icon
           src={{
-            default: getTabIcon('map-outline'),
+            default: getTabIcon('map'),
             selected: getTabIcon('map'),
           }}
           selectedColor={activeColor}
@@ -156,7 +176,7 @@ export default function TabLayout() {
         <Label>Stays</Label>
         <Icon
           src={{
-            default: getTabIcon('bed-outline'),
+            default: getTabIcon('bed'),
             selected: getTabIcon('bed'),
           }}
           selectedColor={activeColor}
@@ -167,7 +187,7 @@ export default function TabLayout() {
         <Label>Friends</Label>
         <Icon
           src={{
-            default: getTabIcon('account-group-outline'),
+            default: getTabIcon('account-group'),
             selected: getTabIcon('account-group'),
           }}
           selectedColor={activeColor}
@@ -178,7 +198,7 @@ export default function TabLayout() {
         <Label>Profile</Label>
         <Icon
           src={{
-            default: getTabIcon('account-circle-outline'),
+            default: getTabIcon('account-circle'),
             selected: getTabIcon('account-circle'),
           }}
           selectedColor={activeColor}

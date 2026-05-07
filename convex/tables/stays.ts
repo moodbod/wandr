@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 
 export const staysTable = defineTable({
   slug: v.string(),
+  managerSlug: v.optional(v.string()),
   name: v.string(),
   locationLabel: v.string(),
   town: v.string(),
@@ -78,5 +79,6 @@ export const staysTable = defineTable({
   regionId: v.optional(v.id('regions')),
 })
   .index('by_slug', ['slug'])
+  .index('by_managerSlug', ['managerSlug'])
   .index('by_region', ['region'])
   .index('by_town', ['town']);

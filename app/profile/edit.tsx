@@ -1,11 +1,13 @@
 import { useMutation } from 'convex/react';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Trash } from 'phosphor-react-native';
-import { useEffect, useState } from 'react';
+import { Bed, Camera, MapTrifold, Trash } from 'phosphor-react-native';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
-import CountryPicker, { type Country, type CountryCode } from 'react-native-country-picker-modal';
+import { type Country } from 'react-native-country-picker-modal';
 
 import type { Id } from '@/convex/_generated/dataModel';
+import { CountryPickerField } from '@/components/wandr/country-picker-field';
 import {
   ProfileSettingScreen,
   SettingActionButton,
@@ -15,12 +17,11 @@ import {
   SettingTextInput,
 } from '@/components/wandr/profile/profile-setting-screen';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
-import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useManagerMode } from '@/hooks/use-manager-mode';
+import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { generateAvatarUploadUrlRef, updateTravelerProfileRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
@@ -34,10 +35,11 @@ const travelStyleOptions = [
 ] as const;
 
 export default function EditProfileScreen() {
+  const router = useRouter();
   const traveler = useCurrentTraveler();
-  const isDark = useColorScheme() === 'dark';
   const { signOut } = useAuthSession();
   const { isLoading: managerModeIsLoading, isManagerMode, setManagerMode } = useManagerMode();
+  const { openManager } = useManagerResourceMode();
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
   const [name, setName] = useState('');
@@ -50,7 +52,7 @@ export default function EditProfileScreen() {
   const [clearAvatar, setClearAvatar] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
+  const hasLoadedTravelerRef = useRef(false);
 
   useEffect(() => {
     if (!traveler) {
@@ -65,7 +67,65 @@ export default function EditProfileScreen() {
     setAvatarUri(traveler.avatarUri ?? null);
     setAvatarStorageId(undefined);
     setClearAvatar(false);
+    hasLoadedTravelerRef.current = true;
   }, [traveler]);
+
+  useEffect(() => {
+    if (!traveler?.slug || !hasLoadedTravelerRef.current) {
+      return;
+    }
+
+    const hasProfileChanged =
+      name !== (traveler.name ?? '') ||
+      homeCity !== (traveler.homeCity ?? '') ||
+      countryCode !== (traveler.countryCode ?? 'NA') ||
+      countryLabel !== (traveler.countryLabel ?? 'Namibia') ||
+      travelStyle !== (traveler.travelStyle ?? 'solo') ||
+      Boolean(avatarStorageId) ||
+      clearAvatar;
+
+    if (!hasProfileChanged) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setIsSaving(true);
+      updateTravelerProfile({
+        travelerSlug: traveler.slug,
+        name,
+        countryCode,
+        countryLabel,
+        homeCity: homeCity.trim() || undefined,
+        travelStyle,
+        avatarStorageId,
+        clearAvatar,
+      })
+        .then(() => {
+          setAvatarStorageId(undefined);
+          setClearAvatar(false);
+        })
+        .catch((error) => {
+          console.error('Failed to autosave profile', error);
+        })
+        .finally(() => {
+          setIsSaving(false);
+        });
+    }, 600);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [
+    avatarStorageId,
+    clearAvatar,
+    countryCode,
+    countryLabel,
+    homeCity,
+    name,
+    traveler,
+    travelStyle,
+    updateTravelerProfile,
+  ]);
 
   const handleChooseAvatar = async () => {
     if (!traveler?.slug || isUploading) {
@@ -113,36 +173,9 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleSave = async () => {
-    if (!traveler?.slug || isSaving) {
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await updateTravelerProfile({
-        travelerSlug: traveler.slug,
-        name,
-        countryCode,
-        countryLabel,
-        homeCity: homeCity.trim() || undefined,
-        travelStyle,
-        avatarStorageId,
-        clearAvatar,
-      });
-      Alert.alert('Profile saved', 'Your traveler profile has been updated.');
-    } catch (error) {
-      console.error('Failed to save profile', error);
-      Alert.alert('Could not save profile', error instanceof Error ? error.message : 'Please check your details and try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleSelectCountry = (country: Country) => {
     setCountryCode(country.cca2);
     setCountryLabel(typeof country.name === 'string' ? country.name : country.name.common);
-    setIsCountryPickerOpen(false);
   };
 
   const handleSignOut = async () => {
@@ -157,7 +190,7 @@ export default function EditProfileScreen() {
   return (
     <ProfileSettingScreen title="Account">
       <View style={styles.avatarPanel}>
-        <FaceHashAvatar name={name || 'Traveler'} seed={traveler?.slug} size={96} uri={avatarUri} />
+        <FaceHashAvatar name={name || 'Traveler'} paletteKey={traveler?.slug} size={96} uri={avatarUri} />
         <View style={styles.avatarActions}>
           <Pressable accessibilityRole="button" onPress={handleChooseAvatar} style={styles.avatarButton}>
             <Camera color={designSystem.colors.darkGreen} size={18} weight="bold" />
@@ -181,40 +214,51 @@ export default function EditProfileScreen() {
 
       <SettingTextInput label="Display name" value={name} onChangeText={setName} placeholder="Your name" />
       <SettingTextInput label="Home city or base" value={homeCity} onChangeText={setHomeCity} placeholder="Windhoek" />
-      <Pressable
-        accessibilityRole="button"
+      <CountryPickerField
         accessibilityLabel="Select country"
-        onPress={() => setIsCountryPickerOpen(true)}
-        style={styles.countryRow}>
-        <CountryFlagAvatar countryCode={countryCode} size={30} />
-        <View style={styles.countryCopy}>
-          <ThemedText style={styles.countryLabel}>Country</ThemedText>
-          <ThemedText style={styles.countryValue}>{countryLabel}</ThemedText>
-        </View>
-      </Pressable>
-      <CountryPicker
-        countryCode={countryCode as CountryCode}
-        onClose={() => setIsCountryPickerOpen(false)}
+        countryCode={countryCode}
+        label="Country"
+        value={countryLabel}
         onSelect={handleSelectCountry}
-        theme={{
-          backgroundColor: isDark ? designSystem.semantic.dark.surfaceRaised : designSystem.colors.white,
-          onBackgroundTextColor: isDark ? designSystem.semantic.dark.text : designSystem.semantic.light.text,
-          primaryColor: designSystem.colors.lime,
-          primaryColorVariant: designSystem.colors.darkGreen,
-        }}
-        visible={isCountryPickerOpen}
-        withFilter
-        withFlag
       />
       <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
-      <SettingRow label="Phone" value={traveler?.phoneNumber ?? 'Local session'} />
+      <SettingRow label="Phone" value={traveler?.phoneNumber ?? 'Add during onboarding'} />
+      <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
       <SettingSwitchRow
         disabled={managerModeIsLoading}
         label="Manager mode"
         value={isManagerMode}
         onValueChange={setManagerMode}
       />
-      <SettingActionButton disabled={isSaving || isUploading || !traveler?.slug} label={isSaving ? 'Saving...' : 'Save account'} onPress={handleSave} />
+      {isManagerMode ? (
+        <View style={styles.managerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open experience management"
+            onPress={() => {
+              openManager('experiences');
+              router.push('/profile');
+            }}
+            style={styles.managerActionButton}>
+            <MapTrifold color={designSystem.colors.darkGreen} size={18} weight="bold" />
+            <ThemedText style={styles.managerActionText}>Experiences</ThemedText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open room management"
+            onPress={() => {
+              openManager('rooms');
+              router.push('/profile');
+            }}
+            style={styles.managerActionButton}>
+            <Bed color={designSystem.colors.darkGreen} size={18} weight="bold" />
+            <ThemedText style={styles.managerActionText}>Rooms</ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+      {isSaving || isUploading ? (
+        <ThemedText style={styles.autosaveText}>{isUploading ? 'Uploading...' : 'Saving changes...'}</ThemedText>
+      ) : null}
       <SettingActionButton label="Sign out" variant="secondary" onPress={handleSignOut} />
     </ProfileSettingScreen>
   );
@@ -247,30 +291,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: designSystem.colors.darkGreen,
   },
-  countryRow: {
-    minHeight: 76,
+  managerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  managerActionButton: {
+    minHeight: 48,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: designSystem.colors.borderSoft,
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 24,
+    backgroundColor: designSystem.colors.lime,
   },
-  countryCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
+  managerActionText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: designSystem.colors.darkGreen,
   },
-  countryLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
+  autosaveText: {
+    alignSelf: 'center',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
     color: designSystem.colors.gray,
-  },
-  countryValue: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
   },
 });

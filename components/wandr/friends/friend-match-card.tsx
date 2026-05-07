@@ -40,7 +40,7 @@ export function FriendMatchCard({
         style={styles.avatarButton}>
         <FaceHashAvatar
           name={candidate.name || candidate.travelerSlug || 'Traveler'}
-          seed={candidate.travelerSlug}
+          paletteKey={candidate.travelerSlug}
           size={60}
           uri={candidate.avatarUri}
           style={styles.avatar}

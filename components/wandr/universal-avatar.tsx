@@ -6,10 +6,10 @@ type UniversalAvatarProps = {
   name?: string | null;
   size: number;
   uri?: string | null;
-  seed?: string | null;
+  paletteKey?: string | null;
   style?: ComponentProps<typeof FaceHashAvatar>['style'];
 };
 
-export function UniversalAvatar({ name, size, uri, seed, style }: UniversalAvatarProps) {
-  return <FaceHashAvatar name={name?.trim() || 'Wandr'} seed={seed} size={size} uri={uri} style={style} />;
+export function UniversalAvatar({ name, size, uri, paletteKey, style }: UniversalAvatarProps) {
+  return <FaceHashAvatar name={name?.trim() || 'Wandr'} paletteKey={paletteKey} size={size} uri={uri} style={style} />;
 }

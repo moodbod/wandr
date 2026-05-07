@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { type Href, useRouter } from 'expo-router';
 import { Diamond } from 'phosphor-react-native';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,6 +11,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import type { ExploreActivityCard as ExploreActivityCardContent } from '@/constants/explore-content';
 
 const CARD_RADIUS = 28;
+const FALLBACK_ACTIVITY_IMAGE = 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1200&q=80&fit=crop';
 
 export type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
@@ -21,6 +23,13 @@ export type ExploreActivityCardProps = {
 export function ExploreActivityCard({ card, marker, href, onPress }: ExploreActivityCardProps) {
   const router = useRouter();
   const { isLargeScreen } = useResponsive();
+  const [imageFailed, setImageFailed] = useState(false);
+  const hasPlaceholderImage = !card.imageUri || card.imageUri.includes('example.com');
+  const imageUri = imageFailed || hasPlaceholderImage ? FALLBACK_ACTIVITY_IMAGE : card.imageUri;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [card.imageUri]);
 
   const handlePress = () => {
     if (onPress) {
@@ -38,8 +47,9 @@ export function ExploreActivityCard({ card, marker, href, onPress }: ExploreActi
     >
       <View style={[styles.imageWrap, isLargeScreen && styles.imageWrapLarge]}>
         <Image
-          source={card.imageUri}
+          source={imageUri}
           contentFit="cover"
+          onError={() => setImageFailed(true)}
           style={styles.image}
         />
         {marker === 'gem' ? (

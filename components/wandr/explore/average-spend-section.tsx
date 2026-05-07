@@ -2,6 +2,8 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
+import { formatUsdPriceParts } from '@/lib/currency';
 
 type AverageSpendSectionProps = {
   amount: string;
@@ -35,13 +37,17 @@ function getAverageSpendNote(priceSuffix?: string) {
 }
 
 export function AverageSpendSection({ amount, priceSuffix }: AverageSpendSectionProps) {
+  const settings = useCurrentUserSettings();
+  const preferredCurrency = settings?.preferredCurrency ?? 'USD';
   const note = getAverageSpendNote(priceSuffix);
+  const price = formatUsdPriceParts(amount, preferredCurrency);
 
   return (
     <View style={styles.section}>
       <View style={styles.amountRow}>
         <ThemedText style={styles.lead}>People spend about</ThemedText>
-        <ThemedText style={styles.amount}>{amount}</ThemedText>
+        <ThemedText style={styles.amount}>{price.amountLabel}</ThemedText>
+        {price.rateLabel ? <ThemedText style={styles.rate}>{price.rateLabel}</ThemedText> : null}
       </View>
       <ThemedText style={styles.note}>{note}</ThemedText>
     </View>
@@ -67,6 +73,12 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: '600',
     color: designSystem.colors.ink,
+  },
+  rate: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400',
+    color: designSystem.colors.gray,
   },
   note: {
     fontSize: 15,

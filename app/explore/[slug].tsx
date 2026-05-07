@@ -448,7 +448,7 @@ function ConnectedExploreExperienceScreen() {
                         <TravelerAvatarStack
                           avatars={joinableTrip.avatarUris}
                           fallbackName={joinableTrip.hostName || joinableTrip.groupName}
-                          fallbackSeed={joinableTrip.circleId}
+                          fallbackPaletteKey={joinableTrip.circleId}
                           totalCount={joinableTrip.memberCount}
                         />
                       </View>

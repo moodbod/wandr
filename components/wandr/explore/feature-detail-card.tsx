@@ -7,6 +7,8 @@ import { ThemedView } from '@/components/themed-view';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreFeatureDetail } from '@/constants/explore-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
+import { formatUsdPriceParts } from '@/lib/currency';
 
 const CARD_RADIUS = 32;
 const CARD_PADDING = 12;
@@ -19,7 +21,9 @@ type ExploreFeatureDetailCardProps = {
 
 export function ExploreFeatureDetailCard({ card, href }: ExploreFeatureDetailCardProps) {
   const isDark = useColorScheme() === 'dark';
+  const settings = useCurrentUserSettings();
   const router = useRouter();
+  const price = formatUsdPriceParts(card.price, settings?.preferredCurrency ?? 'USD');
 
   return (
     <ThemedView 
@@ -36,9 +40,12 @@ export function ExploreFeatureDetailCard({ card, href }: ExploreFeatureDetailCar
         <ThemedText style={styles.title}>{card.title}</ThemedText>
         <ThemedText style={styles.description}>{card.description}</ThemedText>
         <View style={styles.footer}>
-          <View style={styles.priceRow}>
-            <ThemedText style={styles.price}>{card.price}</ThemedText>
-            <ThemedText style={styles.priceSuffix}>{card.priceSuffix}</ThemedText>
+          <View style={styles.priceStack}>
+            <View style={styles.priceRow}>
+              <ThemedText style={styles.price}>{price.amountLabel}</ThemedText>
+              <ThemedText style={styles.priceSuffix}>{card.priceSuffix}</ThemedText>
+            </View>
+            {price.rateLabel ? <ThemedText style={styles.priceRate}>{price.rateLabel}</ThemedText> : null}
           </View>
           {href ? (
             <Pressable
@@ -100,6 +107,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 2,
   },
+  priceStack: {
+    flex: 1,
+    gap: 3,
+  },
   price: {
     fontSize: 28,
     lineHeight: 28,
@@ -109,6 +120,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
+    color: designSystem.colors.gray,
+  },
+  priceRate: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '400',
     color: designSystem.colors.gray,
   },
   cta: {
