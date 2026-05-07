@@ -39,6 +39,19 @@ export function ExploreSheetHeaderSkeleton() {
   );
 }
 
+export function ExploreMobileSheetHeaderSkeleton() {
+  return (
+    <View style={styles.mobileHeaderShell}>
+      <View style={styles.mobileHeaderCopy}>
+        <SkeletonBlock style={styles.mobileTitleLine} />
+        <SkeletonBlock style={styles.mobileSubtitleLine} />
+        <SkeletonBlock style={styles.mobileSubtitleShortLine} />
+      </View>
+      <SkeletonBlock style={styles.sheetSearchButton} />
+    </View>
+  );
+}
+
 export function ExploreTripFilterSkeleton() {
   return (
     <View style={styles.filterRow}>
@@ -46,6 +59,16 @@ export function ExploreTripFilterSkeleton() {
       <SkeletonBlock style={styles.filterChip} />
       <SkeletonBlock style={styles.filterChipShort} />
     </View>
+  );
+}
+
+export function ExploreMobileTripRailSkeleton() {
+  return <SkeletonBlock style={styles.mobileTripRail} />;
+}
+
+export function ExploreMobileFeatureCardSkeleton() {
+  return (
+    <SkeletonBlock style={styles.mobileFeaturePanel} />
   );
 }
 
@@ -138,25 +161,67 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
   },
+  mobileHeaderShell: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  mobileHeaderCopy: {
+    flex: 1,
+    gap: 8,
+    paddingTop: 2,
+    paddingRight: 8,
+  },
+  mobileTitleLine: {
+    width: '56%',
+    height: 28,
+    borderRadius: 14,
+  },
+  mobileSubtitleLine: {
+    width: '58%',
+    height: 14,
+    borderRadius: 7,
+  },
+  mobileSubtitleShortLine: {
+    display: 'none',
+  },
   filterRow: {
     flexDirection: 'row',
     gap: 10,
     overflow: 'hidden',
+    width: '100%',
   },
   filterChipWide: {
-    width: 132,
+    flexBasis: 0,
+    flexGrow: 1.35,
+    minWidth: 92,
     height: 42,
     borderRadius: designSystem.radii.pill,
   },
   filterChip: {
-    width: 108,
+    flexBasis: 0,
+    flexGrow: 1.05,
+    minWidth: 78,
     height: 42,
     borderRadius: designSystem.radii.pill,
   },
   filterChipShort: {
-    width: 88,
+    flexBasis: 0,
+    flexGrow: 0.85,
+    minWidth: 64,
     height: 42,
     borderRadius: designSystem.radii.pill,
+  },
+  mobileTripRail: {
+    width: 148,
+    height: 42,
+    borderRadius: designSystem.radii.pill,
+  },
+  mobileFeaturePanel: {
+    width: '100%',
+    height: 164,
+    borderRadius: 28,
   },
   hiddenGemShell: {
     borderRadius: CARD_RADIUS,

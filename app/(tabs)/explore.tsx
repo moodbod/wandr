@@ -15,6 +15,9 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardList } from '@/components/wandr/explore/activity-card-list';
 import {
+  ExploreMobileFeatureCardSkeleton,
+  ExploreMobileSheetHeaderSkeleton,
+  ExploreMobileTripRailSkeleton,
   ExploreSheetHeaderSkeleton,
   ExploreTripFilterSkeleton,
 } from '@/components/wandr/explore/card-skeletons';
@@ -89,7 +92,7 @@ function ConnectedExploreScreen({
   isDark: boolean;
   mapTopInset: number;
 }) {
-  const { isLargeScreen, isTablet } = useResponsive();
+  const { isLargeScreen } = useResponsive();
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
   const traveler = useCurrentTraveler();
@@ -144,18 +147,29 @@ function ConnectedExploreScreen({
       currentLocationInPlanningLocation ??
       planningLocation.centerCoordinate ??
       [17.0832, -22.5609];
+    const loadingMapContent = (
+      <ExploreMapHero
+        key={loadingMapResetKey}
+        centerCoordinate={loadingMapCenterCoordinate}
+        locationLabel={planningLocation.label}
+        userCoordinate={currentLocationInPlanningLocation}
+        userHeading={currentHeading}
+        markers={[]}
+        routeCoordinates={[]}
+        showRoutes={false}
+        topInset={mapTopInset}
+        onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
+        planningLocation={planningLocation}
+        hideHeader={isLargeScreen}
+        shellStyle={StyleSheet.absoluteFill}
+      />
+    );
 
     return (
       <ThemedView style={styles.root}>
-        <View style={isLargeScreen ? styles.bodyLarge : styles.body}>
-          {isLargeScreen ? (
-            <View
-              style={[
-                styles.contentColumn,
-                isTablet ? styles.contentColumnTablet : styles.contentColumnDesktop,
-                { backgroundColor: isDark ? designSystem.colors.darkBackground : designSystem.colors.background },
-              ]}
-            >
+        {isLargeScreen ? (
+          <LargeScreenWorkspace mapContent={loadingMapContent}>
+            <LargeScreenPanel kind="main">
               <ScrollView
                 contentContainerStyle={[styles.sheetContent, styles.columnScroll]}
                 showsVerticalScrollIndicator={false}
@@ -166,39 +180,25 @@ function ConnectedExploreScreen({
                   <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
                 </View>
               </ScrollView>
+            </LargeScreenPanel>
+          </LargeScreenWorkspace>
+        ) : (
+          <View style={styles.body}>
+            <View style={styles.mapLayer}>
+              {loadingMapContent}
             </View>
-          ) : null}
 
-          <View style={isLargeScreen ? styles.mapColumn : styles.mapLayer}>
-            <ExploreMapHero
-              key={loadingMapResetKey}
-              centerCoordinate={loadingMapCenterCoordinate}
-              locationLabel={planningLocation.label}
-              userCoordinate={currentLocationInPlanningLocation}
-              userHeading={currentHeading}
-              markers={[]}
-              routeCoordinates={[]}
-              showRoutes={false}
-              topInset={mapTopInset}
-              onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
-              planningLocation={planningLocation}
-              hideHeader={isLargeScreen}
-              shellStyle={StyleSheet.absoluteFill}
-            />
-          </View>
-
-          {!isLargeScreen ? (
             <GlassBottomSheet index={0} ref={sheetRef} snapPoints={snapPoints} animatedIndex={animatedIndex}>
               <BottomSheetScrollView contentContainerStyle={styles.mobileSheetContent} showsVerticalScrollIndicator={false}>
-                <ExploreSheetHeaderSkeleton />
-                <ExploreTripFilterSkeleton />
+                <ExploreMobileSheetHeaderSkeleton />
+                <ExploreMobileTripRailSkeleton />
                 <View style={styles.mobileCardList}>
-                  <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
+                  <ExploreMobileFeatureCardSkeleton />
                 </View>
               </BottomSheetScrollView>
             </GlassBottomSheet>
-          ) : null}
-        </View>
+          </View>
+        )}
       </ThemedView>
     );
   }
