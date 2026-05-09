@@ -94,6 +94,18 @@ function AppShell({
   const isSignedIn = Boolean(session);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('code') && isSignedIn) {
+      url.searchParams.delete('code');
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+    }
+  }, [isSignedIn]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
       return;
     }

@@ -72,9 +72,10 @@ export default function SignInScreen() {
     }
 
     oauthCodeHandled.current = true;
-    if (typeof document !== 'undefined') document.title = 'Verifying... | Wandr';
+    const title = typeof document !== 'undefined' ? 'Verifying... | Wandr' : '';
+    if (typeof document !== 'undefined') document.title = title;
     url.searchParams.delete('code');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    window.history.replaceState({}, title, url.pathname + url.search + url.hash);
 
     setIsSubmitting(true);
     setError(null);

@@ -15,29 +15,29 @@ function getWebStorage(kind: 'local' | 'session') {
 }
 
 export const convexAuthStorage: TokenStorage = {
-  getItem(key) {
+  async getItem(key) {
     if (Platform.OS === 'web') {
       return getWebStorage('local')?.getItem(key) ?? getWebStorage('session')?.getItem(key) ?? null;
     }
 
-    return SecureStore.getItemAsync(key);
+    return await SecureStore.getItemAsync(key);
   },
-  setItem(key, value) {
+  async setItem(key, value) {
     if (Platform.OS === 'web') {
       getWebStorage('local')?.setItem(key, value);
       getWebStorage('session')?.removeItem(key);
       return;
     }
 
-    return SecureStore.setItemAsync(key, value);
+    return await SecureStore.setItemAsync(key, value);
   },
-  removeItem(key) {
+  async removeItem(key) {
     if (Platform.OS === 'web') {
       getWebStorage('local')?.removeItem(key);
       getWebStorage('session')?.removeItem(key);
       return;
     }
 
-    return SecureStore.deleteItemAsync(key);
+    return await SecureStore.deleteItemAsync(key);
   },
 };
