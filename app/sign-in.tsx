@@ -96,7 +96,19 @@ export default function AuthScreen() {
   const canContinueProfile = name.trim().length >= 2;
   const returnTo = useMemo(() => {
     const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
-    return rawReturnTo?.startsWith('/') && rawReturnTo !== '/sign-in' && rawReturnTo !== '/(auth)' ? rawReturnTo : undefined;
+    if (rawReturnTo?.startsWith('/') && rawReturnTo !== '/sign-in' && rawReturnTo !== '/(auth)') {
+      return rawReturnTo;
+    }
+    // Recover returnTo from sessionStorage (persisted before OAuth redirect)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('wandr:auth:returnTo');
+        if (stored?.startsWith('/') && stored !== '/sign-in') {
+          return stored;
+        }
+      } catch {}
+    }
+    return undefined;
   }, [params.returnTo]);
 
   useEffect(() => {
@@ -106,13 +118,21 @@ export default function AuthScreen() {
     }
 
     if (authIdentity) {
-      setEmail(authIdentity.email ?? '');
-      setName((current) => current || authIdentity.name || '');
-      setStep('profile');
+      if (authIdentity.onboardingCompleted) {
+        // Already onboarded but session query hasn't resolved yet — show done
+        setStep('done');
+      } else {
+        setEmail(authIdentity.email ?? '');
+        setName((current) => current || authIdentity.name || '');
+        setStep('profile');
+      }
       return;
     }
 
-    setStep((current) => (current === 'done' ? 'auth' : current === 'profile' ? 'auth' : current));
+    // authIdentity === null means unauthenticated; undefined means still loading
+    if (authIdentity === null) {
+      setStep('auth');
+    }
   }, [authIdentity, session]);
 
   useEffect(() => {
@@ -120,6 +140,10 @@ export default function AuthScreen() {
       return;
     }
 
+    // Clean up stored returnTo after successful auth
+    if (Platform.OS === 'web') {
+      try { sessionStorage.removeItem('wandr:auth:returnTo'); } catch {}
+    }
     router.replace((returnTo ?? '/(tabs)/explore') as never);
   }, [returnTo, router, session]);
 
@@ -420,7 +444,15 @@ function PrimaryButton({
 
 function getOAuthRedirectTo(returnTo?: string) {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.location.href;
+    // Use a clean URL (origin + pathname only) so the verifier key matches
+    // after the OAuth round-trip. Query params like ?returnTo= would cause
+    // a verifier mismatch because the redirect URL differs from what was
+    // used when the verifier was originally stored.
+    const cleanUrl = window.location.origin + window.location.pathname;
+    if (returnTo) {
+      try { sessionStorage.setItem('wandr:auth:returnTo', returnTo); } catch {}
+    }
+    return cleanUrl;
   }
 
   return Linking.createURL(returnTo ? `sign-in?returnTo=${encodeURIComponent(returnTo)}` : 'sign-in');
