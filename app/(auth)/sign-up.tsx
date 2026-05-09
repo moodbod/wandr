@@ -20,7 +20,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen() {
   const { signIn } = useAuthActions();
-  const { session } = useAuthSession();
+  const { session, isAuthenticated } = useAuthSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
   const { isLargeScreen } = useResponsive();
@@ -63,7 +63,6 @@ export default function SignUpScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
-    const { isAuthenticated, session } = useAuthSession();
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
     if (!code || oauthCodeHandled.current || isAuthenticated || session) return;

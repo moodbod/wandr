@@ -20,7 +20,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
   const { signIn } = useAuthActions();
-  const { session } = useAuthSession();
+  const { session, isAuthenticated } = useAuthSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
   const { isLargeScreen } = useResponsive();
@@ -65,7 +65,6 @@ export default function SignInScreen() {
       return;
     }
 
-    const { isAuthenticated, session } = useAuthSession();
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
     if (!code || oauthCodeHandled.current || isAuthenticated || session) {
