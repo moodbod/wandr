@@ -25,7 +25,7 @@ import { AuthSessionProvider, useAuthSession } from '@/providers/auth-session';
 
 const ActiveFriendCallOverlay = lazy(() => import('@/components/wandr/friends/active-friend-call-overlay'));
 const PUBLIC_ROUTE_ROOTS = new Set(['explore', 'stays']);
-const PUBLIC_TAB_ROUTES = new Set(['explore', 'stays']);
+const PUBLIC_TAB_ROUTES = new Set(['index', 'explore', 'stays']);
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -249,7 +249,9 @@ function AuthRouteGate() {
   const pathname = usePathname();
   const { isLoading, session } = useAuthSession();
   const isAuthRoute = segments[0] === '(auth)';
+  const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
+    isRootRoute ||
     PUBLIC_ROUTE_ROOTS.has(String(segments[0])) ||
     (segments[0] === '(tabs)' && (!segments[1] || PUBLIC_TAB_ROUTES.has(String(segments[1]))));
 

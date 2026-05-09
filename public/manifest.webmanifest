@@ -8,6 +8,60 @@
   "background_color": "#11130f",
   "theme_color": "#11130f",
   "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "Explore places",
+      "short_name": "Explore",
+      "description": "Open Wandr's public explore map.",
+      "url": "/explore",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Browse stays",
+      "short_name": "Stays",
+      "description": "Open stays and route-friendly places to sleep.",
+      "url": "/stays",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My trip",
+      "short_name": "Trip",
+      "description": "Open your current trip plan.",
+      "url": "/trip",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Friends",
+      "short_name": "Friends",
+      "description": "Open friend planning and chats.",
+      "url": "/friends",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/wandr-favicon.png",

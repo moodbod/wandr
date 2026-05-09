@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -125,6 +125,7 @@ export default function AuthScreen() {
   const [travelStyle, setTravelStyle] = useState<TravelStyle>('solo');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const signInInFlightRef = useRef(false);
 
   const shouldConstrainAuthWidth = isLargeScreen;
   const authFrameWidth = shouldConstrainAuthWidth ? Math.min(width, AUTH_LAYOUT.desktopMaxWidth) : width;
@@ -176,6 +177,11 @@ export default function AuthScreen() {
   }
 
   async function handleGoogleSignIn() {
+    if (signInInFlightRef.current) {
+      return;
+    }
+
+    signInInFlightRef.current = true;
     setError(null);
     setIsSubmitting(true);
 
@@ -200,6 +206,7 @@ export default function AuthScreen() {
     } catch (cause) {
       setError(getErrorMessage(cause, 'Could not sign in with Google.'));
     } finally {
+      signInInFlightRef.current = false;
       setIsSubmitting(false);
     }
   }
