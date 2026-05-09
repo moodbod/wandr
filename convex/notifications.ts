@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import { internalAction, internalQuery, mutation, query } from './_generated/server';
+import { getPublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug } from './authHelpers';
 
 function getRequestActionStatus(notification: Doc<'appNotifications'>) {
@@ -41,26 +42,16 @@ export const listNotifications = query({
 
     return await Promise.all(
       notifications.map(async (notification) => {
-        const actorSlug = notification.actorSlug;
-        const [actorUser, actorProfile] = actorSlug
-          ? await Promise.all([
-              ctx.db
-                .query('appUsers')
-                .withIndex('by_slug', (q) => q.eq('slug', actorSlug))
-                .unique(),
-              ctx.db
-                .query('travelerProfiles')
-                .withIndex('by_slug', (q) => q.eq('travelerSlug', actorSlug))
-                .unique(),
-            ])
-          : [null, null];
+        const actorProfile = notification.actorSlug
+          ? await getPublicTravelerProfile(ctx, notification.actorSlug)
+          : null;
 
         return {
           ...notification,
           actionStatus: getRequestActionStatus(notification),
-          actorName: actorUser?.name ?? null,
+          actorName: actorProfile?.name ?? null,
           actorAvatarUri: actorProfile?.avatarUri ?? null,
-          actorBaseLabel: actorProfile?.regionName ?? actorUser?.countryLabel ?? null,
+          actorBaseLabel: actorProfile?.baseLabel ?? null,
           isViewed: Boolean(notification.viewedAt),
           isRead: Boolean(notification.readAt),
         };

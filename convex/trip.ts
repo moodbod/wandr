@@ -3,7 +3,20 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
 import type { ExploreExperience, ExploreHiddenGem } from '../constants/explore-content';
+import {
+  findAppUserForAuth,
+  getCurrentAuthRecord,
+  requireCurrentAuthRecord,
+} from './authIdentity';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
+import {
+  getAuthUserRole,
+  getDefaultAuthProfileFields,
+  getPublicTravelerProfile,
+  patchAuthUserProfile,
+  syncAppUserProjection,
+  type AuthUserProfile,
+} from './appProfiles';
 
 type TripItineraryItem = {
   _id: Id<'experienceBookings'>;
@@ -31,98 +44,28 @@ export const getCurrentTravelerProfile = query({
     }
 
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const [user, profile] = await Promise.all([
-      ctx.db
-        .query('appUsers')
-        .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-        .unique(),
-      ctx.db
-        .query('travelerProfiles')
-        .withIndex('by_slug', (q) => q.eq('travelerSlug', travelerSlug))
-        .unique(),
-    ]);
+    const profile = await getPublicTravelerProfile(ctx, travelerSlug);
 
-    if (!user) {
+    if (!profile) {
       return null;
     }
 
     return {
-      slug: user.slug,
-      name: user.name,
-      email: user.email ?? null,
-      countryCode: user.countryCode,
-      countryLabel: user.countryLabel,
-      role: getAppUserRole(user),
-      homeCity: user.homeCity ?? null,
-      travelStyle: user.travelStyle ?? null,
-      onboardingCompletedAt: user.onboardingCompletedAt ?? null,
-      avatarUri: profile?.avatarStorageId ? await ctx.storage.getUrl(profile.avatarStorageId) : profile?.avatarUri ?? null,
-      regionCode: profile?.regionCode ?? user.countryCode,
-      regionName: profile?.regionName ?? user.countryLabel,
+      slug: profile.slug,
+      name: profile.name,
+      email: profile.email,
+      countryCode: profile.countryCode,
+      countryLabel: profile.countryLabel,
+      role: profile.role,
+      homeCity: profile.homeCity,
+      travelStyle: profile.travelStyle,
+      onboardingCompletedAt: profile.onboardingCompletedAt,
+      avatarUri: profile.avatarUri,
+      regionCode: profile.regionCode,
+      regionName: profile.regionName,
     };
   },
 });
-
-type AuthIdentity = NonNullable<Awaited<ReturnType<QueryCtx['auth']['getUserIdentity']>>>;
-
-async function requireIdentity(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-
-  if (!identity) {
-    throw new Error('Not authenticated');
-  }
-
-  return identity;
-}
-
-function getIdentityEmail(identity: AuthIdentity) {
-  const identityWithEmail = identity as AuthIdentity & {
-    email?: string | null;
-    preferred_username?: string | null;
-  };
-  const rawEmail = identityWithEmail.email ?? identityWithEmail.preferred_username;
-  const normalized = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
-  return normalized.includes('@') ? normalized : '';
-}
-
-function getIdentityName(identity: AuthIdentity) {
-  const identityWithName = identity as AuthIdentity & {
-    name?: string | null;
-    given_name?: string | null;
-  };
-
-  return (
-    identityWithName.name?.trim() ||
-    identityWithName.given_name?.trim() ||
-    getIdentityEmail(identity).split('@')[0] ||
-    'Traveler'
-  );
-}
-
-async function findAppUserForIdentity(ctx: QueryCtx | MutationCtx, identity: AuthIdentity) {
-  const userByToken = await ctx.db
-    .query('appUsers')
-    .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-    .first();
-
-  if (userByToken) {
-    return userByToken;
-  }
-
-  const email = getIdentityEmail(identity);
-  if (!email) {
-    return null;
-  }
-
-  return await ctx.db
-    .query('appUsers')
-    .withIndex('by_email', (q) => q.eq('email', email))
-    .first();
-}
-
-function getAppUserRole(user: Doc<'appUsers'> | null | undefined) {
-  return user?.role === 'admin' ? 'admin' : 'traveler';
-}
 
 function slugBaseFromName(name: string) {
   return (
@@ -148,12 +91,18 @@ async function createUniqueTravelerSlug(ctx: MutationCtx, name: string) {
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const slug = `${base}-${randomSlugSuffix()}`;
-    const existing = await ctx.db
-      .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', slug))
-      .first();
+    const [existingAppUser, existingAuthUser] = await Promise.all([
+      ctx.db
+        .query('appUsers')
+        .withIndex('by_slug', (q) => q.eq('slug', slug))
+        .first(),
+      ctx.db
+        .query('users')
+        .withIndex('by_slug', (q) => q.eq('slug', slug))
+        .first(),
+    ]);
 
-    if (!existing) {
+    if (!existingAppUser && !existingAuthUser) {
       return slug;
     }
   }
@@ -170,8 +119,7 @@ export const completeProfileOnboarding = mutation({
     travelStyle: v.union(v.literal('solo'), v.literal('couple'), v.literal('friends'), v.literal('family')),
   },
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
-    const email = getIdentityEmail(identity);
+    const authRecord = await requireCurrentAuthRecord(ctx);
     const name = args.name.trim();
     const homeCity = args.homeCity?.trim();
 
@@ -180,76 +128,56 @@ export const completeProfileOnboarding = mutation({
     }
 
     const now = Date.now();
-    const existingUser = await findAppUserForIdentity(ctx, identity);
-    const slug = existingUser?.slug ?? (await createUniqueTravelerSlug(ctx, name));
+    const existingAppUser = await findAppUserForAuth(ctx, authRecord);
+    const existingAuthUser = authRecord.authUser as AuthUserProfile | null;
+    const slug = existingAuthUser?.slug ?? existingAppUser?.slug ?? (await createUniqueTravelerSlug(ctx, name));
+    const role = getAuthUserRole(existingAuthUser ?? existingAppUser);
+    const profileDefaults = getDefaultAuthProfileFields({
+      countryCode: args.countryCode,
+      countryLabel: args.countryLabel,
+      homeCity,
+      travelStyle: args.travelStyle,
+    });
+    const onboardingCompletedAt = existingAuthUser?.onboardingCompletedAt ?? existingAppUser?.onboardingCompletedAt ?? now;
+    const patchedAuthUser = await patchAuthUserProfile(ctx, authRecord.authUserId, {
+      email: authRecord.email ?? existingAuthUser?.email,
+      slug,
+      name,
+      countryCode: args.countryCode,
+      countryLabel: args.countryLabel,
+      role,
+      homeCity: homeCity || undefined,
+      travelStyle: args.travelStyle,
+      onboardingCompletedAt,
+      arrivalWindowLabel: existingAuthUser?.arrivalWindowLabel ?? profileDefaults.arrivalWindowLabel,
+      baseLabel: existingAuthUser?.baseLabel ?? profileDefaults.baseLabel,
+      bio: existingAuthUser?.bio ?? profileDefaults.bio,
+      destinationLabel: existingAuthUser?.destinationLabel ?? profileDefaults.destinationLabel,
+      discoverViewCount: existingAuthUser?.discoverViewCount ?? profileDefaults.discoverViewCount,
+      headline: existingAuthUser?.headline ?? profileDefaults.headline,
+      interests: existingAuthUser?.interests ?? profileDefaults.interests,
+      regionCode: existingAuthUser?.regionCode ?? profileDefaults.regionCode,
+      regionName: existingAuthUser?.regionName ?? profileDefaults.regionName,
+      travelPace: existingAuthUser?.travelPace ?? profileDefaults.travelPace,
+      vibe: existingAuthUser?.vibe ?? profileDefaults.vibe,
+      profileUpdatedAt: now,
+    });
 
-    if (existingUser) {
-      await ctx.db.patch(existingUser._id, {
-        tokenIdentifier: identity.tokenIdentifier,
-        authUserId: identity.subject,
-        email: email || existingUser.email,
-        name,
-        countryCode: args.countryCode,
-        countryLabel: args.countryLabel,
-        role: existingUser.role ?? 'traveler',
-        homeCity: homeCity || undefined,
-        travelStyle: args.travelStyle,
-        onboardingCompletedAt: existingUser.onboardingCompletedAt ?? now,
-      });
-    } else {
-      await ctx.db.insert('appUsers', {
+    await syncAppUserProjection(
+      ctx,
+      authRecord,
+      {
         slug,
-        tokenIdentifier: identity.tokenIdentifier,
-        authUserId: identity.subject,
-        email: email || undefined,
         name,
         countryCode: args.countryCode,
         countryLabel: args.countryLabel,
-        role: 'traveler',
-        homeCity: homeCity || undefined,
+        role,
+        homeCity: homeCity || null,
         travelStyle: args.travelStyle,
-        onboardingCompletedAt: now,
-      });
-    }
-
-    const existingProfile = await ctx.db
-      .query('travelerProfiles')
-      .withIndex('by_slug', (q) => q.eq('travelerSlug', slug))
-      .unique();
-
-    if (existingProfile) {
-      await ctx.db.patch(existingProfile._id, {
-        name,
-        regionCode: args.countryCode,
-        regionName: homeCity || args.countryLabel,
-      });
-    } else {
-      await ctx.db.insert('travelerProfiles', {
-        travelerSlug: slug,
-        name,
-        regionCode: args.countryCode,
-        regionName: homeCity || args.countryLabel,
-      });
-    }
-
-    const existingFriendProfile = await ctx.db
-      .query('friendProfiles')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', slug))
-      .unique();
-
-    if (!existingFriendProfile) {
-      await ctx.db.insert('friendProfiles', {
-        travelerSlug: slug,
-        headline: '',
-        bio: '',
-        baseLabel: homeCity || args.countryLabel,
-        destinationLabel: '',
-        travelPace: 'balanced',
-        vibe: args.travelStyle === 'family' ? 'relaxation' : args.travelStyle === 'friends' ? 'social' : 'culture',
-        arrivalWindowLabel: '',
-        interests: [],
-      });
-    }
+        onboardingCompletedAt: patchedAuthUser?.onboardingCompletedAt ?? onboardingCompletedAt,
+      },
+      existingAppUser
+    );
 
     return {
       slug,
@@ -258,7 +186,7 @@ export const completeProfileOnboarding = mutation({
       countryLabel: args.countryLabel,
       homeCity: homeCity || null,
       travelStyle: args.travelStyle,
-      role: getAppUserRole(existingUser),
+      role,
     };
   },
 });
@@ -266,23 +194,25 @@ export const completeProfileOnboarding = mutation({
 export const getCurrentAuthSession = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
+    const authRecord = await getCurrentAuthRecord(ctx);
+    if (!authRecord) {
       return null;
     }
 
-    const existingUser = await findAppUserForIdentity(ctx, identity);
+    const existingUser = await findAppUserForAuth(ctx, authRecord);
+    const authUser = authRecord.authUser as AuthUserProfile | null;
+    const travelerSlug = authUser?.slug ?? existingUser?.slug;
+    const onboardingCompletedAt = authUser?.onboardingCompletedAt ?? existingUser?.onboardingCompletedAt;
 
-    if (!existingUser?.onboardingCompletedAt) {
+    if (!travelerSlug || !onboardingCompletedAt) {
       return null;
     }
 
     return {
-      travelerSlug: existingUser.slug,
-      email: existingUser.email ?? getIdentityEmail(identity),
-      name: existingUser.name,
-      role: getAppUserRole(existingUser),
+      travelerSlug,
+      email: authUser?.email ?? existingUser?.email ?? authRecord.email ?? '',
+      name: authUser?.name ?? existingUser?.name ?? authRecord.name,
+      role: getAuthUserRole(authUser ?? existingUser),
     };
   },
 });
@@ -452,25 +382,12 @@ function buildDayTitle(locationLabel?: string) {
 }
 
 async function getFriendSummary(ctx: QueryCtx, travelerSlug: string) {
-  const [user, travelerProfile, friendProfile] = await Promise.all([
-    ctx.db
-      .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-      .unique(),
-    ctx.db
-      .query('travelerProfiles')
-      .withIndex('by_slug', (q) => q.eq('travelerSlug', travelerSlug))
-      .unique(),
-    ctx.db
-      .query('friendProfiles')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-      .unique(),
-  ]);
+  const profile = await getPublicTravelerProfile(ctx, travelerSlug);
 
   return {
-    name: user?.name ?? travelerSlug,
-    avatarUri: travelerProfile?.avatarUri ?? null,
-    baseLabel: friendProfile?.baseLabel ?? user?.countryLabel ?? 'Traveler',
+    name: profile?.name ?? travelerSlug,
+    avatarUri: profile?.avatarUri ?? null,
+    baseLabel: profile?.baseLabel ?? 'Traveler',
   };
 }
 
@@ -1473,23 +1390,14 @@ export const listStayRatings = query({
 
     return await Promise.all(
       ratings.map(async (rating) => {
-        const [user, profile] = await Promise.all([
-          ctx.db
-            .query('appUsers')
-            .withIndex('by_slug', (q) => q.eq('slug', rating.travelerSlug))
-            .unique(),
-          ctx.db
-            .query('travelerProfiles')
-            .withIndex('by_slug', (q) => q.eq('travelerSlug', rating.travelerSlug))
-            .unique(),
-        ]);
+        const profile = await getPublicTravelerProfile(ctx, rating.travelerSlug);
 
         return {
           ...rating,
           review: rating.review ?? '',
-          travelerName: user?.name ?? rating.travelerSlug,
+          travelerName: profile?.name ?? rating.travelerSlug,
           travelerAvatarUri: profile?.avatarUri ?? null,
-          travelerRegionName: profile?.regionName ?? user?.countryLabel ?? null,
+          travelerRegionName: profile?.regionName ?? null,
         };
       })
     );

@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from 'convex/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
+import { getPublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 
 import type { ExploreExperience } from '../constants/explore-content';
@@ -588,10 +589,7 @@ async function getCircleAvatarUris(ctx: QueryCtx, circleId: Id<'friendCircles'>)
   const avatars: string[] = [];
 
   for (const member of members.slice(0, 4)) {
-    const profile = await ctx.db
-      .query('travelerProfiles')
-      .withIndex('by_slug', (q) => q.eq('travelerSlug', member.travelerSlug))
-      .unique();
+    const profile = await getPublicTravelerProfile(ctx, member.travelerSlug);
 
     if (profile?.avatarUri) {
       avatars.push(profile.avatarUri);

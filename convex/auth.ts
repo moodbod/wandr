@@ -1,11 +1,29 @@
 import Google from "@auth/core/providers/google";
+import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
-import { query } from "./_generated/server";
-import { mutation } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query, type MutationCtx } from "./_generated/server";
+import {
+  getAuthUserRole,
+  hydrateAuthUserFromProjection,
+  syncAppUserProjection,
+  type AuthUserProfile,
+} from "./appProfiles";
+import {
+  findAppUserForAuth,
+  getCurrentAuthRecord,
+  normalizeEmail,
+} from "./authIdentity";
 
-type AuthIdentity = NonNullable<Awaited<ReturnType<QueryCtx["auth"]["getUserIdentity"]>>>;
+const getProviderProfileValue = (profile: Record<string, unknown>, key: string) => {
+  const value = profile[key];
+  return typeof value === "string" ? value.trim() : undefined;
+};
+
+const getProviderProfileBoolean = (profile: Record<string, unknown>, key: string) => {
+  const value = profile[key];
+  return typeof value === "boolean" ? value : undefined;
+};
 
 const TRUSTED_REDIRECT_PREFIXES = [
   "wandr://",
@@ -15,64 +33,105 @@ const TRUSTED_REDIRECT_PREFIXES = [
   "http://127.0.0.1",
 ];
 
-const normalizeEmail = (email?: string | null) => {
-  const normalized = email?.trim().toLowerCase();
-  return normalized && normalized.includes("@") ? normalized : undefined;
-};
+function stripUndefined<T extends Record<string, unknown>>(value: T) {
+  const result: Partial<T> = {};
+  const entries = Object.entries(value) as [keyof T, T[keyof T]][];
 
-const getIdentityEmail = (identity: AuthIdentity) => {
-  const identityWithEmail = identity as AuthIdentity & {
-    email?: string;
-    preferred_username?: string;
-  };
-  return normalizeEmail(identityWithEmail.email ?? identityWithEmail.preferred_username);
-};
-
-const getIdentityName = (identity: AuthIdentity) => {
-  const identityWithName = identity as AuthIdentity & {
-    name?: string;
-    given_name?: string;
-  };
-  return (
-    identityWithName.name?.trim() ??
-    identityWithName.given_name?.trim() ??
-    getIdentityEmail(identity)?.split("@")[0] ??
-    "Traveler"
-  );
-};
-
-const findAppUserForIdentity = async (
-  ctx: QueryCtx | MutationCtx,
-  identity: AuthIdentity,
-) => {
-  const byToken = await ctx.db
-    .query("appUsers")
-    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .first();
-
-  if (byToken) {
-    return byToken;
+  for (const [key, fieldValue] of entries) {
+    if (fieldValue !== undefined) {
+      result[key] = fieldValue;
+    }
   }
 
-  const email = getIdentityEmail(identity);
-  if (!email) {
-    return null;
-  }
+  return result;
+}
 
-  return await ctx.db
-    .query("appUsers")
-    .withIndex("by_email", (q) => q.eq("email", email))
-    .first();
-};
+function getProfileEmail(profile: Record<string, unknown>) {
+  return normalizeEmail(typeof profile.email === "string" ? profile.email : undefined);
+}
 
-const getAppUserRole = (user: Doc<"appUsers"> | null | undefined) =>
-  user?.role === "admin" ? "admin" : "traveler";
+function getProfileName(profile: Record<string, unknown>, email?: string) {
+  const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : undefined;
+  return name ?? email?.split("@")[0] ?? "Traveler";
+}
 
-const getAuthUserId = (identity: AuthIdentity) => identity.subject as Id<"users">;
+function chooseCanonicalAuthUser(users: AuthUserProfile[]) {
+  const sortedUsers = [...users].sort((first, second) => first._creationTime - second._creationTime);
+  return sortedUsers.find((user) => user.onboardingCompletedAt) ?? sortedUsers[0] ?? null;
+}
+
+async function findCanonicalAuthUserByEmail(ctx: MutationCtx, email: string) {
+  const users = (await ctx.db
+    .query("users")
+    .withIndex("email", (q) => q.eq("email", email))
+    .take(20)) as AuthUserProfile[];
+
+  return chooseCanonicalAuthUser(users);
+}
+
+const passwordProvider = Password({
+  profile(params: Record<string, unknown>) {
+    const email = normalizeEmail(typeof params.email === "string" ? params.email : undefined);
+    if (!email) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const name = typeof params.name === "string" && params.name.trim() ? params.name.trim() : email.split("@")[0];
+    return { email, name };
+  },
+});
+
+const googleProvider = Google({
+  profile(profile) {
+    const source = profile as Record<string, unknown>;
+    const email = normalizeEmail(getProviderProfileValue(source, "email"));
+    const id = getProviderProfileValue(source, "sub") ?? getProviderProfileValue(source, "id") ?? email;
+
+    if (!id) {
+      throw new Error("Google did not return an account id.");
+    }
+
+    return {
+      id,
+      email,
+      name: getProviderProfileValue(source, "name") ?? getProviderProfileValue(source, "given_name") ?? email?.split("@")[0],
+      image: getProviderProfileValue(source, "picture"),
+      emailVerified: getProviderProfileBoolean(source, "email_verified") ?? Boolean(email),
+    };
+  },
+});
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Google],
+  providers: [passwordProvider, googleProvider],
   callbacks: {
+    async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
+      const appCtx = ctx as unknown as MutationCtx;
+      const email = getProfileEmail(profile);
+      const emailUser = email ? await findCanonicalAuthUserByEmail(appCtx, email) : null;
+      const shouldLinkVerifiedEmail = type === "oauth" && profile.emailVerified !== false;
+      let userId = existingUserId as Id<"users"> | null;
+
+      if (emailUser && shouldLinkVerifiedEmail) {
+        userId = emailUser._id;
+      } else if (!userId && emailUser) {
+        throw new Error("An account already exists for this email. Sign in with the existing method first.");
+      }
+
+      const image = typeof profile.image === "string" && profile.image.trim() ? profile.image.trim() : undefined;
+      const userPatch = stripUndefined({
+        email,
+        name: getProfileName(profile, email),
+        image,
+        ...(shouldLinkVerifiedEmail && email ? { emailVerificationTime: Date.now() } : {}),
+      });
+
+      if (userId) {
+        await appCtx.db.patch(userId, userPatch);
+        return userId;
+      }
+
+      return await appCtx.db.insert("users", userPatch);
+    },
     async redirect({ redirectTo }) {
       const configuredSiteUrl = process.env.SITE_URL?.replace(/\/$/, "");
       const allowedRedirects = configuredSiteUrl ? [configuredSiteUrl] : [];
@@ -87,28 +146,39 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       return configuredSiteUrl ?? redirectTo;
     },
   },
+  jwt: {
+    async customClaims(ctx, { userId }) {
+      const user = await ctx.db.get(userId);
+      const email = normalizeEmail(user?.email);
+
+      return {
+        ...(email ? { email } : {}),
+        ...(user?.name ? { name: user.name } : {}),
+      };
+    },
+  },
 });
 
 export const getCurrentAuthIdentity = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
+    const authRecord = await getCurrentAuthRecord(ctx);
+    if (!authRecord) {
       return null;
     }
 
-    const appUser = await findAppUserForIdentity(ctx, identity);
-    const email = getIdentityEmail(identity);
+    const appUser = await findAppUserForAuth(ctx, authRecord);
+    const authUser = authRecord.authUser as AuthUserProfile | null;
 
     return {
-      subject: identity.subject,
-      tokenIdentifier: identity.tokenIdentifier,
-      email,
-      name: getIdentityName(identity),
-      travelerSlug: appUser?.slug ?? null,
-      onboardingCompleted: Boolean(appUser?.onboardingCompletedAt),
-      role: getAppUserRole(appUser),
+      authUserId: authRecord.authUserId,
+      subject: authRecord.identity.subject,
+      tokenIdentifier: authRecord.identity.tokenIdentifier,
+      email: authRecord.email ?? null,
+      name: authRecord.name,
+      travelerSlug: authUser?.slug ?? appUser?.slug ?? null,
+      onboardingCompleted: Boolean(authUser?.onboardingCompletedAt ?? appUser?.onboardingCompletedAt),
+      role: getAuthUserRole(authUser ?? appUser),
     };
   },
 });
@@ -116,13 +186,12 @@ export const getCurrentAuthIdentity = query({
 export const linkCurrentAuthIdentity = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
+    const authRecord = await getCurrentAuthRecord(ctx);
+    if (!authRecord) {
       return null;
     }
 
-    const appUser = await findAppUserForIdentity(ctx, identity);
+    const appUser = await findAppUserForAuth(ctx, authRecord);
     if (!appUser) {
       return {
         linked: false,
@@ -131,32 +200,29 @@ export const linkCurrentAuthIdentity = mutation({
       };
     }
 
-    const email = getIdentityEmail(identity);
-    const patch: Partial<Doc<"appUsers">> = {};
-    if (appUser.tokenIdentifier !== identity.tokenIdentifier) {
-      patch.tokenIdentifier = identity.tokenIdentifier;
-    }
-    if (appUser.authUserId !== getAuthUserId(identity)) {
-      patch.authUserId = getAuthUserId(identity);
-    }
-    if (email && appUser.email !== email) {
-      patch.email = email;
-    }
-    if (!appUser.name?.trim()) {
-      patch.name = getIdentityName(identity);
-    }
-    if (!appUser.role) {
-      patch.role = "traveler";
-    }
+    const authUser = await hydrateAuthUserFromProjection(ctx, authRecord, appUser);
+    const travelerSlug = authUser?.slug ?? appUser.slug;
 
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(appUser._id, patch);
-    }
+    await syncAppUserProjection(
+      ctx,
+      authRecord,
+      {
+        slug: travelerSlug,
+        name: authUser?.name ?? appUser.name,
+        countryCode: authUser?.countryCode ?? appUser.countryCode,
+        countryLabel: authUser?.countryLabel ?? appUser.countryLabel,
+        role: getAuthUserRole(authUser ?? appUser),
+        homeCity: authUser?.homeCity ?? appUser.homeCity ?? null,
+        travelStyle: authUser?.travelStyle ?? appUser.travelStyle ?? null,
+        onboardingCompletedAt: authUser?.onboardingCompletedAt ?? appUser.onboardingCompletedAt,
+      },
+      appUser
+    );
 
     return {
       linked: true,
-      travelerSlug: appUser.slug,
-      role: getAppUserRole({ ...appUser, ...patch }),
+      travelerSlug,
+      role: getAuthUserRole(authUser ?? appUser),
     };
   },
 });
@@ -164,22 +230,25 @@ export const linkCurrentAuthIdentity = mutation({
 export const getCurrentAuthSession = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
+    const authRecord = await getCurrentAuthRecord(ctx);
+    if (!authRecord) {
       return null;
     }
 
-    const appUser = await findAppUserForIdentity(ctx, identity);
-    if (!appUser?.onboardingCompletedAt) {
+    const appUser = await findAppUserForAuth(ctx, authRecord);
+    const authUser = authRecord.authUser as AuthUserProfile | null;
+    const travelerSlug = authUser?.slug ?? appUser?.slug;
+    const onboardingCompletedAt = authUser?.onboardingCompletedAt ?? appUser?.onboardingCompletedAt;
+
+    if (!travelerSlug || !onboardingCompletedAt) {
       return null;
     }
 
     return {
-      travelerSlug: appUser.slug,
-      name: appUser.name,
-      email: appUser.email,
-      role: getAppUserRole(appUser),
+      travelerSlug,
+      name: authUser?.name ?? appUser?.name ?? authRecord.name,
+      email: authUser?.email ?? appUser?.email ?? authRecord.email ?? "",
+      role: getAuthUserRole(authUser ?? appUser),
     };
   },
 });
@@ -187,23 +256,24 @@ export const getCurrentAuthSession = query({
 export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
+    const authRecord = await getCurrentAuthRecord(ctx);
+    if (!authRecord) {
       return null;
     }
 
-    const appUser = await findAppUserForIdentity(ctx, identity);
+    const appUser = await findAppUserForAuth(ctx, authRecord);
 
     return {
       identity: {
-        subject: identity.subject,
-        tokenIdentifier: identity.tokenIdentifier,
-        email: getIdentityEmail(identity),
-        name: getIdentityName(identity),
+        authUserId: authRecord.authUserId,
+        subject: authRecord.identity.subject,
+        tokenIdentifier: authRecord.identity.tokenIdentifier,
+        email: authRecord.email,
+        name: authRecord.name,
       },
+      user: authRecord.authUser as Doc<"users"> | null,
       appUser,
-      role: getAppUserRole(appUser),
+      role: getAuthUserRole((authRecord.authUser as AuthUserProfile | null) ?? appUser),
     };
   },
 });

@@ -3,9 +3,9 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
+import { getPublicTravelerProfile, type PublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug } from './authHelpers';
 
-type FriendProfileDoc = Doc<'friendProfiles'>;
 type FriendCircleDoc = Doc<'friendCircles'>;
 type FriendMemberDoc = Doc<'friendCircleMembers'>;
 type FriendDirectThreadDoc = Doc<'friendDirectThreads'>;
@@ -80,17 +80,11 @@ async function getAppUser(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
 }
 
 async function getTravelerProfile(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
-  return await ctx.db
-    .query('travelerProfiles')
-    .withIndex('by_slug', (q) => q.eq('travelerSlug', travelerSlug))
-    .unique();
+  return await getPublicTravelerProfile(ctx, travelerSlug);
 }
 
 async function getFriendProfile(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
-  return await ctx.db
-    .query('friendProfiles')
-    .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-    .unique();
+  return await getPublicTravelerProfile(ctx, travelerSlug);
 }
 
 async function getActiveCircleMemberships(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
@@ -524,7 +518,7 @@ async function notifyDirectParticipantAboutCall(
   }
 }
 
-function computeMatchScore(current: FriendProfileDoc, candidate: FriendProfileDoc) {
+function computeMatchScore(current: PublicTravelerProfile, candidate: PublicTravelerProfile) {
   const sharedInterests = candidate.interests.filter((interest) => current.interests.includes(interest));
   let score = 68 + sharedInterests.length * 8;
 
@@ -759,30 +753,27 @@ async function buildCandidates(
   const connectionSet = await getFriendConnectionSet(ctx, travelerSlug);
   const excludedSlugs = new Set<string>([travelerSlug, ...activeMembers.map((member) => member.travelerSlug)]);
   const actionMap = await getActionMap(ctx, travelerSlug);
-  const allProfiles = await ctx.db.query('friendProfiles').collect();
+  const appUsers = await ctx.db.query('appUsers').take(200);
+  const allProfiles = (
+    await Promise.all(
+      appUsers
+        .filter((user) => !excludedSlugs.has(user.slug))
+        .map((user) => getPublicTravelerProfile(ctx, user.slug))
+    )
+  ).filter((profile): profile is PublicTravelerProfile => profile !== null);
 
   const candidates = await Promise.all(
     allProfiles
-      .filter((candidate) => !excludedSlugs.has(candidate.travelerSlug))
       .map(async (candidate) => {
-        const [user, travelerProfile] = await Promise.all([
-          getAppUser(ctx, candidate.travelerSlug),
-          getTravelerProfile(ctx, candidate.travelerSlug),
-        ]);
-
-        if (!user) {
-          return null;
-        }
-
         const match = computeMatchScore(currentProfile, candidate);
         const action = actionMap.get(candidate.travelerSlug);
 
         return {
           travelerSlug: candidate.travelerSlug,
-          name: user.name,
-          avatarUri: travelerProfile?.avatarUri ?? null,
-          countryLabel: user.countryLabel,
-          sameCountry: user.countryCode === currentUser.countryCode,
+          name: candidate.name,
+          avatarUri: candidate.avatarUri,
+          countryLabel: candidate.countryLabel,
+          sameCountry: candidate.countryCode === currentUser.countryCode,
           baseLabel: candidate.baseLabel,
           destinationLabel: candidate.destinationLabel,
           headline: candidate.headline,
@@ -1154,11 +1145,12 @@ export const trackFriendDiscoveryView = mutation({
       return false;
     }
 
-    await ctx.db.patch(profile._id, {
+    await ctx.db.patch(profile.user._id, {
       discoverViewCount: (profile.discoverViewCount ?? 0) + 1,
+      profileUpdatedAt: Date.now(),
     });
 
-    return false;
+    return true;
   },
 });
 

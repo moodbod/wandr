@@ -1,8 +1,15 @@
 import { v } from 'convex/values';
 
-import type { Doc, Id } from './_generated/dataModel';
+import type { Doc } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
-import { assertCurrentTravelerSlug, requireCurrentAppUser } from './authHelpers';
+import {
+  getAuthUserRole,
+  getTravelerProfileRecord,
+  patchCoreAuthUserProfile,
+  syncAppUserProjection,
+} from './appProfiles';
+import { assertCurrentTravelerSlug } from './authHelpers';
+import { requireCurrentAuthRecord } from './authIdentity';
 
 const supportedCurrencies = new Set(['USD', 'NAD', 'ZAR', 'EUR', 'GBP']);
 const countryCurrencyMap: Record<string, string> = {
@@ -101,7 +108,7 @@ async function upsertSettings(
 export const generateAvatarUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireCurrentAppUser(ctx);
+    await requireCurrentAuthRecord(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -163,59 +170,43 @@ export const updateTravelerProfile = mutation({
       throw new Error('Choose your home country.');
     }
 
-    const user = await ctx.db
-      .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-      .unique();
+    const authRecord = await requireCurrentAuthRecord(ctx);
+    const profileRecord = await getTravelerProfileRecord(ctx, travelerSlug);
 
-    if (!user) {
+    if (!profileRecord) {
       throw new Error('Traveler profile not found.');
     }
 
-    await ctx.db.patch(user._id, {
+    if (profileRecord.authUser._id !== authRecord.authUserId) {
+      throw new Error('Unauthorized traveler.');
+    }
+
+    const updatedAuthUser = await patchCoreAuthUserProfile(ctx, profileRecord.authUser, {
       name,
       countryCode,
       countryLabel,
-      homeCity: homeCity || undefined,
-      travelStyle: args.travelStyle ?? user.travelStyle,
+      homeCity,
+      travelStyle: args.travelStyle ?? profileRecord.authUser.travelStyle,
+      avatarStorageId: args.avatarStorageId,
+      clearAvatar: args.clearAvatar,
     });
+    const role = getAuthUserRole(updatedAuthUser ?? profileRecord.authUser);
 
-    const profile = await ctx.db
-      .query('travelerProfiles')
-      .withIndex('by_slug', (q) => q.eq('travelerSlug', travelerSlug))
-      .unique();
-    const avatarUri = args.avatarStorageId ? await ctx.storage.getUrl(args.avatarStorageId) : undefined;
-    const avatarPatch = args.avatarStorageId
-      ? { avatarUri: avatarUri ?? undefined, avatarStorageId: args.avatarStorageId as Id<'_storage'> }
-      : {};
-
-    if (profile) {
-      await ctx.db.patch(profile._id, {
-        name,
-        regionCode: countryCode,
-        regionName: homeCity || countryLabel,
-        ...(args.clearAvatar ? { avatarUri: undefined, avatarStorageId: undefined } : avatarPatch),
-      });
-    } else {
-      await ctx.db.insert('travelerProfiles', {
-        travelerSlug,
-        name,
-        regionCode: countryCode,
-        regionName: homeCity || countryLabel,
-        ...avatarPatch,
-      });
-    }
-
-    const friendProfile = await ctx.db
-      .query('friendProfiles')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-      .unique();
-
-    if (friendProfile) {
-      await ctx.db.patch(friendProfile._id, {
-        baseLabel: homeCity || countryLabel,
-      });
-    }
+    await syncAppUserProjection(
+      ctx,
+      authRecord,
+      {
+        slug: travelerSlug,
+        name: updatedAuthUser?.name ?? name,
+        countryCode: updatedAuthUser?.countryCode ?? countryCode,
+        countryLabel: updatedAuthUser?.countryLabel ?? countryLabel,
+        role,
+        homeCity: updatedAuthUser?.homeCity ?? homeCity ?? null,
+        travelStyle: updatedAuthUser?.travelStyle ?? args.travelStyle ?? null,
+        onboardingCompletedAt: updatedAuthUser?.onboardingCompletedAt ?? profileRecord.authUser.onboardingCompletedAt,
+      },
+      profileRecord.appUser
+    );
 
     return true;
   },

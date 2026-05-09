@@ -8,13 +8,16 @@
  * @module
  */
 
+import type * as appProfiles from "../appProfiles.js";
 import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
+import type * as authIdentity from "../authIdentity.js";
 import type * as calls from "../calls.js";
 import type * as explore from "../explore.js";
 import type * as friends from "../friends.js";
 import type * as http from "../http.js";
 import type * as locationPhotos from "../locationPhotos.js";
+import type * as migrations_userProfiles from "../migrations/userProfiles.js";
 import type * as notifications from "../notifications.js";
 import type * as profile from "../profile.js";
 import type * as tables_appNotifications from "../tables/appNotifications.js";
@@ -49,13 +52,16 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  appProfiles: typeof appProfiles;
   auth: typeof auth;
   authHelpers: typeof authHelpers;
+  authIdentity: typeof authIdentity;
   calls: typeof calls;
   explore: typeof explore;
   friends: typeof friends;
   http: typeof http;
   locationPhotos: typeof locationPhotos;
+  "migrations/userProfiles": typeof migrations_userProfiles;
   notifications: typeof notifications;
   profile: typeof profile;
   "tables/appNotifications": typeof tables_appNotifications;

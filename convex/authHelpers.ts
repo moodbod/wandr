@@ -1,45 +1,17 @@
 import { ConvexError } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { getAuthUserRole, type AuthUserProfile } from "./appProfiles";
+import { findAppUserForAuth, getCurrentAuthRecord } from "./authIdentity";
 
 type AuthCtx = QueryCtx | MutationCtx;
 
-const getIdentityEmail = (
-  identity: NonNullable<Awaited<ReturnType<AuthCtx["auth"]["getUserIdentity"]>>>,
-) => {
-  const identityWithEmail = identity as typeof identity & {
-    email?: string;
-    preferred_username?: string;
-  };
-  const email = identityWithEmail.email ?? identityWithEmail.preferred_username;
-  const normalized = email?.trim().toLowerCase();
-  return normalized && normalized.includes("@") ? normalized : undefined;
-};
-
 export async function getCurrentAppUser(ctx: AuthCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const authRecord = await getCurrentAuthRecord(ctx);
+  if (!authRecord) {
     return null;
   }
 
-  const byToken = await ctx.db
-    .query("appUsers")
-    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .first();
-
-  if (byToken) {
-    return byToken;
-  }
-
-  const email = getIdentityEmail(identity);
-  if (!email) {
-    return null;
-  }
-
-  return await ctx.db
-    .query("appUsers")
-    .withIndex("by_email", (q) => q.eq("email", email))
-    .first();
+  return await findAppUserForAuth(ctx, authRecord);
 }
 
 export async function requireCurrentAppUser(ctx: AuthCtx) {
@@ -51,17 +23,49 @@ export async function requireCurrentAppUser(ctx: AuthCtx) {
 }
 
 export async function assertCurrentTravelerSlug(ctx: AuthCtx, travelerSlug: string) {
-  const appUser = await requireCurrentAppUser(ctx);
-  if (appUser.slug !== travelerSlug) {
+  const authRecord = await getCurrentAuthRecord(ctx);
+  if (!authRecord) {
+    throw new ConvexError("Authentication required");
+  }
+
+  const authUser = authRecord.authUser as AuthUserProfile | null;
+  const appUser = await findAppUserForAuth(ctx, authRecord);
+  const canonicalSlug = authUser?.slug ?? appUser?.slug;
+
+  if (!canonicalSlug) {
+    throw new ConvexError("Authentication required");
+  }
+
+  if (canonicalSlug !== travelerSlug) {
     throw new ConvexError("Unauthorized traveler");
   }
-  return appUser.slug;
+  return canonicalSlug;
 }
 
 export async function requireAdmin(ctx: AuthCtx) {
-  const appUser = await requireCurrentAppUser(ctx);
-  if ((appUser as Doc<"appUsers">).role !== "admin") {
+  const authRecord = await getCurrentAuthRecord(ctx);
+  if (!authRecord) {
+    throw new ConvexError("Authentication required");
+  }
+
+  const authUser = authRecord.authUser as AuthUserProfile | null;
+  const appUser = await findAppUserForAuth(ctx, authRecord);
+
+  if (getAuthUserRole(authUser ?? appUser) !== "admin") {
     throw new ConvexError("Admin access required");
   }
-  return appUser;
+
+  const slug = authUser?.slug ?? appUser?.slug;
+  if (!slug) {
+    throw new ConvexError("Admin profile incomplete");
+  }
+
+  return {
+    ...appUser,
+    slug,
+    name: authUser?.name ?? appUser?.name ?? authRecord.name,
+    countryCode: authUser?.countryCode ?? appUser?.countryCode ?? "NA",
+    countryLabel: authUser?.countryLabel ?? appUser?.countryLabel ?? "Namibia",
+    role: "admin" as const,
+  };
 }

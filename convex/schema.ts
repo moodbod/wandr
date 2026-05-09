@@ -26,8 +26,53 @@ import { tripInvitesTable } from './tables/tripInvites';
 import { tripsTable } from './tables/trips';
 import { userSettingsTable } from './tables/userSettings';
 
+const { users: _authUsersTable, ...authTablesWithoutUsers } = authTables;
+
 export default defineSchema({
-  ...authTables,
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+
+    slug: v.optional(v.string()),
+    countryCode: v.optional(v.string()),
+    countryLabel: v.optional(v.string()),
+    role: v.optional(v.union(v.literal('traveler'), v.literal('admin'))),
+    homeCity: v.optional(v.string()),
+    travelStyle: v.optional(v.union(v.literal('solo'), v.literal('couple'), v.literal('friends'), v.literal('family'))),
+    onboardingCompletedAt: v.optional(v.number()),
+
+    avatarUri: v.optional(v.string()),
+    avatarStorageId: v.optional(v.id('_storage')),
+    regionCode: v.optional(v.string()),
+    regionName: v.optional(v.string()),
+    headline: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    baseLabel: v.optional(v.string()),
+    destinationLabel: v.optional(v.string()),
+    discoverViewCount: v.optional(v.number()),
+    travelPace: v.optional(v.union(v.literal('slow'), v.literal('balanced'), v.literal('fast'))),
+    vibe: v.optional(
+      v.union(
+        v.literal('adventure'),
+        v.literal('culture'),
+        v.literal('social'),
+        v.literal('relaxation'),
+        v.literal('food')
+      )
+    ),
+    arrivalWindowLabel: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+    profileUpdatedAt: v.optional(v.number()),
+  })
+    .index('email', ['email'])
+    .index('phone', ['phone'])
+    .index('by_slug', ['slug']),
+  ...authTablesWithoutUsers,
 
   regions: regionsTable,
   trips: tripsTable,
