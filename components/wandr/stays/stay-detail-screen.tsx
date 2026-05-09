@@ -34,6 +34,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
+import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import {
   createStayBookingRef,
   generateLocationPhotoUploadUrlRef,
@@ -143,6 +144,7 @@ export function StayDetailScreen({
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
+  const requireAuthAction = useRequireAuthAction();
   const settings = useCurrentUserSettings();
   const travelerSlug = traveler?.slug ?? '';
   const preferredCurrency = settings?.preferredCurrency ?? 'USD';
@@ -152,7 +154,7 @@ export function StayDetailScreen({
   const generatePhotoUploadUrl = useMutation(generateLocationPhotoUploadUrlRef);
   const submitLocationPhoto = useMutation(submitLocationPhotoRef);
   const submitStayRating = useMutation(submitStayRatingRef);
-  const trips = useQuery(listUserTripsRef, { travelerSlug });
+  const trips = useQuery(listUserTripsRef, travelerSlug ? { travelerSlug } : 'skip');
   const selectedTripId = trips?.[0]?._id;
 
   const stay = useQuery(getStayBySlugRef, { slug: slug ?? '' });
@@ -326,11 +328,19 @@ export function StayDetailScreen({
   };
 
   const handleBookPress = () => {
+    if (!requireAuthAction()) {
+      return;
+    }
+
     clearBookingSnapshot();
     bookingSheetRef.current?.snapToIndex(0);
   };
 
   const handleOpenReviewSheet = () => {
+    if (!requireAuthAction()) {
+      return;
+    }
+
     reviewSheetRef.current?.snapToIndex(0);
   };
 
@@ -361,7 +371,7 @@ export function StayDetailScreen({
   };
 
   const handleSubmitReview = async () => {
-    if (reviewRating < 1 || !travelerSlug) {
+    if (reviewRating < 1 || !requireAuthAction() || !travelerSlug) {
       return;
     }
 
@@ -384,7 +394,7 @@ export function StayDetailScreen({
   };
 
   const handleSharePhoto = async () => {
-    if (!travelerSlug || isUploadingPhoto) {
+    if (!requireAuthAction() || !travelerSlug || isUploadingPhoto) {
       return;
     }
 
@@ -437,6 +447,10 @@ export function StayDetailScreen({
   };
 
   const confirmBooking = async () => {
+    if (!requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
     setIsBooking(true);
     try {
       await createBooking({

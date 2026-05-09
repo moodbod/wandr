@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from 'convex/server';
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
+import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 
 import type { ExploreExperience } from '../constants/explore-content';
 
@@ -416,9 +417,10 @@ export const getPageContent = queryGeneric({
 export const listManagedExperiences = queryGeneric({
   args: { managerSlug: v.string() },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
     const experiences = await ctx.db
       .query('experiences')
-      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', args.managerSlug))
+      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', manager.slug))
       .take(100);
 
     return await enrichExperiencesWithCommunity(ctx, experiences as any);
@@ -467,12 +469,13 @@ export const createManagedExperience = mutationGeneric({
     includes: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
     const slug = await createUniqueExperienceSlug(ctx, args.title);
     const imageGallery = args.galleryImages.length ? args.galleryImages : [args.imageUri];
 
     await ctx.db.insert('experiences', {
       slug,
-      managerSlug: args.managerSlug,
+      managerSlug: manager.slug,
       itemKind: args.itemKind,
       badge: args.itemKind === 'hiddenGem' ? 'Hidden gem' : 'Experience',
       badgeTone: args.itemKind === 'hiddenGem' ? 'soft' : 'accent',
@@ -513,10 +516,11 @@ export const getLocationLikeState = queryGeneric({
     locationSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const likes = await ctx.db
       .query('locationLikes')
       .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
-        q.eq('travelerSlug', args.travelerSlug)
+        q.eq('travelerSlug', travelerSlug)
       )
       .collect();
 
@@ -536,10 +540,11 @@ export const listSavedPlaces = queryGeneric({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const likes = await ctx.db
       .query('locationLikes')
       .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
-        q.eq('travelerSlug', args.travelerSlug)
+        q.eq('travelerSlug', travelerSlug)
       )
       .collect();
 
@@ -596,7 +601,7 @@ async function getCircleAvatarUris(ctx: QueryCtx, circleId: Id<'friendCircles'>)
   return avatars;
 }
 
-async function buildExploreJoinableTripCards(ctx: QueryCtx, travelerSlug: string) {
+async function buildExploreJoinableTripCards(ctx: QueryCtx, travelerSlug?: string) {
   const circles = await ctx.db
     .query('friendCircles')
     .filter((q) =>
@@ -614,15 +619,17 @@ async function buildExploreJoinableTripCards(ctx: QueryCtx, travelerSlug: string
       continue;
     }
 
-    const existingMembership = await ctx.db
-      .query('friendCircleMembers')
-      .withIndex('by_circleId_and_travelerSlug', (q) =>
-        q.eq('circleId', circle._id).eq('travelerSlug', travelerSlug)
-      )
-      .unique();
+    if (travelerSlug) {
+      const existingMembership = await ctx.db
+        .query('friendCircleMembers')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', circle._id).eq('travelerSlug', travelerSlug)
+        )
+        .unique();
 
-    if (existingMembership?.status === 'active') {
-      continue;
+      if (existingMembership?.status === 'active') {
+        continue;
+      }
     }
 
     const [trip, host, members, avatarUris, bookings] = await Promise.all([
@@ -677,20 +684,26 @@ async function buildExploreJoinableTripCards(ctx: QueryCtx, travelerSlug: string
 
 export const getExploreJoinableTripCards = queryGeneric({
   args: {
-    travelerSlug: v.string(),
+    travelerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await buildExploreJoinableTripCards(ctx, args.travelerSlug);
+    const travelerSlug = args.travelerSlug
+      ? await assertCurrentTravelerSlug(ctx, args.travelerSlug)
+      : undefined;
+    return await buildExploreJoinableTripCards(ctx, travelerSlug);
   },
 });
 
 export const getExploreJoinableTrips = queryGeneric({
   args: {
     experienceSlug: v.string(),
-    travelerSlug: v.string(),
+    travelerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const cards = await buildExploreJoinableTripCards(ctx, args.travelerSlug);
+    const travelerSlug = args.travelerSlug
+      ? await assertCurrentTravelerSlug(ctx, args.travelerSlug)
+      : undefined;
+    const cards = await buildExploreJoinableTripCards(ctx, travelerSlug);
     return cards
       .filter((card) => card.experienceSlug === args.experienceSlug)
       .map((card) => ({
@@ -712,6 +725,9 @@ export const getExploreGroupTripDetail = queryGeneric({
     travelerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = args.travelerSlug
+      ? await assertCurrentTravelerSlug(ctx, args.travelerSlug)
+      : undefined;
     const circle = await ctx.db.get(args.circleId);
     if (!circle || circle.visibility !== 'open' || !circle.tripId) {
       return null;
@@ -729,11 +745,11 @@ export const getExploreGroupTripDetail = queryGeneric({
         .query('experienceBookings')
         .withIndex('by_tripId', (q) => q.eq('tripId', circle.tripId))
         .take(20),
-      args.travelerSlug
+      travelerSlug
         ? ctx.db
             .query('friendCircleMembers')
             .withIndex('by_circleId', (q) => q.eq('circleId', circle._id))
-            .filter((q) => q.eq(q.field('travelerSlug'), args.travelerSlug!))
+            .filter((q) => q.eq(q.field('travelerSlug'), travelerSlug))
             .unique()
         : null,
     ]);
@@ -790,6 +806,7 @@ export const requestJoinExploreTrip = mutationGeneric({
     experienceSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const circle = await ctx.db.get(args.circleId);
     if (!circle || circle.visibility !== 'open') {
       return false;
@@ -798,7 +815,7 @@ export const requestJoinExploreTrip = mutationGeneric({
     const existingMembership = await ctx.db
       .query('friendCircleMembers')
       .withIndex('by_circleId', (q) => q.eq('circleId', args.circleId))
-      .filter((q) => q.eq(q.field('travelerSlug'), args.travelerSlug))
+      .filter((q) => q.eq(q.field('travelerSlug'), travelerSlug))
       .unique();
 
     if (existingMembership?.status === 'active') {
@@ -807,7 +824,7 @@ export const requestJoinExploreTrip = mutationGeneric({
 
     const traveler = await ctx.db
       .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
       .unique();
     const experience = await ctx.db
       .query('experiences')
@@ -817,7 +834,7 @@ export const requestJoinExploreTrip = mutationGeneric({
 
     await ctx.db.insert('appNotifications', {
       recipientSlug: circle.createdBySlug,
-      actorSlug: args.travelerSlug,
+      actorSlug: travelerSlug,
       kind: 'trip_join_request',
       title: `${traveler?.name ?? 'A traveler'} wants to join ${circle.name}`,
       body: experience
@@ -833,7 +850,7 @@ export const requestJoinExploreTrip = mutationGeneric({
     if (!existingMembership) {
       await ctx.db.insert('friendCircleMembers', {
         circleId: args.circleId,
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         role: 'member',
         status: 'invited',
         joinedAt: now,
@@ -852,10 +869,11 @@ export const toggleLocationLike = mutationGeneric({
     locationSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const likes = await ctx.db
       .query('locationLikes')
       .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
-        q.eq('travelerSlug', args.travelerSlug)
+        q.eq('travelerSlug', travelerSlug)
       )
       .collect();
 
@@ -870,7 +888,7 @@ export const toggleLocationLike = mutationGeneric({
     }
 
     await ctx.db.insert('locationLikes', {
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       locationKind: args.locationKind,
       locationSlug: args.locationSlug,
       likedAt: Date.now(),
@@ -886,9 +904,10 @@ export const bookExperience = mutationGeneric({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const traveler = await ctx.db
       .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
       .unique();
 
     if (!traveler) {
@@ -898,7 +917,7 @@ export const bookExperience = mutationGeneric({
     const existingBooking = await ctx.db
       .query('experienceBookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
-        q.eq('travelerSlug', args.travelerSlug)
+        q.eq('travelerSlug', travelerSlug)
       )
       .collect();
 
@@ -912,7 +931,7 @@ export const bookExperience = mutationGeneric({
 
     return await ctx.db.insert('experienceBookings', {
       experienceSlug: args.experienceSlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       bookedAt: Date.now(),
     });
   },

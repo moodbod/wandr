@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authHelpers from "../authHelpers.js";
 import type * as calls from "../calls.js";
 import type * as explore from "../explore.js";
 import type * as friends from "../friends.js";
@@ -34,8 +35,6 @@ import type * as tables_friendMessages from "../tables/friendMessages.js";
 import type * as tables_friendProfiles from "../tables/friendProfiles.js";
 import type * as tables_hiddenGems from "../tables/hiddenGems.js";
 import type * as tables_locationLikes from "../tables/locationLikes.js";
-import type * as tables_phoneOtpVerifications from "../tables/phoneOtpVerifications.js";
-import type * as tables_phoneOtps from "../tables/phoneOtps.js";
 import type * as tables_regions from "../tables/regions.js";
 import type * as tables_stays from "../tables/stays.js";
 import type * as tables_tripInvites from "../tables/tripInvites.js";
@@ -51,6 +50,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authHelpers: typeof authHelpers;
   calls: typeof calls;
   explore: typeof explore;
   friends: typeof friends;
@@ -76,8 +76,6 @@ declare const fullApi: ApiFromModules<{
   "tables/friendProfiles": typeof tables_friendProfiles;
   "tables/hiddenGems": typeof tables_hiddenGems;
   "tables/locationLikes": typeof tables_locationLikes;
-  "tables/phoneOtpVerifications": typeof tables_phoneOtpVerifications;
-  "tables/phoneOtps": typeof tables_phoneOtps;
   "tables/regions": typeof tables_regions;
   "tables/stays": typeof tables_stays;
   "tables/tripInvites": typeof tables_tripInvites;
@@ -112,6 +110,4 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {
-  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
-};
+export declare const components: {};

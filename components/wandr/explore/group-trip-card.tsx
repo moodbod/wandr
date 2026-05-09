@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import { useResponsive } from '@/hooks/use-responsive';
 import { requestJoinExploreTripRef } from '@/lib/convex';
 import type { ExploreJoinableTripCard } from '@/types/explore';
@@ -26,6 +27,7 @@ export function ExploreGroupTripCard({
 }) {
   const router = useRouter();
   const traveler = useCurrentTraveler();
+  const requireAuthAction = useRequireAuthAction();
   const { isLargeScreen } = useResponsive();
   const requestJoinTrip = useMutation(requestJoinExploreTripRef);
   const [isRequesting, setIsRequesting] = useState(false);
@@ -40,7 +42,7 @@ export function ExploreGroupTripCard({
   };
 
   const handleJoin = async () => {
-    if (!traveler?.slug || isRequesting || hasRequested) {
+    if (!requireAuthAction() || !traveler?.slug || isRequesting || hasRequested) {
       return;
     }
 

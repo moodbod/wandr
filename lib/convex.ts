@@ -80,23 +80,23 @@ export const createManagedExperienceRef = makeFunctionReference<
 
 export const getExploreJoinableTripCardsRef = makeFunctionReference<
   'query',
-  { travelerSlug: string },
+  { travelerSlug?: string },
   ExploreJoinableTripCard[]
 >('explore:getExploreJoinableTripCards') as FunctionReference<
   'query',
   'public',
-  { travelerSlug: string },
+  { travelerSlug?: string },
   ExploreJoinableTripCard[]
 >;
 
 export const getExploreJoinableTripsRef = makeFunctionReference<
   'query',
-  { travelerSlug: string; experienceSlug: string },
+  { travelerSlug?: string; experienceSlug: string },
   ExploreJoinableTrip[]
 >('explore:getExploreJoinableTrips') as FunctionReference<
   'query',
   'public',
-  { travelerSlug: string; experienceSlug: string },
+  { travelerSlug?: string; experienceSlug: string },
   ExploreJoinableTrip[]
 >;
 
@@ -326,50 +326,9 @@ export const updateNotificationSettingsRef = makeFunctionReference<
   boolean
 >;
 
-export const requestPhoneOtpRef = makeFunctionReference<
-  'action',
-  { phoneNumber: string },
-  {
-    expiresAt: number;
-    devCode: string | null;
-    delivery: {
-      status: string;
-      message?: string;
-      messageId?: string | null;
-      cost?: string | null;
-    };
-  }
->('trip:requestPhoneOtp') as FunctionReference<
-  'action',
-  'public',
-  { phoneNumber: string },
-  {
-    expiresAt: number;
-    devCode: string | null;
-    delivery: {
-      status: string;
-      message?: string;
-      messageId?: string | null;
-      cost?: string | null;
-    };
-  }
->;
-
-export const verifyPhoneOtpRef = makeFunctionReference<
-  'mutation',
-  { phoneNumber: string; code: string },
-  { verified: boolean; verificationToken: string }
->('trip:verifyPhoneOtp') as FunctionReference<
-  'mutation',
-  'public',
-  { phoneNumber: string; code: string },
-  { verified: boolean; verificationToken: string }
->;
-
-export const completePhoneOnboardingRef = makeFunctionReference<
+export const completeProfileOnboardingRef = makeFunctionReference<
   'mutation',
   {
-    phoneNumber: string;
     name: string;
     countryCode: string;
     countryLabel: string;
@@ -381,15 +340,14 @@ export const completePhoneOnboardingRef = makeFunctionReference<
     name: string;
     countryCode: string;
     countryLabel: string;
-    phoneNumber: string;
     homeCity: string | null;
     travelStyle: 'solo' | 'couple' | 'friends' | 'family';
+    role: 'traveler' | 'admin';
   }
->('trip:completePhoneOnboarding') as FunctionReference<
+>('trip:completeProfileOnboarding') as FunctionReference<
   'mutation',
   'public',
   {
-    phoneNumber: string;
     name: string;
     countryCode: string;
     countryLabel: string;
@@ -401,9 +359,9 @@ export const completePhoneOnboardingRef = makeFunctionReference<
     name: string;
     countryCode: string;
     countryLabel: string;
-    phoneNumber: string;
     homeCity: string | null;
     travelStyle: 'solo' | 'couple' | 'friends' | 'family';
+    role: 'traveler' | 'admin';
   }
 >;
 
@@ -413,6 +371,8 @@ export const getCurrentAuthSessionRef = makeFunctionReference<
   {
     travelerSlug: string;
     email: string;
+    name: string;
+    role: 'traveler' | 'admin';
   } | null
 >('auth:getCurrentAuthSession') as FunctionReference<
   'query',
@@ -421,7 +381,51 @@ export const getCurrentAuthSessionRef = makeFunctionReference<
   {
     travelerSlug: string;
     email: string;
+    name: string;
+    role: 'traveler' | 'admin';
   } | null
+>;
+
+export const getCurrentAuthIdentityRef = makeFunctionReference<
+  'query',
+  Record<string, never>,
+  {
+    email: string | null;
+    name: string | null;
+    travelerSlug: string | null;
+    onboardingCompleted: boolean;
+    role: 'traveler' | 'admin';
+  } | null
+>('auth:getCurrentAuthIdentity') as FunctionReference<
+  'query',
+  'public',
+  Record<string, never>,
+  {
+    email: string | null;
+    name: string | null;
+    travelerSlug: string | null;
+    onboardingCompleted: boolean;
+    role: 'traveler' | 'admin';
+  } | null
+>;
+
+export const linkCurrentAuthIdentityRef = makeFunctionReference<
+  'mutation',
+  Record<string, never>,
+  {
+    linked: boolean;
+    travelerSlug: string | null;
+    role: 'traveler' | 'admin';
+  }
+>('auth:linkCurrentAuthIdentity') as FunctionReference<
+  'mutation',
+  'public',
+  Record<string, never>,
+  {
+    linked: boolean;
+    travelerSlug: string | null;
+    role: 'traveler' | 'admin';
+  }
 >;
 
 export const createTripRef = makeFunctionReference<
@@ -769,12 +773,12 @@ export const listManagedLocationPhotosRef = makeFunctionReference<
 
 export const updateLocationPhotoStatusRef = makeFunctionReference<
   'mutation',
-  { photoId: Id<'locationPhotos'>; status: 'approved' | 'rejected'; reviewerSlug?: string },
+  { photoId: Id<'locationPhotos'>; status: 'approved' | 'rejected' },
   boolean
 >('locationPhotos:updateLocationPhotoStatus') as FunctionReference<
   'mutation',
   'public',
-  { photoId: Id<'locationPhotos'>; status: 'approved' | 'rejected'; reviewerSlug?: string },
+  { photoId: Id<'locationPhotos'>; status: 'approved' | 'rejected' },
   boolean
 >;
 

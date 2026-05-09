@@ -419,12 +419,12 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
               detailTab={detailTab}
               groups={groupItems}
               onApprovePhoto={(photoId) =>
-                updateLocationPhotoStatus({ photoId, status: 'approved', reviewerSlug: travelerSlug ?? undefined })
+                updateLocationPhotoStatus({ photoId, status: 'approved' })
               }
               onChangeBookingFilter={setBookingFilter}
               onChangeTab={setDetailTab}
               onRejectPhoto={(photoId) =>
-                updateLocationPhotoStatus({ photoId, status: 'rejected', reviewerSlug: travelerSlug ?? undefined })
+                updateLocationPhotoStatus({ photoId, status: 'rejected' })
               }
               onUpdateStatus={async (booking, status) => {
                 setBusyBookingId(booking._id);

@@ -10,6 +10,7 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useManagerMode } from '@/hooks/use-manager-mode';
 import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { useAuthSession } from '@/providers/auth-session';
 
 const NAV_ITEMS: readonly {
   label: string;
@@ -31,6 +32,7 @@ export function AppSidebar() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
+  const { session } = useAuthSession();
   const { isManagerMode } = useManagerMode();
   const { mode: managerResourceMode, openManager, setSurface, surface: managerSurface } = useManagerResourceMode();
 
@@ -40,6 +42,7 @@ export function AppSidebar() {
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteBorder;
   const activeBackground = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.limeMist;
   const activeHref = getActiveNavHref(pathname);
+  const canUseManagerMode = session?.role === 'admin' && isManagerMode;
 
   return (
     <View
@@ -76,7 +79,7 @@ export function AppSidebar() {
       </View>
 
       <View style={styles.bottomStack}>
-        {isManagerMode ? (
+        {canUseManagerMode ? (
           <View style={[styles.managerSection, { backgroundColor: surfaceColor, borderColor }]}>
             <Pressable
               accessibilityLabel="Manage experiences and groups"

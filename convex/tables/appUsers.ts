@@ -8,6 +8,7 @@ export const appUsersTable = defineTable({
   name: v.string(),
   countryCode: v.string(),
   countryLabel: v.string(),
+  role: v.optional(v.union(v.literal('traveler'), v.literal('admin'))),
   tokenIdentifier: v.optional(v.string()),
   clerkUserId: v.optional(v.string()),
   phoneNumber: v.optional(v.string()),

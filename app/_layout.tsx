@@ -1,8 +1,7 @@
 import { ThemeProvider } from '@react-navigation/native';
-import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react';
-import { ConvexProvider } from 'convex/react';
+import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { isRunningInExpoGo } from 'expo';
-import { router, Stack, useSegments } from 'expo-router';
+import { router, Stack, usePathname, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { lazy, Suspense, useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -19,12 +18,14 @@ import { ActiveFriendCallProvider } from '@/hooks/use-active-friend-call';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PlanningLocationProvider } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
-import { authClient } from '@/lib/auth-client';
+import { convexAuthStorage } from '@/lib/convex-auth-storage';
 import { convexClient } from '@/lib/convex';
 import { getNavigationBackground, getNavigationTheme, getStackScreenOptions } from '@/lib/navigation-theme';
 import { AuthSessionProvider, useAuthSession } from '@/providers/auth-session';
 
 const ActiveFriendCallOverlay = lazy(() => import('@/components/wandr/friends/active-friend-call-overlay'));
+const PUBLIC_ROUTE_ROOTS = new Set(['explore', 'stays']);
+const PUBLIC_TAB_ROUTES = new Set(['explore', 'stays']);
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -42,17 +43,23 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor }}>
-      <ConvexProvider client={convexClient}>
-        <ConvexBetterAuthProvider authClient={authClient} client={convexClient}>
-          <PlanningLocationProvider>
-            <AuthSessionProvider>
-              <ThemeProvider value={navigationTheme}>
-                <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-              </ThemeProvider>
-            </AuthSessionProvider>
-          </PlanningLocationProvider>
-        </ConvexBetterAuthProvider>
-      </ConvexProvider>
+      <ConvexAuthProvider
+        client={convexClient}
+        replaceURL={(url) => {
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.history.replaceState({}, '', url);
+          }
+        }}
+        shouldHandleCode={Platform.OS === 'web'}
+        storage={convexAuthStorage}>
+        <PlanningLocationProvider>
+          <AuthSessionProvider>
+            <ThemeProvider value={navigationTheme}>
+              <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
+            </ThemeProvider>
+          </AuthSessionProvider>
+        </PlanningLocationProvider>
+      </ConvexAuthProvider>
     </GestureHandlerRootView>
   );
 }
@@ -209,22 +216,15 @@ function AppShell({
           {isSignedIn && isLargeScreen && <AppSidebar />}
           <View style={styles.content}>
             <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
-              {!isSignedIn ? (
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              ) : (
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              )}
-              {isSignedIn && (
-                <>
-                  <Stack.Screen name="explore" options={{ headerShown: false }} />
-                  <Stack.Screen name="trip" options={{ headerShown: false }} />
-                  <Stack.Screen name="stays" options={{ headerShown: false }} />
-                  <Stack.Screen name="friends" options={{ headerShown: false }} />
-                  <Stack.Screen name="notifications" options={{ headerShown: false }} />
-                  <Stack.Screen name="profile" options={{ headerShown: false }} />
-                  <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-                </>
-              )}
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="explore" options={{ headerShown: false }} />
+              <Stack.Screen name="trip" options={{ headerShown: false }} />
+              <Stack.Screen name="stays" options={{ headerShown: false }} />
+              <Stack.Screen name="friends" options={{ headerShown: false }} />
+              <Stack.Screen name="notifications" options={{ headerShown: false }} />
+              <Stack.Screen name="profile" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             </Stack>
           </View>
         </View>
@@ -246,23 +246,26 @@ function AppShell({
 
 function AuthRouteGate() {
   const segments = useSegments();
+  const pathname = usePathname();
   const { isLoading, session } = useAuthSession();
   const isAuthRoute = segments[0] === '(auth)';
+  const isPublicRoute =
+    PUBLIC_ROUTE_ROOTS.has(String(segments[0])) ||
+    (segments[0] === '(tabs)' && (!segments[1] || PUBLIC_TAB_ROUTES.has(String(segments[1]))));
 
   useEffect(() => {
     if (isLoading) {
       return;
     }
 
-    if (!session && !isAuthRoute) {
-      router.replace('/(auth)');
+    if (!session && !isAuthRoute && !isPublicRoute) {
+      router.replace({
+        pathname: '/(auth)',
+        params: { returnTo: pathname || '/(tabs)/explore' },
+      });
       return;
     }
-
-    if (session && isAuthRoute) {
-      router.replace('/(tabs)/explore');
-    }
-  }, [isAuthRoute, isLoading, session]);
+  }, [isAuthRoute, isLoading, isPublicRoute, pathname, session]);
 
   return null;
 }

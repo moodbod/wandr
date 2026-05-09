@@ -76,7 +76,7 @@ export default function FriendsDiscoverScreen({
   const router = useRouter();
   const traveler = useCurrentTraveler();
   const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
-  const discovery = useQuery(getFriendDiscoveryRef, { travelerSlug: traveler?.slug ?? '' });
+  const discovery = useQuery(getFriendDiscoveryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const actOnCandidate = useMutation(actOnFriendCandidateRef);
   const trackView = useMutation(trackFriendDiscoveryViewRef);
   const [activeVibe, setActiveVibe] = useState<string>('all');

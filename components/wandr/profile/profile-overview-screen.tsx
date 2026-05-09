@@ -28,6 +28,7 @@ import {
   listTravelerHistoryRef,
 } from '@/lib/convex';
 import { formatUsdConversion } from '@/lib/currency';
+import { useAuthSession } from '@/providers/auth-session';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
 import { ManagerDashboard } from '../manager/manager-dashboard';
@@ -56,6 +57,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const { isLargeScreen } = useResponsive();
+  const { session } = useAuthSession();
   const { isManagerMode } = useManagerMode();
   const { surface: managerSurface } = useManagerResourceMode();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
@@ -86,6 +88,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
   const planningLabel = rawPlanningLabel && !generatedPlanningLabels.has(rawPlanningLabel) ? rawPlanningLabel : null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
+  const canUseManagerMode = session?.role === 'admin' && isManagerMode;
 
   const mainContent = (
     <>
@@ -150,7 +153,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
     return (
       <ThemedView style={styles.root}>
         <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
-          {isManagerMode && managerSurface === 'manager' ? (
+          {canUseManagerMode && managerSurface === 'manager' ? (
             <ManagerDashboard travelerSlug={traveler?.slug} />
           ) : (
             <LargeScreenPanel kind="main">

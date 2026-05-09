@@ -1,9 +1,9 @@
 import { v } from 'convex/values';
-import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
-import { action, internalMutation, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
 import type { ExploreExperience, ExploreHiddenGem } from '../constants/explore-content';
+import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 
 type TripItineraryItem = {
   _id: Id<'experienceBookings'>;
@@ -21,14 +21,6 @@ type TripItineraryItem = {
   stayBookingDetails?: Doc<'stayBookings'>['stayBookingDetails'];
 };
 
-const OTP_TTL_MS = 5 * 60 * 1000;
-const OTP_RESEND_COOLDOWN_MS = 30 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
-const PHONE_VERIFICATION_TTL_MS = 10 * 60 * 1000;
-const AFRICAS_TALKING_LIVE_SMS_URL = 'https://api.africastalking.com/version1/messaging';
-const AFRICAS_TALKING_SANDBOX_SMS_URL = 'https://api.sandbox.africastalking.com/version1/messaging';
-const INFOBIP_SMS_URL_PATH = '/sms/3/messages';
-
 export const getCurrentTravelerProfile = query({
   args: {
     travelerSlug: v.optional(v.string()),
@@ -38,7 +30,7 @@ export const getCurrentTravelerProfile = query({
       return null;
     }
 
-    const travelerSlug = args.travelerSlug;
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const [user, profile] = await Promise.all([
       ctx.db
         .query('appUsers')
@@ -60,7 +52,7 @@ export const getCurrentTravelerProfile = query({
       email: user.email ?? null,
       countryCode: user.countryCode,
       countryLabel: user.countryLabel,
-      phoneNumber: user.phoneNumber ?? null,
+      role: getAppUserRole(user),
       homeCity: user.homeCity ?? null,
       travelStyle: user.travelStyle ?? null,
       onboardingCompletedAt: user.onboardingCompletedAt ?? null,
@@ -70,6 +62,8 @@ export const getCurrentTravelerProfile = query({
     };
   },
 });
+
+type AuthIdentity = NonNullable<Awaited<ReturnType<QueryCtx['auth']['getUserIdentity']>>>;
 
 async function requireIdentity(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -81,477 +75,94 @@ async function requireIdentity(ctx: QueryCtx | MutationCtx) {
   return identity;
 }
 
-function getIdentityEmail(identity: { email?: string | null }) {
-  return typeof identity.email === 'string' ? identity.email.trim().toLowerCase() : '';
+function getIdentityEmail(identity: AuthIdentity) {
+  const identityWithEmail = identity as AuthIdentity & {
+    email?: string | null;
+    preferred_username?: string | null;
+  };
+  const rawEmail = identityWithEmail.email ?? identityWithEmail.preferred_username;
+  const normalized = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+  return normalized.includes('@') ? normalized : '';
 }
 
-async function findAppUserForIdentity(
-  ctx: QueryCtx | MutationCtx,
-  tokenIdentifier: string,
-  options?: { phoneNumber?: string; email?: string }
-) {
+function getIdentityName(identity: AuthIdentity) {
+  const identityWithName = identity as AuthIdentity & {
+    name?: string | null;
+    given_name?: string | null;
+  };
+
+  return (
+    identityWithName.name?.trim() ||
+    identityWithName.given_name?.trim() ||
+    getIdentityEmail(identity).split('@')[0] ||
+    'Traveler'
+  );
+}
+
+async function findAppUserForIdentity(ctx: QueryCtx | MutationCtx, identity: AuthIdentity) {
   const userByToken = await ctx.db
     .query('appUsers')
-    .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', tokenIdentifier))
-    .unique();
+    .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
+    .first();
 
   if (userByToken) {
     return userByToken;
   }
 
-  if (options?.email) {
-    const userByEmail = await ctx.db
-      .query('appUsers')
-      .withIndex('by_email', (q) => q.eq('email', options.email!))
-      .unique();
-
-    if (userByEmail) {
-      return userByEmail;
-    }
-  }
-
-  if (!options?.phoneNumber) {
+  const email = getIdentityEmail(identity);
+  if (!email) {
     return null;
   }
 
   return await ctx.db
     .query('appUsers')
-    .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', options.phoneNumber!))
-    .unique();
+    .withIndex('by_email', (q) => q.eq('email', email))
+    .first();
 }
 
-function normalizePhoneNumber(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  const hasPlus = trimmed.startsWith('+');
-  const digits = trimmed.replace(/\D/g, '');
-  return digits ? `${hasPlus ? '+' : ''}${digits}` : '';
+function getAppUserRole(user: Doc<'appUsers'> | null | undefined) {
+  return user?.role === 'admin' ? 'admin' : 'traveler';
 }
 
-function getIdentityPhoneNumber(identity: { phoneNumber?: string | null }) {
-  return normalizePhoneNumber(identity.phoneNumber ?? '');
-}
-
-function slugFromNameAndPhone(name: string, phoneNumber: string) {
-  const base = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'traveler';
-  const suffix = phoneNumber.replace(/\D/g, '').slice(-6) || `${Date.now()}`;
-  return `${base}-${suffix}`;
-}
-
-function toHex(bytes: Uint8Array) {
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-function getRandomBytes(length: number) {
-  const bytes = new Uint8Array(length);
-  globalThis.crypto.getRandomValues(bytes);
-  return bytes;
-}
-
-function getRandomOtpCode() {
-  const bytes = getRandomBytes(4);
-  const value = new DataView(bytes.buffer).getUint32(0);
-  return `${value % 1000000}`.padStart(6, '0');
-}
-
-async function hashOtpCode(phoneNumber: string, code: string, salt: string) {
-  const payload = new TextEncoder().encode(`${phoneNumber}:${code}:${salt}`);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', payload);
-  return toHex(new Uint8Array(digest));
-}
-
-function getRandomToken() {
-  return toHex(getRandomBytes(32));
-}
-
-async function hashVerificationToken(token: string) {
-  const payload = new TextEncoder().encode(token);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', payload);
-  return toHex(new Uint8Array(digest));
-}
-
-async function consumePhoneVerification(ctx: MutationCtx, phoneNumber: string, verificationToken: string) {
-  const tokenHash = await hashVerificationToken(verificationToken);
-  const verification = await ctx.db
-    .query('phoneOtpVerifications')
-    .withIndex('by_tokenHash', (q) => q.eq('tokenHash', tokenHash))
-    .unique();
-  const now = Date.now();
-
-  if (!verification || verification.phoneNumber !== phoneNumber || verification.consumedAt) {
-    throw new Error('Verify your phone number first.');
-  }
-
-  if (verification.expiresAt <= now) {
-    await ctx.db.patch(verification._id, { consumedAt: now });
-    throw new Error('Phone verification expired. Request a new code.');
-  }
-
-  await ctx.db.patch(verification._id, { consumedAt: now });
-}
-
-function getOtpSmsBody(code: string) {
-  return `Your Wandr verification code is ${code}. It expires in 5 minutes.`;
-}
-
-function encodeBasicAuth(username: string, password: string) {
-  return globalThis.btoa(`${username}:${password}`);
-}
-
-async function sendOtpWithTwilio(phoneNumber: string, code: string) {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-
-  if (!accountSid || !authToken || (!from && !messagingServiceSid)) {
-    return null;
-  }
-
-  const body = new URLSearchParams({
-    To: phoneNumber,
-    Body: getOtpSmsBody(code),
-  });
-
-  if (messagingServiceSid) {
-    body.set('MessagingServiceSid', messagingServiceSid);
-  } else if (from) {
-    body.set('From', from);
-  }
-
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${encodeBasicAuth(accountSid, authToken)}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Could not send SMS with Twilio (${response.status}). ${responseText}`);
-  }
-
-  const responseJson = JSON.parse(responseText);
-  return {
-    provider: 'twilio',
-    status: typeof responseJson.status === 'string' ? responseJson.status : 'sent',
-    messageId: typeof responseJson.sid === 'string' ? responseJson.sid : null,
-    cost: typeof responseJson.price === 'string' ? responseJson.price : null,
-  } as const;
-}
-
-async function sendOtpWithInfobip(phoneNumber: string, code: string) {
-  const apiKey = process.env.INFOBIP_API_KEY;
-  const baseUrl = process.env.INFOBIP_BASE_URL;
-  const sender = process.env.INFOBIP_SENDER_ID ?? 'ServiceSMS';
-
-  if (!apiKey || !baseUrl) {
-    return null;
-  }
-
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}${INFOBIP_SMS_URL_PATH}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `App ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: [
-        {
-          sender,
-          destinations: [{ to: phoneNumber.replace(/^\+/, '') }],
-          content: { text: getOtpSmsBody(code) },
-        },
-      ],
-    }),
-  });
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Could not send SMS with Infobip (${response.status}). ${responseText}`);
-  }
-
-  const responseJson = JSON.parse(responseText);
-  const message = responseJson?.messages?.[0];
-  return {
-    provider: 'infobip',
-    status: typeof message?.status?.name === 'string' ? message.status.name : 'sent',
-    messageId: typeof message?.messageId === 'string' ? message.messageId : null,
-    cost: null,
-  } as const;
-}
-
-async function sendOtpWithAfricasTalking(phoneNumber: string, code: string) {
-  const apiKey = process.env.AFRICASTALKING_API_KEY;
-  const username = process.env.AFRICASTALKING_USERNAME;
-  const senderId = process.env.AFRICASTALKING_SENDER_ID;
-  const environment = process.env.AFRICASTALKING_ENV;
-
-  if (!apiKey || !username) {
-    return null;
-  }
-
-  const body = new URLSearchParams({
-    username,
-    to: phoneNumber,
-    message: getOtpSmsBody(code),
-    enqueue: '1',
-  });
-
-  if (senderId) {
-    body.set('from', senderId);
-  }
-
-  const response = await fetch(
-    environment === 'sandbox' ? AFRICAS_TALKING_SANDBOX_SMS_URL : AFRICAS_TALKING_LIVE_SMS_URL,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        apiKey,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    }
-  );
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Could not send SMS with Africa's Talking (${response.status}). ${responseText}`);
-  }
-
-  let responseJson: any = null;
-  try {
-    responseJson = JSON.parse(responseText);
-  } catch {
-    responseJson = null;
-  }
-
-  const recipient = responseJson?.SMSMessageData?.Recipients?.[0];
-  const status = typeof recipient?.status === 'string' ? recipient.status : 'sent';
-
-  if (typeof status === 'string' && status.toLowerCase().includes('invalid')) {
-    throw new Error('That phone number could not receive an SMS.');
-  }
-
-  return {
-    provider: 'africastalking',
-    status,
-    messageId: typeof recipient?.messageId === 'string' ? recipient.messageId : null,
-    cost: typeof recipient?.cost === 'string' ? recipient.cost : null,
-  } as const;
-}
-
-async function sendOtpSms(phoneNumber: string, code: string) {
-  const provider = process.env.SMS_PROVIDER?.toLowerCase();
-
-  if (provider === 'dev') {
-    return {
-      provider: 'dev',
-      status: 'dev',
-      message: 'SMS_PROVIDER is set to dev.',
-    } as const;
-  }
-
-  if (provider === 'twilio') {
-    const delivery = await sendOtpWithTwilio(phoneNumber, code);
-    if (delivery) {
-      return delivery;
-    }
-    throw new Error('Missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID.');
-  }
-
-  if (provider === 'infobip') {
-    const delivery = await sendOtpWithInfobip(phoneNumber, code);
-    if (delivery) {
-      return delivery;
-    }
-    throw new Error('Missing INFOBIP_API_KEY or INFOBIP_BASE_URL.');
-  }
-
-  if (provider === 'africastalking') {
-    const delivery = await sendOtpWithAfricasTalking(phoneNumber, code);
-    if (delivery) {
-      return delivery;
-    }
-    throw new Error('Missing AFRICASTALKING_USERNAME or AFRICASTALKING_API_KEY.');
-  }
-
+function slugBaseFromName(name: string) {
   return (
-    (await sendOtpWithInfobip(phoneNumber, code)) ??
-    (await sendOtpWithTwilio(phoneNumber, code)) ??
-    (await sendOtpWithAfricasTalking(phoneNumber, code)) ?? {
-      provider: 'dev',
-      status: 'dev',
-      message: 'No SMS provider environment variables are set.',
-    }
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'traveler'
   );
 }
 
-export const storeRequestedPhoneOtp = internalMutation({
-  args: {
-    phoneNumber: v.string(),
-    codeHash: v.string(),
-    salt: v.string(),
-    createdAt: v.number(),
-    expiresAt: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const recentOtp = await ctx.db
-      .query('phoneOtps')
-      .withIndex('by_phoneNumber_and_createdAt', (q) => q.eq('phoneNumber', args.phoneNumber))
-      .order('desc')
+function randomSlugSuffix() {
+  const bytes = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(36).padStart(2, '0'))
+    .join('')
+    .slice(0, 8);
+}
+
+async function createUniqueTravelerSlug(ctx: MutationCtx, name: string) {
+  const base = slugBaseFromName(name);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const slug = `${base}-${randomSlugSuffix()}`;
+    const existing = await ctx.db
+      .query('appUsers')
+      .withIndex('by_slug', (q) => q.eq('slug', slug))
       .first();
 
-    if (recentOtp && !recentOtp.consumedAt && recentOtp.lastSentAt > args.createdAt - OTP_RESEND_COOLDOWN_MS) {
-      throw new Error('Please wait a moment before requesting another code.');
+    if (!existing) {
+      return slug;
     }
+  }
 
-    return await ctx.db.insert('phoneOtps', {
-      phoneNumber: args.phoneNumber,
-      codeHash: args.codeHash,
-      salt: args.salt,
-      attempts: 0,
-      createdAt: args.createdAt,
-      expiresAt: args.expiresAt,
-      lastSentAt: args.createdAt,
-    });
-  },
-});
+  return `${base}-${Date.now().toString(36)}`;
+}
 
-export const consumePhoneOtp = internalMutation({
+export const completeProfileOnboarding = mutation({
   args: {
-    otpId: v.id('phoneOtps'),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.otpId, { consumedAt: Date.now() });
-  },
-});
-
-export const requestPhoneOtp = action({
-  args: {
-    phoneNumber: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const phoneNumber = normalizePhoneNumber(args.phoneNumber);
-
-    if (!phoneNumber || phoneNumber.length < 8) {
-      throw new Error('Enter a valid phone number.');
-    }
-
-    const now = Date.now();
-    const code = getRandomOtpCode();
-    const salt = toHex(getRandomBytes(16));
-    const codeHash = await hashOtpCode(phoneNumber, code, salt);
-    const expiresAt = now + OTP_TTL_MS;
-
-    const otpId: Id<'phoneOtps'> = await ctx.runMutation(internal.trip.storeRequestedPhoneOtp, {
-      phoneNumber,
-      codeHash,
-      salt,
-      createdAt: now,
-      expiresAt,
-    });
-
-    let delivery: Awaited<ReturnType<typeof sendOtpSms>>;
-    try {
-      delivery = await sendOtpSms(phoneNumber, code);
-    } catch (cause) {
-      await ctx.runMutation(internal.trip.consumePhoneOtp, { otpId });
-      throw cause;
-    }
-
-    return {
-      expiresAt,
-      devCode: delivery.status === 'dev' ? code : null,
-      delivery,
-    };
-  },
-});
-
-export const verifyPhoneOtp = mutation({
-  args: {
-    phoneNumber: v.string(),
-    code: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const phoneNumber = normalizePhoneNumber(args.phoneNumber);
-    const code = args.code.replace(/\D/g, '');
-
-    if (!phoneNumber || phoneNumber.length < 8) {
-      throw new Error('Enter a valid phone number.');
-    }
-
-    if (code.length !== 6) {
-      throw new Error('Enter the 6-digit code.');
-    }
-
-    const otp = await ctx.db
-      .query('phoneOtps')
-      .withIndex('by_phoneNumber_and_createdAt', (q) => q.eq('phoneNumber', phoneNumber))
-      .order('desc')
-      .first();
-
-    if (!otp || otp.consumedAt) {
-      throw new Error('Request a new code.');
-    }
-
-    const now = Date.now();
-
-    if (otp.expiresAt <= now) {
-      await ctx.db.patch(otp._id, { consumedAt: now });
-      throw new Error('That code expired. Request a new one.');
-    }
-
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-      await ctx.db.patch(otp._id, { consumedAt: now });
-      throw new Error('Too many attempts. Request a new code.');
-    }
-
-    const codeHash = await hashOtpCode(phoneNumber, code, otp.salt);
-
-    if (codeHash !== otp.codeHash) {
-      const nextAttempts = otp.attempts + 1;
-      await ctx.db.patch(
-        otp._id,
-        nextAttempts >= OTP_MAX_ATTEMPTS ? { attempts: nextAttempts, consumedAt: now } : { attempts: nextAttempts }
-      );
-      throw new Error('That code is not correct.');
-    }
-
-    const verificationToken = getRandomToken();
-    const tokenHash = await hashVerificationToken(verificationToken);
-
-    await ctx.db.patch(otp._id, {
-      attempts: otp.attempts + 1,
-      consumedAt: now,
-    });
-
-    await ctx.db.insert('phoneOtpVerifications', {
-      phoneNumber,
-      tokenHash,
-      createdAt: now,
-      expiresAt: now + PHONE_VERIFICATION_TTL_MS,
-    });
-
-    return { verified: true, verificationToken };
-  },
-});
-
-export const completePhoneOnboarding = mutation({
-  args: {
-    phoneNumber: v.string(),
     name: v.string(),
     countryCode: v.string(),
     countryLabel: v.string(),
@@ -560,23 +171,17 @@ export const completePhoneOnboarding = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
-    const phoneNumber = normalizePhoneNumber(args.phoneNumber);
     const email = getIdentityEmail(identity);
     const name = args.name.trim();
     const homeCity = args.homeCity?.trim();
-
-    if (!phoneNumber || phoneNumber.length < 8) {
-      throw new Error('Enter a valid phone number.');
-    }
 
     if (name.length < 2) {
       throw new Error('Enter your name.');
     }
 
     const now = Date.now();
-    const existingUser = await findAppUserForIdentity(ctx, identity.tokenIdentifier, { phoneNumber, email });
-
-    const slug = existingUser?.slug ?? slugFromNameAndPhone(name, phoneNumber);
+    const existingUser = await findAppUserForIdentity(ctx, identity);
+    const slug = existingUser?.slug ?? (await createUniqueTravelerSlug(ctx, name));
 
     if (existingUser) {
       await ctx.db.patch(existingUser._id, {
@@ -586,7 +191,7 @@ export const completePhoneOnboarding = mutation({
         name,
         countryCode: args.countryCode,
         countryLabel: args.countryLabel,
-        phoneNumber,
+        role: existingUser.role ?? 'traveler',
         homeCity: homeCity || undefined,
         travelStyle: args.travelStyle,
         onboardingCompletedAt: existingUser.onboardingCompletedAt ?? now,
@@ -600,7 +205,7 @@ export const completePhoneOnboarding = mutation({
         name,
         countryCode: args.countryCode,
         countryLabel: args.countryLabel,
-        phoneNumber,
+        role: 'traveler',
         homeCity: homeCity || undefined,
         travelStyle: args.travelStyle,
         onboardingCompletedAt: now,
@@ -651,9 +256,9 @@ export const completePhoneOnboarding = mutation({
       name,
       countryCode: args.countryCode,
       countryLabel: args.countryLabel,
-      phoneNumber,
       homeCity: homeCity || null,
       travelStyle: args.travelStyle,
+      role: getAppUserRole(existingUser),
     };
   },
 });
@@ -667,21 +272,20 @@ export const getCurrentAuthSession = query({
       return null;
     }
 
-    const phoneNumber = getIdentityPhoneNumber(identity);
-    const email = getIdentityEmail(identity);
-    const existingUser = await findAppUserForIdentity(ctx, identity.tokenIdentifier, { phoneNumber, email });
+    const existingUser = await findAppUserForIdentity(ctx, identity);
 
-    if (!existingUser) {
+    if (!existingUser?.onboardingCompletedAt) {
       return null;
     }
 
     return {
       travelerSlug: existingUser.slug,
-      phoneNumber: existingUser.phoneNumber ?? phoneNumber,
+      email: existingUser.email ?? getIdentityEmail(identity),
+      name: existingUser.name,
+      role: getAppUserRole(existingUser),
     };
   },
 });
-
 async function getFallbackTripId(ctx: QueryCtx, travelerSlug: string) {
   const trips = await ctx.db
     .query('trips')
@@ -1009,7 +613,8 @@ export const getUserItinerary = query({
     tripId: v.optional(v.id('trips')),
   },
   handler: async (ctx, args) => {
-    return await getResolvedItinerary(ctx, args.travelerSlug, args.tripId);
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    return await getResolvedItinerary(ctx, travelerSlug, args.tripId);
   },
 });
 
@@ -1019,11 +624,12 @@ export const getTripDashboard = query({
     tripId: v.optional(v.id('trips')),
   },
   handler: async (ctx, args) => {
-    const resolvedTrip = await getResolvedTrip(ctx, args.travelerSlug, args.tripId);
-    const itinerary = resolvedTrip ? await getResolvedItinerary(ctx, args.travelerSlug, resolvedTrip._id) : [];
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    const resolvedTrip = await getResolvedTrip(ctx, travelerSlug, args.tripId);
+    const itinerary = resolvedTrip ? await getResolvedItinerary(ctx, travelerSlug, resolvedTrip._id) : [];
     const visits = await ctx.db
       .query('tripVisits')
-      .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', travelerSlug))
       .collect();
 
     const visitByBookingId = new Map(visits.map((visit) => [visit.bookingId, visit]));
@@ -1076,7 +682,7 @@ export const getTripDashboard = query({
         : null,
       visibility: resolvedTrip?.visibility ?? 'private',
       isGroupTrip: Boolean(resolvedTrip?.circleId),
-      group: resolvedTrip?.circleId ? await getTripGroupDetails(ctx, resolvedTrip, args.travelerSlug) : null,
+      group: resolvedTrip?.circleId ? await getTripGroupDetails(ctx, resolvedTrip, travelerSlug) : null,
       items,
     };
   },
@@ -1085,15 +691,16 @@ export const getTripDashboard = query({
 export const listUserTrips = query({
   args: { travelerSlug: v.string() },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const trips = await ctx.db
       .query('trips')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .order('desc')
       .collect();
 
     const tripsWithPreviews = await Promise.all(
       trips.map(async (trip) => {
-        const itinerary = await getResolvedItinerary(ctx, args.travelerSlug, trip._id);
+        const itinerary = await getResolvedItinerary(ctx, travelerSlug, trip._id);
         const previewImage = itinerary[0]?.stay?.imageUri ?? itinerary[0]?.experience.imageUri ?? null;
         const centerCoordinate = itinerary[0] ? getItineraryCoordinate(itinerary[0]) ?? null : null;
         return {
@@ -1117,8 +724,9 @@ export const getTripSettings = query({
     tripId: v.id('trips'),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const trip = await ctx.db.get(args.tripId);
-    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+    if (!trip || trip.travelerSlug !== travelerSlug) {
       return null;
     }
 
@@ -1139,9 +747,10 @@ export const listTravelerHistory = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const visits = await ctx.db
       .query('tripVisits')
-      .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', travelerSlug))
       .order('desc')
       .take(50);
 
@@ -1172,20 +781,21 @@ export const listTravelerBookings = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const [experienceBookings, stayBookings, trips] = await Promise.all([
       ctx.db
         .query('experienceBookings')
-        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', travelerSlug))
         .order('desc')
         .take(50),
       ctx.db
         .query('stayBookings')
-        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', args.travelerSlug))
+        .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', travelerSlug))
         .order('desc')
         .take(50),
       ctx.db
         .query('trips')
-        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
         .collect(),
     ]);
 
@@ -1253,6 +863,8 @@ export const listManagedBookings = query({
     status: v.optional(v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'))),
   },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
+    const managerSlug = manager.slug;
     const status = args.status;
     const [experienceBookings, stayBookings] = await Promise.all([
       status
@@ -1282,7 +894,7 @@ export const listManagedBookings = query({
         ]);
         const bookingStatus = booking.status ?? 'confirmed';
 
-        if (experience?.managerSlug !== args.managerSlug) {
+        if (experience?.managerSlug !== managerSlug) {
           return null;
         }
 
@@ -1315,7 +927,7 @@ export const listManagedBookings = query({
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
           .unique();
 
-        if (stay?.managerSlug !== args.managerSlug) {
+        if (stay?.managerSlug !== managerSlug) {
           return null;
         }
 
@@ -1356,6 +968,7 @@ export const updateManagedBookingStatus = mutation({
     status: v.union(v.literal('confirmed'), v.literal('cancelled')),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     if (args.source === 'experienceBooking') {
       const bookingId = args.bookingId as Id<'experienceBookings'>;
       const booking = await ctx.db.get(bookingId);
@@ -1386,9 +999,10 @@ export const createTrip = mutation({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const tripId = await ctx.db.insert('trips', {
       name: args.name,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       createdAt: Date.now(),
       status: 'active',
     });
@@ -1404,8 +1018,9 @@ export const updateTripSettings = mutation({
     visibility: v.union(v.literal('private'), v.literal('public')),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const trip = await ctx.db.get(args.tripId);
-    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+    if (!trip || trip.travelerSlug !== travelerSlug) {
       return false;
     }
 
@@ -1425,16 +1040,17 @@ export const inviteFriendsToTrip = mutation({
     friendSlugs: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const trip = await ctx.db.get(args.tripId);
-    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+    if (!trip || trip.travelerSlug !== travelerSlug) {
       return false;
     }
 
     const now = Date.now();
-    for (const friendSlug of [...new Set(args.friendSlugs)].filter((slug) => slug !== args.travelerSlug)) {
+    for (const friendSlug of [...new Set(args.friendSlugs)].filter((slug) => slug !== travelerSlug)) {
       await ctx.db.insert('tripInvites', {
         tripId: args.tripId,
-        inviterSlug: args.travelerSlug,
+        inviterSlug: travelerSlug,
         inviteeSlug: friendSlug,
         status: 'invited',
         createdAt: now,
@@ -1452,12 +1068,13 @@ export const addExperienceToTrip = mutation({
     tripId: v.optional(v.id('trips')),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const resolvedTripId =
       args.tripId ??
-      (await getFallbackTripId(ctx, args.travelerSlug)) ??
+      (await getFallbackTripId(ctx, travelerSlug)) ??
       (await ctx.db.insert('trips', {
         name: 'My Trip',
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         createdAt: Date.now(),
         status: 'active',
       }));
@@ -1466,7 +1083,7 @@ export const addExperienceToTrip = mutation({
     const existing = await ctx.db
       .query('experienceBookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) => 
-        q.eq('travelerSlug', args.travelerSlug)
+        q.eq('travelerSlug', travelerSlug)
       )
       .collect();
     
@@ -1475,7 +1092,7 @@ export const addExperienceToTrip = mutation({
 
     return await ctx.db.insert('experienceBookings', {
       experienceSlug: args.experienceSlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       tripId: resolvedTripId,
       bookedAt: Date.now(),
       status: 'pending',
@@ -1489,9 +1106,10 @@ export const removeExperienceFromTrip = mutation({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const booking = await ctx.db.get(args.bookingId);
 
-    if (!booking || booking.travelerSlug !== args.travelerSlug) {
+    if (!booking || booking.travelerSlug !== travelerSlug) {
       return false;
     }
 
@@ -1506,9 +1124,10 @@ export const deleteTrip = mutation({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const trip = await ctx.db.get(args.tripId);
 
-    if (!trip || trip.travelerSlug !== args.travelerSlug) {
+    if (!trip || trip.travelerSlug !== travelerSlug) {
       return false;
     }
 
@@ -1518,7 +1137,7 @@ export const deleteTrip = mutation({
       .collect();
 
     for (const booking of bookings) {
-      if (booking.travelerSlug === args.travelerSlug) {
+      if (booking.travelerSlug === travelerSlug) {
         await ctx.db.delete(booking._id);
       }
     }
@@ -1535,11 +1154,12 @@ export const bookStay = mutation({
     tripId: v.optional(v.id('trips')),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     // Stays are booked using the same experienceBookings table for simplicity in the itinerary
     const existingBooking = await ctx.db
       .query('experienceBookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
-        q.eq('travelerSlug', args.travelerSlug).eq('experienceSlug', args.staySlug)
+        q.eq('travelerSlug', travelerSlug).eq('experienceSlug', args.staySlug)
       )
       .unique();
 
@@ -1552,7 +1172,7 @@ export const bookStay = mutation({
 
     return await ctx.db.insert('experienceBookings', {
       experienceSlug: args.staySlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       tripId: args.tripId,
       bookedAt: Date.now(),
     });
@@ -1567,9 +1187,10 @@ export const recordTripArrival = mutation({
     coordinate: v.optional(v.array(v.number())),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const booking = await ctx.db.get(args.bookingId);
 
-    if (!booking || booking.travelerSlug !== args.travelerSlug) {
+    if (!booking || booking.travelerSlug !== travelerSlug) {
       return { created: false, experienceSlug: null as string | null };
     }
 
@@ -1604,11 +1225,12 @@ export const submitExperienceRating = mutation({
     review: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const review = args.review?.trim();
     const existingRating = await ctx.db
       .query('experienceRatings')
       .withIndex('by_experienceSlug_and_travelerSlug', (q) =>
-        q.eq('experienceSlug', args.experienceSlug).eq('travelerSlug', args.travelerSlug)
+        q.eq('experienceSlug', args.experienceSlug).eq('travelerSlug', travelerSlug)
       )
       .unique();
 
@@ -1624,7 +1246,7 @@ export const submitExperienceRating = mutation({
 
     return await ctx.db.insert('experienceRatings', {
       experienceSlug: args.experienceSlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       rating: args.rating,
       review: review && review.length > 0 ? review : undefined,
       createdAt: Date.now(),
@@ -1660,10 +1282,11 @@ export const createStayBooking = mutation({
     tripId: v.optional(v.id('trips')),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     // 1. Create the official property booking
     const bookingId = await ctx.db.insert('stayBookings', {
       staySlug: args.staySlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       checkIn: args.checkIn,
       checkOut: args.checkOut,
       totalPrice: args.totalPrice,
@@ -1677,7 +1300,7 @@ export const createStayBooking = mutation({
     if (args.tripId) {
       await ctx.db.insert('experienceBookings', {
         experienceSlug: args.staySlug,
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         tripId: args.tripId,
         bookedAt: Date.now(),
       });
@@ -1702,9 +1325,11 @@ export const listAllStays = query({
 export const listManagedStays = query({
   args: { managerSlug: v.string() },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
+    const managerSlug = manager.slug;
     const stays = await ctx.db
       .query('stays')
-      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', args.managerSlug))
+      .withIndex('by_managerSlug', (q) => q.eq('managerSlug', managerSlug))
       .take(100);
 
     return stays.map((stay) => ({
@@ -1755,13 +1380,14 @@ export const createManagedStay = mutation({
     nearbyHighlights: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
     const slug = await createUniqueStaySlug(ctx, args.name);
     const roomId = 'standard-room';
     const arrivalId = 'standard-arrival';
 
     await ctx.db.insert('stays', {
       slug,
-      managerSlug: args.managerSlug,
+      managerSlug: manager.slug,
       name: args.name,
       locationLabel: 'Map location',
       town: 'Windhoek',
@@ -1824,9 +1450,10 @@ export const getTravelerStayBooking = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const bookings = await ctx.db
       .query('stayBookings')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .collect();
 
     return bookings.find((booking) => booking.staySlug === args.staySlug) ?? null;
@@ -1877,11 +1504,12 @@ export const submitStayRating = mutation({
     review: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const review = args.review?.trim();
     const existingRating = await ctx.db
       .query('stayRatings')
       .withIndex('by_staySlug_and_travelerSlug', (q) =>
-        q.eq('staySlug', args.staySlug).eq('travelerSlug', args.travelerSlug)
+        q.eq('staySlug', args.staySlug).eq('travelerSlug', travelerSlug)
       )
       .unique();
 
@@ -1896,7 +1524,7 @@ export const submitStayRating = mutation({
 
     return await ctx.db.insert('stayRatings', {
       staySlug: args.staySlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       rating: args.rating,
       review: review && review.length > 0 ? review : undefined,
       createdAt: Date.now(),

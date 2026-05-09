@@ -37,7 +37,7 @@ const travelStyleOptions = [
 export default function EditProfileScreen() {
   const router = useRouter();
   const traveler = useCurrentTraveler();
-  const { signOut } = useAuthSession();
+  const { session, signOut } = useAuthSession();
   const { isLoading: managerModeIsLoading, isManagerMode, setManagerMode } = useManagerMode();
   const { openManager } = useManagerResourceMode();
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
@@ -53,6 +53,7 @@ export default function EditProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const hasLoadedTravelerRef = useRef(false);
+  const isAdmin = session?.role === 'admin';
 
   useEffect(() => {
     if (!traveler) {
@@ -69,6 +70,12 @@ export default function EditProfileScreen() {
     setClearAvatar(false);
     hasLoadedTravelerRef.current = true;
   }, [traveler]);
+
+  useEffect(() => {
+    if (!isAdmin && isManagerMode) {
+      setManagerMode(false);
+    }
+  }, [isAdmin, isManagerMode, setManagerMode]);
 
   useEffect(() => {
     if (!traveler?.slug || !hasLoadedTravelerRef.current) {
@@ -222,15 +229,16 @@ export default function EditProfileScreen() {
         onSelect={handleSelectCountry}
       />
       <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
-      <SettingRow label="Phone" value={traveler?.phoneNumber ?? 'Add during onboarding'} />
       <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
-      <SettingSwitchRow
-        disabled={managerModeIsLoading}
-        label="Manager mode"
-        value={isManagerMode}
-        onValueChange={setManagerMode}
-      />
-      {isManagerMode ? (
+      {isAdmin ? (
+        <SettingSwitchRow
+          disabled={managerModeIsLoading}
+          label="Manager mode"
+          value={isManagerMode}
+          onValueChange={setManagerMode}
+        />
+      ) : null}
+      {isAdmin && isManagerMode ? (
         <View style={styles.managerActions}>
           <Pressable
             accessibilityRole="button"

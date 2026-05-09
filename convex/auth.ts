@@ -1,56 +1,163 @@
-import { createClient, type AuthFunctions, type GenericCtx } from '@convex-dev/better-auth';
-import { crossDomain, convex } from '@convex-dev/better-auth/plugins';
-import { expo } from '@better-auth/expo';
-import { betterAuth, type BetterAuthOptions } from 'better-auth/minimal';
-import { query } from './_generated/server';
-import { components, internal } from './_generated/api';
-import type { DataModel } from './_generated/dataModel';
-import authConfig from './auth.config';
+import Google from "@auth/core/providers/google";
+import { convexAuth } from "@convex-dev/auth/server";
+import { query } from "./_generated/server";
+import { mutation } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 
-const siteUrl = process.env.SITE_URL;
-const trustedOrigins = [
-  ...(siteUrl ? [siteUrl] : []),
-  'https://wandr.website',
-  'https://www.wandr.website',
-  'https://wandr-liard.vercel.app',
-  'https://wandr-moodbods.vercel.app',
-  'https://wandr-9m9hggj01-moodbods.vercel.app',
-  'https://wandr-fc2px3nb4-moodbods.vercel.app',
-  'http://localhost:8081',
-  'http://127.0.0.1:8081',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'wandr://',
+type AuthIdentity = NonNullable<Awaited<ReturnType<QueryCtx["auth"]["getUserIdentity"]>>>;
+
+const TRUSTED_REDIRECT_PREFIXES = [
+  "wandr://",
+  "exp://",
+  "exps://",
+  "http://localhost",
+  "http://127.0.0.1",
 ];
-const authFunctions: AuthFunctions = internal.auth;
 
-export const authComponent = createClient<DataModel>(components.betterAuth, {
-  authFunctions,
-  triggers: {},
+const normalizeEmail = (email?: string | null) => {
+  const normalized = email?.trim().toLowerCase();
+  return normalized && normalized.includes("@") ? normalized : undefined;
+};
+
+const getIdentityEmail = (identity: AuthIdentity) => {
+  const identityWithEmail = identity as AuthIdentity & {
+    email?: string;
+    preferred_username?: string;
+  };
+  return normalizeEmail(identityWithEmail.email ?? identityWithEmail.preferred_username);
+};
+
+const getIdentityName = (identity: AuthIdentity) => {
+  const identityWithName = identity as AuthIdentity & {
+    name?: string;
+    given_name?: string;
+  };
+  return (
+    identityWithName.name?.trim() ??
+    identityWithName.given_name?.trim() ??
+    getIdentityEmail(identity)?.split("@")[0] ??
+    "Traveler"
+  );
+};
+
+const findAppUserForIdentity = async (
+  ctx: QueryCtx | MutationCtx,
+  identity: AuthIdentity,
+) => {
+  const byToken = await ctx.db
+    .query("appUsers")
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .first();
+
+  if (byToken) {
+    return byToken;
+  }
+
+  const email = getIdentityEmail(identity);
+  if (!email) {
+    return null;
+  }
+
+  return await ctx.db
+    .query("appUsers")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .first();
+};
+
+const getAppUserRole = (user: Doc<"appUsers"> | null | undefined) =>
+  user?.role === "admin" ? "admin" : "traveler";
+
+const getAuthUserId = (identity: AuthIdentity) => identity.subject as Id<"users">;
+
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
+  providers: [Google],
+  callbacks: {
+    async redirect({ redirectTo }) {
+      const configuredSiteUrl = process.env.SITE_URL?.replace(/\/$/, "");
+      const allowedRedirects = configuredSiteUrl ? [configuredSiteUrl] : [];
+      const isTrustedRedirect =
+        allowedRedirects.some((origin) => redirectTo.startsWith(origin)) ||
+        TRUSTED_REDIRECT_PREFIXES.some((prefix) => redirectTo.startsWith(prefix));
+
+      if (isTrustedRedirect) {
+        return redirectTo;
+      }
+
+      return configuredSiteUrl ?? redirectTo;
+    },
+  },
 });
 
-export const createAuth = (ctx: GenericCtx<DataModel>) =>
-  betterAuth({
-    trustedOrigins,
-    database: authComponent.adapter(ctx),
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-    },
-    plugins: [
-      expo(),
-      convex({ authConfig }),
-      ...(siteUrl ? [crossDomain({ siteUrl })] : []),
-    ],
-  } satisfies BetterAuthOptions);
-
-export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
-export const { getAuthUser } = authComponent.clientApi();
-
-export const getCurrentUser = query({
+export const getCurrentAuthIdentity = query({
   args: {},
   handler: async (ctx) => {
-    return await authComponent.safeGetAuthUser(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      return null;
+    }
+
+    const appUser = await findAppUserForIdentity(ctx, identity);
+    const email = getIdentityEmail(identity);
+
+    return {
+      subject: identity.subject,
+      tokenIdentifier: identity.tokenIdentifier,
+      email,
+      name: getIdentityName(identity),
+      travelerSlug: appUser?.slug ?? null,
+      onboardingCompleted: Boolean(appUser?.onboardingCompletedAt),
+      role: getAppUserRole(appUser),
+    };
+  },
+});
+
+export const linkCurrentAuthIdentity = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      return null;
+    }
+
+    const appUser = await findAppUserForIdentity(ctx, identity);
+    if (!appUser) {
+      return {
+        linked: false,
+        travelerSlug: null,
+        role: "traveler" as const,
+      };
+    }
+
+    const email = getIdentityEmail(identity);
+    const patch: Partial<Doc<"appUsers">> = {};
+    if (appUser.tokenIdentifier !== identity.tokenIdentifier) {
+      patch.tokenIdentifier = identity.tokenIdentifier;
+    }
+    if (appUser.authUserId !== getAuthUserId(identity)) {
+      patch.authUserId = getAuthUserId(identity);
+    }
+    if (email && appUser.email !== email) {
+      patch.email = email;
+    }
+    if (!appUser.name?.trim()) {
+      patch.name = getIdentityName(identity);
+    }
+    if (!appUser.role) {
+      patch.role = "traveler";
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(appUser._id, patch);
+    }
+
+    return {
+      linked: true,
+      travelerSlug: appUser.slug,
+      role: getAppUserRole({ ...appUser, ...patch }),
+    };
   },
 });
 
@@ -63,27 +170,40 @@ export const getCurrentAuthSession = query({
       return null;
     }
 
-    const email = typeof identity.email === 'string' ? identity.email.trim().toLowerCase() : '';
-    const appUserByToken = await ctx.db
-      .query('appUsers')
-      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
-      .unique();
-    const appUser =
-      appUserByToken ??
-      (email
-        ? await ctx.db
-            .query('appUsers')
-            .withIndex('by_email', (q) => q.eq('email', email))
-            .unique()
-        : null);
-
-    if (!appUser || !appUser.onboardingCompletedAt) {
+    const appUser = await findAppUserForIdentity(ctx, identity);
+    if (!appUser?.onboardingCompletedAt) {
       return null;
     }
 
     return {
       travelerSlug: appUser.slug,
-      email: appUser.email ?? email,
+      name: appUser.name,
+      email: appUser.email,
+      role: getAppUserRole(appUser),
+    };
+  },
+});
+
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      return null;
+    }
+
+    const appUser = await findAppUserForIdentity(ctx, identity);
+
+    return {
+      identity: {
+        subject: identity.subject,
+        tokenIdentifier: identity.tokenIdentifier,
+        email: getIdentityEmail(identity),
+        name: getIdentityName(identity),
+      },
+      appUser,
+      role: getAppUserRole(appUser),
     };
   },
 });

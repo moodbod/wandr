@@ -18,6 +18,7 @@ import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug, hiddenGemDetails, type HiddenGemDetailContent } from '@/constants/hidden-gems-content';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import { bookExperienceRef, getExplorePageContentRef, getLocationLikeStateRef, listUserTripsRef, toggleLocationLikeRef } from '@/lib/convex';
 
 export default function HiddenGemDetailScreen({
@@ -35,14 +36,16 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   const slug = slugProp ?? routeSlug;
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
+  const requireAuthAction = useRequireAuthAction();
   const travelerSlug = traveler?.slug ?? '';
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
-  const trips = useQuery(listUserTripsRef, { travelerSlug });
-  const likeState = useQuery(getLocationLikeStateRef, {
-    travelerSlug,
-    locationKind: 'hiddenGem',
-    locationSlug: typeof slug === 'string' ? slug : '',
-  });
+  const trips = useQuery(listUserTripsRef, travelerSlug ? { travelerSlug } : 'skip');
+  const likeState = useQuery(
+    getLocationLikeStateRef,
+    travelerSlug && typeof slug === 'string'
+      ? { travelerSlug, locationKind: 'hiddenGem', locationSlug: slug }
+      : 'skip'
+  );
   const bookExperience = useMutation(bookExperienceRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
   const tripSheetRef = useRef<BottomSheet>(null);
@@ -79,6 +82,10 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     : [];
 
   const handleToggleLike = async () => {
+    if (!requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
     const nextLiked = !isLiked;
     setOptimisticLiked(nextLiked);
 
@@ -95,7 +102,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   };
 
   const addHiddenGemToTrip = async (tripId?: Id<'trips'>) => {
-    if (bookingAction || !travelerSlug) {
+    if (bookingAction || !requireAuthAction() || !travelerSlug) {
       return;
     }
 
@@ -113,6 +120,10 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   };
 
   const handleAddToTripPress = () => {
+    if (!requireAuthAction()) {
+      return;
+    }
+
     if (trips && trips.length === 0) {
       void addHiddenGemToTrip();
       return;

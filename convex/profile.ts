@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
+import { assertCurrentTravelerSlug, requireCurrentAppUser } from './authHelpers';
 
 const supportedCurrencies = new Set(['USD', 'NAD', 'ZAR', 'EUR', 'GBP']);
 const countryCurrencyMap: Record<string, string> = {
@@ -100,6 +101,7 @@ async function upsertSettings(
 export const generateAvatarUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireCurrentAppUser(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -112,7 +114,7 @@ export const getUserSettings = query({
     if (!args.travelerSlug) {
       return null;
     }
-    const travelerSlug = args.travelerSlug;
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
 
     const [settings, user] = await Promise.all([
       ctx.db
@@ -147,6 +149,7 @@ export const updateTravelerProfile = mutation({
     clearAvatar: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const name = args.name.trim();
     const countryCode = args.countryCode.trim().toUpperCase();
     const countryLabel = args.countryLabel.trim();
@@ -162,7 +165,7 @@ export const updateTravelerProfile = mutation({
 
     const user = await ctx.db
       .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
       .unique();
 
     if (!user) {
@@ -179,7 +182,7 @@ export const updateTravelerProfile = mutation({
 
     const profile = await ctx.db
       .query('travelerProfiles')
-      .withIndex('by_slug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_slug', (q) => q.eq('travelerSlug', travelerSlug))
       .unique();
     const avatarUri = args.avatarStorageId ? await ctx.storage.getUrl(args.avatarStorageId) : undefined;
     const avatarPatch = args.avatarStorageId
@@ -195,7 +198,7 @@ export const updateTravelerProfile = mutation({
       });
     } else {
       await ctx.db.insert('travelerProfiles', {
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         name,
         regionCode: countryCode,
         regionName: homeCity || countryLabel,
@@ -205,7 +208,7 @@ export const updateTravelerProfile = mutation({
 
     const friendProfile = await ctx.db
       .query('friendProfiles')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .unique();
 
     if (friendProfile) {
@@ -226,7 +229,8 @@ export const updateExperiencePreferences = mutation({
     temperatureUnit: v.union(v.literal('celsius'), v.literal('fahrenheit')),
   },
   handler: async (ctx, args) => {
-    await upsertSettings(ctx, args.travelerSlug, {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    await upsertSettings(ctx, travelerSlug, {
       preferredCurrency: normalizeCurrency(args.preferredCurrency),
       distanceUnit: args.distanceUnit,
       temperatureUnit: args.temperatureUnit,
@@ -244,7 +248,8 @@ export const updatePrivacySettings = mutation({
     locationSharing: v.union(v.literal('off'), v.literal('whileUsing'), v.literal('tripOnly')),
   },
   handler: async (ctx, args) => {
-    await upsertSettings(ctx, args.travelerSlug, {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    await upsertSettings(ctx, travelerSlug, {
       profileVisibility: args.profileVisibility,
       showSavedPlaces: args.showSavedPlaces,
       showTripActivity: args.showTripActivity,
@@ -263,7 +268,8 @@ export const updateNotificationSettings = mutation({
     productUpdatesEnabled: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await upsertSettings(ctx, args.travelerSlug, {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    await upsertSettings(ctx, travelerSlug, {
       tripAlertsEnabled: args.tripAlertsEnabled,
       friendMessagesEnabled: args.friendMessagesEnabled,
       bookingUpdatesEnabled: args.bookingUpdatesEnabled,

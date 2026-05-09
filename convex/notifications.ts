@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import { internalAction, internalQuery, mutation, query } from './_generated/server';
+import { assertCurrentTravelerSlug } from './authHelpers';
 
 function getRequestActionStatus(notification: Doc<'appNotifications'>) {
   if (notification.actionStatus === 'approved' || notification.actionStatus === 'declined') {
@@ -31,9 +32,10 @@ export const listNotifications = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const notifications = await ctx.db
       .query('appNotifications')
-      .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', args.travelerSlug))
+      .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', travelerSlug))
       .order('desc')
       .take(100);
 
@@ -73,12 +75,13 @@ export const markNotificationsViewed = mutation({
     notificationIds: v.optional(v.array(v.id('appNotifications'))),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const now = Date.now();
 
     if (args.notificationIds && args.notificationIds.length > 0) {
       for (const notificationId of args.notificationIds) {
         const notification = await ctx.db.get(notificationId);
-        if (!notification || notification.recipientSlug !== args.travelerSlug || notification.viewedAt) {
+        if (!notification || notification.recipientSlug !== travelerSlug || notification.viewedAt) {
           continue;
         }
 
@@ -90,7 +93,7 @@ export const markNotificationsViewed = mutation({
 
     const unviewed = await ctx.db
       .query('appNotifications')
-      .withIndex('by_recipientSlug_and_viewedAt', (q) => q.eq('recipientSlug', args.travelerSlug))
+      .withIndex('by_recipientSlug_and_viewedAt', (q) => q.eq('recipientSlug', travelerSlug))
       .collect();
 
     for (const notification of unviewed) {
@@ -110,12 +113,13 @@ export const markNotificationsRead = mutation({
     notificationIds: v.optional(v.array(v.id('appNotifications'))),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const now = Date.now();
 
     if (args.notificationIds && args.notificationIds.length > 0) {
       for (const notificationId of args.notificationIds) {
         const notification = await ctx.db.get(notificationId);
-        if (!notification || notification.recipientSlug !== args.travelerSlug || notification.readAt) {
+        if (!notification || notification.recipientSlug !== travelerSlug || notification.readAt) {
           continue;
         }
 
@@ -127,7 +131,7 @@ export const markNotificationsRead = mutation({
 
     const unread = await ctx.db
       .query('appNotifications')
-      .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', args.travelerSlug))
+      .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', travelerSlug))
       .collect();
 
     for (const notification of unread) {
@@ -152,8 +156,9 @@ export const createTripNotification = mutation({
     entityLabel: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const recipientSlug = await assertCurrentTravelerSlug(ctx, args.recipientSlug);
     await ctx.db.insert('appNotifications', {
-      recipientSlug: args.recipientSlug,
+      recipientSlug,
       kind: args.kind,
       title: args.title,
       body: args.body,
@@ -175,6 +180,7 @@ export const registerDevicePushToken = mutation({
     platform: v.union(v.literal('ios'), v.literal('android')),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const now = Date.now();
     const existingForInstallation = await ctx.db
       .query('devicePushTokens')
@@ -183,7 +189,7 @@ export const registerDevicePushToken = mutation({
 
     if (existingForInstallation) {
       await ctx.db.patch(existingForInstallation._id, {
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         expoPushToken: args.expoPushToken,
         platform: args.platform,
         updatedAt: now,
@@ -198,7 +204,7 @@ export const registerDevicePushToken = mutation({
 
     if (existingForToken) {
       await ctx.db.patch(existingForToken._id, {
-        travelerSlug: args.travelerSlug,
+        travelerSlug,
         installationId: args.installationId,
         platform: args.platform,
         updatedAt: now,
@@ -207,7 +213,7 @@ export const registerDevicePushToken = mutation({
     }
 
     await ctx.db.insert('devicePushTokens', {
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       installationId: args.installationId,
       expoPushToken: args.expoPushToken,
       platform: args.platform,

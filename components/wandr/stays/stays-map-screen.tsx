@@ -57,11 +57,11 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const traveler = useCurrentTraveler();
   const settings = useCurrentUserSettings();
   const preferredCurrency = settings?.preferredCurrency ?? 'USD';
-  const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
+  const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const [selectedTripId, setSelectedTripId] = useState<string | undefined>(undefined);
   const trip = useQuery(
     getTripDashboardRef,
-    selectedTripId ? { travelerSlug: traveler?.slug ?? '', tripId: selectedTripId } : 'skip'
+    selectedTripId && traveler?.slug ? { travelerSlug: traveler.slug, tripId: selectedTripId } : 'skip'
   );
   const dbStays = useQuery(listAllStaysRef);
   const currentLocation = useCurrentLocation();

@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
+import { authTables } from '@convex-dev/auth/server';
 
 import { appUsersTable } from './tables/appUsers';
 import { appNotificationsTable } from './tables/appNotifications';
@@ -19,8 +20,6 @@ import { friendMessagesTable } from './tables/friendMessages';
 import { friendProfilesTable } from './tables/friendProfiles';
 import { hiddenGemsTable } from './tables/hiddenGems';
 import { locationLikesTable } from './tables/locationLikes';
-import { phoneOtpVerificationsTable } from './tables/phoneOtpVerifications';
-import { phoneOtpsTable } from './tables/phoneOtps';
 import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
 import { tripInvitesTable } from './tables/tripInvites';
@@ -28,6 +27,8 @@ import { tripsTable } from './tables/trips';
 import { userSettingsTable } from './tables/userSettings';
 
 export default defineSchema({
+  ...authTables,
+
   regions: regionsTable,
   trips: tripsTable,
   tripInvites: tripInvitesTable,
@@ -79,8 +80,6 @@ export default defineSchema({
 
   appUsers: appUsersTable,
   userSettings: userSettingsTable,
-  phoneOtps: phoneOtpsTable,
-  phoneOtpVerifications: phoneOtpVerificationsTable,
   experienceBookings: experienceBookingsTable,
   locationLikes: locationLikesTable,
   locationPhotos: defineTable({

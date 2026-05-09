@@ -42,7 +42,7 @@ function ConnectedTripMapScreen() {
     routeTripId
   );
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
-  const trips = useQuery(listUserTripsRef, { travelerSlug: traveler?.slug ?? '' });
+  const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
   const { planningLocation } = usePlanningLocation();

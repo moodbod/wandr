@@ -22,6 +22,7 @@ import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import {
   bookExperienceRef,
   createTripRef,
@@ -50,12 +51,13 @@ function ConnectedExploreExperienceScreen() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
+  const requireAuthAction = useRequireAuthAction();
   const travelerSlug = traveler?.slug ?? '';
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
-  const trips = useQuery(listUserTripsRef, { travelerSlug });
+  const trips = useQuery(listUserTripsRef, travelerSlug ? { travelerSlug } : 'skip');
   const joinableTrips = useQuery(
     getExploreJoinableTripsRef,
-    travelerSlug && typeof slug === 'string' ? { experienceSlug: slug, travelerSlug } : 'skip'
+    typeof slug === 'string' ? { experienceSlug: slug, ...(travelerSlug ? { travelerSlug } : {}) } : 'skip'
   );
   const primaryTripId = trips?.[0]?._id;
   const trip = useQuery(
@@ -72,16 +74,17 @@ function ConnectedExploreExperienceScreen() {
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
   const generatePhotoUploadUrl = useMutation(generateLocationPhotoUploadUrlRef);
   const submitLocationPhoto = useMutation(submitLocationPhotoRef);
-  const itinerary = useQuery(getUserItineraryRef, { travelerSlug });
+  const itinerary = useQuery(getUserItineraryRef, travelerSlug ? { travelerSlug } : 'skip');
   const communityPhotos = useQuery(
     listLocationPhotosRef,
     typeof slug === 'string' ? { locationKind: 'experience', locationSlug: slug } : 'skip'
   );
-  const likeState = useQuery(getLocationLikeStateRef, {
-    travelerSlug,
-    locationKind: 'experience',
-    locationSlug: typeof slug === 'string' ? slug : '',
-  });
+  const likeState = useQuery(
+    getLocationLikeStateRef,
+    travelerSlug && typeof slug === 'string'
+      ? { travelerSlug, locationKind: 'experience', locationSlug: slug }
+      : 'skip'
+  );
   const [bookingAction, setBookingAction] = useState<'primary' | 'secondary' | null>(null);
   const [requestingCircleId, setRequestingCircleId] = useState<string | null>(null);
   const [requestedCircleIds, setRequestedCircleIds] = useState<string[]>([]);
@@ -96,7 +99,7 @@ function ConnectedExploreExperienceScreen() {
     setOptimisticLiked(null);
   }, [slug]);
 
-  if (page === undefined || itinerary === undefined || trip === undefined) {
+  if (page === undefined || (travelerSlug && (itinerary === undefined || trip === undefined))) {
     return <ExperienceDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
   }
 
@@ -123,7 +126,7 @@ function ConnectedExploreExperienceScreen() {
       .filter((photo) => !hostGalleryImages.includes(photo.imageUri))
       .map((photo) => ({ uri: photo.imageUri, source: 'visitor' as const })),
   ];
-  const bookingMapCenter = experience.coordinate ?? trip.centerCoordinate ?? page.home.hero.centerCoordinate;
+  const bookingMapCenter = experience.coordinate ?? trip?.centerCoordinate ?? page.home.hero.centerCoordinate;
   const bookingMapMarkers = experience.coordinate
     ? [
         {
@@ -164,6 +167,10 @@ function ConnectedExploreExperienceScreen() {
         ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as TripFitSummaryItem[];
 
   const saveExperienceToTrip = async (action: 'primary' | 'secondary', tripId?: Id<'trips'>) => {
+    if (!requireAuthAction() || !travelerSlug) {
+      return false;
+    }
+
     if (bookingAction) {
       return false;
     }
@@ -183,6 +190,10 @@ function ConnectedExploreExperienceScreen() {
   };
 
   const handleAddToTripPress = () => {
+    if (!requireAuthAction()) {
+      return;
+    }
+
     tripSheetRef.current?.snapToIndex(0);
   };
 
@@ -192,7 +203,7 @@ function ConnectedExploreExperienceScreen() {
   };
 
   const handleRequestJoinTrip = async (joinableTrip: ExploreJoinableTrip) => {
-    if (!travelerSlug || requestingCircleId || requestedCircleIds.includes(joinableTrip.circleId)) {
+    if (!requireAuthAction() || !travelerSlug || requestingCircleId || requestedCircleIds.includes(joinableTrip.circleId)) {
       return;
     }
 
@@ -213,6 +224,10 @@ function ConnectedExploreExperienceScreen() {
   };
 
   const handleStartJourney = async () => {
+    if (!requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
     if (bookingAction) {
       return;
     }
@@ -234,6 +249,10 @@ function ConnectedExploreExperienceScreen() {
   };
 
   const handleToggleLike = async () => {
+    if (!requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
     const nextLiked = !isLiked;
     setOptimisticLiked(nextLiked);
 
@@ -250,7 +269,7 @@ function ConnectedExploreExperienceScreen() {
   };
 
   const handleSharePhoto = async () => {
-    if (!travelerSlug || isUploadingPhoto) {
+    if (!requireAuthAction() || !travelerSlug || isUploadingPhoto) {
       return;
     }
 

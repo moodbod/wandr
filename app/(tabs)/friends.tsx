@@ -31,7 +31,7 @@ export default function FriendsScreen() {
   const groupCardWidth = Math.min(312, Math.max(260, screenWidth - horizontalGutter * 3));
   const traveler = useCurrentTraveler();
   const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
-  const dashboard = useQuery(getFriendsDashboardRef, { travelerSlug: traveler?.slug ?? '' });
+  const dashboard = useQuery(getFriendsDashboardRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const actOnCandidate = useMutation(actOnFriendCandidateRef);
   const [busyCandidateSlug, setBusyCandidateSlug] = useState<string | null>(null);
   const [selectedProfileSlug, setSelectedProfileSlug] = useState<string | null>(null);

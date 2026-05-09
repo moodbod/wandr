@@ -1,10 +1,12 @@
 import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
+import { assertCurrentTravelerSlug, requireAdmin, requireCurrentAppUser } from './authHelpers';
 
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireCurrentAppUser(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -18,10 +20,11 @@ export const submitLocationPhoto = mutation({
     caption: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     return await ctx.db.insert('locationPhotos', {
       locationKind: args.locationKind,
       locationSlug: args.locationSlug,
-      travelerSlug: args.travelerSlug,
+      travelerSlug,
       storageId: args.storageId,
       caption: args.caption,
       source: 'user',
@@ -37,6 +40,8 @@ export const listManagedLocationPhotos = query({
     status: v.optional(v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected'))),
   },
   handler: async (ctx, args) => {
+    const manager = await requireAdmin(ctx);
+    const managerSlug = manager.slug;
     const status = args.status;
     const query = status
       ? ctx.db
@@ -59,7 +64,7 @@ export const listManagedLocationPhotos = query({
                 .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
                 .unique();
 
-        if (location?.managerSlug !== args.managerSlug) {
+        if (location?.managerSlug !== managerSlug) {
           return null;
         }
 
@@ -93,9 +98,9 @@ export const updateLocationPhotoStatus = mutation({
   args: {
     photoId: v.id('locationPhotos'),
     status: v.union(v.literal('approved'), v.literal('rejected')),
-    reviewerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const reviewer = await requireAdmin(ctx);
     const photo = await ctx.db.get(args.photoId);
 
     if (!photo) {
@@ -105,7 +110,7 @@ export const updateLocationPhotoStatus = mutation({
     await ctx.db.patch(args.photoId, {
       status: args.status,
       reviewedAt: Date.now(),
-      reviewedBy: args.reviewerSlug,
+      reviewedBy: reviewer.slug,
     });
 
     return true;

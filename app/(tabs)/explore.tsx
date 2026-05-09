@@ -117,7 +117,7 @@ function ConnectedExploreScreen({
   const trip = useRetainedQueryValue(tripQuery);
   const joinableTripCardsQuery = useQuery(
     getExploreJoinableTripCardsRef,
-    traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
+    traveler?.slug ? { travelerSlug: traveler.slug } : {}
   );
   const joinableTripCards = useRetainedQueryValue(joinableTripCardsQuery) ?? EMPTY_JOINABLE_TRIP_CARDS;
   const [loadingMapResetKey, setLoadingMapResetKey] = useState(0);

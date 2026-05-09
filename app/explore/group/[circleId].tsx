@@ -13,6 +13,7 @@ import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreGroupTripDetailRef, requestJoinExploreTripRef } from '@/lib/convex';
 import { useEffect, useState } from 'react';
@@ -28,6 +29,7 @@ export default function ExploreGroupTripDetailScreen({
   const circleId = circleIdProp ?? routeCircleId;
   const router = useRouter();
   const traveler = useCurrentTraveler();
+  const requireAuthAction = useRequireAuthAction();
   const insets = useSafeAreaInsets();
   const { isLargeScreen } = useResponsive();
   const shouldRedirectToExploreShell = isLargeScreen && !circleIdProp && Boolean(circleId);
@@ -57,7 +59,7 @@ export default function ExploreGroupTripDetailScreen({
   }
 
   const handleJoin = async () => {
-    if (!traveler?.slug || !detail || detail.itinerary.length === 0 || isRequesting || detail.isMember) {
+    if (!requireAuthAction() || !traveler?.slug || !detail || detail.itinerary.length === 0 || isRequesting || detail.isMember) {
       return;
     }
 

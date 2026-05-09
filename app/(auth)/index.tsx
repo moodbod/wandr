@@ -1,7 +1,10 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useMutation } from 'convex/react';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useMutation, useQuery } from 'convex/react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AsYouType, parsePhoneNumberFromString, type CountryCode as PhoneCountryCode } from 'libphonenumber-js/min';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -13,26 +16,25 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { type CountryCode } from 'react-native-country-picker-modal';
+import { type Country, type CountryCode } from 'react-native-country-picker-modal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
-import { PhoneCountrySheet, type PhoneCountrySelection } from '@/components/wandr/phone-country-sheet';
+import { CountryPickerField } from '@/components/wandr/country-picker-field';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Input } from '@/components/ui/input';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
-import { authClient } from '@/lib/auth-client';
-import { completePhoneOnboardingRef } from '@/lib/convex';
+import { completeProfileOnboardingRef, getCurrentAuthIdentityRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 type IntroSlide = { icon: MaterialIconName; title: string; body: string };
 type TravelStyleOption = { value: 'solo' | 'couple' | 'friends' | 'family'; label: string; icon: MaterialIconName };
 type FlowStep = 'intro' | 'auth' | 'profile' | 'done';
-type AuthMode = 'signIn' | 'signUp';
 type TravelStyle = (typeof travelStyles)[number]['value'];
 
 const introSlides: IntroSlide[] = [
@@ -103,38 +105,34 @@ function createAuthPalette(isDark: boolean) {
 }
 
 export default function AuthScreen() {
-  const completeOnboarding = useMutation(completePhoneOnboardingRef);
+  const completeOnboarding = useMutation(completeProfileOnboardingRef);
+  const { signIn, signOut } = useAuthActions();
   const { session } = useAuthSession();
-  const { data: betterSession, isPending: isSessionPending } = authClient.useSession();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const authIdentity = useQuery(getCurrentAuthIdentityRef, session ? 'skip' : {});
   const { width } = useWindowDimensions();
   const { isLargeScreen } = useResponsive();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
   const [step, setStep] = useState<FlowStep>('intro');
-  const [mode, setMode] = useState<AuthMode>('signIn');
   const [slideIndex, setSlideIndex] = useState(0);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [homeCity, setHomeCity] = useState('');
   const [countryCode, setCountryCode] = useState<CountryCode>('NA');
-  const [callingCode, setCallingCode] = useState('264');
   const [countryLabel, setCountryLabel] = useState('Namibia');
   const [travelStyle, setTravelStyle] = useState<TravelStyle>('solo');
   const [error, setError] = useState<string | null>(null);
-  const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const shouldConstrainAuthWidth = isLargeScreen;
   const authFrameWidth = shouldConstrainAuthWidth ? Math.min(width, AUTH_LAYOUT.desktopMaxWidth) : width;
-  const formattedPhone = useMemo(() => new AsYouType(countryCode as PhoneCountryCode).input(phone), [countryCode, phone]);
-  const parsedPhoneNumber = useMemo(
-    () => parsePhoneNumberFromString(phone, countryCode as PhoneCountryCode),
-    [countryCode, phone]
-  );
-  const fullPhoneNumber = parsedPhoneNumber?.number ?? `+${callingCode}${phone.replace(/\D/g, '')}`;
-  const canContinueProfile = name.trim().length >= 2 && Boolean(parsedPhoneNumber?.isValid());
+  const canContinueProfile = name.trim().length >= 2;
+  const returnTo = useMemo(() => {
+    const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+    return rawReturnTo?.startsWith('/') && rawReturnTo !== '/(auth)' ? rawReturnTo : undefined;
+  }, [params.returnTo]);
 
   useEffect(() => {
     if (session) {
@@ -142,14 +140,23 @@ export default function AuthScreen() {
       return;
     }
 
-    if (betterSession?.session) {
-      setEmail(betterSession.user.email ?? '');
+    if (authIdentity) {
+      setEmail(authIdentity.email ?? '');
+      setName((current) => current || authIdentity.name || '');
       setStep('profile');
       return;
     }
 
     setStep((current) => (current === 'done' ? 'auth' : current === 'profile' ? 'auth' : current));
-  }, [betterSession?.session, betterSession?.user.email, session]);
+  }, [authIdentity, session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    router.replace((returnTo ?? '/(tabs)/explore') as never);
+  }, [returnTo, router, session]);
 
   function getErrorMessage(cause: unknown, fallback: string) {
     if (cause && typeof cause === 'object' && 'message' in cause && typeof (cause as { message?: unknown }).message === 'string') {
@@ -168,45 +175,30 @@ export default function AuthScreen() {
     setStep('auth');
   }
 
-  async function handleAuthSubmit() {
-    if (!email.trim() || !password.trim()) {
-      setError('Enter your email and password.');
-      return;
-    }
-
-    if (password.trim().length < 8) {
-      setError('Use at least 8 characters for your password.');
-      return;
-    }
-
+  async function handleGoogleSignIn() {
     setError(null);
     setIsSubmitting(true);
 
     try {
-      if (mode === 'signIn') {
-        const result = await authClient.signIn.email({
-          email: email.trim().toLowerCase(),
-          password,
-        });
+      const redirectTo = getOAuthRedirectTo(returnTo);
+      const result = await signIn('google', { redirectTo });
 
-        if (result.error) {
-          throw new Error(result.error.message ?? 'Could not sign in.');
+      if (result.redirect && Platform.OS !== 'web') {
+        const authResult = await WebBrowser.openAuthSessionAsync(result.redirect.toString(), redirectTo);
+
+        if (authResult.type !== 'success') {
+          return;
         }
 
-        return;
-      }
+        const code = getCodeFromUrl(authResult.url);
+        if (!code) {
+          throw new Error('Google did not return an auth code.');
+        }
 
-      const result = await authClient.signUp.email({
-        name: '',
-        email: email.trim().toLowerCase(),
-        password,
-      });
-
-      if (result.error) {
-        throw new Error(result.error.message ?? 'Could not create your account.');
+        await signInWithCode(signIn, code);
       }
     } catch (cause) {
-      setError(getErrorMessage(cause, mode === 'signIn' ? 'Could not sign in.' : 'Could not create your account.'));
+      setError(getErrorMessage(cause, 'Could not sign in with Google.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -214,7 +206,7 @@ export default function AuthScreen() {
 
   async function handleFinish() {
     if (!canContinueProfile) {
-      setError('Add your name and a valid phone number.');
+      setError('Add your name.');
       return;
     }
 
@@ -223,7 +215,6 @@ export default function AuthScreen() {
 
     try {
       await completeOnboarding({
-        phoneNumber: fullPhoneNumber,
         name: name.trim(),
         countryCode,
         countryLabel,
@@ -240,18 +231,13 @@ export default function AuthScreen() {
 
   async function handleBackFromProfile() {
     setError(null);
-    if (betterSession?.session) {
-      await authClient.signOut();
-    }
+    await signOut();
     setStep('auth');
   }
 
-  function handleSelectCountry(country: PhoneCountrySelection) {
-    setCountryCode(country.countryCode as CountryCode);
-    setCountryLabel(country.countryLabel);
-    setCallingCode(country.callingCode);
-    setPhone('');
-    setIsCountryPickerOpen(false);
+  function handleSelectCountry(country: Country) {
+    setCountryCode(country.cca2);
+    setCountryLabel(typeof country.name === 'string' ? country.name : country.name.common);
   }
 
   return (
@@ -273,60 +259,20 @@ export default function AuthScreen() {
 
         {step === 'auth' ? (
           <FormShell
-            title={mode === 'signIn' ? 'Sign in to Wandr' : 'Create your account'}
-            subtitle={mode === 'signIn' ? 'Use your email and password to continue.' : 'Start with your email, then finish your traveler details.'}
+            title="Sign in to Wandr"
+            subtitle="Use your Google account to continue."
             footer={
               <PrimaryButton
-                disabled={isSubmitting || isSessionPending}
-                label={isSubmitting ? 'Working...' : mode === 'signIn' ? 'Sign in' : 'Continue'}
+                disabled={isSubmitting}
+                iconName="google"
+                label={isSubmitting ? 'Opening Google...' : 'Continue with Google'}
                 loading={isSubmitting}
                 palette={palette}
-                onPress={handleAuthSubmit}
+                onPress={handleGoogleSignIn}
               />
             }
             onBack={() => setStep('intro')}
             palette={palette}>
-            <View style={styles.modeRow}>
-              <ModeButton active={mode === 'signIn'} label="Sign in" onPress={() => setMode('signIn')} palette={palette} />
-              <ModeButton active={mode === 'signUp'} label="Create account" onPress={() => setMode('signUp')} palette={palette} />
-            </View>
-
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              Email
-            </ThemedText>
-            <Input
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect={false}
-              containerStyle={styles.authInputContainer}
-              keyboardType="email-address"
-              placeholder="you@example.com"
-              textContentType="emailAddress"
-              value={email}
-              onChangeText={(value) => {
-                setEmail(value);
-                setError(null);
-              }}
-            />
-
-            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-              Password
-            </ThemedText>
-            <Input
-              autoCapitalize="none"
-              autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
-              autoCorrect={false}
-              containerStyle={styles.authInputContainer}
-              placeholder="At least 8 characters"
-              secureTextEntry
-              textContentType={mode === 'signIn' ? 'password' : 'newPassword'}
-              value={password}
-              onChangeText={(value) => {
-                setPassword(value);
-                setError(null);
-              }}
-            />
-
             {error ? (
               <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>
                 {error}
@@ -336,27 +282,26 @@ export default function AuthScreen() {
         ) : null}
 
         {step === 'profile' ? (
-          <>
-            <FormShell
-              title="A few details for your trips"
-              subtitle="This keeps your traveler profile, stays, and friend matching useful."
-              footer={
-                <PrimaryButton
-                  disabled={!canContinueProfile || isSubmitting}
-                  label={isSubmitting ? 'Saving...' : 'Finish'}
-                  loading={isSubmitting}
-                  palette={palette}
-                  onPress={handleFinish}
-                />
-              }
-              onBack={() => {
-                void handleBackFromProfile();
-              }}
-              palette={palette}>
+          <FormShell
+            title="A few details for your trips"
+            subtitle="This keeps your traveler profile, stays, and friend matching useful."
+            footer={
+              <PrimaryButton
+                disabled={!canContinueProfile || isSubmitting}
+                label={isSubmitting ? 'Saving...' : 'Finish'}
+                loading={isSubmitting}
+                palette={palette}
+                onPress={handleFinish}
+              />
+            }
+            onBack={() => {
+              void handleBackFromProfile();
+            }}
+            palette={palette}>
               <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
                 Email
               </ThemedText>
-              <Input containerStyle={styles.authInputContainer} editable={false} placeholder="Email" value={email} />
+              <Input containerStyle={styles.authInputContainer} editable={false} placeholder="Google account email" value={email} />
 
               <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
                 Your name
@@ -376,33 +321,13 @@ export default function AuthScreen() {
                 }}
               />
 
-              <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
-                Your phone number
-              </ThemedText>
-              <View style={styles.phoneInputRow}>
-                <Pressable
-                  accessibilityLabel={`Change country, currently ${countryLabel}`}
-                  accessibilityRole="button"
-                  style={[styles.phoneCountryButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
-                  onPress={() => setIsCountryPickerOpen(true)}>
-                  <CountryFlagAvatar countryCode={countryCode} size={32} />
-                  <ThemedText lightColor={designSystem.colors.ink} darkColor={designSystem.colors.darkText} style={styles.countryDial}>
-                    +{callingCode}
-                  </ThemedText>
-                  <MaterialCommunityIcons color={palette.borderStrong} name="chevron-down" size={20} />
-                </Pressable>
-                <Input
-                  keyboardType="number-pad"
-                  placeholder="Phone number"
-                  containerStyle={[styles.authInputContainer, styles.phoneNumberInput]}
-                  textContentType="telephoneNumber"
-                  value={formattedPhone}
-                  onChangeText={(value) => {
-                    setPhone(value);
-                    setError(null);
-                  }}
-                />
-              </View>
+              <CountryPickerField
+                accessibilityLabel="Select home country"
+                countryCode={countryCode}
+                label="Home country"
+                value={countryLabel}
+                onSelect={handleSelectCountry}
+              />
 
               <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
                 Home city
@@ -458,14 +383,7 @@ export default function AuthScreen() {
                   {error}
                 </ThemedText>
               ) : null}
-            </FormShell>
-            <PhoneCountrySheet
-              selectedCountryCode={countryCode as PhoneCountryCode}
-              visible={isCountryPickerOpen}
-              onClose={() => setIsCountryPickerOpen(false)}
-              onSelectCountry={handleSelectCountry}
-            />
-          </>
+          </FormShell>
         ) : null}
 
         {step === 'done' ? <DoneStep palette={palette} /> : null}
@@ -589,46 +507,16 @@ function FormShell({
   );
 }
 
-function ModeButton({
-  active,
-  label,
-  onPress,
-  palette,
-}: {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-  palette: ReturnType<typeof createAuthPalette>;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[
-        styles.modeButton,
-        {
-          backgroundColor: active ? palette.primary : palette.surface,
-          borderColor: active ? palette.borderStrong : palette.border,
-        },
-      ]}>
-      <ThemedText
-        lightColor={active ? palette.primaryText : designSystem.colors.ink}
-        darkColor={active ? palette.primaryText : designSystem.colors.darkText}
-        style={styles.modeButtonText}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
 function PrimaryButton({
   disabled,
+  iconName,
   label,
   loading,
   palette,
   onPress,
 }: {
   disabled?: boolean;
+  iconName?: MaterialIconName;
   label: string;
   loading?: boolean;
   palette: ReturnType<typeof createAuthPalette>;
@@ -648,12 +536,39 @@ function PrimaryButton({
       {loading ? (
         <ActivityIndicator color={palette.primaryText} />
       ) : (
-        <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.primaryButtonText}>
-          {label}
-        </ThemedText>
+        <View style={styles.primaryButtonContent}>
+          {iconName ? <MaterialCommunityIcons color={palette.primaryText} name={iconName} size={AUTH_LAYOUT.iconSizeMd} /> : null}
+          <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.primaryButtonText}>
+            {label}
+          </ThemedText>
+        </View>
       )}
     </Pressable>
   );
+}
+
+function getOAuthRedirectTo(returnTo?: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.href;
+  }
+
+  return Linking.createURL(returnTo ? `/(auth)?returnTo=${encodeURIComponent(returnTo)}` : '/(auth)');
+}
+
+function getCodeFromUrl(url: string) {
+  try {
+    return new URL(url).searchParams.get('code');
+  } catch {
+    const [, queryString = ''] = url.split('?');
+    return new URLSearchParams(queryString).get('code');
+  }
+}
+
+async function signInWithCode(
+  signIn: ReturnType<typeof useAuthActions>['signIn'],
+  code: string
+) {
+  await (signIn as unknown as (provider: undefined, params: { code: string }) => Promise<unknown>)(undefined, { code });
 }
 
 function DoneStep({ palette }: { palette: ReturnType<typeof createAuthPalette> }) {
@@ -794,23 +709,6 @@ const styles = StyleSheet.create({
     gap: designSystem.spacing.sm,
     marginTop: designSystem.radii.sheet - designSystem.spacing.xxs / 2,
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap: designSystem.spacing.sm,
-    marginBottom: designSystem.spacing.sm,
-  },
-  modeButton: {
-    alignItems: 'center',
-    borderRadius: designSystem.radii.pill,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: designSystem.layout.inputHeight,
-    paddingHorizontal: designSystem.spacing.md,
-  },
-  modeButtonText: {
-    ...designSystem.type.bodyStrong,
-  },
   fieldLabel: {
     ...designSystem.type.label,
     marginTop: designSystem.spacing.xs,
@@ -818,27 +716,6 @@ const styles = StyleSheet.create({
   authInputContainer: {
     borderColor: designSystem.colors.border,
     borderWidth: 1,
-  },
-  phoneInputRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: designSystem.spacing.sm,
-  },
-  phoneCountryButton: {
-    alignItems: 'center',
-    borderRadius: designSystem.radii.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: designSystem.spacing.xs,
-    height: designSystem.layout.inputHeight,
-    paddingHorizontal: designSystem.spacing.xs,
-  },
-  countryDial: {
-    ...designSystem.type.bodyStrong,
-  },
-  phoneNumberInput: {
-    flex: 1,
-    marginBottom: 0,
   },
   travelStyleGrid: {
     flexDirection: 'row',
@@ -886,6 +763,12 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     ...designSystem.type.bodyStrong,
     color: designSystem.colors.darkGreen,
+  },
+  primaryButtonContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: designSystem.spacing.xs,
+    justifyContent: 'center',
   },
   filledButtonPressed: {
     opacity: 0.82,
