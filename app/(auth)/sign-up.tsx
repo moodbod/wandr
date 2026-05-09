@@ -69,6 +69,7 @@ export default function SignUpScreen() {
     if (!code || oauthCodeHandled.current || isAuthenticated || session) return;
 
     oauthCodeHandled.current = true;
+    if (typeof document !== 'undefined') document.title = 'Verifying... | Wandr';
     url.searchParams.delete('code');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
 

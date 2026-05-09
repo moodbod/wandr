@@ -73,6 +73,7 @@ export default function SignInScreen() {
     }
 
     oauthCodeHandled.current = true;
+    if (typeof document !== 'undefined') document.title = 'Verifying... | Wandr';
     url.searchParams.delete('code');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
 
