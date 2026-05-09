@@ -36,10 +36,10 @@
       ]
     },
     {
-      "name": "My trip",
-      "short_name": "Trip",
-      "description": "Open your current trip plan.",
-      "url": "/trip",
+      "name": "Search",
+      "short_name": "Search",
+      "description": "Search public places, stays, and hidden gems.",
+      "url": "/explore/search",
       "icons": [
         {
           "src": "/wandr-icon.png",
@@ -49,10 +49,10 @@
       ]
     },
     {
-      "name": "Friends",
-      "short_name": "Friends",
-      "description": "Open friend planning and chats.",
-      "url": "/friends",
+      "name": "Hidden gems",
+      "short_name": "Gems",
+      "description": "Open public hidden gems.",
+      "url": "/explore/hidden-gems",
       "icons": [
         {
           "src": "/wandr-icon.png",

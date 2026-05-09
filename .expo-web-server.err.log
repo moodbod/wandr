@@ -1,0 +1,3 @@
+$ bun run ensure:expo-types
+$ node ./scripts/ensure-expo-types.js
+$ expo start --web --port "8081"

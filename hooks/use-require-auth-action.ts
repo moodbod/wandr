@@ -14,7 +14,7 @@ export function useRequireAuthAction() {
     }
 
     router.push({
-      pathname: '/(auth)',
+      pathname: '/sign-in' as never,
       params: { returnTo: pathname || '/(tabs)/explore' },
     });
     return false;

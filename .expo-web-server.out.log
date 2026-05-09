@@ -1,0 +1,3 @@
+env: load .env.local
+env: export CONVEX_DEPLOYMENT EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_CONVEX_SITE_URL
+Starting project at C:\Users\asm_00\Documents\wandr
