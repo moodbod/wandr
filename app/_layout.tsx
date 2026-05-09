@@ -50,7 +50,7 @@ export default function RootLayout() {
             window.history.replaceState({}, '', url);
           }
         }}
-        shouldHandleCode={Platform.OS === 'web'}
+        shouldHandleCode={false}
         storage={convexAuthStorage}>
         <PlanningLocationProvider>
           <AuthSessionProvider>

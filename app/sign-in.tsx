@@ -150,6 +150,45 @@ export default function AuthScreen() {
     router.replace((returnTo ?? '/(tabs)/explore') as never);
   }, [returnTo, router, session]);
 
+  // Handle OAuth code exchange on web — we do this ourselves instead of using
+  // the library's shouldHandleCode to avoid a race condition that causes
+  // "Invalid verifier" errors.
+  const oauthCodeHandled = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    if (!code || oauthCodeHandled.current) {
+      return;
+    }
+
+    oauthCodeHandled.current = true;
+
+    // Clean the code from the URL immediately
+    url.searchParams.delete('code');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+
+    // Exchange the code for auth tokens
+    setIsSubmitting(true);
+    setError(null);
+
+    void (async () => {
+      try {
+        await signIn(undefined as unknown as string, { code });
+      } catch (cause) {
+        console.error('[wandr] OAuth code exchange failed:', cause);
+        setError('Sign in failed. Please try again.');
+        oauthCodeHandled.current = false;
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function getErrorMessage(cause: unknown, fallback: string) {
     if (cause && typeof cause === 'object' && 'message' in cause && typeof (cause as { message?: unknown }).message === 'string') {
       return (cause as { message: string }).message;
