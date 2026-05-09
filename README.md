@@ -16,27 +16,27 @@ Wandr is an Expo app for travel discovery, stays, trips, friends, and real-time 
 Install dependencies:
 
 ```bash
-npm install
+bun install
 ```
 
 Start the Expo dev server:
 
 ```bash
-npm run start
+bun run start
 ```
 
 Run a specific target:
 
 ```bash
-npm run ios
-npm run android
-npm run web
+bun run ios
+bun run android
+bun run web
 ```
 
 Start Convex locally:
 
 ```bash
-npm run convex:dev
+bun run convex:dev
 ```
 
 ## Project Map
@@ -92,17 +92,17 @@ Those project guidelines override generic Convex advice. Schema and data model c
 Run these before asking for review:
 
 ```bash
-npm run lint
-npx tsc --noEmit
-npm run build:web
+bun run lint
+bun run typecheck
+bun run build:web
 ```
 
 For native app changes, also run the affected platform:
 
 ```bash
-npm run ios
+bun run ios
 # or
-npm run android
+bun run android
 ```
 
 For UI changes, include screenshots or a short recording. For backend changes, describe the data impact and whether a migration or seed update is needed.
@@ -110,11 +110,12 @@ For UI changes, include screenshots or a short recording. For backend changes, d
 ## Useful Scripts
 
 ```bash
-npm run start       # Start Expo
-npm run ios         # Run iOS
-npm run android     # Run Android
-npm run web         # Run web
-npm run build:web   # Export web build
-npm run lint        # Run Expo lint
-npm run convex:dev  # Start Convex dev
+bun run start       # Start Expo
+bun run ios         # Run iOS
+bun run android     # Run Android
+bun run web         # Run web
+bun run build:web   # Export web build
+bun run lint        # Run Expo lint
+bun run typecheck   # Run TypeScript
+bun run convex:dev  # Start Convex dev
 ```

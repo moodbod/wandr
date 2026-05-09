@@ -33,7 +33,8 @@ export function IncomingFriendCallCenter() {
     listIncomingFriendCallsRef,
     traveler?.slug ? { travelerSlug: traveler.slug } : 'skip'
   ) as IncomingFriendCall[] | undefined;
-  const isCallRoute = segments[0] === 'friends' && segments[1] === 'call';
+  const routeSegments: readonly string[] = segments;
+  const isCallRoute = routeSegments[0] === 'friends' && routeSegments[1] === 'call';
   const incomingCall = useMemo(
     () =>
       incomingCalls?.find(

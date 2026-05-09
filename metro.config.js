@@ -4,6 +4,14 @@ const path = require('path');
 const config = getDefaultConfig(__dirname);
 
 const { resolver } = config;
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const nestedReactAsyncHookPath = path.join(
+  __dirname,
+  'node_modules',
+  'react-native-country-picker-modal',
+  'node_modules',
+  'react-async-hook'
+);
 
 resolver.extraNodeModules = {
   ...resolver.extraNodeModules,
@@ -13,7 +21,8 @@ resolver.extraNodeModules = {
 resolver.sourceExts = [...resolver.sourceExts, 'mjs', 'cjs'];
 
 resolver.blockList = [
-  /node_modules\/react-native-country-picker-modal\/node_modules\/react-async-hook\/.*/,
+  ...(Array.isArray(resolver.blockList) ? resolver.blockList : resolver.blockList ? [resolver.blockList] : []),
+  new RegExp(`${escapeRegex(nestedReactAsyncHookPath)}[/\\\\].*`),
 ];
 
 module.exports = config;

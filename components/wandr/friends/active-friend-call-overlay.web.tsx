@@ -130,7 +130,8 @@ export default function ActiveFriendCallOverlay() {
   const callMembers = (call?.members ?? []) as FriendCircleMember[];
   const callTitle = call?.circleName ?? call?.title ?? 'Wandr';
   const callMode = call?.mode ?? 'voice';
-  const isCallRoute = segments[0] === 'friends' && segments[1] === 'call';
+  const routeSegments: readonly string[] = segments;
+  const isCallRoute = routeSegments[0] === 'friends' && routeSegments[1] === 'call';
   const shouldShowMiniCall = isMinimized || !isCallRoute;
   const handleExpand = useCallback(() => {
     if (!activeCallId) {
