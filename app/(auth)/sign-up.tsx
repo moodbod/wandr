@@ -63,9 +63,10 @@ export default function SignUpScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
+    const { isAuthenticated, session } = useAuthSession();
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
-    if (!code || oauthCodeHandled.current) return;
+    if (!code || oauthCodeHandled.current || isAuthenticated || session) return;
 
     oauthCodeHandled.current = true;
     url.searchParams.delete('code');

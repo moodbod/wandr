@@ -247,8 +247,9 @@ function AppShell({
 function AuthRouteGate() {
   const segments = useSegments();
   const pathname = usePathname();
-  const { isLoading, session } = useAuthSession();
+  const { isLoading, isAuthenticated, onboardingRequired, session } = useAuthSession();
   const isAuthRoute = String(segments[0]) === '(auth)';
+  const isOnboardingRoute = pathname === '/onboarding' || pathname === '/(auth)/onboarding';
   const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
     isRootRoute ||
@@ -260,14 +261,19 @@ function AuthRouteGate() {
       return;
     }
 
-    if (!session && !isAuthRoute && !isPublicRoute) {
+    if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
       router.replace({
         pathname: '/(auth)/sign-in' as never,
         params: { returnTo: pathname || '/(tabs)/explore' },
       });
       return;
     }
-  }, [isAuthRoute, isLoading, isPublicRoute, pathname, session]);
+
+    if (isAuthenticated && onboardingRequired && !isOnboardingRoute) {
+      router.replace('/(auth)/onboarding' as never);
+      return;
+    }
+  }, [isAuthenticated, isLoading, isPublicRoute, isOnboardingRoute, onboardingRequired, pathname]);
 
   return null;
 }

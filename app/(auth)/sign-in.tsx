@@ -65,9 +65,10 @@ export default function SignInScreen() {
       return;
     }
 
+    const { isAuthenticated, session } = useAuthSession();
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
-    if (!code || oauthCodeHandled.current) {
+    if (!code || oauthCodeHandled.current || isAuthenticated || session) {
       return;
     }
 
@@ -228,8 +229,8 @@ export default function SignInScreen() {
             style={{ marginTop: designSystem.spacing.sm, alignSelf: 'flex-start' }}
             onPress={() => {
               router.push({
-                pathname: '/sign-up' as never,
-                params: { returnTo: returnTo ?? '' },
+                pathname: '/(auth)/sign-up' as never,
+                params: { returnTo: returnTo || '' },
               });
             }}>
             <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={{ ...designSystem.type.bodyStrong }}>
