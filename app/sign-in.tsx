@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useMutation, useQuery } from 'convex/react';
+import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -77,6 +77,7 @@ export default function AuthScreen() {
   const { session } = useAuthSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const authIdentity = useQuery(getCurrentAuthIdentityRef, session ? 'skip' : {});
   const { isLargeScreen } = useResponsive();
   const isDark = useColorScheme() === 'dark';
@@ -115,12 +116,25 @@ export default function AuthScreen() {
   }, [params.returnTo]);
 
   useEffect(() => {
+    // If we have a session, we are fully authenticated and onboarded
     if (session) {
       setStep('done');
       return;
     }
 
-    if (authIdentity) {
+    // If we are authenticated but have no session, we need onboarding
+    if (isAuthenticated) {
+      if (authIdentity === undefined) {
+        // Still loading identity, don't change step yet
+        return;
+      }
+
+      if (authIdentity === null) {
+        // This shouldn't happen if isAuthenticated is true, but handle it
+        setStep('auth');
+        return;
+      }
+
       if (authIdentity.onboardingCompleted) {
         // Already onboarded but session query hasn't resolved yet — show done
         setStep('done');
@@ -132,11 +146,11 @@ export default function AuthScreen() {
       return;
     }
 
-    // authIdentity === null means unauthenticated; undefined means still loading
-    if (authIdentity === null) {
+    // Not authenticated, show auth form
+    if (!isAuthLoading && !isAuthenticated) {
       setStep('auth');
     }
-  }, [authIdentity, session]);
+  }, [authIdentity, isAuthenticated, isAuthLoading, session]);
 
   useEffect(() => {
     if (!session) {
