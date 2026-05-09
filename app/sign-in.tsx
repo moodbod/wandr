@@ -90,6 +90,9 @@ export default function AuthScreen() {
   const [travelStyle, setTravelStyle] = useState<TravelStyle>('solo');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signUp');
   const signInInFlightRef = useRef(false);
 
   const shouldConstrainAuthWidth = isLargeScreen;
@@ -189,6 +192,29 @@ export default function AuthScreen() {
       setIsSubmitting(false);
     }
   }
+  async function handlePasswordAuth() {
+    if (signInInFlightRef.current) {
+      return;
+    }
+
+    if (!loginEmail || !loginPassword) {
+      setError('Please enter your email and password.');
+      return;
+    }
+
+    signInInFlightRef.current = true;
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      await signIn('password', { email: loginEmail, password: loginPassword, flow: authMode });
+    } catch (cause) {
+      setError(getErrorMessage(cause, `Could not ${authMode === 'signUp' ? 'sign up' : 'sign in'}. Please check your credentials.`));
+    } finally {
+      signInInFlightRef.current = false;
+      setIsSubmitting(false);
+    }
+  }
 
   async function handleFinish() {
     if (!canContinueProfile) {
@@ -233,20 +259,68 @@ export default function AuthScreen() {
         style={[styles.keyboardFrame, shouldConstrainAuthWidth && styles.maxWidthFrame]}>
         {step === 'auth' ? (
           <FormShell
-            title="Sign in to Wandr"
-            subtitle="Use your Google account when you are ready to save, book, chat, or plan with friends."
+            title={authMode === 'signUp' ? "Create an account" : "Sign in to Wandr"}
+            subtitle="Use your email or Google account to save, book, chat, and plan with friends."
             footer={
-              <PrimaryButton
-                disabled={isSubmitting}
-                iconName="google"
-                label={isSubmitting ? 'Opening Google...' : 'Continue with Google'}
-                loading={isSubmitting}
-                palette={palette}
-                onPress={handleGoogleSignIn}
-              />
+              <View style={{ gap: designSystem.spacing.sm }}>
+                <PrimaryButton
+                  disabled={isSubmitting}
+                  iconName="email"
+                  label={isSubmitting ? 'Authenticating...' : authMode === 'signUp' ? 'Sign up with Email' : 'Sign in with Email'}
+                  loading={isSubmitting}
+                  palette={palette}
+                  onPress={handlePasswordAuth}
+                />
+                <PrimaryButton
+                  disabled={isSubmitting}
+                  iconName="google"
+                  label={isSubmitting ? 'Opening Google...' : 'Continue with Google'}
+                  loading={isSubmitting}
+                  palette={palette}
+                  onPress={handleGoogleSignIn}
+                />
+              </View>
             }
             onBack={() => router.replace('/explore')}
             palette={palette}>
+            
+            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+              Email
+            </ThemedText>
+            <Input
+              autoCapitalize="none"
+              autoComplete="email"
+              containerStyle={styles.authInputContainer}
+              keyboardType="email-address"
+              placeholder="name@example.com"
+              value={loginEmail}
+              onChangeText={(val) => { setLoginEmail(val); setError(null); }}
+            />
+
+            <ThemedText lightColor={designSystem.colors.warmDark} darkColor={designSystem.colors.darkMutedText} style={styles.fieldLabel}>
+              Password
+            </ThemedText>
+            <Input
+              autoCapitalize="none"
+              autoComplete="password"
+              containerStyle={styles.authInputContainer}
+              placeholder="Password"
+              secureTextEntry
+              value={loginPassword}
+              onChangeText={(val) => { setLoginPassword(val); setError(null); }}
+            />
+
+            <Pressable
+              style={{ marginTop: designSystem.spacing.sm, alignSelf: 'flex-start' }}
+              onPress={() => {
+                setAuthMode(mode => mode === 'signUp' ? 'signIn' : 'signUp');
+                setError(null);
+              }}>
+              <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={{ ...designSystem.type.bodyStrong }}>
+                {authMode === 'signUp' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </ThemedText>
+            </Pressable>
+
             {error ? (
               <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.errorText}>
                 {error}
