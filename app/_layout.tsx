@@ -51,7 +51,7 @@ export default function RootLayout() {
           }
         }}
         shouldHandleCode={Platform.OS === 'web'}
-        storage={Platform.OS === 'web' ? undefined : convexAuthStorage}>
+        storage={convexAuthStorage}>
         <PlanningLocationProvider>
           <AuthSessionProvider>
             <ThemeProvider value={navigationTheme}>
