@@ -67,14 +67,14 @@ async function resolveCurrentTravelerSlug(ctx: QueryCtx | MutationCtx, travelerS
     return mostRecentTrip.travelerSlug;
   }
 
-  const travelers = await ctx.db.query('appUsers').collect();
-  const sortedTravelers = [...travelers].sort((a, b) => a.name.localeCompare(b.name));
+  const travelers = await ctx.db.query('users').collect();
+  const sortedTravelers = [...travelers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return sortedTravelers[0]?.slug ?? null;
 }
 
 async function getAppUser(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   return await ctx.db
-    .query('appUsers')
+    .query('users')
     .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
     .unique();
 }
@@ -188,7 +188,7 @@ async function getFriendPickerItems(ctx: QueryCtx | MutationCtx, travelerSlug: s
 
   return friends
     .filter((friend): friend is NonNullable<typeof friend> => friend !== null)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 async function getDirectThreadsForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
@@ -753,12 +753,12 @@ async function buildCandidates(
   const connectionSet = await getFriendConnectionSet(ctx, travelerSlug);
   const excludedSlugs = new Set<string>([travelerSlug, ...activeMembers.map((member) => member.travelerSlug)]);
   const actionMap = await getActionMap(ctx, travelerSlug);
-  const appUsers = await ctx.db.query('appUsers').take(200);
+  const users = await ctx.db.query('users').take(200);
   const allProfiles = (
     await Promise.all(
-      appUsers
-        .filter((user) => !excludedSlugs.has(user.slug))
-        .map((user) => getPublicTravelerProfile(ctx, user.slug))
+      users
+        .filter((user) => user.slug !== undefined && !excludedSlugs.has(user.slug))
+        .map((user) => getPublicTravelerProfile(ctx, user.slug as string))
     )
   ).filter((profile): profile is PublicTravelerProfile => profile !== null);
 
@@ -1340,22 +1340,22 @@ export const matchFriendContacts = query({
 
     for (const phoneNumber of normalizedNumbers) {
       const user = await ctx.db
-        .query('appUsers')
-        .withIndex('by_phoneNumber', (q) => q.eq('phoneNumber', phoneNumber))
+        .query('users')
+        .withIndex('phone', (q) => q.eq('phone', phoneNumber))
         .unique();
 
       if (!user || user.slug === travelerSlug) {
         continue;
       }
 
-      const profile = await getTravelerProfile(ctx, user.slug);
+      const profile = await getTravelerProfile(ctx, user.slug as string);
       matched.push({
-        travelerSlug: user.slug,
-        name: user.name,
+        travelerSlug: user.slug as string,
+        name: user.name ?? 'Traveler',
         avatarUri: profile?.avatarUri ?? null,
-        baseLabel: profile?.regionName ?? user.countryLabel,
+        baseLabel: profile?.regionName ?? user.countryLabel ?? 'Unknown',
         phoneNumber,
-        isFriend: friendSet.has(user.slug),
+        isFriend: friendSet.has(user.slug as string),
       });
       unmatched.delete(phoneNumber);
     }
@@ -1386,7 +1386,7 @@ export const createOpenFriendGroup = mutation({
     }
 
     const now = Date.now();
-    const firstName = hostUser.name.split(' ')[0] ?? hostUser.name;
+    const firstName = (hostUser.name || 'A traveler').split(' ')[0];
     const destinationLabel = hostProfile?.destinationLabel ?? 'Travel group';
     const trimmedName = args.name?.trim();
     const sourceTrip =
@@ -1768,7 +1768,7 @@ export const acceptFriendRequest = mutation({
 
     if (requester && recipient) {
       await insertAppNotification(ctx, {
-        recipientSlug: requester.slug,
+        recipientSlug: requester.slug as string,
         actorSlug: recipient.slug,
         kind: 'friend_added',
         title: `${recipient.name} accepted your friend request`,
@@ -2252,11 +2252,11 @@ export const actOnFriendCandidate = mutation({
       } else if (candidate && actor) {
         const existingRequest = await ctx.db
           .query('appNotifications')
-          .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', candidate.slug))
+          .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', candidate.slug as string))
           .filter((q) =>
             q.and(
               q.eq(q.field('kind'), 'friend_invite'),
-              q.eq(q.field('actorSlug'), actor.slug),
+              q.eq(q.field('actorSlug'), actor.slug as string),
               q.eq(q.field('actionStatus'), 'pending')
             )
           )
@@ -2265,8 +2265,8 @@ export const actOnFriendCandidate = mutation({
 
         if (!existingRequest) {
           await insertAppNotification(ctx, {
-            recipientSlug: candidate.slug,
-            actorSlug: actor.slug,
+            recipientSlug: candidate.slug as string,
+            actorSlug: actor.slug as string,
             kind: 'friend_invite',
             title: `${actor.name} sent a friend request`,
             body: 'Accept to add each other on Wandr.',
@@ -2346,8 +2346,8 @@ export const actOnFriendCandidate = mutation({
 
       if (candidate && actor) {
         await insertAppNotification(ctx, {
-          recipientSlug: candidate.slug,
-          actorSlug: actor.slug,
+          recipientSlug: candidate.slug as string,
+          actorSlug: actor.slug as string,
           kind: 'friend_invite',
           title: `${actor.name} invited you to a friends circle`,
           body: `Join ${circle.name} to plan the next stretch together.`,

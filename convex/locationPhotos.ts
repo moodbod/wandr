@@ -1,12 +1,13 @@
 import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
-import { assertCurrentTravelerSlug, requireAdmin, requireCurrentAppUser } from './authHelpers';
+import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
+import { requireCurrentAuthRecord } from './authIdentity';
 
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireCurrentAppUser(ctx);
+    await requireCurrentAuthRecord(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });

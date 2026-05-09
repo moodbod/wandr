@@ -2,12 +2,7 @@ import { v } from 'convex/values';
 
 import type { Doc } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
-import {
-  getAuthUserRole,
-  getTravelerProfileRecord,
-  patchCoreAuthUserProfile,
-  syncAppUserProjection,
-} from './appProfiles';
+import { patchCoreAuthUserProfile } from './appProfiles';
 import { assertCurrentTravelerSlug } from './authHelpers';
 import { requireCurrentAuthRecord } from './authIdentity';
 
@@ -54,7 +49,7 @@ function getDefaultCurrencyForCountry(countryCode?: string | null) {
 
 async function getDefaultSettingsForTraveler(ctx: MutationCtx, travelerSlug: string) {
   const user = await ctx.db
-    .query('appUsers')
+    .query('users')
     .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
     .unique();
 
@@ -129,7 +124,7 @@ export const getUserSettings = query({
         .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
         .unique(),
       ctx.db
-        .query('appUsers')
+        .query('users')
         .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
         .unique(),
     ]);
@@ -171,42 +166,20 @@ export const updateTravelerProfile = mutation({
     }
 
     const authRecord = await requireCurrentAuthRecord(ctx);
-    const profileRecord = await getTravelerProfileRecord(ctx, travelerSlug);
 
-    if (!profileRecord) {
-      throw new Error('Traveler profile not found.');
-    }
-
-    if (profileRecord.authUser._id !== authRecord.authUserId) {
+    if (!authRecord.authUser || authRecord.authUser.slug !== travelerSlug) {
       throw new Error('Unauthorized traveler.');
     }
 
-    const updatedAuthUser = await patchCoreAuthUserProfile(ctx, profileRecord.authUser, {
+    await patchCoreAuthUserProfile(ctx, authRecord.authUser as any, {
       name,
       countryCode,
       countryLabel,
       homeCity,
-      travelStyle: args.travelStyle ?? profileRecord.authUser.travelStyle,
+      travelStyle: args.travelStyle ?? (authRecord.authUser as any).travelStyle,
       avatarStorageId: args.avatarStorageId,
       clearAvatar: args.clearAvatar,
     });
-    const role = getAuthUserRole(updatedAuthUser ?? profileRecord.authUser);
-
-    await syncAppUserProjection(
-      ctx,
-      authRecord,
-      {
-        slug: travelerSlug,
-        name: updatedAuthUser?.name ?? name,
-        countryCode: updatedAuthUser?.countryCode ?? countryCode,
-        countryLabel: updatedAuthUser?.countryLabel ?? countryLabel,
-        role,
-        homeCity: updatedAuthUser?.homeCity ?? homeCity ?? null,
-        travelStyle: updatedAuthUser?.travelStyle ?? args.travelStyle ?? null,
-        onboardingCompletedAt: updatedAuthUser?.onboardingCompletedAt ?? profileRecord.authUser.onboardingCompletedAt,
-      },
-      profileRecord.appUser
-    );
 
     return true;
   },

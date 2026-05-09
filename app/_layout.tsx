@@ -218,7 +218,6 @@ function AppShell({
             <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              <Stack.Screen name="sign-in" options={{ headerShown: false }} />
               <Stack.Screen name="explore" options={{ headerShown: false }} />
               <Stack.Screen name="trip" options={{ headerShown: false }} />
               <Stack.Screen name="stays" options={{ headerShown: false }} />
@@ -249,7 +248,7 @@ function AuthRouteGate() {
   const segments = useSegments();
   const pathname = usePathname();
   const { isLoading, session } = useAuthSession();
-  const isAuthRoute = String(segments[0]) === 'sign-in';
+  const isAuthRoute = String(segments[0]) === '(auth)';
   const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
     isRootRoute ||
@@ -263,7 +262,7 @@ function AuthRouteGate() {
 
     if (!session && !isAuthRoute && !isPublicRoute) {
       router.replace({
-        pathname: '/sign-in' as never,
+        pathname: '/(auth)/sign-in' as never,
         params: { returnTo: pathname || '/(tabs)/explore' },
       });
       return;

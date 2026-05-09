@@ -25,8 +25,8 @@ export const createFriendCallToken = action({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args): Promise<FriendCallTokenResponse> => {
-    const currentUser = await ctx.runQuery(api.auth.getCurrentUser, {});
-    if (!currentUser?.appUser || currentUser.appUser.slug !== args.travelerSlug) {
+    const currentUser = await ctx.runQuery(api.authSession.getCurrentSession, {});
+    if (!currentUser || currentUser.travelerSlug !== args.travelerSlug) {
       throw new Error('Not authenticated');
     }
 

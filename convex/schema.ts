@@ -1,8 +1,6 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { authTables } from '@convex-dev/auth/server';
-
-import { appUsersTable } from './tables/appUsers';
 import { appNotificationsTable } from './tables/appNotifications';
 import { devicePushTokensTable } from './tables/devicePushTokens';
 import { experienceBookingsTable } from './tables/experienceBookings';
@@ -123,7 +121,6 @@ export default defineSchema({
   friendConnections: friendConnectionsTable,
   friendCalls: friendCallsTable,
 
-  appUsers: appUsersTable,
   userSettings: userSettingsTable,
   experienceBookings: experienceBookingsTable,
   locationLikes: locationLikesTable,

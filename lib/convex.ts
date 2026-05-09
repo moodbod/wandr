@@ -326,7 +326,7 @@ export const updateNotificationSettingsRef = makeFunctionReference<
   boolean
 >;
 
-export const completeProfileOnboardingRef = makeFunctionReference<
+export const completeOnboardingRef = makeFunctionReference<
   'mutation',
   {
     name: string;
@@ -344,7 +344,7 @@ export const completeProfileOnboardingRef = makeFunctionReference<
     travelStyle: 'solo' | 'couple' | 'friends' | 'family';
     role: 'traveler' | 'admin';
   }
->('trip:completeProfileOnboarding') as FunctionReference<
+>('authSession:completeOnboarding') as FunctionReference<
   'mutation',
   'public',
   {
@@ -374,7 +374,7 @@ export const getCurrentAuthSessionRef = makeFunctionReference<
     name: string;
     role: 'traveler' | 'admin';
   } | null
->('auth:getCurrentAuthSession') as FunctionReference<
+>('authSession:getCurrentSession') as FunctionReference<
   'query',
   'public',
   Record<string, never>,
@@ -396,7 +396,7 @@ export const getCurrentAuthIdentityRef = makeFunctionReference<
     onboardingCompleted: boolean;
     role: 'traveler' | 'admin';
   } | null
->('auth:getCurrentAuthIdentity') as FunctionReference<
+>('authSession:getCurrentIdentity') as FunctionReference<
   'query',
   'public',
   Record<string, never>,

@@ -1,6 +1,5 @@
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
-import type { CurrentAuthRecord } from './authIdentity';
 
 type ProfileCtx = QueryCtx | MutationCtx;
 type TravelStyle = 'solo' | 'couple' | 'friends' | 'family';
@@ -36,17 +35,6 @@ export type AuthUserProfile = Doc<'users'> & {
   vibe?: TravelVibe;
 };
 
-type ProjectionInput = {
-  countryCode?: string;
-  countryLabel?: string;
-  homeCity?: string | null;
-  name?: string;
-  onboardingCompletedAt?: number;
-  role?: UserRole;
-  slug: string;
-  travelStyle?: TravelStyle | null;
-};
-
 export type PublicTravelerProfile = {
   _id: Id<'users'>;
   arrivalWindowLabel: string;
@@ -67,8 +55,8 @@ export type PublicTravelerProfile = {
   regionName: string;
   role: 'traveler' | 'admin';
   slug: string;
-  travelPace: TravelPace;
   travelerSlug: string;
+  travelPace: TravelPace;
   travelStyle: TravelStyle | null;
   user: AuthUserProfile;
   vibe: TravelVibe;
@@ -85,7 +73,7 @@ function getDefaultVibe(travelStyle?: TravelStyle | null): TravelVibe {
   return travelStyle === 'family' ? 'relaxation' : travelStyle === 'friends' ? 'social' : 'culture';
 }
 
-export function getAuthUserRole(user: AuthUserProfile | Doc<'appUsers'> | null | undefined): UserRole {
+export function getAuthUserRole(user: AuthUserProfile | null | undefined): UserRole {
   return user?.role === 'admin' ? 'admin' : 'traveler';
 }
 
@@ -113,13 +101,6 @@ export function getDefaultAuthProfileFields(input: {
   };
 }
 
-export async function getAppUserBySlug(ctx: ProfileCtx, travelerSlug: string) {
-  return await ctx.db
-    .query('appUsers')
-    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-    .unique();
-}
-
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   const result: Partial<T> = {};
   const entries = Object.entries(value) as [keyof T, T[keyof T]][];
@@ -133,70 +114,6 @@ function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return result;
 }
 
-function chooseCanonicalAuthUser(users: AuthUserProfile[], travelerSlug?: string) {
-  if (travelerSlug) {
-    const slugMatch = users.find((user) => user.slug === travelerSlug);
-    if (slugMatch) {
-      return slugMatch;
-    }
-  }
-
-  const sortedUsers = [...users].sort((first, second) => first._creationTime - second._creationTime);
-  return sortedUsers.find((user) => user.onboardingCompletedAt) ?? sortedUsers[0] ?? null;
-}
-
-async function getAuthUserByEmail(ctx: ProfileCtx, email?: string | null, travelerSlug?: string) {
-  const normalizedEmail = email?.trim().toLowerCase();
-  if (!normalizedEmail || !normalizedEmail.includes('@')) {
-    return null;
-  }
-
-  const users = (await ctx.db
-    .query('users')
-    .withIndex('email', (q) => q.eq('email', normalizedEmail))
-    .take(10)) as AuthUserProfile[];
-
-  return chooseCanonicalAuthUser(users, travelerSlug);
-}
-
-async function getAuthUserByProjection(ctx: ProfileCtx, appUser: Doc<'appUsers'> | null) {
-  if (!appUser) {
-    return null;
-  }
-
-  if (appUser.authUserId) {
-    try {
-      const authUser = (await ctx.db.get(appUser.authUserId as Id<'users'>)) as AuthUserProfile | null;
-      if (authUser) {
-        return authUser;
-      }
-    } catch {
-      // Older projection rows may contain non-Convex auth identifiers.
-    }
-  }
-
-  return await getAuthUserByEmail(ctx, appUser.email, appUser.slug);
-}
-
-export async function getTravelerProfileRecord(ctx: ProfileCtx, travelerSlug: string) {
-  const appUser = await getAppUserBySlug(ctx, travelerSlug);
-  const authUserFromProjection = await getAuthUserByProjection(ctx, appUser);
-
-  if (authUserFromProjection) {
-    return {
-      appUser,
-      authUser: authUserFromProjection,
-    };
-  }
-
-  const authUser = (await ctx.db
-    .query('users')
-    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-    .unique()) as AuthUserProfile | null;
-
-  return authUser ? { appUser, authUser } : null;
-}
-
 async function getResolvedAvatarUri(ctx: ProfileCtx, user: AuthUserProfile) {
   if (user.avatarStorageId) {
     return await ctx.storage.getUrl(user.avatarStorageId);
@@ -206,18 +123,20 @@ async function getResolvedAvatarUri(ctx: ProfileCtx, user: AuthUserProfile) {
 }
 
 export async function getPublicTravelerProfile(ctx: ProfileCtx, travelerSlug: string): Promise<PublicTravelerProfile | null> {
-  const record = await getTravelerProfileRecord(ctx, travelerSlug);
+  const user = (await ctx.db
+    .query('users')
+    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
+    .unique()) as AuthUserProfile | null;
 
-  if (!record) {
+  if (!user) {
     return null;
   }
 
-  const { appUser, authUser: user } = record;
-  const countryCode = user.countryCode ?? appUser?.countryCode ?? 'NA';
-  const countryLabel = user.countryLabel ?? appUser?.countryLabel ?? 'Namibia';
-  const homeCity = user.homeCity ?? appUser?.homeCity ?? null;
-  const travelStyle = user.travelStyle ?? appUser?.travelStyle ?? null;
-  const slug = user.slug ?? appUser?.slug;
+  const countryCode = user.countryCode ?? 'NA';
+  const countryLabel = user.countryLabel ?? 'Namibia';
+  const homeCity = user.homeCity ?? null;
+  const travelStyle = user.travelStyle ?? null;
+  const slug = user.slug;
 
   if (!slug) {
     return null;
@@ -252,8 +171,8 @@ export async function getPublicTravelerProfile(ctx: ProfileCtx, travelerSlug: st
     headline: user.headline ?? defaults.headline,
     homeCity,
     interests: user.interests ?? defaults.interests,
-    name: user.name ?? appUser?.name ?? user.email?.split('@')[0] ?? 'Traveler',
-    onboardingCompletedAt: user.onboardingCompletedAt ?? appUser?.onboardingCompletedAt ?? null,
+    name: user.name ?? user.email?.split('@')[0] ?? 'Traveler',
+    onboardingCompletedAt: user.onboardingCompletedAt ?? null,
     regionCode: region.regionCode,
     regionName: region.regionName,
     role: getAuthUserRole(user),
@@ -278,90 +197,6 @@ export async function patchAuthUserProfile(
   }
 
   return (await ctx.db.get(authUserId)) as AuthUserProfile | null;
-}
-
-function getProjectionPatch(appUser: Doc<'appUsers'> | null, authRecord: CurrentAuthRecord, profile: ProjectionInput) {
-  const nextRole = profile.role ?? appUser?.role ?? 'traveler';
-  const patch: Partial<Doc<'appUsers'>> = stripUndefined({
-    authUserId: authRecord.authUserId,
-    tokenIdentifier: authRecord.identity.tokenIdentifier,
-    email: authRecord.email,
-    name: profile.name,
-    countryCode: profile.countryCode,
-    countryLabel: profile.countryLabel,
-    role: nextRole,
-    homeCity: profile.homeCity || undefined,
-    travelStyle: profile.travelStyle ?? undefined,
-    onboardingCompletedAt: profile.onboardingCompletedAt,
-  });
-
-  if (appUser?.slug === profile.slug) {
-    return patch;
-  }
-
-  return {
-    ...patch,
-    slug: profile.slug,
-  };
-}
-
-export async function syncAppUserProjection(
-  ctx: MutationCtx,
-  authRecord: CurrentAuthRecord,
-  profile: ProjectionInput,
-  existingAppUser?: Doc<'appUsers'> | null
-) {
-  const appUser = existingAppUser ?? (await getAppUserBySlug(ctx, profile.slug));
-  const patch = getProjectionPatch(appUser, authRecord, profile);
-
-  if (appUser) {
-    await ctx.db.patch(appUser._id, {
-      ...patch,
-      ...(profile.homeCity === null ? { homeCity: undefined } : {}),
-      ...(profile.travelStyle === null ? { travelStyle: undefined } : {}),
-    });
-    return appUser._id;
-  }
-
-  return await ctx.db.insert('appUsers', {
-    slug: profile.slug,
-    authUserId: authRecord.authUserId,
-    tokenIdentifier: authRecord.identity.tokenIdentifier,
-    ...(authRecord.email ? { email: authRecord.email } : {}),
-    name: profile.name ?? authRecord.name,
-    countryCode: profile.countryCode ?? 'NA',
-    countryLabel: profile.countryLabel ?? 'Namibia',
-    role: profile.role ?? 'traveler',
-    ...(profile.homeCity ? { homeCity: profile.homeCity } : {}),
-    ...(profile.travelStyle ? { travelStyle: profile.travelStyle } : {}),
-    ...(profile.onboardingCompletedAt ? { onboardingCompletedAt: profile.onboardingCompletedAt } : {}),
-  });
-}
-
-export async function hydrateAuthUserFromProjection(
-  ctx: MutationCtx,
-  authRecord: CurrentAuthRecord,
-  appUser: Doc<'appUsers'> | null
-) {
-  const authUser = (await ctx.db.get(authRecord.authUserId)) as AuthUserProfile | null;
-  if (!authUser || !appUser) {
-    return authUser;
-  }
-
-  const patch = stripUndefined({
-    email: authRecord.email ?? authUser.email,
-    name: authUser.name ?? appUser.name ?? authRecord.name,
-    slug: authUser.slug ?? appUser.slug,
-    countryCode: authUser.countryCode ?? appUser.countryCode,
-    countryLabel: authUser.countryLabel ?? appUser.countryLabel,
-    role: authUser.role ?? appUser.role ?? 'traveler',
-    homeCity: authUser.homeCity ?? appUser.homeCity,
-    travelStyle: authUser.travelStyle ?? appUser.travelStyle,
-    onboardingCompletedAt: authUser.onboardingCompletedAt ?? appUser.onboardingCompletedAt,
-    profileUpdatedAt: authUser.profileUpdatedAt ?? Date.now(),
-  });
-
-  return await patchAuthUserProfile(ctx, authRecord.authUserId, patch);
 }
 
 export async function patchCoreAuthUserProfile(ctx: MutationCtx, user: AuthUserProfile, input: CoreProfileInput) {

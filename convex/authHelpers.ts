@@ -1,25 +1,16 @@
 import { ConvexError } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { getAuthUserRole, type AuthUserProfile } from "./appProfiles";
-import { findAppUserForAuth, getCurrentAuthRecord } from "./authIdentity";
+import { getCurrentAuthRecord, getUserBySlug } from "./authIdentity";
 
 type AuthCtx = QueryCtx | MutationCtx;
 
-export async function getCurrentAppUser(ctx: AuthCtx) {
+export async function requireCurrentAuthUser(ctx: AuthCtx) {
   const authRecord = await getCurrentAuthRecord(ctx);
-  if (!authRecord) {
-    return null;
-  }
-
-  return await findAppUserForAuth(ctx, authRecord);
-}
-
-export async function requireCurrentAppUser(ctx: AuthCtx) {
-  const appUser = await getCurrentAppUser(ctx);
-  if (!appUser) {
+  if (!authRecord || !authRecord.authUser) {
     throw new ConvexError("Authentication required");
   }
-  return appUser;
+  return { authRecord, user: authRecord.authUser as AuthUserProfile };
 }
 
 export async function assertCurrentTravelerSlug(ctx: AuthCtx, travelerSlug: string) {
@@ -29,8 +20,7 @@ export async function assertCurrentTravelerSlug(ctx: AuthCtx, travelerSlug: stri
   }
 
   const authUser = authRecord.authUser as AuthUserProfile | null;
-  const appUser = await findAppUserForAuth(ctx, authRecord);
-  const canonicalSlug = authUser?.slug ?? appUser?.slug;
+  const canonicalSlug = authUser?.slug;
 
   if (!canonicalSlug) {
     throw new ConvexError("Authentication required");
@@ -49,23 +39,21 @@ export async function requireAdmin(ctx: AuthCtx) {
   }
 
   const authUser = authRecord.authUser as AuthUserProfile | null;
-  const appUser = await findAppUserForAuth(ctx, authRecord);
 
-  if (getAuthUserRole(authUser ?? appUser) !== "admin") {
+  if (getAuthUserRole(authUser) !== "admin") {
     throw new ConvexError("Admin access required");
   }
 
-  const slug = authUser?.slug ?? appUser?.slug;
+  const slug = authUser?.slug;
   if (!slug) {
     throw new ConvexError("Admin profile incomplete");
   }
 
   return {
-    ...appUser,
     slug,
-    name: authUser?.name ?? appUser?.name ?? authRecord.name,
-    countryCode: authUser?.countryCode ?? appUser?.countryCode ?? "NA",
-    countryLabel: authUser?.countryLabel ?? appUser?.countryLabel ?? "Namibia",
+    name: authUser?.name ?? authRecord.name,
+    countryCode: authUser?.countryCode ?? "NA",
+    countryLabel: authUser?.countryLabel ?? "Namibia",
     role: "admin" as const,
   };
 }

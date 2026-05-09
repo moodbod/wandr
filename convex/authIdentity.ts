@@ -60,50 +60,10 @@ export async function requireCurrentAuthRecord(ctx: AuthCtx) {
   return authRecord;
 }
 
-function chooseCanonicalAppUser(users: Doc<'appUsers'>[]) {
-  const sortedUsers = [...users].sort((first, second) => first._creationTime - second._creationTime);
-  return sortedUsers.find((user) => user.onboardingCompletedAt) ?? sortedUsers[0] ?? null;
-}
-
-export async function findAppUserForAuth(ctx: AuthCtx, authRecord: CurrentAuthRecord) {
-  const byAuthUserId = await ctx.db
-    .query('appUsers')
-    .withIndex('by_authUserId', (q) => q.eq('authUserId', authRecord.authUserId))
-    .take(10);
-  const authUserMatch = chooseCanonicalAppUser(byAuthUserId);
-
-  if (authUserMatch) {
-    return authUserMatch;
-  }
-
-  const authSlug = authRecord.authUser?.slug;
-  if (authSlug) {
-    const slugMatch = await ctx.db
-      .query('appUsers')
-      .withIndex('by_slug', (q) => q.eq('slug', authSlug))
-      .unique();
-
-    if (slugMatch) {
-      return slugMatch;
-    }
-  }
-
-  if (authRecord.email) {
-    const byEmail = await ctx.db
-      .query('appUsers')
-      .withIndex('by_email', (q) => q.eq('email', authRecord.email))
-      .take(10);
-    const emailMatch = chooseCanonicalAppUser(byEmail);
-
-    if (emailMatch) {
-      return emailMatch;
-    }
-  }
-
-  const byToken = await ctx.db
-    .query('appUsers')
-    .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', authRecord.identity.tokenIdentifier))
-    .take(10);
-
-  return chooseCanonicalAppUser(byToken);
+/** Look up a user row by slug. */
+export async function getUserBySlug(ctx: AuthCtx, slug: string) {
+  return await ctx.db
+    .query('users')
+    .withIndex('by_slug', (q) => q.eq('slug', slug))
+    .unique();
 }
