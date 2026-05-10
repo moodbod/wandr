@@ -178,11 +178,11 @@ export function PlanningLocationSheet({
         keyExtractor={(location) => location.id}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={isSearchExpanded ? [0] : undefined}
-        contentContainerStyle={[
+        contentContainerStyle={StyleSheet.flatten([
           styles.listContent,
           isDesktop ? styles.desktopListContent : null,
           { paddingBottom: Math.max(insets.bottom, isDesktop ? designSystem.spacing.md : designSystem.spacing.lg) },
-        ]}
+        ])}
         ListHeaderComponent={
           isSearchExpanded ? (
             <View style={styles.header}>
