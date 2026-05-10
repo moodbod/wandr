@@ -86,6 +86,10 @@ const PUBLIC_AVAILABILITY_OPTIONS = [
   'Fully booked',
 ] as const;
 
+const STAY_STYLE_OPTIONS = ['design', 'lodge', 'roadside', 'wellness'] as const;
+
+const ROUTE_VIBE_OPTIONS = ['city reset', 'coast base', 'wildlife stop', 'desert night'] as const;
+
 type ManagerDashboardProps = {
   travelerSlug?: string | null;
 };
@@ -423,8 +427,8 @@ function createDraftRoom(): DraftResource {
       { editor: 'number', label: 'stay.rating', value: '' },
       { editor: 'number', label: 'stay.reviewCount', value: '' },
       { label: 'stay.bookingNote', multiline: true, value: '' },
-      { label: 'stay.stayStyle', value: '' },
-      { label: 'stay.routeVibe', value: '' },
+      { editor: 'select', label: 'stay.stayStyle', options: STAY_STYLE_OPTIONS, value: '' },
+      { editor: 'select', label: 'stay.routeVibe', options: ROUTE_VIBE_OPTIONS, value: '' },
       { label: 'stay.sleepSignal', value: '' },
       { editor: 'list', label: 'stay.idealFor', multiline: true, value: '' },
       { editor: 'list', label: 'stay.amenities', multiline: true, value: '' },
@@ -1998,42 +2002,70 @@ function buildDraftJsonPrompt(draft: DraftResource) {
     `Create one Wandr ${draft.kind}.`,
     'Return only valid JSON. No markdown, no comments.',
     `Use this exact shape: {"kind":"${draft.kind}","fields":{...}}`,
+    'Inside fields, use the exact dotted keys listed below. Do not invent extra keys.',
     'Fill every field below:',
     fields,
     'Use public bare image URLs for image fields. Use [longitude, latitude] for mapLocation.',
+    ...getDraftJsonPromptRules(draft),
   ].join('\n');
 }
 
 function getPromptFieldHint(row: SchemaRow) {
-  if (row.editor === 'number') {
+  const editor = row.editor ?? getSchemaEditor(row.label, row.multiline);
+
+  if (row.label === 'bookingProfile.roomOptions') {
+    return 'array of room objects exactly like [{"id":"garden-queen-room","label":"Garden Queen Room","detail":"Queen room with private bathroom","maxAdults":2,"maxChildren":0,"maxRooms":3,"bedOptions":[{"id":"queen-bed","label":"Queen bed"}]}]';
+  }
+
+  if (row.label === 'bookingProfile.arrivalOptions') {
+    return 'array of arrival objects exactly like [{"id":"self-drive","label":"Self-drive arrival"}]; only id and label';
+  }
+
+  if (editor === 'number') {
     return 'number';
   }
 
-  if (row.editor === 'coordinate') {
+  if (editor === 'coordinate') {
     return '[longitude, latitude]';
   }
 
-  if (row.editor === 'image') {
+  if (editor === 'image') {
     return 'single public image URL';
   }
 
-  if (row.editor === 'images') {
+  if (editor === 'images') {
     return 'array of public image URLs';
   }
 
-  if (row.editor === 'list') {
+  if (editor === 'list') {
     return 'array of short strings';
   }
 
-  if (row.editor === 'json') {
+  if (editor === 'json') {
     return 'JSON array or object';
   }
 
-  if (row.editor === 'select' && row.options?.length) {
-    return `one of: ${row.options.filter(Boolean).join(', ')}`;
+  if (editor === 'select') {
+    const options = row.options ?? getSchemaOptions(row.label);
+    const populatedOptions = options.filter(Boolean);
+    return populatedOptions.length ? `one of exactly: ${populatedOptions.join(', ')}` : 'text';
   }
 
   return 'text';
+}
+
+function getDraftJsonPromptRules(draft: DraftResource) {
+  if (draft.kind !== 'room') {
+    return [];
+  }
+
+  return [
+    'For stay.stayStyle, use only: design, lodge, roadside, wellness.',
+    'For stay.routeVibe, use only: city reset, coast base, wildlife stop, desert night.',
+    'bookingProfile.defaultRoomOptionId must equal one bookingProfile.roomOptions id.',
+    'bookingProfile.defaultArrivalOptionId must equal one bookingProfile.arrivalOptions id.',
+    'Do not put priceUsd, sleeps, or note inside bookingProfile.roomOptions or bookingProfile.arrivalOptions.',
+  ];
 }
 
 function tokenizeJsonLines(value: string): JsonSyntaxToken[][] {
@@ -2372,11 +2404,11 @@ function getSchemaOptions(label: string) {
   }
 
   if (label.endsWith('.stayStyle')) {
-    return ['design', 'lodge', 'roadside', 'wellness'];
+    return STAY_STYLE_OPTIONS;
   }
 
   if (label.endsWith('.routeVibe')) {
-    return ['city reset', 'coast base', 'wildlife stop', 'desert night'];
+    return ROUTE_VIBE_OPTIONS;
   }
 
   if (label.endsWith('.confirmMode')) {

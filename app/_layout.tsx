@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@react-navigation/native';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { isRunningInExpoGo } from 'expo';
-import { router, Stack, usePathname, useSegments } from 'expo-router';
+import { Stack, usePathname, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { lazy, Suspense, useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -220,7 +220,6 @@ function AppShell({
           <View style={styles.content}>
             <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="explore" options={{ headerShown: false }} />
               <Stack.Screen name="trip" options={{ headerShown: false }} />
               <Stack.Screen name="stays" options={{ headerShown: false }} />
@@ -251,9 +250,7 @@ function AuthRouteGate() {
   const segments = useSegments();
   const pathname = usePathname();
   const { openAuthSheet } = useAuthSheet();
-  const { isAuthenticated, isLoading, onboardingRequired, session } = useAuthSession();
-  const isAuthRoute = String(segments[0]) === '(auth)';
-  const isOnboardingRoute = pathname === '/onboarding' || pathname === '/(auth)/onboarding';
+  const { isAuthenticated, isLoading } = useAuthSession();
   const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
     isRootRoute ||
@@ -265,7 +262,7 @@ function AuthRouteGate() {
       return;
     }
 
-    if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
+    if (!isAuthenticated && !isPublicRoute) {
       openAuthSheet({
         dismissTo: '/(tabs)/explore',
         initialMode: 'signIn',
@@ -273,15 +270,7 @@ function AuthRouteGate() {
       });
       return;
     }
-
-    if (isAuthenticated && onboardingRequired && !isOnboardingRoute) {
-      return;
-    }
-
-    if (session && isAuthRoute && !isOnboardingRoute) {
-      router.replace('/(tabs)/explore');
-    }
-  }, [isAuthRoute, isAuthenticated, isLoading, isOnboardingRoute, isPublicRoute, onboardingRequired, openAuthSheet, pathname, session]);
+  }, [isAuthenticated, isLoading, isPublicRoute, openAuthSheet, pathname]);
 
   return null;
 }

@@ -1,1 +1,16 @@
-{"projectId":"prj_jcZW6oZfostKcrxJa2ADdwYi5tAc","orgId":"team_IUSx8zzsvT2FkHCxJnrFUaxl","projectName":"wandr"}
+{
+  "projectId": "prj_mozQ0R5j7CE3Dr24OdnvlG6HnC1p",
+  "orgId": "team_IUSx8zzsvT2FkHCxJnrFUaxl",
+  "projectName": "wandr",
+  "settings": {
+    "createdAt": 1778426283745,
+    "framework": null,
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

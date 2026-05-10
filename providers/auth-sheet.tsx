@@ -33,11 +33,6 @@ export function AuthSheetProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, onboardingRequired, session } = useAuthSession();
-  const isAuthPath =
-    pathname.startsWith('/(auth)') ||
-    pathname === '/sign-in' ||
-    pathname === '/sign-up' ||
-    pathname === '/onboarding';
   const [state, setState] = useState<AuthSheetState>({
     dismissTo: null,
     isOpen: false,
@@ -76,7 +71,7 @@ export function AuthSheetProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || !onboardingRequired || isAuthPath) {
+    if (!isAuthenticated || !onboardingRequired) {
       return;
     }
 
@@ -85,7 +80,7 @@ export function AuthSheetProvider({ children }: { children: ReactNode }) {
       isOpen: true,
       mode: 'onboarding',
     }));
-  }, [isAuthPath, isAuthenticated, onboardingRequired]);
+  }, [isAuthenticated, onboardingRequired]);
 
   useEffect(() => {
     if (!session || !state.isOpen) {

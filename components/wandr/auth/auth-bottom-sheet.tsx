@@ -62,8 +62,12 @@ function getCodeFromUrl(url: string) {
 }
 
 function getOAuthRedirectTo(mode: Exclude<AuthSheetMode, 'onboarding'>, returnTo: string) {
-  const route = mode === 'signIn' ? 'sign-in' : 'sign-up';
-  return Linking.createURL(`${route}?returnTo=${encodeURIComponent(returnTo)}`);
+  return Linking.createURL('/', {
+    queryParams: {
+      authMode: mode,
+      returnTo,
+    },
+  });
 }
 
 function useIsDesktopAuthSheet() {

@@ -8,6 +8,60 @@
   "background_color": "#11130f",
   "theme_color": "#11130f",
   "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "Explore places",
+      "short_name": "Explore",
+      "description": "Open Wandr's public explore map.",
+      "url": "/explore",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Browse stays",
+      "short_name": "Stays",
+      "description": "Open stays and route-friendly places to sleep.",
+      "url": "/stays",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "description": "Search public places, stays, and hidden gems.",
+      "url": "/explore/search",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Hidden gems",
+      "short_name": "Gems",
+      "description": "Open public hidden gems.",
+      "url": "/explore/hidden-gems",
+      "icons": [
+        {
+          "src": "/wandr-icon.png",
+          "sizes": "1024x1024",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/wandr-favicon.png",

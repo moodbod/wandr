@@ -1,0 +1,22 @@
+# Local dependencies and generated output
+node_modules/
+dist/
+web-build/
+.expo/
+.vercel/
+
+# Native app trees are not needed for the static web build
+ios/
+android/
+
+# Local-only tooling and notes
+.agents/
+.claude/
+.design/
+.obsidian/
+.vscode/
+
+# Local env/log files
+.env*.local
+*.log
+.DS_Store
