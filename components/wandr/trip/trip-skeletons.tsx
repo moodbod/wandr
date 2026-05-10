@@ -164,7 +164,6 @@ const styles = StyleSheet.create({
     width: 2,
     flex: 1,
     minHeight: 100,
-    backgroundColor: designSystem.colors.borderSoft,
   },
   timelineItemSkeleton: {
     flex: 1,

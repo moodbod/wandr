@@ -36,31 +36,16 @@ export default function TripScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
+  const { isLargeScreen } = useResponsive();
 
   if (traveler === undefined || traveler === null) {
     return (
-      <ThemedView style={styles.root}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
-          }}
-        />
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 120 },
-          ]}>
-          <TripSwitcher
-            isLoading
-            trips={[]}
-            onDeleteTrip={() => {}}
-            onSelectTrip={() => {}}
-            onNewTrip={() => {}}
-          />
-          <TripTimelineSection isLoading />
-        </ScrollView>
-      </ThemedView>
+      <TripLoadingScreen
+        insetsBottom={insets.bottom}
+        insetsTop={insets.top}
+        isDark={isDark}
+        isLargeScreen={isLargeScreen}
+      />
     );
   }
 
@@ -126,6 +111,7 @@ function ConnectedTripScreen({
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [invitingFriendSlug, setInvitingFriendSlug] = useState<string | null>(null);
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
+  const { isLargeScreen } = useResponsive();
 
   useEffect(() => {
     if (orderedTrips.length === 0) {
@@ -279,28 +265,12 @@ function ConnectedTripScreen({
 
   if (isInitialTripLoad) {
     return (
-      <ThemedView style={[styles.root, isDark && styles.rootDark]}>
-        <WandrHeader
-          config={{
-            overlay: true,
-            trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
-          }}
-        />
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + 120 },
-          ]}>
-          <TripSwitcher
-            isLoading
-            trips={[]}
-            onDeleteTrip={() => {}}
-            onSelectTrip={() => {}}
-            onNewTrip={() => {}}
-          />
-          <TripTimelineSection isLoading />
-        </ScrollView>
-      </ThemedView>
+      <TripLoadingScreen
+        insetsBottom={insetsBottom}
+        insetsTop={insetsTop}
+        isDark={isDark}
+        isLargeScreen={isLargeScreen}
+      />
     );
   }
 
@@ -525,6 +495,76 @@ function ConnectedTripScreen({
         </BottomSheetScrollView>
       </GlassBottomSheet>
     </>
+  );
+}
+
+function TripLoadingScreen({
+  insetsBottom,
+  insetsTop,
+  isDark,
+  isLargeScreen,
+}: {
+  insetsBottom: number;
+  insetsTop: number;
+  isDark: boolean;
+  isLargeScreen: boolean;
+}) {
+  const { planningLocation } = usePlanningLocation();
+  const planningCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
+  const loadingContent = (
+    <>
+      {!isLargeScreen ? (
+        <WandrHeader
+          config={{
+            overlay: true,
+            trailingActions: [{ kind: 'notifications', accessibilityLabel: 'Notifications', tone: 'surface' }],
+          }}
+        />
+      ) : null}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: isLargeScreen ? insetsTop + 24 : insetsTop + 72, paddingBottom: insetsBottom + 88 },
+        ]}>
+        <TripSwitcher
+          isLoading
+          trips={[]}
+          onDeleteTrip={() => {}}
+          onSelectTrip={() => {}}
+          onNewTrip={() => {}}
+        />
+        <TripTimelineSection isLoading />
+      </ScrollView>
+    </>
+  );
+
+  if (isLargeScreen) {
+    return (
+      <ThemedView style={[styles.root, isDark && styles.rootDark]}>
+        <LargeScreenWorkspace
+          mapContent={
+            <MapPreview
+              centerCoordinate={planningCenterCoordinate}
+              markers={[]}
+              routeCoordinates={[]}
+              showRoutes={false}
+              zoomLevel={12}
+            />
+          }
+        >
+          <LargeScreenPanel kind="main" style={isDark ? styles.largePanelDark : null}>
+            {loadingContent}
+          </LargeScreenPanel>
+        </LargeScreenWorkspace>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
+      {loadingContent}
+    </ThemedView>
   );
 }
 

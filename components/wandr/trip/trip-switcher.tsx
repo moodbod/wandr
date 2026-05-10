@@ -115,14 +115,14 @@ export function TripSwitcher({
 export function TripSwitcherSkeleton() {
   return (
     <View style={styles.switcherContainer}>
-      <View style={styles.switcherContent}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.switcherContent}>
         {Array.from({ length: 3 }).map((_, index) => (
           <View key={`trip-switcher-skeleton-${index}`} style={styles.tripCard}>
-            <SkeletonBlock style={styles.imageFrame} />
+            <SkeletonBlock style={styles.switcherImageSkeleton} />
             <SkeletonBlock style={styles.switcherLabelSkeleton} />
           </View>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -133,6 +133,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -designSystem.spacing.lg,
   },
   switcherContent: {
+    flexDirection: 'row',
     paddingHorizontal: designSystem.spacing.lg,
     gap: 16,
   },
@@ -151,6 +152,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  switcherImageSkeleton: {
+    width: 120,
+    height: 180,
+    borderRadius: 20,
   },
   imageFrameDark: {
     backgroundColor: designSystem.colors.darkSurface,
