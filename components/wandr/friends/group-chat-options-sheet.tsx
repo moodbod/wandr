@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { ChatOptionsSheet } from '@/components/wandr/friends/chat-options-sheet';
 import {
   OptionsSheetAction,
@@ -173,7 +173,7 @@ function MemberAvatar({ member, size }: { member: FriendCircleMember; size: numb
           borderRadius: radius,
         },
       ]}>
-      <FaceHashAvatar
+      <WandrAvatar
         name={member.name || member.travelerSlug || 'Traveler'}
         paletteKey={member.travelerSlug}
         size={size}

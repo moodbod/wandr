@@ -8,6 +8,7 @@ import type { MapMarker } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { type PlanningLocation } from '@/constants/planning-countries';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
@@ -56,13 +57,17 @@ export function ExploreMapHero({
   shellStyle,
 }: ExploreMapHeroProps) {
   const router = useRouter();
+  const traveler = useCurrentTraveler();
 
   return (
     <MapFrame
       shellStyle={[styles.shell, shellStyle]}
         centerCoordinate={centerCoordinate}
         userCoordinate={userCoordinate}
+        userAvatarPaletteKey={traveler?.slug}
+        userAvatarUri={traveler?.avatarUri}
         userHeading={userHeading}
+        userName={traveler?.name}
         viewportPadding={viewportPadding}
         markers={markers}
         routeCoordinates={routeCoordinates}

@@ -186,25 +186,32 @@ const styles = StyleSheet.create({
   },
   desktopSearchRow: {
     gap: 8,
+    width: '100%',
   },
   searchAccessory: {
     flexShrink: 0,
   },
   desktopLeadingAccessory: {
-    width: 184,
+    flexShrink: 1,
+    maxWidth: 184,
+    minWidth: 124,
+    width: 148,
   },
   desktopTrailingAccessory: {
-    width: 184,
+    width: 52,
     alignItems: 'flex-end',
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
   },
   desktopSearchInput: {
     flexShrink: 1,
-    minWidth: 280,
+    minWidth: 0,
   },
   desktopSearchInputContent: {
+    gap: 8,
+    paddingHorizontal: 12,
   },
   desktopSearchText: {
     color: designSystem.colors.darkTextWarm,

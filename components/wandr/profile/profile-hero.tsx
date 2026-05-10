@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -19,7 +19,7 @@ export function ProfileHero({ avatarUri, avatarPaletteKey, baseLabel, displayNam
 
   return (
     <View style={styles.hero}>
-      <FaceHashAvatar name={displayName} paletteKey={avatarPaletteKey} size={88} uri={avatarUri} style={[styles.avatar, { backgroundColor: colors.surface }]} />
+      <WandrAvatar name={displayName} paletteKey={avatarPaletteKey} size={88} uri={avatarUri} style={[styles.avatar, { backgroundColor: colors.surface }]} />
       <View style={styles.copy}>
         <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.name}>
           {displayName}

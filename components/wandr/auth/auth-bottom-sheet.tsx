@@ -148,6 +148,7 @@ function SignInSheetForm({
   const { signIn } = useAuthActions();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
+  const isDesktopSheet = useIsDesktopAuthSheet();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -219,15 +220,16 @@ function SignInSheetForm({
       onBack={onBack}
       scrollMode="bottomSheet"
       showBackButton={false}>
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Email</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         keyboardType="email-address"
         lightColor={palette.surface}
         darkColor={palette.surface}
+        style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="emailAddress"
         value={email}
         onChangeText={(value) => {
@@ -235,15 +237,16 @@ function SignInSheetForm({
           setError(null);
         }}
       />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Password</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Password</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="current-password"
         autoCorrect={false}
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         darkColor={palette.surface}
         lightColor={palette.surface}
         secureTextEntry
+        style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="password"
         value={password}
         onChangeText={(value) => {
@@ -280,6 +283,7 @@ function SignUpSheetForm({
   const { signIn } = useAuthActions();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
+  const isDesktopSheet = useIsDesktopAuthSheet();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -356,15 +360,16 @@ function SignUpSheetForm({
       onBack={onBack}
       scrollMode="bottomSheet"
       showBackButton={false}>
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Email</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         keyboardType="email-address"
         lightColor={palette.surface}
         darkColor={palette.surface}
+        style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="emailAddress"
         value={email}
         onChangeText={(value) => {
@@ -372,15 +377,16 @@ function SignUpSheetForm({
           setError(null);
         }}
       />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Password</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Password</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="new-password"
         autoCorrect={false}
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         darkColor={palette.surface}
         lightColor={palette.surface}
         secureTextEntry
+        style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="newPassword"
         value={password}
         onChangeText={(value) => {
@@ -416,6 +422,7 @@ function OnboardingSheetForm({
   const { signOut } = useAuthActions();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
+  const isDesktopSheet = useIsDesktopAuthSheet();
   const [name, setName] = useState('');
   const [homeCity, setHomeCity] = useState('');
   const [countryCode, setCountryCode] = useState<CountryCode | string>('');
@@ -483,31 +490,33 @@ function OnboardingSheetForm({
       showBackButton={false}>
       {identity?.email ? (
         <>
-          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Email</ThemedText>
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
           <Input
-            containerStyle={[styles.input, { borderColor: palette.border }]}
+            containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
             darkColor={palette.surface}
             editable={false}
             lightColor={palette.surface}
+            style={isDesktopSheet ? styles.desktopInputText : null}
             value={identity.email}
           />
         </>
       ) : null}
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Your name</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Your name</ThemedText>
       <Input
         autoCapitalize="words"
         autoCorrect={false}
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         darkColor={palette.surface}
         lightColor={palette.surface}
         placeholder="Tuyoleni"
+        style={isDesktopSheet ? styles.desktopInputText : null}
         value={name}
         onChangeText={(value) => {
           setName(value);
           setError(null);
         }}
       />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Country</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Country</ThemedText>
       <CountryPickerField
         accessibilityLabel={`Change country, currently ${countryLabel}`}
         countryCode={countryCode}
@@ -515,17 +524,18 @@ function OnboardingSheetForm({
         value={countryLabel}
         onSelect={handleSelectCountry}
       />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>Home city</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Home city</ThemedText>
       <Input
         autoCapitalize="words"
-        containerStyle={[styles.input, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
         darkColor={palette.surface}
         lightColor={palette.surface}
         placeholder="Home city"
+        style={isDesktopSheet ? styles.desktopInputText : null}
         value={homeCity}
         onChangeText={setHomeCity}
       />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.label}>How do you usually travel?</ThemedText>
+      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>How do you usually travel?</ThemedText>
       <View style={styles.travelGrid}>
         {travelStyles.map((item) => {
           const selected = item.value === travelStyle;
@@ -537,16 +547,17 @@ function OnboardingSheetForm({
               onPress={() => setTravelStyle(item.value)}
               style={[
                 styles.travelOption,
+                isDesktopSheet ? styles.desktopTravelOption : null,
                 {
                   backgroundColor: selected ? palette.primary : palette.surface,
                   borderColor: selected ? palette.primaryText : palette.border,
                 },
               ]}>
-              <MaterialCommunityIcons color={palette.primaryText} name={item.icon} size={22} />
-              <ThemedText lightColor={palette.text} darkColor={palette.text} style={styles.travelLabel}>
+              <MaterialCommunityIcons color={palette.primaryText} name={item.icon} size={isDesktopSheet ? 18 : 22} />
+              <ThemedText lightColor={palette.text} darkColor={palette.text} style={[styles.travelLabel, isDesktopSheet ? styles.desktopTravelLabel : null]}>
                 {item.label}
               </ThemedText>
-              {selected ? <MaterialCommunityIcons color={palette.primaryText} name="check" size={20} /> : null}
+              {selected ? <MaterialCommunityIcons color={palette.primaryText} name="check" size={isDesktopSheet ? 18 : 20} /> : null}
             </Pressable>
           );
         })}
@@ -562,6 +573,29 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
+  },
+  desktopInput: {
+    height: 44,
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  desktopInputText: {
+    fontSize: 14,
+    height: 20,
+    lineHeight: 20,
+  },
+  desktopLabel: {
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  desktopTravelLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  desktopTravelOption: {
+    borderRadius: designSystem.radii.card - 4,
+    gap: designSystem.spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: designSystem.spacing.sm,
   },
   keyboardFrame: {
     flex: 1,

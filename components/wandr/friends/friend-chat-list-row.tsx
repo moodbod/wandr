@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import type { FriendChatListItem } from '@/types/friends';
@@ -58,7 +58,7 @@ export function FriendChatListRow({
               onAvatarPress?.();
             }}
             style={styles.avatarButton}>
-            <FaceHashAvatar
+            <WandrAvatar
               name={item.title || item.travelerSlug || 'Traveler'}
               paletteKey={item.travelerSlug}
               size={44}

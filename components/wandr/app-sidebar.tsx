@@ -9,7 +9,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useManagerMode } from '@/hooks/use-manager-mode';
 import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { useAuthSession } from '@/providers/auth-session';
 
 const NAV_ITEMS: readonly {
@@ -131,7 +131,7 @@ export function AppSidebar() {
           }}
           style={[styles.navItem, activeHref === '/profile' && managerSurface === 'profile' && { backgroundColor: activeBackground }]}
         >
-          <FaceHashAvatar
+          <WandrAvatar
             name={traveler?.name || 'Traveler'}
             paletteKey={traveler?.slug}
             size={32}

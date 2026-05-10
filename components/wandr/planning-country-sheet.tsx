@@ -1,7 +1,7 @@
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { ArrowUp, MapPin } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,6 +17,7 @@ import {
 } from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 
 type PlanningLocationSheetProps = {
   availableLocations?: readonly PlanningLocation[];
@@ -40,6 +41,8 @@ export function PlanningLocationSheet({
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const isDesktop = Platform.OS === 'web' && isLargeScreen;
   const currentLocation = getPlanningLocationForCoordinate(currentCoordinate);
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
   const selectedAccentColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
@@ -175,13 +178,17 @@ export function PlanningLocationSheet({
         keyExtractor={(location) => location.id}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={isSearchExpanded ? [0] : undefined}
-        contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
+        contentContainerStyle={[
+          styles.listContent,
+          isDesktop ? styles.desktopListContent : null,
+          { paddingBottom: Math.max(insets.bottom, isDesktop ? designSystem.spacing.md : designSystem.spacing.lg) },
+        ]}
         ListHeaderComponent={
           isSearchExpanded ? (
             <View style={styles.header}>
               <GlassInput
                 autoCapitalize="words"
-                leftIcon={<MapPin color={mutedColor} size={20} weight="bold" />}
+                leftIcon={<MapPin color={mutedColor} size={isDesktop ? 18 : 20} weight="bold" />}
                 placeholder="Where are you planning?"
                 returnKeyType="done"
                 value={query}
@@ -222,14 +229,14 @@ export function PlanningLocationSheet({
 
                   handleSelectLocation(location);
                 }}
-                style={[styles.option, { opacity: isDisabled ? 0.48 : 1 }]}
+                style={[styles.option, isDesktop ? styles.desktopOption : null, { opacity: isDisabled ? 0.48 : 1 }]}
               >
                 {location.countryCode ? (
-                  <CountryFlagAvatar countryCode={location.countryCode} size={32} />
+                  <CountryFlagAvatar countryCode={location.countryCode} size={isDesktop ? 28 : 32} />
                 ) : null}
                 <View style={styles.optionCopy}>
                   <View style={styles.optionTitleRow}>
-                    <ThemedText style={[styles.optionTitle, selected ? { color: selectedAccentColor } : null]}>
+                    <ThemedText style={[styles.optionTitle, isDesktop ? styles.desktopOptionTitle : null, selected ? { color: selectedAccentColor } : null]}>
                       {location.label}
                     </ThemedText>
                     {isCurrent ? (
@@ -251,12 +258,12 @@ export function PlanningLocationSheet({
                       </View>
                     ) : null}
                   </View>
-                  <ThemedText style={[styles.optionDetail, { color: selected ? selectedAccentColor : mutedColor }]}>
+                  <ThemedText style={[styles.optionDetail, isDesktop ? styles.desktopOptionDetail : null, { color: selected ? selectedAccentColor : mutedColor }]}>
                     {location.detail}
                   </ThemedText>
                 </View>
                 {isSearchPrompt ? (
-                  <ArrowUp color={mutedColor} size={20} weight="bold" />
+                  <ArrowUp color={mutedColor} size={isDesktop ? 18 : 20} weight="bold" />
                 ) : (
                   <View
                     style={[
@@ -288,6 +295,21 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: designSystem.spacing.lg,
+  },
+  desktopListContent: {
+    paddingBottom: designSystem.spacing.md,
+  },
+  desktopOption: {
+    minHeight: 48,
+    paddingVertical: 8,
+  },
+  desktopOptionDetail: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  desktopOptionTitle: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   statusRow: {
     minHeight: 54,

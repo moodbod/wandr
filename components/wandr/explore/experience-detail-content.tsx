@@ -487,7 +487,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
               <Pressable
                 key={t._id}
                 onPress={() => void handleSelectTripForBooking(t._id as Id<'trips'>)}
-                style={styles.tripRow}
+                style={[styles.tripRow, isDark && styles.tripRowDark]}
               >
                 <ThemedText style={styles.tripName}>{t.name}</ThemedText>
                 <ThemedText style={styles.tripMeta}>{t.dayCount} days</ThemedText>
@@ -703,9 +703,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     backgroundColor: designSystem.colors.surface,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  tripRowDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
   },
   tripName: {
     fontSize: 16,

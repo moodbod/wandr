@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendCandidate } from '@/types/friends';
@@ -38,7 +38,7 @@ export function FriendMatchCard({
         disabled={!onOpenProfile}
         onPress={onOpenProfile}
         style={styles.avatarButton}>
-        <FaceHashAvatar
+        <WandrAvatar
           name={candidate.name || candidate.travelerSlug || 'Traveler'}
           paletteKey={candidate.travelerSlug}
           size={60}

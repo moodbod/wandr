@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -50,7 +50,7 @@ export function TravelerAvatarStack({
               borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
             },
           ]}>
-          <FaceHashAvatar name="Traveler" size={avatarSize} uri={avatarUri} />
+          <WandrAvatar name="Traveler" size={avatarSize} uri={avatarUri} />
         </View>
       ))}
       {showFallbackAvatar ? (
@@ -64,7 +64,7 @@ export function TravelerAvatarStack({
               borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
             },
           ]}>
-          <FaceHashAvatar name={fallbackName} paletteKey={fallbackPaletteKey ?? fallbackName} size={avatarSize} uri={null} />
+          <WandrAvatar name={fallbackName} paletteKey={fallbackPaletteKey ?? fallbackName} size={avatarSize} uri={null} />
         </View>
       ) : null}
       {hiddenCount > 0 ? (

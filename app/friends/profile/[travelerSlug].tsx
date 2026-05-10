@@ -9,7 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -163,7 +163,7 @@ function ViewerHero({
   return (
     <View style={styles.hero}>
       <View style={styles.heroTop}>
-        <FaceHashAvatar
+        <WandrAvatar
           name={profile.traveler.name || profile.traveler.slug || 'Traveler'}
           paletteKey={profile.traveler.slug}
           size={92}

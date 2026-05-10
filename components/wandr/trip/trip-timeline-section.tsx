@@ -71,10 +71,22 @@ export function TripTimelineSection({
     <View style={[styles.timeline, isSheet ? styles.timelineSheet : null]}>
       {!isSheet && (
         <View style={styles.sectionHeader}>
-          <ThemedText style={styles.sectionTitle}>Itinerary</ThemedText>
+          <ThemedText
+            darkColor={designSystem.colors.darkText}
+            lightColor={designSystem.colors.ink}
+            style={styles.sectionTitle}
+          >
+            Itinerary
+          </ThemedText>
           <View style={styles.sectionMeta}>
             <MapTrifold size={18} color={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray} weight="bold" />
-            <ThemedText style={styles.sectionMetaText}>{items.length} Places</ThemedText>
+            <ThemedText
+              darkColor={designSystem.colors.darkMutedText}
+              lightColor={designSystem.colors.gray}
+              style={styles.sectionMetaText}
+            >
+              {items.length} Places
+            </ThemedText>
           </View>
         </View>
       )}

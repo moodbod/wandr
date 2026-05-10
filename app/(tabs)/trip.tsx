@@ -2,7 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { GlassButton } from '@/components/ui/glass-button';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { ExperienceDetailContent } from '@/components/wandr/explore/experience-detail-content';
 import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
@@ -279,7 +279,7 @@ function ConnectedTripScreen({
 
   if (isInitialTripLoad) {
     return (
-      <ThemedView style={styles.root}>
+      <ThemedView style={[styles.root, isDark && styles.rootDark]}>
         <WandrHeader
           config={{
             overlay: true,
@@ -461,7 +461,7 @@ function ConnectedTripScreen({
                           <View key={friend.slug} style={styles.friendRow}>
                             <View style={styles.friendIdentity}>
                               <View style={styles.avatarWrap}>
-                                <FaceHashAvatar
+                                <WandrAvatar
                                   name={friend.name || friend.slug || 'Traveler'}
                                   paletteKey={friend.slug}
                                   size={38}
@@ -645,7 +645,7 @@ function TripScreenView({
 
   if (isLargeScreen) {
     return (
-      <ThemedView style={styles.root}>
+      <ThemedView style={[styles.root, isDark && styles.rootDark]}>
         <LargeScreenWorkspace
           mapContent={
             <MapPreview
@@ -657,11 +657,11 @@ function TripScreenView({
             />
           }
         >
-          <LargeScreenPanel kind="main">
+          <LargeScreenPanel kind="main" style={isDark ? styles.largePanelDark : null}>
             {mainContent}
           </LargeScreenPanel>
           {detailItem ? (
-            <LargeScreenPanel kind="detail">
+            <LargeScreenPanel kind="detail" style={isDark ? styles.largePanelDark : null}>
               {detailItem.kind === 'stay' ? (
                 <StayDetailScreen onClose={() => setDetailItem(null)} slug={detailItem.experienceSlug} />
               ) : (
@@ -678,7 +678,7 @@ function TripScreenView({
   }
 
   return (
-    <ThemedView style={styles.root}>
+    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
       {mainContent}
     </ThemedView>
   );
@@ -687,6 +687,13 @@ function TripScreenView({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  rootDark: {
+    backgroundColor: designSystem.colors.darkBackground,
+  },
+  largePanelDark: {
+    backgroundColor: designSystem.colors.darkBackground,
+    borderColor: designSystem.colors.darkSurfaceBorder,
   },
   largeBody: {
     flex: 1,

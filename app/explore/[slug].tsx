@@ -458,7 +458,7 @@ function ConnectedExploreExperienceScreen() {
                   const isRequesting = requestingCircleId === joinableTrip.circleId;
 
                   return (
-                    <View key={joinableTrip.circleId} style={styles.publicTripOption}>
+                    <View key={joinableTrip.circleId} style={[styles.publicTripOption, isDark && styles.sheetOptionDark]}>
                       <View style={styles.publicTripCopy}>
                         <ThemedText style={styles.publicTripName}>{joinableTrip.groupName}</ThemedText>
                         <ThemedText style={[styles.publicTripMeta, isDark && styles.sheetSubtitleDark]}>
@@ -505,7 +505,7 @@ function ConnectedExploreExperienceScreen() {
             {trips?.map((t) => (
               <Pressable
                 key={t._id}
-                style={styles.tripOption}
+                style={[styles.tripOption, isDark && styles.sheetOptionDark]}
                 onPress={() => handleSelectTripForBooking(t._id as Id<'trips'>)}>
                 {t.previewImage ? (
                   <Image source={t.previewImage} style={styles.tripOptionImage} contentFit="cover" />
@@ -780,6 +780,10 @@ const styles = StyleSheet.create({
   tripOptionDefault: {
     backgroundColor: designSystem.colors.lime,
     borderColor: designSystem.colors.lime,
+  },
+  sheetOptionDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
   },
   tripOptionIcon: {
     width: 48,

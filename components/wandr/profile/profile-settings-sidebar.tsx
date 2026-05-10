@@ -11,7 +11,7 @@ import {
 } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getAppMetadata } from '@/lib/app-metadata';
@@ -146,7 +146,7 @@ export function ProfileSettingsSidebar({
           <Animated.View style={[styles.sidebar, { backgroundColor: colors.background }, sidebarStyle]}>
             <View style={styles.sidebarHeader}>
               <View style={styles.sidebarIdentity}>
-                <FaceHashAvatar name={name} paletteKey={avatarPaletteKey} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
+                <WandrAvatar name={name} paletteKey={avatarPaletteKey} size={58} uri={avatarUri} style={[styles.sidebarAvatar, { backgroundColor: colors.text }]} />
                 <View style={styles.sidebarNameWrap}>
                   <ThemedText numberOfLines={1} style={styles.sidebarName}>
                     {name}

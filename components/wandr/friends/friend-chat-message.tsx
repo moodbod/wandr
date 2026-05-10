@@ -5,7 +5,7 @@ import { useRef, type ReactNode } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { RouteMapWidget } from '@/components/wandr/friends/chat-widgets';
 import type { MessageActionAnchor } from '@/components/wandr/friends/message-action-menu';
 import { designSystem } from '@/constants/design-system';
@@ -264,7 +264,7 @@ export function FriendChatMessageBubble({
     <View style={[styles.messageWrap, message.isOwnMessage ? styles.messageWrapOwn : null]}>
       {!message.isOwnMessage ? (
         <View style={styles.senderRow}>
-          <FaceHashAvatar
+          <WandrAvatar
             name={message.senderName || message.senderSlug || 'Traveler'}
             paletteKey={message.senderSlug}
             size={24}
@@ -517,7 +517,7 @@ export function DirectChatMessageBubble({
     <View style={[styles.messageWrap, message.isOwnMessage ? styles.messageWrapOwn : null]}>
       {!message.isOwnMessage ? (
         <View style={styles.senderRow}>
-          <FaceHashAvatar
+          <WandrAvatar
             name={message.senderName || message.senderSlug || 'Traveler'}
             paletteKey={message.senderSlug}
             size={24}

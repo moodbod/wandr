@@ -2,7 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Check, MagnifyingGlass } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Country, type CountryCode } from 'react-native-country-picker-modal';
 
@@ -13,6 +13,7 @@ import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { allPlanningCountryOptions } from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 
 type CountryPickerFieldProps = {
   accessibilityLabel: string;
@@ -35,6 +36,8 @@ export function CountryPickerField({
   const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const isDesktop = Platform.OS === 'web' && isLargeScreen;
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
   const snapPoints = useMemo(() => ['58%', '78%'], []);
   const countryOptions = useMemo(
@@ -82,13 +85,16 @@ export function CountryPickerField({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={() => setIsOpen(true)}
-        style={variant === 'compact' ? styles.compactRow : styles.row}>
-        <CountryFlagAvatar countryCode={countryCode} size={30} />
+        style={[
+          variant === 'compact' ? styles.compactRow : styles.row,
+          isDesktop ? styles.desktopRow : null,
+        ]}>
+        <CountryFlagAvatar countryCode={countryCode} size={isDesktop ? 26 : 30} />
         {variant === 'compact' ? (
-          <ThemedText style={styles.compactValue}>{value}</ThemedText>
+          <ThemedText style={[styles.compactValue, isDesktop ? styles.desktopValue : null]}>{value}</ThemedText>
         ) : (
           <View style={styles.copy}>
-            <ThemedText style={[styles.value, !value && styles.placeholderValue]}>
+            <ThemedText style={[styles.value, isDesktop ? styles.desktopValue : null, !value && styles.placeholderValue]}>
               {value || 'Select country'}
             </ThemedText>
           </View>
@@ -144,9 +150,9 @@ export function CountryPickerField({
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => handleSelectCountry(item)}
-                  style={styles.option}>
-                  <CountryFlagAvatar countryCode={item.code} size={32} />
-                  <ThemedText style={[styles.optionTitle, selected ? styles.selectedText : null]}>
+                  style={[styles.option, isDesktop ? styles.desktopOption : null]}>
+                  <CountryFlagAvatar countryCode={item.code} size={isDesktop ? 28 : 32} />
+                  <ThemedText style={[styles.optionTitle, isDesktop ? styles.desktopOptionTitle : null, selected ? styles.selectedText : null]}>
                     {item.label}
                   </ThemedText>
                   {selected ? <Check color={designSystem.colors.lime} size={20} weight="bold" /> : null}
@@ -198,6 +204,22 @@ const styles = StyleSheet.create({
   },
   compactValue: {
     ...designSystem.type.bodyStrong,
+  },
+  desktopOption: {
+    minHeight: 48,
+    paddingVertical: 8,
+  },
+  desktopOptionTitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  desktopRow: {
+    height: 44,
+    paddingHorizontal: designSystem.spacing.sm,
+  },
+  desktopValue: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   option: {
     alignItems: 'center',

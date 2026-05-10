@@ -14,7 +14,7 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented-tabs';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-row';
 import { WandrHeader } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
@@ -375,7 +375,7 @@ export default function FriendsChatListScreen() {
                     key={friend.travelerSlug}
                     onPress={() => toggleSelectedFriend(friend.travelerSlug)}
                     style={[styles.friendOption, isSelected ? styles.friendOptionActive : null]}>
-                    <FaceHashAvatar
+                    <WandrAvatar
                       name={friend.name || friend.travelerSlug || 'Traveler'}
                       paletteKey={friend.travelerSlug}
                       size={44}

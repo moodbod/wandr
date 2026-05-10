@@ -17,6 +17,7 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
 import { getHiddenGemSlug, type HiddenGemDetailContent } from '@/constants/hidden-gems-content';
 import type { Id } from '@/convex/_generated/dataModel';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import { bookExperienceRef, getExplorePageContentRef, getLocationLikeStateRef, listUserTripsRef, toggleLocationLikeRef } from '@/lib/convex';
@@ -35,6 +36,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   const { slug: routeSlug } = useLocalSearchParams<{ slug: string }>();
   const slug = slugProp ?? routeSlug;
   const insets = useSafeAreaInsets();
+  const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
   const requireAuthAction = useRequireAuthAction();
   const travelerSlug = traveler?.slug ?? '';
@@ -229,7 +231,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
               <Pressable
                 key={trip._id}
                 onPress={() => void addHiddenGemToTrip(trip._id as Id<'trips'>)}
-                style={styles.tripRow}
+                style={[styles.tripRow, isDark && styles.tripRowDark]}
               >
                 <ThemedText style={styles.tripName}>{trip.name}</ThemedText>
               </Pressable>
@@ -436,6 +438,12 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     backgroundColor: designSystem.colors.surface,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  tripRowDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
   },
   tripName: {
     fontSize: 16,

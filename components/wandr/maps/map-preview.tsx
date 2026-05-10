@@ -8,7 +8,7 @@ import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchRoutePath } from '@/lib/routing';
 
-import { MapboxPlaceMarker } from './mapbox/mapbox-marker';
+import { MapboxPlaceMarker, MapboxUserMarker } from './mapbox/mapbox-marker';
 import { getMapboxModule } from './mapbox/mapbox-module';
 import { MapRouteOverlays } from './mapbox/mapbox-routes';
 import type { MapMarker, MapPreviewProps } from './mapbox/types';
@@ -20,7 +20,10 @@ const DEFAULT_MAP_CENTER: readonly [number, number] =
 function MapPreviewComponent({
   centerCoordinate,
   userCoordinate = null,
+  userAvatarPaletteKey,
+  userAvatarUri,
   userHeading = null,
+  userName,
   viewportPadding,
   markers = [],
   routeCoordinates,
@@ -345,7 +348,16 @@ function MapPreviewComponent({
           zoomLevel={zoomLevel}
           animationMode="none"
         />
-        <MapboxGL.UserLocation visible animated showsUserHeadingIndicator />
+        <MapboxGL.UserLocation visible={!userCoordinate} animated showsUserHeadingIndicator />
+        {userCoordinate ? (
+          <MapboxUserMarker
+            avatarPaletteKey={userAvatarPaletteKey}
+            avatarUri={userAvatarUri}
+            coordinate={userCoordinate}
+            isDark={isDark}
+            name={userName}
+          />
+        ) : null}
 
         {normalizedMarkers.map((marker) => {
           return (

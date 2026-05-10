@@ -4,7 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Check, Plus, Star, X } from 'phosphor-react-native';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import { ThemedText } from '@/components/themed-text';
@@ -167,6 +167,11 @@ type JsonEditorDiagnostic = {
   severity: 'error' | 'info' | 'warning';
 };
 
+type JsonSyntaxToken = {
+  kind: 'boolean' | 'key' | 'number' | 'plain' | 'punctuation' | 'string' | 'whitespace';
+  text: string;
+};
+
 export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -179,6 +184,7 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const [bookingFilter, setBookingFilter] = useState<BookingFilter>('pending');
   const [busyBookingId, setBusyBookingId] = useState<string | null>(null);
   const [draftResource, setDraftResource] = useState<DraftResource | null>(null);
+  const [draftCreateError, setDraftCreateError] = useState<string | null>(null);
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
   const createManagedExperience = useMutation(createManagedExperienceRef);
   const createManagedStay = useMutation(createManagedStayRef);
@@ -225,12 +231,14 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const visibleBookings =
     bookingFilter === 'all' ? activeBookings : activeBookings.filter((booking) => booking.status === bookingFilter);
   function handleAddResource() {
+    setDraftCreateError(null);
     setDetailTab('overview');
     setSelectedId(null);
     setDraftResource(mode === 'experiences' ? createDraftExperience() : createDraftRoom());
   }
 
   function handleSelectResource(resource: ManagedResource) {
+    setDraftCreateError(null);
     setDraftResource(null);
     setSelectedId(resource.id);
     setDetailTab('overview');
@@ -243,18 +251,21 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
     }
 
     setIsCreatingDraft(true);
+    setDraftCreateError(null);
     try {
       if (draftResource.kind === 'experience') {
         const result = await createManagedExperience(buildExperienceCreateArgs(draftResource, travelerSlug));
         setSelectedId(result.slug);
       } else {
         const result = await createManagedStay(buildStayCreateArgs(draftResource, travelerSlug));
-        setSelectedId(`${result.slug}:${result.roomId}`);
+      setSelectedId(`${result.slug}:${result.roomId}`);
       }
       setDetailTab('overview');
       setDraftResource(null);
     } catch (error) {
-      Alert.alert('Could not create draft', error instanceof Error ? error.message : 'Check the required fields and try again.');
+      const message = error instanceof Error ? error.message : 'Check the required fields and try again.';
+      setDraftCreateError(message);
+      Alert.alert('Could not create draft', message);
     } finally {
       setIsCreatingDraft(false);
     }
@@ -304,12 +315,17 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
           {draftResource ? (
             <DraftResourceEditor
               colors={colors}
+              createError={draftCreateError}
               draft={draftResource}
               onCancel={() => {
+                setDraftCreateError(null);
                 setDraftResource(null);
                 setSelectedId(resources[0]?.id ?? null);
               }}
-              onChange={setDraftResource}
+              onChange={(nextDraft) => {
+                setDraftCreateError(null);
+                setDraftResource(nextDraft);
+              }}
               onCreate={handleCreateDraft}
               isCreating={isCreatingDraft}
             />
@@ -1712,6 +1728,7 @@ function CoordinatePickerModal({
 
 function DraftResourceEditor({
   colors,
+  createError,
   draft,
   isCreating,
   onCancel,
@@ -1719,6 +1736,7 @@ function DraftResourceEditor({
   onCreate,
 }: {
   colors: DashboardColors;
+  createError?: string | null;
   draft: DraftResource;
   isCreating: boolean;
   onCancel: () => void;
@@ -1729,51 +1747,23 @@ function DraftResourceEditor({
   const [importReport, setImportReport] = useState<JsonImportReport | null>(null);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [pastedJson, setPastedJson] = useState('');
+  const [hasCopiedPrompt, setHasCopiedPrompt] = useState(false);
   const editorDiagnostics = useMemo(() => analyzeDraftJsonText(pastedJson, draft), [draft, pastedJson]);
   const editorHasErrors = editorDiagnostics.some((diagnostic) => diagnostic.severity === 'error');
-  const lineNumbers = useMemo(
-    () => Array.from({ length: Math.max(8, pastedJson.split('\n').length) }, (_, index) => index + 1),
-    [pastedJson]
-  );
   const updateRow = (label: string, value: string) => {
     onChange({
       ...draft,
       rows: draft.rows.map((row) => (row.label === label ? { ...row, value } : row)),
     });
   };
-  const handleImportJson = () => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') {
-      Alert.alert('JSON import needs desktop web', 'Open the manager dashboard on a large web screen to upload a JSON file.');
-      return;
+  const handleCopyPrompt = async () => {
+    try {
+      await copyTextToClipboard(buildDraftJsonPrompt(draft));
+      setHasCopiedPrompt(true);
+    } catch (error) {
+      console.error('Failed to copy JSON prompt', error);
+      Alert.alert('Could not copy prompt', 'Copy is not available in this browser.');
     }
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,application/json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) {
-        return;
-      }
-
-      try {
-        const text = await file.text();
-        const compiled = compileDraftJson(text, draft);
-        onChange(compiled.draft);
-        setImportReport({
-          fileName: file.name,
-          messages: compiled.messages.length ? compiled.messages : ['JSON compiled and populated the form.'],
-          status: 'success',
-        });
-      } catch (error) {
-        setImportReport({
-          fileName: file.name,
-          messages: splitCompilerMessage(error instanceof Error ? error.message : 'Could not compile JSON.'),
-          status: 'error',
-        });
-      }
-    };
-    input.click();
   };
   const handleCompilePastedJson = () => {
     try {
@@ -1806,9 +1796,6 @@ function DraftResourceEditor({
           <Pressable accessibilityRole="button" onPress={() => setIsJsonModalOpen(true)} style={styles.secondaryButton}>
             <ThemedText style={styles.secondaryButtonText}>Paste JSON</ThemedText>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleImportJson} style={styles.secondaryButton}>
-            <ThemedText style={styles.secondaryButtonText}>Import JSON</ThemedText>
-          </Pressable>
           <Pressable accessibilityRole="button" onPress={onCancel} style={styles.secondaryButton}>
             <ThemedText style={styles.secondaryButtonText}>Cancel</ThemedText>
           </Pressable>
@@ -1827,7 +1814,6 @@ function DraftResourceEditor({
           <View style={[styles.promptModal, { backgroundColor: colors.background, borderColor: colors.borderSoft }]}>
             <View style={styles.promptModalHeader}>
               <View>
-                <ThemedText style={styles.detailEyebrow}>Manual JSON</ThemedText>
                 <ThemedText style={styles.promptModalTitle}>Paste JSON</ThemedText>
               </View>
               <View style={styles.draftHeaderActions}>
@@ -1839,42 +1825,27 @@ function DraftResourceEditor({
             <View style={[styles.pasteCompilerBox, { borderColor: colors.borderSoft }]}>
               <View style={styles.pasteCompilerHeader}>
                 <View>
-                  <ThemedText style={styles.importReportTitle}>Paste JSON</ThemedText>
-                  <ThemedText style={styles.importReportMessage}>Compile it here and the create form will fill in automatically.</ThemedText>
+                  <ThemedText style={styles.importReportTitle}>{hasCopiedPrompt ? 'Prompt copied' : 'Paste JSON'}</ThemedText>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!pastedJson.trim() || editorHasErrors}
-                  onPress={handleCompilePastedJson}
-                  style={[styles.saveButton, (!pastedJson.trim() || editorHasErrors) && styles.actionButtonDisabled]}>
-                  <ThemedText style={styles.saveButtonText}>Compile JSON</ThemedText>
-                </Pressable>
+                <View style={styles.draftHeaderActions}>
+                  <Pressable accessibilityRole="button" onPress={handleCopyPrompt} style={styles.secondaryButton}>
+                    <ThemedText style={styles.secondaryButtonText}>Copy prompt</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!pastedJson.trim() || editorHasErrors}
+                    onPress={handleCompilePastedJson}
+                    style={[styles.saveButton, (!pastedJson.trim() || editorHasErrors) && styles.actionButtonDisabled]}>
+                    <ThemedText style={styles.saveButtonText}>Apply JSON</ThemedText>
+                  </Pressable>
+                </View>
               </View>
-              <View style={[styles.jsonEditorFrame, { borderColor: colors.borderSoft }]}>
-                <ScrollView style={styles.lineNumberGutter} showsVerticalScrollIndicator={false}>
-                  {lineNumbers.map((lineNumber) => {
-                    const hasLineError = editorDiagnostics.some((diagnostic) => diagnostic.line === lineNumber && diagnostic.severity === 'error');
-                    return (
-                      <ThemedText key={lineNumber} style={[styles.lineNumberText, hasLineError && styles.lineNumberTextError]}>
-                        {lineNumber}
-                      </ThemedText>
-                    );
-                  })}
-                </ScrollView>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  multiline
-                  onChangeText={setPastedJson}
-                  placeholder="Paste JSON here"
-                  placeholderTextColor={colors.placeholder}
-                  scrollEnabled
-                  spellCheck={false}
-                  style={[styles.jsonEditorInput, { color: colors.text }]}
-                  textAlignVertical="top"
-                  value={pastedJson}
-                />
-              </View>
+              <JsonCompilerEditor
+                colors={colors}
+                diagnostics={editorDiagnostics}
+                onChangeText={setPastedJson}
+                value={pastedJson}
+              />
               <View style={styles.diagnosticsPanel}>
                 {editorDiagnostics.map((diagnostic, index) => (
                   <View
@@ -1897,6 +1868,12 @@ function DraftResourceEditor({
         </View>
       </Modal>
       <ScrollView style={styles.detailScroller} contentContainerStyle={styles.detailBody} showsVerticalScrollIndicator={false}>
+        {createError ? (
+          <View style={[styles.importReport, styles.createErrorReport, { borderColor: designSystem.colors.copper }]}>
+            <ThemedText style={styles.importReportTitle}>Draft did not save</ThemedText>
+            <ThemedText style={styles.importReportMessage}>{createError}</ThemedText>
+          </View>
+        ) : null}
         {importReport ? (
           <View
             style={[
@@ -1929,6 +1906,224 @@ function DraftResourceEditor({
       </ScrollView>
     </View>
   );
+}
+
+function JsonCompilerEditor({
+  colors,
+  diagnostics,
+  onChangeText,
+  value,
+}: {
+  colors: DashboardColors;
+  diagnostics: JsonEditorDiagnostic[];
+  onChangeText: (value: string) => void;
+  value: string;
+}) {
+  const [scrollY, setScrollY] = useState(0);
+  const highlightedLines = useMemo(() => tokenizeJsonLines(value), [value]);
+  const lineNumbers = useMemo(
+    () => Array.from({ length: Math.max(8, value.split('\n').length) }, (_, index) => index + 1),
+    [value]
+  );
+  const syntaxLineWhiteSpace = Platform.OS === 'web' ? ({ whiteSpace: 'pre' } as any) : null;
+  const transparentInputStyle = value ? ({ color: 'transparent' } as const) : { color: colors.placeholder };
+  const caretStyle = Platform.OS === 'web' ? ({ caretColor: colors.text } as any) : null;
+
+  return (
+    <View style={[styles.jsonEditorFrame, { borderColor: colors.borderSoft }]}>
+      <View style={styles.lineNumberGutter}>
+        <View style={{ transform: [{ translateY: -scrollY }] }}>
+          {lineNumbers.map((lineNumber) => {
+            const hasLineError = diagnostics.some((diagnostic) => diagnostic.line === lineNumber && diagnostic.severity === 'error');
+
+            return (
+              <ThemedText key={lineNumber} style={[styles.lineNumberText, hasLineError && styles.lineNumberTextError]}>
+                {lineNumber}
+              </ThemedText>
+            );
+          })}
+        </View>
+      </View>
+      <View style={styles.jsonEditorTextPane}>
+        <View pointerEvents="none" style={styles.jsonHighlightLayer}>
+          <View style={[styles.jsonHighlightContent, { transform: [{ translateY: -scrollY }] }]}>
+            {highlightedLines.map((line, lineIndex) => (
+              <Text key={`${lineIndex}-${line.map((token) => token.text).join('')}`} style={[styles.jsonSyntaxLine, syntaxLineWhiteSpace]}>
+                {line.length === 0 ? ' ' : line.map((token, tokenIndex) => (
+                  <Text key={`${lineIndex}-${tokenIndex}-${token.text}`} style={getJsonSyntaxTokenStyle(token.kind)}>
+                    {token.text}
+                  </Text>
+                ))}
+              </Text>
+            ))}
+          </View>
+        </View>
+        <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          cursorColor={colors.text}
+          multiline
+          onChangeText={onChangeText}
+          onScroll={(event) => {
+            setScrollY(getTextInputScrollY(event));
+          }}
+          placeholder="Paste JSON here"
+          placeholderTextColor={colors.placeholder}
+          scrollEnabled
+          selectionColor={designSystem.colors.darkGreen}
+          spellCheck={false}
+          style={[styles.jsonEditorInput, styles.jsonEditorInputOverlay, transparentInputStyle, caretStyle]}
+          textAlignVertical="top"
+          value={value}
+        />
+      </View>
+    </View>
+  );
+}
+
+async function copyTextToClipboard(text: string) {
+  const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+
+  if (!clipboard?.writeText) {
+    throw new Error('Clipboard unavailable');
+  }
+
+  await clipboard.writeText(text);
+}
+
+function buildDraftJsonPrompt(draft: DraftResource) {
+  const fields = draft.rows.map((row) => `- ${row.label}: ${getPromptFieldHint(row)}`).join('\n');
+
+  return [
+    `Create one Wandr ${draft.kind}.`,
+    'Return only valid JSON. No markdown, no comments.',
+    `Use this exact shape: {"kind":"${draft.kind}","fields":{...}}`,
+    'Fill every field below:',
+    fields,
+    'Use public bare image URLs for image fields. Use [longitude, latitude] for mapLocation.',
+  ].join('\n');
+}
+
+function getPromptFieldHint(row: SchemaRow) {
+  if (row.editor === 'number') {
+    return 'number';
+  }
+
+  if (row.editor === 'coordinate') {
+    return '[longitude, latitude]';
+  }
+
+  if (row.editor === 'image') {
+    return 'single public image URL';
+  }
+
+  if (row.editor === 'images') {
+    return 'array of public image URLs';
+  }
+
+  if (row.editor === 'list') {
+    return 'array of short strings';
+  }
+
+  if (row.editor === 'json') {
+    return 'JSON array or object';
+  }
+
+  if (row.editor === 'select' && row.options?.length) {
+    return `one of: ${row.options.filter(Boolean).join(', ')}`;
+  }
+
+  return 'text';
+}
+
+function tokenizeJsonLines(value: string): JsonSyntaxToken[][] {
+  const lines = value.split('\n');
+  const visibleLines = lines.length ? lines : [''];
+
+  return visibleLines.map(tokenizeJsonLine);
+}
+
+function tokenizeJsonLine(line: string): JsonSyntaxToken[] {
+  const tokens: JsonSyntaxToken[] = [];
+  const pattern = /"(?:\\.|[^"\\])*"|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\],:]|\s+|[^\s{}\[\],:"]+/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(line)) !== null) {
+    const text = match[0];
+    const endIndex = match.index + text.length;
+    const remainingLine = line.slice(endIndex);
+
+    tokens.push({
+      text,
+      kind: getJsonTokenKind(text, remainingLine),
+    });
+  }
+
+  return tokens;
+}
+
+function getJsonTokenKind(text: string, remainingLine: string): JsonSyntaxToken['kind'] {
+  if (/^\s+$/.test(text)) {
+    return 'whitespace';
+  }
+
+  if (text.startsWith('"')) {
+    return /^\s*:/.test(remainingLine) ? 'key' : 'string';
+  }
+
+  if (text === 'true' || text === 'false' || text === 'null') {
+    return 'boolean';
+  }
+
+  if (/^-?\d/.test(text)) {
+    return 'number';
+  }
+
+  if (/^[{}\[\],:]$/.test(text)) {
+    return 'punctuation';
+  }
+
+  return 'plain';
+}
+
+function getJsonSyntaxTokenStyle(kind: JsonSyntaxToken['kind']) {
+  switch (kind) {
+    case 'key':
+      return styles.jsonSyntaxKey;
+    case 'string':
+      return styles.jsonSyntaxString;
+    case 'number':
+      return styles.jsonSyntaxNumber;
+    case 'boolean':
+      return styles.jsonSyntaxBoolean;
+    case 'punctuation':
+      return styles.jsonSyntaxPunctuation;
+    default:
+      return styles.jsonSyntaxPlain;
+  }
+}
+
+function getTextInputScrollY(event: unknown) {
+  const scrollEvent = event as {
+    currentTarget?: { scrollTop?: unknown };
+    nativeEvent?: {
+      contentOffset?: { y?: unknown };
+      target?: { scrollTop?: unknown };
+    };
+    target?: { scrollTop?: unknown };
+  };
+  const nativeOffsetY = scrollEvent.nativeEvent?.contentOffset?.y;
+
+  if (typeof nativeOffsetY === 'number') {
+    return nativeOffsetY;
+  }
+
+  const webScrollTop =
+    scrollEvent.currentTarget?.scrollTop ??
+    scrollEvent.target?.scrollTop ??
+    scrollEvent.nativeEvent?.target?.scrollTop;
+
+  return typeof webScrollTop === 'number' ? webScrollTop : 0;
 }
 
 function DetailMetric({ label, value }: { label: string; value: number | string }) {
@@ -4015,6 +4210,9 @@ const styles = StyleSheet.create({
     gap: 5,
     padding: 12,
   },
+  createErrorReport: {
+    backgroundColor: 'rgba(161, 75, 26, 0.14)',
+  },
   importReportTitle: {
     color: designSystem.colors.ink,
     fontSize: 13,
@@ -4082,12 +4280,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    minHeight: 220,
+    height: 320,
     overflow: 'hidden',
   },
   lineNumberGutter: {
     backgroundColor: designSystem.colors.scrimFaint,
     flexGrow: 0,
+    overflow: 'hidden',
     paddingHorizontal: 8,
     paddingTop: 11,
     width: 44,
@@ -4103,6 +4302,44 @@ const styles = StyleSheet.create({
   lineNumberTextError: {
     color: designSystem.colors.copper,
   },
+  jsonEditorTextPane: {
+    flex: 1,
+    position: 'relative',
+  },
+  jsonHighlightLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  jsonHighlightContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  jsonSyntaxLine: {
+    color: designSystem.colors.ink,
+    fontFamily: 'Courier',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    minHeight: 18,
+  },
+  jsonSyntaxKey: {
+    color: designSystem.colors.darkGreen,
+  },
+  jsonSyntaxString: {
+    color: designSystem.colors.copper,
+  },
+  jsonSyntaxNumber: {
+    color: designSystem.colors.teal,
+  },
+  jsonSyntaxBoolean: {
+    color: designSystem.colors.fern,
+  },
+  jsonSyntaxPunctuation: {
+    color: designSystem.colors.gray,
+  },
+  jsonSyntaxPlain: {
+    color: designSystem.colors.ink,
+  },
   jsonEditorInput: {
     flex: 1,
     fontFamily: 'Courier',
@@ -4112,6 +4349,12 @@ const styles = StyleSheet.create({
     minHeight: 220,
     paddingHorizontal: 12,
     paddingVertical: 11,
+  },
+  jsonEditorInputOverlay: {
+    backgroundColor: 'transparent',
+    height: '100%',
+    position: 'absolute',
+    width: '100%',
   },
   diagnosticsPanel: {
     gap: 6,

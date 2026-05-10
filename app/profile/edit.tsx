@@ -16,7 +16,7 @@ import {
   SettingSwitchRow,
   SettingTextInput,
 } from '@/components/wandr/profile/profile-setting-screen';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
@@ -197,7 +197,7 @@ export default function EditProfileScreen() {
   return (
     <ProfileSettingScreen title="Account">
       <View style={styles.avatarPanel}>
-        <FaceHashAvatar name={name || 'Traveler'} paletteKey={traveler?.slug} size={96} uri={avatarUri} />
+        <WandrAvatar name={name || 'Traveler'} paletteKey={traveler?.slug} size={96} uri={avatarUri} />
         <View style={styles.avatarActions}>
           <Pressable accessibilityRole="button" onPress={handleChooseAvatar} style={styles.avatarButton}>
             <Camera color={designSystem.colors.darkGreen} size={18} weight="bold" />

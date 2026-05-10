@@ -24,7 +24,7 @@ import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
@@ -1244,7 +1244,7 @@ function ReviewCard({
     <View style={[styles.reviewCard, isDark && styles.reviewCardDark]}>
       <View style={styles.reviewHeader}>
         <View style={styles.reviewAvatar}>
-          <FaceHashAvatar name={name} size={42} uri={avatarUri} />
+          <WandrAvatar name={name} size={42} uri={avatarUri} />
         </View>
         <View>
           <ThemedText style={[styles.reviewName, isDark && styles.reviewNameDark]}>{name}</ThemedText>

@@ -9,7 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
@@ -361,7 +361,7 @@ function NotificationRow({
       style={styles.row}
     >
       {showActorAvatar ? (
-        <FaceHashAvatar
+        <WandrAvatar
           name={notification.actorName ?? notification.actorSlug ?? 'Wandr'}
           paletteKey={notification.actorSlug}
           size={52}

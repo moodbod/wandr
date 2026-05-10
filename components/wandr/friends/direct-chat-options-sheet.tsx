@@ -4,7 +4,7 @@ import { type RefObject } from 'react';
 import { Platform, View } from 'react-native';
 
 import { ChatOptionsSheet } from '@/components/wandr/friends/chat-options-sheet';
-import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import {
   OptionsSheetAction,
@@ -32,7 +32,7 @@ export function DirectChatOptionsSheet({
   return (
     <ChatOptionsSheet
       avatar={
-        <FaceHashAvatar
+        <WandrAvatar
           name={chat.participant.name || chat.participant.slug || 'Traveler'}
           paletteKey={chat.participant.slug}
           size={Platform.OS === 'web' ? 38 : 48}

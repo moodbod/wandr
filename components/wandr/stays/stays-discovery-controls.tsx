@@ -95,13 +95,14 @@ export function StaysDiscoveryControls({
           contentStyle={
             isDesktopMap
               ? [
+                  styles.searchContent,
                   styles.desktopSearchContent,
                   {
                     backgroundColor: desktopInputSurfaceColor,
                     borderColor: desktopBorderColor,
                   },
                 ]
-              : undefined
+              : styles.searchContent
           }
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
@@ -250,14 +251,22 @@ const styles = StyleSheet.create({
   },
   desktopSearchRow: {
     gap: 8,
+    width: '100%',
   },
   searchGlass: {
     flex: 1,
+    minWidth: 0,
+  },
+  searchContent: {
+    gap: 8,
+    paddingHorizontal: 12,
   },
   desktopSearchGlass: {
-    minWidth: 280,
+    flexShrink: 1,
+    minWidth: 0,
   },
   desktopSearchContent: {
+    paddingHorizontal: 12,
   },
   desktopSearchText: {
     color: designSystem.colors.darkTextWarm,
@@ -266,7 +275,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   desktopLeadingAccessory: {
-    minWidth: 148,
+    flexShrink: 1,
+    maxWidth: 184,
+    minWidth: 124,
+    width: 148,
   },
   desktopTrailingAccessory: {
     width: 52,

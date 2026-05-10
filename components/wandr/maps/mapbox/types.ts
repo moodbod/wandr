@@ -16,7 +16,10 @@ export type MapMarker = {
 export type MapPreviewProps = {
   centerCoordinate?: readonly [number, number] | null;
   userCoordinate?: readonly [number, number] | null;
+  userAvatarPaletteKey?: string | null;
+  userAvatarUri?: string | null;
   userHeading?: number | null;
+  userName?: string | null;
   viewportPadding?: {
     paddingBottom?: number;
     paddingLeft?: number;

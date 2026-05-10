@@ -2,9 +2,11 @@ import { StyleSheet, View } from 'react-native';
 
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 
 export function AppMapWorkspace() {
   const currentLocation = useCurrentLocation();
+  const traveler = useCurrentTraveler();
   const centerCoordinate = currentLocation.coordinate ?? null;
 
   return (
@@ -12,6 +14,9 @@ export function AppMapWorkspace() {
       <MapPreview
         centerCoordinate={centerCoordinate}
         userCoordinate={currentLocation.coordinate}
+        userAvatarPaletteKey={traveler?.slug}
+        userAvatarUri={traveler?.avatarUri}
+        userName={traveler?.name}
         markers={[]}
         routeCoordinates={[]}
         showRoutes={false}

@@ -2,9 +2,11 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 import type mapboxgl from 'mapbox-gl';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -17,11 +19,18 @@ const DEFAULT_MAP_CENTER: readonly [number, number] =
   getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
 
 type MapboxModule = typeof mapboxgl;
+type RenderedMapMarker = {
+  marker: mapboxgl.Marker;
+  root?: Root;
+};
 
 function MapPreviewWebComponent({
   centerCoordinate,
   userCoordinate = null,
+  userAvatarPaletteKey,
+  userAvatarUri,
   userHeading = null,
+  userName,
   viewportPadding,
   markers = [],
   routeCoordinates,
@@ -37,7 +46,7 @@ function MapPreviewWebComponent({
 }: MapPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markerRefs = useRef<mapboxgl.Marker[]>([]);
+  const markerRefs = useRef<RenderedMapMarker[]>([]);
   const onInteractRef = useRef(onInteract);
   const onMapPressRef = useRef(onMapPress);
   const hasCenteredOnResolvedDataRef = useRef(false);
@@ -185,7 +194,7 @@ function MapPreviewWebComponent({
       }
       window.removeEventListener('resize', resizeMap);
       resizeObserver.disconnect();
-      markerRefs.current.forEach((marker) => marker.remove());
+      clearRenderedMarkers(markerRefs.current);
       markerRefs.current = [];
       map.remove();
       mapRef.current = null;
@@ -319,7 +328,7 @@ function MapPreviewWebComponent({
       return;
     }
 
-    markerRefs.current.forEach((marker) => marker.remove());
+    clearRenderedMarkers(markerRefs.current);
     markerRefs.current = [];
 
     normalizedMarkers.forEach((mapMarker) => {
@@ -336,24 +345,20 @@ function MapPreviewWebComponent({
         onMarkerPress?.(mapMarker);
       });
 
-      markerRefs.current.push(marker);
+      markerRefs.current.push({ marker });
     });
 
     if (userCoordinate) {
-      const element = document.createElement('div');
-      element.style.cssText = [
-        'width:18px',
-        'height:18px',
-        'border-radius:999px',
-        `background:${designSystem.colors.lime}`,
-        `border:3px solid ${designSystem.colors.white}`,
-        'box-shadow:0 6px 16px rgba(0,0,0,0.28)',
-      ].join(';');
-      markerRefs.current.push(
-        new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current)
-      );
+      const { element, root } = createUserMarkerElement({
+        avatarPaletteKey: userAvatarPaletteKey,
+        avatarUri: userAvatarUri,
+        isDark,
+        name: userName,
+      });
+      const marker = new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current);
+      markerRefs.current.push({ marker, root });
     }
-  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userCoordinate]);
+  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userAvatarPaletteKey, userAvatarUri, userCoordinate, userName]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -490,6 +495,50 @@ function createMarkerElement(marker: MapMarker, isDark: boolean, variant: MapPre
   ">${marker.imageUri ? `<img src="${escapeHtml(marker.imageUri)}" alt="" style="width:100%;height:100%;object-fit:cover;" />` : ''}</span>`;
 
   return element;
+}
+
+function createUserMarkerElement({
+  avatarPaletteKey,
+  avatarUri,
+  isDark,
+  name,
+}: {
+  avatarPaletteKey?: string | null;
+  avatarUri?: string | null;
+  isDark: boolean;
+  name?: string | null;
+}) {
+  const element = document.createElement('div');
+  element.style.cssText = [
+    'width:50px',
+    'height:50px',
+    'border-radius:999px',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    `background:${isDark ? designSystem.colors.darkBackground : designSystem.colors.white}`,
+    'box-shadow:0 8px 14px rgba(0,0,0,0.18)',
+    'overflow:hidden',
+  ].join(';');
+
+  const root = createRoot(element);
+  root.render(
+    <WandrAvatar
+      name={name}
+      paletteKey={avatarPaletteKey}
+      size={42}
+      uri={avatarUri}
+    />
+  );
+
+  return { element, root };
+}
+
+function clearRenderedMarkers(markers: RenderedMapMarker[]) {
+  markers.forEach(({ marker, root }) => {
+    root?.unmount();
+    marker.remove();
+  });
 }
 
 function upsertRouteLayer(

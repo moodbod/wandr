@@ -45,7 +45,14 @@ export function TripSwitcher({
           <View style={[styles.imageFrame, styles.newTripFrame, isDark && styles.imageFrameDark]}>
             <Plus size={24} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
           </View>
-          <ThemedText style={styles.tripCardName} numberOfLines={1}>New Trip</ThemedText>
+          <ThemedText
+            darkColor={designSystem.colors.darkMutedText}
+            lightColor={designSystem.colors.warmDark}
+            style={styles.tripCardName}
+            numberOfLines={1}
+          >
+            New Trip
+          </ThemedText>
         </Pressable>
 
         {trips.map((t) => (
@@ -92,6 +99,8 @@ export function TripSwitcher({
             </View>
             <ThemedText 
               numberOfLines={1} 
+              lightColor={selectedTripId === t._id ? designSystem.colors.ink : designSystem.colors.warmDark}
+              darkColor={selectedTripId === t._id ? designSystem.colors.darkText : designSystem.colors.darkMutedText}
               style={[styles.tripCardName, selectedTripId === t._id && styles.tripCardNameActive]}
             >
               {t.name}

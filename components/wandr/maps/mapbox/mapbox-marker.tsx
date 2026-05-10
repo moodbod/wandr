@@ -3,6 +3,7 @@ import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 
 import { getMapboxModule } from './mapbox-module';
@@ -136,6 +137,36 @@ export const MapboxPlaceMarker = memo(function MapboxPlaceMarker({
   );
 });
 
+type MapboxUserMarkerProps = {
+  avatarPaletteKey?: string | null;
+  avatarUri?: string | null;
+  coordinate: readonly [number, number];
+  isDark: boolean;
+  name?: string | null;
+};
+
+export const MapboxUserMarker = memo(function MapboxUserMarker({
+  avatarPaletteKey,
+  avatarUri,
+  coordinate,
+  isDark,
+  name,
+}: MapboxUserMarkerProps) {
+  const MapboxGL = getMapboxModule();
+
+  if (!MapboxGL) {
+    return null;
+  }
+
+  return (
+    <MapboxGL.MarkerView coordinate={toMapboxPosition(coordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap style={styles.userMarkerView}>
+      <View style={[styles.userAvatarFrame, isDark && styles.userAvatarFrameDark]}>
+        <WandrAvatar name={name} paletteKey={avatarPaletteKey} size={42} uri={avatarUri} />
+      </View>
+    </MapboxGL.MarkerView>
+  );
+});
+
 function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
   return [coordinate[0], coordinate[1]];
 }
@@ -144,6 +175,27 @@ const styles = StyleSheet.create({
   markerView: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  userMarkerView: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  userAvatarFrame: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: designSystem.colors.white,
+    shadowColor: designSystem.colors.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  userAvatarFrameDark: {
+    backgroundColor: designSystem.colors.darkBackground,
   },
   markerShell: {
     alignItems: 'center',

@@ -994,7 +994,14 @@ const ExploreContent = memo(function ExploreContent({
     <ScrollComponent contentContainerStyle={[styles.sheetContent, scrollContainerStyle]} showsVerticalScrollIndicator={false}>
       <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
         <View style={styles.sectionCopy}>
-          <ThemedText numberOfLines={2} style={styles.sectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+          <ThemedText
+            darkColor={designSystem.colors.darkText}
+            lightColor={designSystem.colors.ink}
+            numberOfLines={2}
+            style={styles.sectionTitle}
+          >
+            {planningCopy.exploreTitle}
+          </ThemedText>
         </View>
       </Animated.View>
 
@@ -1177,7 +1184,13 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
       <BottomSheetScrollView contentContainerStyle={styles.mobileSheetContent} showsVerticalScrollIndicator={false}>
         <Animated.View style={headerAnimatedStyle ? [styles.mobileSectionHeader, headerAnimatedStyle] : styles.mobileSectionHeader}>
           <View style={styles.sectionCopy}>
-            <ThemedText style={styles.mobileSectionTitle}>{planningCopy.exploreTitle}</ThemedText>
+            <ThemedText
+              darkColor={designSystem.colors.darkText}
+              lightColor={designSystem.colors.ink}
+              style={styles.mobileSectionTitle}
+            >
+              {planningCopy.exploreTitle}
+            </ThemedText>
             <ThemedText
               style={[
                 styles.mobileSectionSubtitle,
@@ -1574,6 +1587,9 @@ function toTrendingActivityCard(
     title: experience.title,
     visitorCount: getExperiencePopularityCount(experience),
     countryLabel: experience.countryLabel ?? experience.locationLabel,
+    ...(experience.travelerMomentum?.avatarUris
+      ? { avatarUris: [...experience.travelerMomentum.avatarUris] }
+      : {}),
   };
 }
 

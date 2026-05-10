@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   desktopSelector: {
     height: designSystem.layout.inputHeight,
     width: '100%',
-    minWidth: 148,
+    minWidth: 0,
     maxWidth: 184,
     borderRadius: designSystem.radii.pill,
     borderWidth: 1,
