@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
-import { Bed, Check, MapTrifold, Plus, Star, UsersThree, X } from 'phosphor-react-native';
+import { Check, Plus, Star, X } from 'phosphor-react-native';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -30,9 +30,8 @@ import { formatUsdConversion, formatUsdConversionParts } from '@/lib/currency';
 import { fetchMapboxLocationSuggestions } from '@/lib/mapbox-geocoding';
 import type { ExploreExperience } from '@/constants/explore-content';
 import type { ExploreJoinableTripCard } from '@/types/explore';
-import type { StayProperty, StayRoomOption } from '@/types/stays';
+import type { StayArrivalOption, StayProperty, StayRoomOption } from '@/types/stays';
 
-type ResourceMode = 'experiences' | 'rooms';
 type DetailTab = 'overview' | 'bookings' | 'visits' | 'ratings' | 'images';
 type BookingFilter = 'pending' | 'confirmed' | 'cancelled' | 'all';
 
@@ -86,102 +85,6 @@ const PUBLIC_AVAILABILITY_OPTIONS = [
   'Next opening this week',
   'Fully booked',
 ] as const;
-
-const DEFAULT_MANAGER_MAP_CENTER = [17.0832, -22.57] as const;
-
-const MANAGER_IMPORT_PROMPTS: Record<ResourceMode, string> = {
-  experiences: `Generate one valid Wandr manager import JSON file for an experience.
-
-Return ONLY raw JSON. Do not wrap it in markdown. Do not add comments.
-
-The JSON must match this shape exactly. Replace every example value with real content:
-
-{
-  "kind": "experience",
-  "fields": {
-    "itemKind": "Experience",
-    "title": "Windhoek Craft Walk",
-    "subtitle": "Old brewery, design studios, and coffee stops",
-    "description": "A guided city-first route with contemporary Namibian design, easy food stops, and enough structure to feel curated.",
-    "category": "Adventure | Culture | Food & Drink | Gastronomy | Nature | Wildlife | Wellness",
-    "durationLabel": "45 minutes | 2 hours | 2-3 hours | 3 hours | 3-4 hours | 4 hours | Half day | Full day | Overnight",
-    "groupCapacity": 10,
-    "priceUsd": 120,
-    "mapLocation": {
-      "longitude": 17.0832,
-      "latitude": -22.5609
-    },
-    "imageUri": "https://example.com/images/windhoek-craft-walk-cover.jpg",
-    "galleryImages": [
-      "https://example.com/images/windhoek-craft-walk-1.jpg",
-      "https://example.com/images/windhoek-craft-walk-2.jpg"
-    ],
-    "booking": {
-      "availabilityLabel": "Available today | Open daily | Morning departures | Morning and afternoon departures | Next opening this week | Fully booked",
-      "confirmMode": "Instant confirmation | Host confirmation within 1 hour | Host confirmation within 2 hours | Host confirmation within 4 hours | Manual confirmation"
-    },
-    "includes": ["Local guide", "Coffee stop", "Studio visits"]
-  }
-}
-
-Rules:
-- Every field shown above is required.
-- All strings must be useful real content, not placeholders like "string", "...", or "https://...".
-- imageUri and galleryImages must be valid public image URLs.
-- Do not use markdown links. Put bare image URLs only in imageUri and galleryImages.
-- Bad image URL: "[https://example.com/photo.jpg"
-- Bad text: "Ask](https://example.com/photo.jpg) for a room"
-- Notes/descriptions must be plain human text and must not contain JSON fragments, encoded JSON, or image URLs.
-- Never put text like "%22galleryImages%22", "\\"imageUri\\"", "\\"bookingNote\\"", or any copied JSON fragment inside a description or note.
-- mapLocation must use longitude first and latitude second.
-- priceUsd and groupCapacity must be numbers.
-- Return one JSON object only.`,
-  rooms: `Generate one valid Wandr manager import JSON file for a room.
-
-Return ONLY raw JSON. Do not wrap it in markdown. Do not add comments.
-
-The JSON must match this shape exactly. Replace every example value with real content:
-
-{
-  "kind": "room",
-  "fields": {
-    "stay": {
-      "name": "Avani Windhoek Hotel & Casino",
-      "bookingPhone": "+264 61 280 0000",
-      "summary": "Modern city hotel in central Windhoek, close to shops, craft markets, monuments, and rooftop views across the capital.",
-      "imageUri": "https://example.com/images/avani-windhoek-cover.jpg",
-      "galleryImages": [
-        "https://example.com/images/avani-windhoek-1.jpg",
-        "https://example.com/images/avani-windhoek-2.jpg"
-      ],
-      "priceUsd": 140,
-      "bookingNote": "Ask for a city-view room and confirm parking or airport transfer at least 24 hours ahead if needed.",
-      "stayStyle": "design | lodge | roadside | wellness",
-      "routeVibe": "city reset | coast base | wildlife stop | desert night",
-      "idealFor": ["Windhoek overnight reset", "Business travelers", "Self-drive Namibia starters"],
-      "amenities": ["Free WiFi", "Rooftop restaurant and bar", "Rooftop pool", "On-site parking"],
-      "nearbyHighlights": ["Christuskirche", "Namibia Craft Centre", "Zoo Park"]
-    },
-    "mapLocation": {
-      "longitude": 17.0832,
-      "latitude": -22.5609
-    }
-  }
-}
-
-Rules:
-- Every field shown above is required.
-- All strings must be useful real content, not placeholders like "string", "...", or "https://...".
-- imageUri and galleryImages must be valid public image URLs.
-- Do not use markdown links. Put bare image URLs only in imageUri and galleryImages.
-- Bad image URL: "[https://example.com/photo.jpg"
-- Bad bookingNote: "Ask](https://example.com/photo.jpg) for a room"
-- bookingNote must be plain human text and must not contain JSON fragments, encoded JSON, or image URLs.
-- Never put text like "%22galleryImages%22", "\\"imageUri\\"", "\\"bookingNote\\"", or any copied JSON fragment inside bookingNote.
-- mapLocation must use longitude first and latitude second.
-- priceUsd must be a number.
-- Return one JSON object only.`,
-};
 
 type ManagerDashboardProps = {
   travelerSlug?: string | null;
@@ -288,8 +191,8 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const bookings = useQuery(listManagedBookingsRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
   const locationPhotos = useQuery(listManagedLocationPhotosRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
 
-  const experiences = (experiencesQuery as ExploreExperience[] | undefined) ?? [];
-  const stayItems = (stays as StayProperty[] | undefined) ?? [];
+  const experiences = useMemo(() => (experiencesQuery as ExploreExperience[] | undefined) ?? [], [experiencesQuery]);
+  const stayItems = useMemo(() => (stays as StayProperty[] | undefined) ?? [], [stays]);
   const managedBookings = (bookings as ManagedBooking[] | undefined) ?? [];
   const photos = (locationPhotos as ManagedLocationPhoto[] | undefined) ?? [];
   const groupItems = (groups as ExploreJoinableTripCard[] | undefined) ?? [];
@@ -489,17 +392,31 @@ function createDraftRoom(): DraftResource {
     rows: [
       { label: 'stay.name', value: '' },
       { label: 'stay.bookingPhone', value: '' },
+      { label: 'stay.locationLabel', value: '' },
+      { label: 'stay.town', value: '' },
+      { label: 'stay.region', value: '' },
+      { label: 'stay.countryCode', value: '' },
+      { label: 'stay.countryLabel', value: '' },
+      { label: 'stay.planningLocationId', value: '' },
       { label: 'stay.summary', multiline: true, value: '' },
       { editor: 'coordinate', label: 'mapLocation', value: '' },
       { editor: 'image', label: 'stay.imageUri', value: '' },
       { editor: 'images', label: 'stay.galleryImages', value: '' },
       { editor: 'number', label: 'stay.priceUsd', value: '' },
+      { label: 'stay.currencyCode', value: '' },
+      { editor: 'number', label: 'stay.rating', value: '' },
+      { editor: 'number', label: 'stay.reviewCount', value: '' },
       { label: 'stay.bookingNote', multiline: true, value: '' },
       { label: 'stay.stayStyle', value: '' },
       { label: 'stay.routeVibe', value: '' },
+      { label: 'stay.sleepSignal', value: '' },
       { editor: 'list', label: 'stay.idealFor', multiline: true, value: '' },
       { editor: 'list', label: 'stay.amenities', multiline: true, value: '' },
       { editor: 'list', label: 'stay.nearbyHighlights', multiline: true, value: '' },
+      { label: 'bookingProfile.defaultRoomOptionId', value: '' },
+      { label: 'bookingProfile.defaultArrivalOptionId', value: '' },
+      { editor: 'json', label: 'bookingProfile.roomOptions', multiline: true, value: '' },
+      { editor: 'json', label: 'bookingProfile.arrivalOptions', multiline: true, value: '' },
     ],
   };
 }
@@ -548,12 +465,28 @@ function requireDraftNumber(draft: DraftResource, label: string) {
   return value;
 }
 
+function requireDraftNonNegativeNumber(draft: DraftResource, label: string) {
+  const value = Number(requireDraftValue(draft, label));
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${formatDraftLabel(label)} must be zero or above.`);
+  }
+  return value;
+}
+
 function requireDraftCoordinate(draft: DraftResource, label: string) {
   const coordinate = parseCoordinateValue(requireDraftValue(draft, label));
   if (!coordinate) {
     throw new Error(`${formatDraftLabel(label)} must be longitude, latitude.`);
   }
   return [coordinate[0], coordinate[1]];
+}
+
+function requireDraftJson<T>(draft: DraftResource, label: string): T {
+  try {
+    return JSON.parse(requireDraftValue(draft, label)) as T;
+  } catch {
+    throw new Error(`${formatDraftLabel(label)} must be valid JSON.`);
+  }
 }
 
 function buildExperienceCreateArgs(draft: DraftResource, managerSlug: string) {
@@ -597,17 +530,33 @@ function buildStayCreateArgs(draft: DraftResource, managerSlug: string) {
   return {
     managerSlug,
     name: requireDraftValue(draft, 'stay.name'),
+    locationLabel: requireDraftValue(draft, 'stay.locationLabel'),
+    town: requireDraftValue(draft, 'stay.town'),
+    region: requireDraftValue(draft, 'stay.region'),
+    countryCode: getDraftValue(draft, 'stay.countryCode') || undefined,
+    countryLabel: getDraftValue(draft, 'stay.countryLabel') || undefined,
+    planningLocationId: getDraftValue(draft, 'stay.planningLocationId') || undefined,
     summary: requireDraftValue(draft, 'stay.summary'),
     coordinate: requireDraftCoordinate(draft, 'mapLocation'),
     imageUri: requireDraftValue(draft, 'stay.imageUri'),
     galleryImages: requireDraftList(draft, 'stay.galleryImages'),
     priceUsd: requireDraftNumber(draft, 'stay.priceUsd'),
+    currencyCode: requireDraftValue(draft, 'stay.currencyCode'),
+    rating: requireDraftNonNegativeNumber(draft, 'stay.rating'),
+    reviewCount: requireDraftNonNegativeNumber(draft, 'stay.reviewCount'),
     bookingNote: requireDraftValue(draft, 'stay.bookingNote'),
     stayStyle: normalizeStayStyle(requireDraftValue(draft, 'stay.stayStyle')),
     routeVibe: normalizeRouteVibe(requireDraftValue(draft, 'stay.routeVibe')),
+    sleepSignal: requireDraftValue(draft, 'stay.sleepSignal'),
     idealFor: requireDraftList(draft, 'stay.idealFor'),
     amenities: requireDraftList(draft, 'stay.amenities'),
     nearbyHighlights: requireDraftList(draft, 'stay.nearbyHighlights'),
+    bookingProfile: {
+      roomOptions: requireDraftJson<StayRoomOption[]>(draft, 'bookingProfile.roomOptions'),
+      arrivalOptions: requireDraftJson<StayArrivalOption[]>(draft, 'bookingProfile.arrivalOptions'),
+      defaultRoomOptionId: requireDraftValue(draft, 'bookingProfile.defaultRoomOptionId'),
+      defaultArrivalOptionId: requireDraftValue(draft, 'bookingProfile.defaultArrivalOptionId'),
+    },
   };
 }
 
@@ -778,91 +727,6 @@ function OverviewEditor({
   );
 }
 
-function AvailabilityEditor({
-  colors,
-  resource,
-  totalBookings,
-}: {
-  colors: DashboardColors;
-  resource: ManagedResource;
-  totalBookings: ManagedBooking[];
-}) {
-  const availability = getAvailabilitySummary(resource, totalBookings);
-
-  return (
-    <SectionBlock colors={colors} title="Availability" subtitle="Live booking state, capacity, and inventory controls.">
-      <View style={styles.availabilityGrid}>
-        <View
-          style={[
-            styles.availabilityCard,
-            {
-              backgroundColor: availability.isFull ? colors.overlay : designSystem.colors.limeSoft,
-              borderColor: availability.isFull ? designSystem.colors.copper : designSystem.colors.lime,
-            },
-          ]}
-        >
-          <ThemedText style={[styles.availabilityLabel, availability.isFull ? styles.availabilityFull : styles.availabilityOpen]}>
-            {availability.label}
-          </ThemedText>
-          <ThemedText style={styles.availabilityMeta}>{availability.detail}</ThemedText>
-        </View>
-        <ManagerField colors={colors} label="Confirmed" value={String(availability.confirmedCount)} />
-        <ManagerField colors={colors} label="Pending" value={String(availability.pendingCount)} />
-        <ManagerField colors={colors} label="Capacity / inventory" value={availability.capacityLabel} />
-      </View>
-      <View style={styles.formGrid}>
-        {resource.kind === 'experience' ? (
-          <>
-            <ManagerField colors={colors} label="Public availability label" value={resource.experience.booking?.availabilityLabel ?? 'Available'} />
-            <ManagerField colors={colors} label="Confirmation mode" value={resource.experience.booking?.confirmMode ?? 'Manual confirmation'} />
-            <ManagerField colors={colors} label="Traveler capacity" value="Set capacity or leave open" />
-            <ManagerField colors={colors} label="Blackout dates" value="Add unavailable dates" />
-          </>
-        ) : (
-          <>
-            <ManagerField colors={colors} label="Max rooms" value={String(resource.room.room.maxRooms)} />
-            <ManagerField colors={colors} label="Max adults" value={String(resource.room.room.maxAdults)} />
-            <ManagerField colors={colors} label="Max children" value={String(resource.room.room.maxChildren)} />
-            <ManagerField colors={colors} label="Arrival windows" value={resource.room.stay.bookingProfile?.arrivalOptions.map((option) => option.label).join(', ') ?? ''} />
-          </>
-        )}
-      </View>
-    </SectionBlock>
-  );
-}
-
-function AvailabilityTable({
-  colors,
-  resource,
-  totalBookings,
-}: {
-  colors: DashboardColors;
-  resource: ManagedResource;
-  totalBookings: ManagedBooking[];
-}) {
-  const availability = getAvailabilitySummary(resource, totalBookings);
-  const rows =
-    resource.kind === 'experience'
-      ? [
-          { label: 'availability.status', value: availability.label },
-          { label: 'availability.confirmed', value: String(availability.confirmedCount) },
-          { label: 'availability.pending', value: String(availability.pendingCount) },
-          { label: 'availability.capacity', value: availability.capacityLabel },
-          { label: 'booking.availabilityLabel', value: resource.experience.booking?.availabilityLabel ?? '' },
-          { label: 'booking.confirmMode', value: resource.experience.booking?.confirmMode ?? '' },
-        ]
-      : [
-          { label: 'availability.status', value: availability.label },
-          { label: 'availability.confirmed', value: String(availability.confirmedCount) },
-          { label: 'availability.pending', value: String(availability.pendingCount) },
-          { label: 'room.maxRooms', value: String(resource.room.room.maxRooms) },
-          { label: 'room.maxAdults', value: String(resource.room.room.maxAdults) },
-          { label: 'room.maxChildren', value: String(resource.room.room.maxChildren) },
-        ];
-
-  return <SchemaRowsTable colors={colors} rows={rows} title="Availability" />;
-}
-
 function ExperienceManagerForm({
   colors,
   preferredCurrency,
@@ -973,144 +837,6 @@ function RoomManagerForm({
   );
 }
 
-function PricingEditor({ colors, preferredCurrency, resource }: { colors: DashboardColors; preferredCurrency: string; resource: ManagedResource }) {
-  if (resource.kind === 'experience') {
-    const priceUsd = parsePriceAmount(resource.experience.price);
-
-    return (
-      <SectionBlock colors={colors} title="Pricing">
-        <View style={styles.formGrid}>
-          <ManagerField colors={colors} label="USD price" value={String(priceUsd)} />
-          <ManagerField colors={colors} label="Traveler price" value={formatUsdConversion(priceUsd, preferredCurrency)} />
-        </View>
-      </SectionBlock>
-    );
-  }
-
-  return (
-    <SectionBlock colors={colors} title="Pricing">
-      <View style={styles.formGrid}>
-        <ManagerField colors={colors} label="USD nightly price" value={String(resource.room.stay.pricePerNight)} />
-        <ManagerField colors={colors} label="Traveler price" value={formatUsdConversion(resource.room.stay.pricePerNight, preferredCurrency)} />
-        <ManagerTextArea colors={colors} label="Booking note" value={resource.room.stay.bookingNote} />
-        <ManagerField colors={colors} label="Default room option" value={resource.room.stay.bookingProfile?.defaultRoomOptionId ?? resource.room.room.id} />
-        <ManagerField colors={colors} label="Default arrival option" value={resource.room.stay.bookingProfile?.defaultArrivalOptionId ?? ''} />
-        <ManagerField colors={colors} label="Deposit / cancellation" value="Add policy" />
-      </View>
-    </SectionBlock>
-  );
-}
-
-function RoomOptionsEditor({ colors, options }: { colors: DashboardColors; options: readonly StayRoomOption[] }) {
-  const [draftOptions, setDraftOptions] = useState(() => [...options]);
-
-  useEffect(() => {
-    setDraftOptions([...options]);
-  }, [options]);
-
-  return (
-    <View style={[styles.optionTable, { borderColor: colors.borderSoft }]}>
-      <View style={[styles.optionHeader, { borderColor: colors.borderSoft }]}>
-        <ThemedText style={[styles.optionHeaderText, styles.optionNameColumn]}>Room</ThemedText>
-        <ThemedText style={[styles.optionHeaderText, styles.optionSmallColumn]}>Adults</ThemedText>
-        <ThemedText style={[styles.optionHeaderText, styles.optionSmallColumn]}>Children</ThemedText>
-        <ThemedText style={[styles.optionHeaderText, styles.optionSmallColumn]}>Rooms</ThemedText>
-        <View style={styles.optionActionColumn} />
-      </View>
-      {draftOptions.map((option) => (
-        <View key={option.id} style={[styles.optionRow, { borderColor: colors.borderSoft }]}>
-          <View style={styles.optionNameColumn}>
-            <TextInput defaultValue={option.label} placeholder="Room name" placeholderTextColor={colors.placeholder} style={[styles.optionInput, { color: colors.text }]} />
-            <TextInput
-              defaultValue={option.detail}
-              multiline
-              placeholder="Room detail"
-              placeholderTextColor={colors.placeholder}
-              style={[styles.optionInput, styles.optionDetailInput, { color: colors.text }]}
-            />
-            <TextInput
-              defaultValue={option.bedOptions.map((bed) => bed.label).join(', ')}
-              placeholder="Bed options"
-              placeholderTextColor={colors.placeholder}
-              style={[styles.optionMetaInput, { color: colors.text }]}
-            />
-          </View>
-          <CompactNumberInput colors={colors} value={option.maxAdults} />
-          <CompactNumberInput colors={colors} value={option.maxChildren} />
-          <CompactNumberInput colors={colors} value={option.maxRooms} />
-          <Pressable
-            accessibilityLabel="Remove room option"
-            accessibilityRole="button"
-            onPress={() => setDraftOptions((currentOptions) => currentOptions.filter((currentOption) => currentOption.id !== option.id))}
-            style={styles.rowRemoveButton}
-          >
-            <X color={designSystem.colors.mutedText} size={15} weight="bold" />
-          </Pressable>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function CompactNumberInput({ colors, value }: { colors: DashboardColors; value: number }) {
-  const [draftValue, setDraftValue] = useState(value);
-
-  useEffect(() => {
-    setDraftValue(value);
-  }, [value]);
-
-  return (
-    <View style={[styles.optionSmallColumn, styles.compactStepperCell]}>
-      <Pressable accessibilityRole="button" onPress={() => setDraftValue((currentValue) => Math.max(0, currentValue - 1))} style={styles.compactStepperButton}>
-        <ThemedText style={styles.compactStepperText}>-</ThemedText>
-      </Pressable>
-      <TextInput
-        keyboardType="number-pad"
-        onChangeText={(nextValue) => setDraftValue(Math.max(0, Number.parseInt(nextValue, 10) || 0))}
-        placeholder="0"
-        placeholderTextColor={colors.placeholder}
-        style={[styles.compactStepperInput, { color: colors.text }]}
-        value={String(draftValue)}
-      />
-      <Pressable accessibilityRole="button" onPress={() => setDraftValue((currentValue) => currentValue + 1)} style={styles.compactStepperButton}>
-        <ThemedText style={styles.compactStepperText}>+</ThemedText>
-      </Pressable>
-    </View>
-  );
-}
-
-function ArrivalOptionsEditor({ colors, options }: { colors: DashboardColors; options: readonly { id: string; label: string }[] }) {
-  const [draftOptions, setDraftOptions] = useState(() => [...options]);
-
-  useEffect(() => {
-    setDraftOptions([...options]);
-  }, [options]);
-
-  return (
-    <View style={[styles.optionTable, { borderColor: colors.borderSoft }]}>
-      <View style={[styles.optionHeader, { borderColor: colors.borderSoft }]}>
-        <ThemedText style={[styles.optionHeaderText, styles.optionSmallColumn]}>ID</ThemedText>
-        <ThemedText style={[styles.optionHeaderText, styles.optionNameColumn]}>Arrival window</ThemedText>
-        <View style={styles.optionActionColumn} />
-      </View>
-      {draftOptions.map((option) => (
-        <View key={option.id} style={[styles.optionRow, styles.compactOptionRow, { borderColor: colors.borderSoft }]}>
-          <TextInput defaultValue={option.id} placeholder="id" placeholderTextColor={colors.placeholder} style={[styles.optionInput, styles.optionSmallColumn, { color: colors.text }]} />
-          <TextInput defaultValue={option.label} placeholder="Arrival label" placeholderTextColor={colors.placeholder} style={[styles.optionInput, styles.optionNameColumn, { color: colors.text }]} />
-          <Pressable
-            accessibilityLabel="Remove arrival window"
-            accessibilityRole="button"
-            onPress={() => setDraftOptions((currentOptions) => currentOptions.filter((currentOption) => currentOption.id !== option.id))}
-            style={styles.rowRemoveButton}
-          >
-            <X color={designSystem.colors.mutedText} size={15} weight="bold" />
-          </Pressable>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function FriendlySection({ children, title }: { children: React.ReactNode; title: string }) {
   return (
     <View style={styles.friendlySection}>
@@ -1164,55 +890,6 @@ function FriendlyDerivedValue({ colors, label, rateLabel, value }: { colors: Das
       <View style={styles.derivedValueStack}>
         <ThemedText style={styles.derivedValueText}>{value || 'Derived when value is set'}</ThemedText>
         {rateLabel ? <ThemedText style={styles.derivedRateText}>{rateLabel}</ThemedText> : null}
-      </View>
-    </View>
-  );
-}
-
-function FriendlyNumberField({
-  colors,
-  label,
-  max = 99,
-  min = 0,
-  suffix,
-  value,
-}: {
-  colors: DashboardColors;
-  label: string;
-  max?: number;
-  min?: number;
-  suffix?: string;
-  value: number;
-}) {
-  const [draftValue, setDraftValue] = useState(Number.isFinite(value) ? value : min);
-
-  useEffect(() => {
-    setDraftValue(Number.isFinite(value) ? value : min);
-  }, [min, value]);
-
-  const updateValue = (nextValue: number) => {
-    setDraftValue(Math.min(max, Math.max(min, nextValue)));
-  };
-
-  return (
-    <View style={[styles.friendlyRow, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.friendlyLabel}>{label}</ThemedText>
-      <View style={styles.stepperCell}>
-        <Pressable accessibilityRole="button" onPress={() => updateValue(draftValue - 1)} style={styles.stepperButton}>
-          <ThemedText style={styles.stepperButtonText}>-</ThemedText>
-        </Pressable>
-        <TextInput
-          keyboardType="number-pad"
-          onChangeText={(nextValue) => updateValue(Number.parseInt(nextValue, 10) || min)}
-          placeholder="0"
-          placeholderTextColor={colors.placeholder}
-          style={[styles.stepperInput, { color: colors.text }]}
-          value={String(draftValue)}
-        />
-        <Pressable accessibilityRole="button" onPress={() => updateValue(draftValue + 1)} style={styles.stepperButton}>
-          <ThemedText style={styles.stepperButtonText}>+</ThemedText>
-        </Pressable>
-        {suffix ? <ThemedText style={styles.stepperSuffix}>{suffix}</ThemedText> : null}
       </View>
     </View>
   );
@@ -1451,25 +1128,6 @@ function TripFitEditor({
         <Plus color={designSystem.colors.darkGreen} size={14} weight="bold" />
         <ThemedText style={styles.inlineAddText}>Add trip fit row</ThemedText>
       </Pressable>
-    </View>
-  );
-}
-
-function FriendlyImageField({
-  colors,
-  label,
-  multiple = false,
-  value,
-}: {
-  colors: DashboardColors;
-  label: string;
-  multiple?: boolean;
-  value: string;
-}) {
-  return (
-    <View style={[styles.friendlyRow, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.friendlyLabel}>{label}</ThemedText>
-      <SchemaCellEditor colors={colors} row={{ editor: multiple ? 'images' : 'image', label, value }} />
     </View>
   );
 }
@@ -1786,31 +1444,6 @@ function ImagesPanel({
   );
 }
 
-function SchemaRowsTable({
-  colors,
-  rows,
-  title,
-}: {
-  colors: DashboardColors;
-  rows: SchemaRow[];
-  title: string;
-}) {
-  return (
-    <View style={styles.sectionStack}>
-      <SectionBlock colors={colors} title={title}>
-        <View style={[styles.table, { borderColor: colors.borderSoft }]}>
-          {rows.map((row) => (
-            <View key={row.label} style={[styles.dataRow, { borderColor: colors.borderSoft }]}>
-              <ThemedText style={styles.dataLabel}>{row.label}</ThemedText>
-              <SchemaCellEditor colors={colors} row={row} />
-            </View>
-          ))}
-        </View>
-      </SectionBlock>
-    </View>
-  );
-}
-
 function SchemaCellEditor({
   colors,
   onChange,
@@ -1987,7 +1620,7 @@ function CoordinatePickerModal({
 
     try {
       const results = await fetchMapboxLocationSuggestions({
-        currentCoordinate: coordinate ?? DEFAULT_MANAGER_MAP_CENTER,
+        currentCoordinate: coordinate,
         query: trimmedQuery,
       });
       setHasSearched(true);
@@ -2061,7 +1694,7 @@ function CoordinatePickerModal({
             </View>
             <View style={styles.coordinateMapFrame}>
               <MapPreview
-                centerCoordinate={coordinate ?? DEFAULT_MANAGER_MAP_CENTER}
+                centerCoordinate={coordinate}
                 markers={coordinate ? [{ id: 'selected', coordinate, label: 'Selected point', priceLabel: 'Pin', status: 'active' }] : []}
                 onMapPress={(nextCoordinate) => {
                   setCoordinate(nextCoordinate);
@@ -2094,9 +1727,8 @@ function DraftResourceEditor({
 }) {
   const groupedRows = groupSchemaRows(draft.rows);
   const [importReport, setImportReport] = useState<JsonImportReport | null>(null);
-  const [isPromptOpen, setIsPromptOpen] = useState(false);
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [pastedJson, setPastedJson] = useState('');
-  const promptText = MANAGER_IMPORT_PROMPTS[draft.kind === 'experience' ? 'experiences' : 'rooms'];
   const editorDiagnostics = useMemo(() => analyzeDraftJsonText(pastedJson, draft), [draft, pastedJson]);
   const editorHasErrors = editorDiagnostics.some((diagnostic) => diagnostic.severity === 'error');
   const lineNumbers = useMemo(
@@ -2143,19 +1775,6 @@ function DraftResourceEditor({
     };
     input.click();
   };
-  const handleCopyPrompt = async () => {
-    if (Platform.OS === 'web' && globalThis.navigator?.clipboard?.writeText) {
-      await globalThis.navigator.clipboard.writeText(promptText);
-      setImportReport({
-        fileName: 'schema prompt',
-        messages: ['Prompt copied. Paste it into your AI tool, then upload the JSON it returns.'],
-        status: 'success',
-      });
-      return;
-    }
-
-    setIsPromptOpen(true);
-  };
   const handleCompilePastedJson = () => {
     try {
       const compiled = compileDraftJson(pastedJson, draft);
@@ -2165,7 +1784,7 @@ function DraftResourceEditor({
         messages: compiled.messages.length ? compiled.messages : ['JSON compiled and populated the form.'],
         status: 'success',
       });
-      setIsPromptOpen(false);
+      setIsJsonModalOpen(false);
     } catch (error) {
       setImportReport({
         fileName: 'pasted JSON',
@@ -2184,8 +1803,8 @@ function DraftResourceEditor({
           <ThemedText style={styles.detailSubtitle}>Fill the sections and create when ready.</ThemedText>
         </View>
         <View style={styles.draftHeaderActions}>
-          <Pressable accessibilityRole="button" onPress={() => setIsPromptOpen(true)} style={styles.secondaryButton}>
-            <ThemedText style={styles.secondaryButtonText}>Schema prompt</ThemedText>
+          <Pressable accessibilityRole="button" onPress={() => setIsJsonModalOpen(true)} style={styles.secondaryButton}>
+            <ThemedText style={styles.secondaryButtonText}>Paste JSON</ThemedText>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={handleImportJson} style={styles.secondaryButton}>
             <ThemedText style={styles.secondaryButtonText}>Import JSON</ThemedText>
@@ -2203,34 +1822,24 @@ function DraftResourceEditor({
           </Pressable>
         </View>
       </View>
-      <Modal transparent animationType="fade" visible={isPromptOpen} onRequestClose={() => setIsPromptOpen(false)}>
+      <Modal transparent animationType="fade" visible={isJsonModalOpen} onRequestClose={() => setIsJsonModalOpen(false)}>
         <View style={styles.promptModalBackdrop}>
           <View style={[styles.promptModal, { backgroundColor: colors.background, borderColor: colors.borderSoft }]}>
             <View style={styles.promptModalHeader}>
               <View>
-                <ThemedText style={styles.detailEyebrow}>AI schema</ThemedText>
-                <ThemedText style={styles.promptModalTitle}>Prompt and paste JSON</ThemedText>
+                <ThemedText style={styles.detailEyebrow}>Manual JSON</ThemedText>
+                <ThemedText style={styles.promptModalTitle}>Paste JSON</ThemedText>
               </View>
               <View style={styles.draftHeaderActions}>
-                <Pressable accessibilityRole="button" onPress={handleCopyPrompt} style={styles.saveButton}>
-                  <ThemedText style={styles.saveButtonText}>Copy</ThemedText>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => setIsPromptOpen(false)} style={styles.secondaryButton}>
+                <Pressable accessibilityRole="button" onPress={() => setIsJsonModalOpen(false)} style={styles.secondaryButton}>
                   <ThemedText style={styles.secondaryButtonText}>Close</ThemedText>
                 </Pressable>
               </View>
             </View>
-            <TextInput
-              editable={false}
-              multiline
-              scrollEnabled
-              value={promptText}
-              style={[styles.promptTextArea, { borderColor: colors.borderSoft, color: colors.text }]}
-            />
             <View style={[styles.pasteCompilerBox, { borderColor: colors.borderSoft }]}>
               <View style={styles.pasteCompilerHeader}>
                 <View>
-                  <ThemedText style={styles.importReportTitle}>Paste generated JSON</ThemedText>
+                  <ThemedText style={styles.importReportTitle}>Paste JSON</ThemedText>
                   <ThemedText style={styles.importReportMessage}>Compile it here and the create form will fill in automatically.</ThemedText>
                 </View>
                 <Pressable
@@ -2257,7 +1866,7 @@ function DraftResourceEditor({
                   autoCorrect={false}
                   multiline
                   onChangeText={setPastedJson}
-                  placeholder="Paste the AI-generated JSON here"
+                  placeholder="Paste JSON here"
                   placeholderTextColor={colors.placeholder}
                   scrollEnabled
                   spellCheck={false}
@@ -2322,82 +1931,6 @@ function DraftResourceEditor({
   );
 }
 
-function ManagerField({ colors, label, value }: { colors: DashboardColors; label: string; value: string }) {
-  return (
-    <View style={[styles.managerField, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <TextInput
-        defaultValue={value}
-        placeholder="Not set"
-        placeholderTextColor={colors.placeholder}
-        style={[styles.textInput, { color: colors.text }]}
-      />
-    </View>
-  );
-}
-
-function ManagerTextArea({ colors, label, value }: { colors: DashboardColors; label: string; value: string }) {
-  return (
-    <View style={[styles.managerField, styles.managerTextArea, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <TextInput
-        defaultValue={value}
-        multiline
-        placeholder="Not set"
-        placeholderTextColor={colors.placeholder}
-        style={[styles.textInput, styles.textAreaInput, { color: colors.text }]}
-      />
-    </View>
-  );
-}
-
-function ManagerList({ colors, items, label }: { colors: DashboardColors; items: readonly string[]; label: string }) {
-  return (
-    <View style={[styles.managerField, styles.managerTextArea, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <View style={styles.bulletList}>
-        {(items.length ? items : ['']).map((item, index) => (
-          <TextInput
-            defaultValue={item}
-            key={`${label}-${index}-${item}`}
-            placeholder={index === 0 ? 'Add item' : 'Not set'}
-            placeholderTextColor={colors.placeholder}
-            style={[styles.listInput, { color: colors.text }]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function DraftField({
-  colors,
-  label,
-  multiline = false,
-  onChangeText,
-  value,
-}: {
-  colors: DashboardColors;
-  label: string;
-  multiline?: boolean;
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <View style={[styles.managerField, { borderColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <TextInput
-        placeholder={label}
-        placeholderTextColor={colors.placeholder}
-        multiline={multiline}
-        value={value}
-        onChangeText={onChangeText}
-        style={[styles.textInput, multiline && styles.textAreaInput, { color: colors.text }]}
-      />
-    </View>
-  );
-}
-
 function DetailMetric({ label, value }: { label: string; value: number | string }) {
   return (
     <View style={styles.detailMetric}>
@@ -2438,22 +1971,6 @@ function EmptyTableRow({ label }: { label: string }) {
   return (
     <View style={styles.emptyTableRow}>
       <ThemedText style={styles.emptyText}>{label}</ThemedText>
-    </View>
-  );
-}
-
-function EmptyDetail({ colors, mode, onAdd }: { colors: DashboardColors; mode: ResourceMode; onAdd: () => void }) {
-  return (
-    <View style={styles.emptyDetail}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.overlay }]}>
-        {mode === 'experiences' ? <MapTrifold color={colors.textMuted} size={24} weight="duotone" /> : <Bed color={colors.textMuted} size={24} weight="duotone" />}
-      </View>
-      <ThemedText style={styles.emptyTitle}>No item selected</ThemedText>
-      <ThemedText style={styles.emptyBody}>Choose an item from the list or add a new {mode === 'experiences' ? 'experience' : 'room'}.</ThemedText>
-      <Pressable accessibilityRole="button" onPress={onAdd} style={styles.addButton}>
-        <Plus color={designSystem.colors.darkGreen} size={18} weight="bold" />
-        <ThemedText style={styles.addButtonText}>Add {mode === 'experiences' ? 'experience' : 'room'}</ThemedText>
-      </Pressable>
     </View>
   );
 }
@@ -2549,37 +2066,6 @@ function buildRatingSignals(resource: ManagedResource, bookings: ManagedBooking[
     { label: 'Confirmed visits', detail: 'Approved bookings for this experience', value: bookings.filter((booking) => booking.status === 'confirmed').length },
     { label: 'Trip fit', detail: resource.experience.tripFit?.map((item) => item.value).join(' · ') ?? 'Not set', value: resource.experience.tripFit?.length ?? 0 },
   ];
-}
-
-function getAvailabilitySummary(resource: ManagedResource, bookings: ManagedBooking[]) {
-  const confirmedCount = bookings.filter((booking) => booking.status === 'confirmed').length;
-  const pendingCount = bookings.filter((booking) => booking.status === 'pending').length;
-
-  if (resource.kind === 'room') {
-    const hasBookings = confirmedCount > 0 || pendingCount > 0;
-
-    return {
-      capacityLabel: hasBookings ? `${confirmedCount} confirmed` : 'Open',
-      confirmedCount,
-      detail: pendingCount ? `${pendingCount} pending requests` : 'No pending requests',
-      isFull: false,
-      label: 'Available',
-      pendingCount,
-    };
-  }
-
-  const publicLabel = resource.experience.booking?.availabilityLabel ?? 'Available';
-  const normalized = publicLabel.toLowerCase();
-  const isFull = normalized.includes('full') || normalized.includes('sold');
-
-  return {
-    capacityLabel: resource.experience.groupSizeLabel ?? 'Open capacity',
-    confirmedCount,
-    detail: `${confirmedCount} confirmed visits · ${pendingCount} pending requests`,
-    isFull,
-    label: isFull ? publicLabel : 'Available',
-    pendingCount,
-  };
 }
 
 function getSchemaEditor(label: string, multiline?: boolean): NonNullable<SchemaRow['editor']> {
@@ -2794,7 +2280,7 @@ function compileDraftJson(jsonText: string, draft: DraftResource): { draft: Draf
 function analyzeDraftJsonText(jsonText: string, draft: DraftResource): JsonEditorDiagnostic[] {
   const trimmedText = jsonText.trim();
   if (!trimmedText) {
-    return [{ message: 'Paste generated JSON to start live validation.', severity: 'info' }];
+    return [{ message: 'Paste JSON to start live validation.', severity: 'info' }];
   }
 
   const diagnostics: JsonEditorDiagnostic[] = [];
@@ -3209,77 +2695,6 @@ function formatCoordinateValue(coordinate: readonly [number, number]) {
   return `${coordinate[0].toFixed(5)}, ${coordinate[1].toFixed(5)}`;
 }
 
-function buildSchemaRows(resource: ManagedResource): SchemaRow[] {
-  if (resource.kind === 'experience') {
-    const experience = resource.experience;
-    return [
-      { label: 'itemKind', value: getExperienceKindSelectValue(experience) },
-      { label: 'slug', value: experience.slug },
-      { label: 'badge', value: experience.badge },
-      { label: 'badgeTone', value: experience.badgeTone ?? '' },
-      { label: 'title', value: experience.title },
-      { label: 'subtitle', value: experience.subtitle },
-      { label: 'description', multiline: true, value: experience.description },
-      { label: 'imageUri', value: experience.imageUri },
-      { label: 'galleryImages', multiline: true, value: joinList(experience.galleryImages) },
-      { editor: 'number', label: 'priceUsd', value: String(parsePriceAmount(experience.price)) },
-      { label: 'category', value: experience.category ?? '' },
-      { label: 'countryCode', value: experience.countryCode ?? '' },
-      { label: 'countryLabel', value: experience.countryLabel ?? '' },
-      { label: 'planningLocationId', value: experience.planningLocationId ?? '' },
-      { label: 'coordinate', value: joinList(experience.coordinate) },
-      { label: 'locationLabel', value: experience.locationLabel ?? '' },
-      { label: 'geography.region', value: experience.geography?.region ?? '' },
-      { label: 'geography.town', value: experience.geography?.town ?? '' },
-      { label: 'durationLabel', value: experience.durationLabel ?? '' },
-      { label: 'groupSizeLabel', value: experience.groupSizeLabel ?? '' },
-      { label: 'booking.availabilityLabel', value: experience.booking?.availabilityLabel ?? '' },
-      { label: 'booking.confirmMode', value: experience.booking?.confirmMode ?? '' },
-      { label: 'includes', multiline: true, value: joinList(experience.includes) },
-      { label: 'tripFit', multiline: true, value: stringifyCompact(experience.tripFit) },
-    ];
-  }
-
-  const { room, stay } = resource.room;
-  return [
-    { label: 'room.id', value: room.id },
-    { label: 'room.label', value: room.label },
-    { label: 'room.detail', multiline: true, value: room.detail },
-    { label: 'room.maxAdults', value: String(room.maxAdults) },
-    { label: 'room.maxChildren', value: String(room.maxChildren) },
-    { label: 'room.maxRooms', value: String(room.maxRooms) },
-    { label: 'room.bedOptions', multiline: true, value: stringifyCompact(room.bedOptions) },
-    { label: 'stay.id', value: stay.id },
-    { label: 'stay.slug', value: stay.slug },
-    { label: 'stay.name', value: stay.name },
-    { label: 'stay.bookingPhone', value: stay.bookingPhone ?? '' },
-    { label: 'stay.locationLabel', value: stay.locationLabel },
-    { label: 'stay.town', value: stay.town },
-    { label: 'stay.region', value: stay.region },
-    { label: 'stay.countryCode', value: stay.countryCode ?? '' },
-    { label: 'stay.countryLabel', value: stay.countryLabel ?? '' },
-    { label: 'stay.planningLocationId', value: stay.planningLocationId ?? '' },
-    { label: 'stay.coordinate', value: joinList(stay.coordinate) },
-    { label: 'stay.imageUri', value: stay.imageUri },
-    { label: 'stay.galleryImages', multiline: true, value: joinList(stay.galleryImages) },
-    { editor: 'number', label: 'stay.priceUsd', value: String(stay.pricePerNight) },
-    { label: 'stay.rating', value: String(stay.rating) },
-    { label: 'stay.reviewCount', value: String(stay.reviewCount) },
-    { label: 'stay.stayStyle', value: stay.stayStyle },
-    { label: 'stay.routeVibe', value: stay.routeVibe },
-    { label: 'stay.sleepSignal', value: stay.sleepSignal },
-    { label: 'stay.summary', multiline: true, value: stay.summary },
-    { label: 'stay.idealFor', multiline: true, value: joinList(stay.idealFor) },
-    { label: 'stay.amenities', multiline: true, value: joinList(stay.amenities) },
-    { label: 'stay.nearbyHighlights', multiline: true, value: joinList(stay.nearbyHighlights) },
-    { label: 'bookingProfile.defaultRoomOptionId', value: stay.bookingProfile?.defaultRoomOptionId ?? '' },
-    { label: 'bookingProfile.defaultArrivalOptionId', value: stay.bookingProfile?.defaultArrivalOptionId ?? '' },
-    { editor: 'json', label: 'bookingProfile.roomOptions', multiline: true, value: stringifyCompact(stay.bookingProfile?.roomOptions) },
-    { editor: 'json', label: 'bookingProfile.arrivalOptions', multiline: true, value: stringifyCompact(stay.bookingProfile?.arrivalOptions) },
-    { label: 'stay.bookingNote', multiline: true, value: stay.bookingNote },
-  ];
-}
-
 function groupSchemaRows(rows: SchemaRow[]) {
   const groups: { rows: SchemaRow[]; title: string }[] = [];
 
@@ -3370,14 +2785,6 @@ function getSchemaDisplayLabel(label: string) {
 
 function joinList(value: readonly unknown[] | undefined) {
   return value?.map((item) => String(item)).join(', ') ?? '';
-}
-
-function stringifyCompact(value: unknown) {
-  return value ? JSON.stringify(value) : '';
-}
-
-function stringifyValue(value: unknown) {
-  return value === null || value === undefined ? '' : String(value);
 }
 
 function parseCapacityFromLabel(label: string) {

@@ -173,10 +173,7 @@ function getDistanceInKm(from: readonly [number, number], to: readonly [number, 
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function getOrderedRouteStops(
-  itinerary: TripItineraryItem[],
-  origin: readonly [number, number]
-) {
+function getOrderedRouteStops(itinerary: TripItineraryItem[]) {
   const withCoordinates = itinerary.filter(
     (item) => isCoordinate(getItineraryCoordinate(item))
   );
@@ -184,9 +181,13 @@ function getOrderedRouteStops(
 
   const remaining = [...withCoordinates];
   const ordered: TripItineraryItem[] = [];
-  let currentPoint = origin;
+  const firstStop = remaining.shift();
+  if (firstStop) {
+    ordered.push(firstStop);
+  }
+  let currentPoint = firstStop ? getItineraryCoordinate(firstStop) as readonly [number, number] : null;
 
-  while (remaining.length > 0) {
+  while (currentPoint && remaining.length > 0) {
     let nearestIndex = 0;
     let nearestDistance = getDistanceInKm(currentPoint, getItineraryCoordinate(remaining[0]) as readonly [number, number]);
 
@@ -359,9 +360,7 @@ async function getResolvedItinerary(
     })
     .filter((item): item is TripItineraryItem => item !== null);
 
-  const origin = [17.0832, -22.5609] as const;
-
-  return getOrderedRouteStops(resolvedItinerary, origin);
+  return getOrderedRouteStops(resolvedItinerary);
 }
 
 export const getUserItinerary = query({
@@ -416,11 +415,8 @@ export const getTripDashboard = query({
 
     const activeItem = activeIndex >= 0 ? items[activeIndex] : null;
     const locationItem = activeItem ?? items[items.length - 1] ?? null;
-    const baseLocationLabel =
-      locationItem?.stay?.locationLabel ?? locationItem?.experience.locationLabel ?? 'Windhoek, NA';
-    const centerCoordinate =
-      getItineraryCoordinate(locationItem) ??
-      ([17.0832, -22.5609] as const);
+    const baseLocationLabel = locationItem?.stay?.locationLabel ?? locationItem?.experience.locationLabel;
+    const centerCoordinate = getItineraryCoordinate(locationItem) ?? null;
 
     return {
       dayTitle: buildDayTitle(baseLocationLabel),
@@ -1124,68 +1120,87 @@ export const createManagedStay = mutation({
   args: {
     managerSlug: v.string(),
     name: v.string(),
+    locationLabel: v.string(),
+    town: v.string(),
+    region: v.string(),
+    countryCode: v.optional(v.string()),
+    countryLabel: v.optional(v.string()),
+    planningLocationId: v.optional(v.string()),
     summary: v.string(),
     coordinate: v.array(v.number()),
     imageUri: v.string(),
     galleryImages: v.array(v.string()),
     priceUsd: v.number(),
+    currencyCode: v.string(),
+    rating: v.number(),
+    reviewCount: v.number(),
     bookingNote: v.string(),
     stayStyle: v.union(v.literal('design'), v.literal('lodge'), v.literal('roadside'), v.literal('wellness')),
     routeVibe: v.union(v.literal('city reset'), v.literal('coast base'), v.literal('wildlife stop'), v.literal('desert night')),
+    sleepSignal: v.string(),
     idealFor: v.array(v.string()),
     amenities: v.array(v.string()),
     nearbyHighlights: v.array(v.string()),
+    bookingProfile: v.object({
+      roomOptions: v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+          detail: v.string(),
+          maxAdults: v.number(),
+          maxChildren: v.number(),
+          maxRooms: v.number(),
+          bedOptions: v.array(
+            v.object({
+              id: v.string(),
+              label: v.string(),
+            })
+          ),
+        })
+      ),
+      arrivalOptions: v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+        })
+      ),
+      defaultRoomOptionId: v.string(),
+      defaultArrivalOptionId: v.string(),
+    }),
   },
   handler: async (ctx, args) => {
     const manager = await requireAdmin(ctx);
     const slug = await createUniqueStaySlug(ctx, args.name);
-    const roomId = 'standard-room';
-    const arrivalId = 'standard-arrival';
 
     await ctx.db.insert('stays', {
       slug,
       managerSlug: manager.slug,
       name: args.name,
-      locationLabel: 'Map location',
-      town: 'Windhoek',
-      region: 'Khomas',
-      countryCode: 'NA',
-      countryLabel: 'Namibia',
+      locationLabel: args.locationLabel,
+      town: args.town,
+      region: args.region,
+      countryCode: args.countryCode,
+      countryLabel: args.countryLabel,
+      planningLocationId: args.planningLocationId,
       coordinate: args.coordinate,
       imageUri: args.imageUri,
-      galleryImages: args.galleryImages.length ? args.galleryImages : [args.imageUri],
+      galleryImages: args.galleryImages,
       pricePerNight: args.priceUsd,
-      currencyCode: 'USD',
-      rating: 0,
-      reviewCount: 0,
+      currencyCode: args.currencyCode,
+      rating: args.rating,
+      reviewCount: args.reviewCount,
       stayStyle: args.stayStyle,
       routeVibe: args.routeVibe,
-      sleepSignal: 'New listing',
+      sleepSignal: args.sleepSignal,
       summary: args.summary,
       idealFor: args.idealFor,
       amenities: args.amenities,
       nearbyHighlights: args.nearbyHighlights,
-      bookingProfile: {
-        roomOptions: [
-          {
-            id: roomId,
-            label: 'Standard room',
-            detail: 'Default room option',
-            maxAdults: 2,
-            maxChildren: 1,
-            maxRooms: 1,
-            bedOptions: [{ id: 'standard-bed', label: 'Standard bed' }],
-          },
-        ],
-        arrivalOptions: [{ id: arrivalId, label: 'Standard arrival' }],
-        defaultRoomOptionId: roomId,
-        defaultArrivalOptionId: arrivalId,
-      },
+      bookingProfile: args.bookingProfile,
       bookingNote: args.bookingNote,
-      bookingProvider: 'manager',
     });
 
-    return { roomId, slug };
+    return { roomId: args.bookingProfile.defaultRoomOptionId, slug };
   },
 });
 

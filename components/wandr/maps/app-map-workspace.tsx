@@ -2,15 +2,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { useCurrentLocation } from '@/hooks/use-current-location';
-import { usePlanningLocation } from '@/hooks/use-planning-location';
 
 export function AppMapWorkspace() {
   const currentLocation = useCurrentLocation();
-  const { planningLocation } = usePlanningLocation();
-  const centerCoordinate =
-    currentLocation.coordinate ??
-    planningLocation.centerCoordinate ??
-    null;
+  const centerCoordinate = currentLocation.coordinate ?? null;
 
   return (
     <View style={styles.root}>
@@ -20,7 +15,7 @@ export function AppMapWorkspace() {
         markers={[]}
         routeCoordinates={[]}
         showRoutes={false}
-        zoomLevel={planningLocation.centerCoordinate ? 8 : 12}
+        zoomLevel={12}
       />
     </View>
   );

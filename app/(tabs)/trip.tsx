@@ -12,6 +12,7 @@ import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
 import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
+import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
@@ -94,6 +95,7 @@ function ConnectedTripScreen({
   const { coordinate: currentLocation } = useCurrentLocation();
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
   const { planningLocation } = usePlanningLocation();
+  const planningCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
   const orderedTrips = useMemo(
     () => orderTripsByPlanningCountry(trips ?? [], planningLocation),
     [planningLocation, trips]
@@ -309,6 +311,7 @@ function ConnectedTripScreen({
         insetsTop={insetsTop}
         isDark={isDark}
         router={router}
+        planningCenterCoordinate={planningCenterCoordinate}
         trip={displayTrip}
         trips={orderedTrips}
         selectedTripId={selectedTripId}
@@ -540,6 +543,7 @@ function TripScreenView({
   onRemoveItem,
   onOpenSettings,
   onToggleEditing,
+  planningCenterCoordinate,
   removingItemId,
   useSkeletons,
 }: {
@@ -557,6 +561,7 @@ function TripScreenView({
   onRemoveItem: (itemId: string) => void;
   onOpenSettings: () => void;
   onToggleEditing: () => void;
+  planningCenterCoordinate: readonly [number, number] | null;
   removingItemId: string | null;
   useSkeletons: boolean;
 }) {
@@ -644,7 +649,7 @@ function TripScreenView({
         <LargeScreenWorkspace
           mapContent={
             <MapPreview
-              centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? null}
+              centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? planningCenterCoordinate}
               markers={mapMarkers}
               routeCoordinates={routeCoordinates}
               showRoutes={routeCoordinates.length > 1}

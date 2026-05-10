@@ -24,27 +24,26 @@ const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isConvexLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
-  
   const identity = useQuery(getCurrentAuthIdentityRef, isAuthenticated ? {} : 'skip');
   const session = useQuery(getCurrentAuthSessionRef, isAuthenticated ? {} : 'skip');
 
-  const value = useMemo(
-    () => {
-      const isIdentityLoading = isAuthenticated && identity === undefined;
-      const isSessionLoading = isAuthenticated && session === undefined;
-      
-      const onboardingRequired = isAuthenticated && identity !== undefined && identity !== null && !identity.onboardingCompleted;
+  const value = useMemo(() => {
+    const isIdentityLoading = isAuthenticated && identity === undefined;
+    const isSessionLoading = isAuthenticated && session === undefined;
+    const onboardingRequired =
+      isAuthenticated &&
+      identity !== undefined &&
+      identity !== null &&
+      !identity.onboardingCompleted;
 
-      return {
-        isLoading: isConvexLoading || isIdentityLoading || isSessionLoading,
-        isAuthenticated,
-        onboardingRequired,
-        session: session ?? null,
-        signOut,
-      };
-    },
-    [isAuthenticated, isConvexLoading, identity, session, signOut]
-  );
+    return {
+      isLoading: isConvexLoading || isIdentityLoading || isSessionLoading,
+      isAuthenticated,
+      onboardingRequired,
+      session: session ?? null,
+      signOut,
+    };
+  }, [identity, isAuthenticated, isConvexLoading, session, signOut]);
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }

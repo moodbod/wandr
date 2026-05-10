@@ -23,10 +23,9 @@ export const defaultPlanningLocations: readonly PlanningLocation[] = [
   {
     id: 'namibia',
     label: 'Namibia',
-    detail: 'Windhoek, coast, desert, safari routes',
+    detail: 'Supported travel region',
     countryCode: 'NA',
     countryLabel: 'Namibia',
-    centerCoordinate: [17.0832, -22.5609],
     bounds: {
       minLng: 11.7,
       maxLng: 25.3,
@@ -51,10 +50,9 @@ export const defaultPlanningLocations: readonly PlanningLocation[] = [
   {
     id: 'south-africa',
     label: 'South Africa',
-    detail: 'Cape Town, Winelands, coast, safari starts',
+    detail: 'Supported travel region',
     countryCode: 'ZA',
     countryLabel: 'South Africa',
-    centerCoordinate: [18.4241, -33.9249],
     bounds: {
       minLng: 17.6,
       maxLng: 20.2,
@@ -388,11 +386,94 @@ export function getPlanningLocationForCoordinate(
   return defaultPlanningLocations.find((location) => coordinateIsInPlanningLocation(coordinate, location)) ?? null;
 }
 
+type PlanningLocationSource = {
+  coordinate?: readonly number[] | null;
+  countryCode?: string | null;
+  countryLabel?: string | null;
+  planningLocationId?: string | null;
+};
+
+export function buildPlanningLocationsFromDestinations(
+  destinations: readonly PlanningLocationSource[]
+): readonly PlanningLocation[] {
+  const buckets = new Map<
+    string,
+    {
+      base: PlanningLocation;
+      count: number;
+      latitudeTotal: number;
+      longitudeTotal: number;
+    }
+  >();
+
+  destinations.forEach((destination) => {
+    const coordinate = normalizePlanningLocationCoordinate(destination.coordinate);
+    if (!coordinate) {
+      return;
+    }
+
+    const baseLocation =
+      getPlanningLocationForCountry(destination) ??
+      getPlanningLocationForCoordinate(coordinate);
+
+    if (!baseLocation?.countryCode) {
+      return;
+    }
+
+    const key = baseLocation.countryCode.toUpperCase();
+    const existing = buckets.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      existing.longitudeTotal += coordinate[0];
+      existing.latitudeTotal += coordinate[1];
+      return;
+    }
+
+    buckets.set(key, {
+      base: baseLocation,
+      count: 1,
+      longitudeTotal: coordinate[0],
+      latitudeTotal: coordinate[1],
+    });
+  });
+
+  return [...buckets.values()]
+    .map(({ base, count, latitudeTotal, longitudeTotal }) => ({
+      ...base,
+      centerCoordinate: [longitudeTotal / count, latitudeTotal / count] as const,
+      detail: count === 1 ? '1 place available' : `${count} places available`,
+      isSupported: true,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export function getPlanningLocationCenterCoordinate(
+  location?: PlanningLocation | null
+): readonly [number, number] | null {
+  if (!location) {
+    return null;
+  }
+
+  if (location.centerCoordinate) {
+    return location.centerCoordinate;
+  }
+
+  if (!location.bounds) {
+    return null;
+  }
+
+  return [
+    (location.bounds.minLng + location.bounds.maxLng) / 2,
+    (location.bounds.minLat + location.bounds.maxLat) / 2,
+  ];
+}
+
 export function coordinateIsInPlanningLocation(
   coordinate: readonly [number, number] | null | undefined,
   location: PlanningLocation
 ) {
-  if (!coordinate || !location.bounds) {
+  if (!coordinate) {
     return false;
   }
 
@@ -434,7 +515,7 @@ export function getPlanningLocationForCountry({
   const normalizedCountryCode = countryCode?.trim().toUpperCase();
   const normalizedCountryLabel = countryLabel?.trim().toLowerCase();
 
-  return defaultPlanningLocations.find((location) => {
+  const matcher = (location: PlanningLocation) => {
     if (planningLocationId && location.id === planningLocationId) {
       return true;
     }
@@ -443,8 +524,18 @@ export function getPlanningLocationForCountry({
       return true;
     }
 
-    return Boolean(normalizedCountryLabel && location.countryLabel?.toLowerCase() === normalizedCountryLabel);
-  }) ?? null;
+    return Boolean(
+      normalizedCountryLabel &&
+        (location.countryLabel?.toLowerCase() === normalizedCountryLabel ||
+          location.label.toLowerCase() === normalizedCountryLabel)
+    );
+  };
+
+  return (
+    defaultPlanningLocations.find(matcher) ??
+    allPlanningCountryOptions.find(matcher) ??
+    null
+  );
 }
 
 export function getPlanningLocationMetadataForDestination({
@@ -519,6 +610,21 @@ function getDistanceInKm(from: readonly [number, number], to: readonly [number, 
     Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
 
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function normalizePlanningLocationCoordinate(
+  coordinate?: readonly number[] | null
+): readonly [number, number] | null {
+  if (!coordinate || coordinate.length < 2) {
+    return null;
+  }
+
+  const longitude = Number(coordinate[0]);
+  const latitude = Number(coordinate[1]);
+
+  return Number.isFinite(longitude) && Number.isFinite(latitude)
+    ? ([longitude, latitude] as const)
+    : null;
 }
 
 function toRadians(value: number) {

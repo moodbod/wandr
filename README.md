@@ -47,7 +47,7 @@ bun run convex:dev
 - `lib/` contains app services, helpers, routing, notifications, maps, and Convex client setup.
 - `constants/` contains design tokens and app content.
 - `types/` contains shared TypeScript models.
-- `convex/` contains backend schema, tables, queries, mutations, actions, and seed scripts.
+- `convex/` contains backend schema, tables, queries, mutations, and actions.
 - `public/`, `app/+html.tsx`, `*.web.tsx`, and `vercel.json` are web-facing surfaces.
 
 ## Working Safely
@@ -105,7 +105,7 @@ bun run ios
 bun run android
 ```
 
-For UI changes, include screenshots or a short recording. For backend changes, describe the data impact and whether a migration or seed update is needed.
+For UI changes, include screenshots or a short recording. For backend changes, describe the data impact and whether a migration is needed.
 
 ## Useful Scripts
 

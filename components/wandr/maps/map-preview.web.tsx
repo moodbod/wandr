@@ -6,12 +6,15 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchRoutePath } from '@/lib/routing';
 
 import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
+const DEFAULT_MAP_CENTER: readonly [number, number] =
+  getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
 
 type MapboxModule = typeof mapboxgl;
 
@@ -37,14 +40,15 @@ function MapPreviewWebComponent({
   const markerRefs = useRef<mapboxgl.Marker[]>([]);
   const onInteractRef = useRef(onInteract);
   const onMapPressRef = useRef(onMapPress);
+  const hasCenteredOnResolvedDataRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
   const lastCameraTargetKeyRef = useRef<string | null>(null);
   const initialMapConfigRef = useRef<{
-    centerCoordinate: readonly [number, number] | null;
+    centerCoordinate: readonly [number, number];
     isDark: boolean;
     zoomLevel: number;
   }>({
-    centerCoordinate: null,
+    centerCoordinate: DEFAULT_MAP_CENTER,
     isDark: false,
     zoomLevel,
   });
@@ -59,7 +63,7 @@ function MapPreviewWebComponent({
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
-  const hasResolvedCenterCoordinate = resolvedCenterCoordinate !== null;
+  const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -87,11 +91,11 @@ function MapPreviewWebComponent({
 
   useEffect(() => {
     initialMapConfigRef.current = {
-      centerCoordinate: resolvedCenterCoordinate,
+      centerCoordinate: mapCenterCoordinate,
       isDark,
       zoomLevel,
     };
-  }, [isDark, resolvedCenterCoordinate, zoomLevel]);
+  }, [isDark, mapCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,7 +120,7 @@ function MapPreviewWebComponent({
   useEffect(() => {
     const initialConfig = initialMapConfigRef.current;
 
-    if (!mapbox || !containerRef.current || mapRef.current || !initialConfig.centerCoordinate) {
+    if (!mapbox || !containerRef.current || mapRef.current) {
       return;
     }
 
@@ -187,7 +191,7 @@ function MapPreviewWebComponent({
       mapRef.current = null;
       setIsMapReady(false);
     };
-  }, [hasResolvedCenterCoordinate, mapbox]);
+  }, [mapbox]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -198,16 +202,21 @@ function MapPreviewWebComponent({
   }, [isDark, isMapReady]);
 
   useEffect(() => {
-    if (!mapRef.current || !resolvedCenterCoordinate) {
+    if (!mapRef.current) {
       return;
     }
 
-    const cameraTargetKey = getCameraTargetKey(resolvedCenterCoordinate, zoomLevel);
+    const cameraTargetKey = getCameraTargetKey(mapCenterCoordinate, zoomLevel);
     if (cameraTargetKey === lastCameraTargetKeyRef.current) {
       return;
     }
 
-    if (hasUserInteractedRef.current && !centerCoordinate) {
+    if (
+      hasUserInteractedRef.current &&
+      !centerCoordinate &&
+      resolvedCenterCoordinate &&
+      hasCenteredOnResolvedDataRef.current
+    ) {
       return;
     }
 
@@ -215,13 +224,16 @@ function MapPreviewWebComponent({
     hasUserInteractedRef.current = false;
     mapRef.current.easeTo({
       bearing: 0,
-      center: resolvedCenterCoordinate as [number, number],
+      center: mapCenterCoordinate as [number, number],
       duration: 650,
       padding: cameraPadding,
       pitch: 0,
       zoom: zoomLevel,
     });
-  }, [cameraPadding, centerCoordinate, resolvedCenterCoordinate, zoomLevel]);
+    if (resolvedCenterCoordinate) {
+      hasCenteredOnResolvedDataRef.current = true;
+    }
+  }, [cameraPadding, centerCoordinate, mapCenterCoordinate, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
@@ -384,14 +396,6 @@ function MapPreviewWebComponent({
     return (
       <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
         <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
-      </View>
-    );
-  }
-
-  if (!resolvedCenterCoordinate) {
-    return (
-      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map data is still loading.</ThemedText>
       </View>
     );
   }

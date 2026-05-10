@@ -44,8 +44,8 @@ export default function EditProfileScreen() {
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
   const [name, setName] = useState('');
   const [homeCity, setHomeCity] = useState('');
-  const [countryCode, setCountryCode] = useState('NA');
-  const [countryLabel, setCountryLabel] = useState('Namibia');
+  const [countryCode, setCountryCode] = useState('');
+  const [countryLabel, setCountryLabel] = useState('');
   const [travelStyle, setTravelStyle] = useState<TravelStyle>('solo');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarStorageId, setAvatarStorageId] = useState<Id<'_storage'> | undefined>();
@@ -62,8 +62,8 @@ export default function EditProfileScreen() {
 
     setName(traveler.name ?? '');
     setHomeCity(traveler.homeCity ?? '');
-    setCountryCode(traveler.countryCode ?? 'NA');
-    setCountryLabel(traveler.countryLabel ?? 'Namibia');
+    setCountryCode(traveler.countryCode ?? '');
+    setCountryLabel(traveler.countryLabel ?? '');
     setTravelStyle(traveler.travelStyle ?? 'solo');
     setAvatarUri(traveler.avatarUri ?? null);
     setAvatarStorageId(undefined);
@@ -85,8 +85,8 @@ export default function EditProfileScreen() {
     const hasProfileChanged =
       name !== (traveler.name ?? '') ||
       homeCity !== (traveler.homeCity ?? '') ||
-      countryCode !== (traveler.countryCode ?? 'NA') ||
-      countryLabel !== (traveler.countryLabel ?? 'Namibia') ||
+      countryCode !== (traveler.countryCode ?? '') ||
+      countryLabel !== (traveler.countryLabel ?? '') ||
       travelStyle !== (traveler.travelStyle ?? 'solo') ||
       Boolean(avatarStorageId) ||
       clearAvatar;
@@ -220,7 +220,6 @@ export default function EditProfileScreen() {
       </View>
 
       <SettingTextInput label="Display name" value={name} onChangeText={setName} placeholder="Your name" />
-      <SettingTextInput label="Home city or base" value={homeCity} onChangeText={setHomeCity} placeholder="Windhoek" />
       <CountryPickerField
         accessibilityLabel="Select country"
         countryCode={countryCode}
@@ -228,6 +227,7 @@ export default function EditProfileScreen() {
         value={countryLabel}
         onSelect={handleSelectCountry}
       />
+      <SettingTextInput label="Home city or base" value={homeCity} onChangeText={setHomeCity} placeholder="Home city" />
       <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
       <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
       {isAdmin ? (

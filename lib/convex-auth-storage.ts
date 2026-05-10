@@ -1,43 +1,34 @@
 import type { TokenStorage } from '@convex-dev/auth/react';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
-function getWebStorage(kind: 'local' | 'session') {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    return kind === 'session' ? window.sessionStorage : window.localStorage;
-  } catch {
-    return null;
-  }
-}
+const webStorage =
+  Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.localStorage
+    : null;
 
 export const convexAuthStorage: TokenStorage = {
   async getItem(key) {
-    if (Platform.OS === 'web') {
-      return getWebStorage('local')?.getItem(key) ?? getWebStorage('session')?.getItem(key) ?? null;
+    if (webStorage) {
+      return webStorage.getItem(key);
     }
 
     return await SecureStore.getItemAsync(key);
   },
-  async setItem(key, value) {
-    if (Platform.OS === 'web') {
-      getWebStorage('local')?.setItem(key, value);
-      getWebStorage('session')?.removeItem(key);
-      return;
-    }
-
-    return await SecureStore.setItemAsync(key, value);
-  },
   async removeItem(key) {
-    if (Platform.OS === 'web') {
-      getWebStorage('local')?.removeItem(key);
-      getWebStorage('session')?.removeItem(key);
+    if (webStorage) {
+      webStorage.removeItem(key);
       return;
     }
 
-    return await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync(key);
+  },
+  async setItem(key, value) {
+    if (webStorage) {
+      webStorage.setItem(key, value);
+      return;
+    }
+
+    await SecureStore.setItemAsync(key, value);
   },
 };

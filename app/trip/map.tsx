@@ -14,6 +14,7 @@ import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
+import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
@@ -114,7 +115,7 @@ function ConnectedTripMapScreen() {
       trips={orderedTrips}
       selectedTripId={selectedTripId}
       onSelectTrip={setSelectedTripId}
-      fallbackCenterCoordinate={planningLocation.centerCoordinate ?? currentLocation ?? [17.0832, -22.5609]}
+      fallbackCenterCoordinate={getPlanningLocationCenterCoordinate(planningLocation)}
       fallbackLocationLabel={planningLocation.label}
       useSkeletons={isLoading}
     />
@@ -140,7 +141,7 @@ function TripMapScreenView({
   animatedIndex?: ReturnType<typeof useSharedValue<number>>;
   currentHeading?: number | null;
   currentLocation?: readonly [number, number] | null;
-  fallbackCenterCoordinate: readonly [number, number];
+  fallbackCenterCoordinate?: readonly [number, number] | null;
   fallbackLocationLabel: string;
   headerAnimatedStyle?: object;
   insetsTop: number;
@@ -164,7 +165,7 @@ function TripMapScreenView({
         : [],
     [trip]
   );
-  const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? fallbackCenterCoordinate;
+  const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? fallbackCenterCoordinate ?? null;
 
   const handleMapInteract = () => {
     sheetRef?.current?.snapToIndex(0);

@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   desktopSelector: {
-    height: 42,
+    height: designSystem.layout.inputHeight,
     width: '100%',
     minWidth: 148,
     maxWidth: 184,
-    borderRadius: 21,
+    borderRadius: designSystem.radii.pill,
     borderWidth: 1,
     justifyContent: 'center',
     overflow: 'hidden',

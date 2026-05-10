@@ -132,8 +132,8 @@ export async function getPublicTravelerProfile(ctx: ProfileCtx, travelerSlug: st
     return null;
   }
 
-  const countryCode = user.countryCode ?? 'NA';
-  const countryLabel = user.countryLabel ?? 'Namibia';
+  const countryCode = user.countryCode ?? '';
+  const countryLabel = user.countryLabel ?? '';
   const homeCity = user.homeCity ?? null;
   const travelStyle = user.travelStyle ?? null;
   const slug = user.slug;

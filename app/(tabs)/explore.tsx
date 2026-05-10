@@ -15,7 +15,6 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardList } from '@/components/wandr/explore/activity-card-list';
 import {
-  ExploreMobileFeatureCardSkeleton,
   ExploreMobileSheetHeaderSkeleton,
   ExploreMobileTripRailSkeleton,
   ExploreSheetHeaderSkeleton,
@@ -30,12 +29,18 @@ import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/
 import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
-import type { ExploreMapMarker } from '@/constants/explore-content';
+import type {
+  ExploreActivityCard as ExploreActivityCardContent,
+  ExploreExperience,
+  ExploreHiddenGem,
+  ExploreMapMarker,
+} from '@/constants/explore-content';
 import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
-import type { PlanningLocation } from '@/constants/planning-countries';
 import {
+  buildPlanningLocationsFromDestinations,
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
+  getPlanningLocationCenterCoordinate,
 } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
@@ -66,6 +71,19 @@ const INTENT_OPTIONS: readonly DiscoveryOption[] = [
   { key: 'food', label: 'Food & Drink' },
   { key: 'popular', label: 'Popular with Travelers' },
 ];
+
+type ExploreDiscoveryItem =
+  | {
+      kind: 'experience';
+      card: ExploreActivityCardContent;
+      key: string;
+    }
+  | {
+      kind: 'hiddenGem';
+      card: ExploreActivityCardContent;
+      key: string;
+      slug: string;
+    };
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
@@ -146,25 +164,25 @@ function ConnectedExploreScreen({
       ? currentLocation
       : null;
     const loadingMapCenterCoordinate =
-      currentLocationInPlanningLocation ??
-      planningLocation.centerCoordinate ??
-      [17.0832, -22.5609];
+      currentLocationInPlanningLocation ?? getPlanningLocationCenterCoordinate(planningLocation);
     const loadingMapContent = (
-      <ExploreMapHero
-        key={loadingMapResetKey}
-        centerCoordinate={loadingMapCenterCoordinate}
-        locationLabel={planningLocation.label}
-        userCoordinate={currentLocationInPlanningLocation}
-        userHeading={currentHeading}
-        markers={[]}
-        routeCoordinates={[]}
-        showRoutes={false}
-        topInset={mapTopInset}
-        onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
-        planningLocation={planningLocation}
-        hideHeader={isLargeScreen}
-        shellStyle={StyleSheet.absoluteFill}
-      />
+      loadingMapCenterCoordinate ? (
+        <ExploreMapHero
+          key={loadingMapResetKey}
+          centerCoordinate={loadingMapCenterCoordinate}
+          locationLabel={planningLocation.label}
+          userCoordinate={currentLocationInPlanningLocation}
+          userHeading={currentHeading}
+          markers={[]}
+          routeCoordinates={[]}
+          showRoutes={false}
+          topInset={mapTopInset}
+          onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
+          planningLocation={planningLocation}
+          hideHeader={isLargeScreen}
+          shellStyle={StyleSheet.absoluteFill}
+        />
+      ) : null
     );
 
     return (
@@ -195,7 +213,7 @@ function ConnectedExploreScreen({
                 <ExploreMobileSheetHeaderSkeleton />
                 <ExploreMobileTripRailSkeleton />
                 <View style={styles.mobileCardList}>
-                  <ExploreMobileFeatureCardSkeleton />
+                  <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
                 </View>
               </BottomSheetScrollView>
             </GlassBottomSheet>
@@ -291,6 +309,14 @@ function ExploreScreenView({
   const [activeDiscoveryIntent, setActiveDiscoveryIntent] = useState('all');
   const { openPlanningLocationSheet, planningLocation } = usePlanningLocation();
   const content = pageContent.home;
+  const availablePlanningLocations = useMemo(
+    () =>
+      buildPlanningLocationsFromDestinations([
+        ...pageContent.experiences,
+        ...pageContent.search.hiddenGems.items,
+      ]),
+    [pageContent.experiences, pageContent.search.hiddenGems.items]
+  );
   const routeExperienceSlug = Array.isArray(params.experienceSlug)
     ? params.experienceSlug[0]
     : params.experienceSlug;
@@ -312,24 +338,38 @@ function ExploreScreenView({
   const currentLocationInPlanningLocation = coordinateIsInPlanningLocation(currentLocation, planningLocation)
     ? currentLocation
     : null;
-  const fallbackRouteStart = useMemo(
-    () => (currentLocationInPlanningLocation ? null : getPlanningLocationRouteStart(planningLocation)),
-    [currentLocationInPlanningLocation, planningLocation]
-  );
   const tripMarkers = useMemo(() => (trip ? buildTripMapMarkers(trip.items, 10, preferredCurrency) : []), [preferredCurrency, trip]);
   const tripRouteCoordinates = useMemo(
     () =>
       buildTripRouteCoordinates(trip, {
-        currentCoordinate: currentLocationInPlanningLocation ?? fallbackRouteStart?.coordinate,
+        currentCoordinate: currentLocationInPlanningLocation,
         onlyRemaining: true,
       }),
-    [currentLocationInPlanningLocation, fallbackRouteStart, trip]
+    [currentLocationInPlanningLocation, trip]
   );
   const locationRouteCoordinates = useMemo(
     () => tripRouteCoordinates.filter((coordinate) => coordinateIsInPlanningLocation(coordinate, planningLocation)),
     [planningLocation, tripRouteCoordinates]
   );
-  const exploreMarkers = content.hero.markers;
+  const exploreMarkers = useMemo<ExploreMapMarker[]>(
+    () =>
+      pageContent.experiences
+        .filter(
+          (experience): experience is ExploreExperience & { coordinate: readonly [number, number] } =>
+            Boolean(experience.coordinate)
+        )
+        .map((experience, index) => ({
+          id: experience.slug,
+          coordinate: experience.coordinate,
+          experienceSlug: experience.slug,
+          imageUri: experience.imageUri,
+          itemKind: experience.itemKind ?? 'experience',
+          label: experience.title,
+          popularityScore: experience.travelerMomentum?.visitorCount ?? 0,
+          tone: index % 2 === 0 ? 'accent' : 'dark',
+        })),
+    [pageContent.experiences]
+  );
   const experienceBySlug = useMemo(() => {
     return new Map(pageContent.experiences.map((experience) => [experience.slug, experience]));
   }, [pageContent.experiences]);
@@ -361,30 +401,8 @@ function ExploreScreenView({
     [experienceBySlug, exploreMarkers, planningLocation]
   );
   const mapMarkers = useMemo(() => {
-    const markers = [...locationTripMarkers, ...locationExploreMarkers];
-    if (!fallbackRouteStart) {
-      return markers;
-    }
-
-    const alreadyHasStartMarker = markers.some((marker) =>
-      coordinatesAreClose(marker.coordinate, fallbackRouteStart.coordinate)
-    );
-
-    if (alreadyHasStartMarker) {
-      return markers;
-    }
-
-    return [
-      {
-        id: `${planningLocation.id}-route-start`,
-        coordinate: fallbackRouteStart.coordinate,
-        label: fallbackRouteStart.label,
-        popularityScore: Number.MAX_SAFE_INTEGER,
-        tone: 'accent' as const,
-      },
-      ...markers,
-    ];
-  }, [fallbackRouteStart, locationExploreMarkers, locationTripMarkers, planningLocation.id]);
+    return [...locationTripMarkers, ...locationExploreMarkers];
+  }, [locationExploreMarkers, locationTripMarkers]);
   const locationExperienceBySlug = useMemo(() => {
     const locationExperiences = pageContent.experiences.filter((experience) =>
       destinationMatchesPlanningLocation({
@@ -460,9 +478,9 @@ function ExploreScreenView({
       buildRegionOptions(
         searchMatchedExperiences,
         searchMatchedGems,
-        currentLocationInPlanningLocation ?? planningLocation.centerCoordinate ?? content.hero.centerCoordinate
+        currentLocationInPlanningLocation ?? content.hero.centerCoordinate
       ),
-    [content.hero.centerCoordinate, currentLocationInPlanningLocation, planningLocation.centerCoordinate, searchMatchedExperiences, searchMatchedGems]
+    [content.hero.centerCoordinate, currentLocationInPlanningLocation, searchMatchedExperiences, searchMatchedGems]
   );
   const regionMatchedExperiences = useMemo(
     () =>
@@ -602,9 +620,8 @@ function ExploreScreenView({
     tripCenterInPlanningLocation ??
     mapMarkers[0]?.coordinate ??
     heroCenterInPlanningLocation ??
-    fallbackRouteStart?.coordinate ??
-    planningLocation.centerCoordinate ??
-    content.hero.centerCoordinate;
+    getPlanningLocationCenterCoordinate(planningLocation) ??
+    null;
   const mapLocationLabel = currentLocationInPlanningLocation
     ? trip?.dayTitle ?? content.hero.locationLabel
     : planningLocation.label;
@@ -636,9 +653,10 @@ function ExploreScreenView({
   }, []);
   const handleOpenLocationSheet = useCallback(() => {
     openPlanningLocationSheet({
+      availableLocations: availablePlanningLocations,
       currentCoordinate: currentLocation,
     });
-  }, [currentLocation, openPlanningLocationSheet]);
+  }, [availablePlanningLocations, currentLocation, openPlanningLocationSheet]);
   const handlePressMapMarker = useCallback(
     (marker: ExploreMapMarker) => {
       if (marker.itemKind === 'stay' && marker.experienceSlug) {
@@ -841,6 +859,7 @@ function ExploreScreenView({
           isCardLoading={isCardLoading}
           isDark={isDark}
           locationActivities={locationActivities}
+          locationHiddenGems={locationHiddenGems}
           locationJoinableTripCards={locationJoinableTripCards}
           locationLabel={planningLocation.label}
           locationTrips={locationTrips}
@@ -896,7 +915,7 @@ const ExploreContent = memo(function ExploreContent({
 }) {
   const router = useRouter();
   const getActivityHref = useCallback(
-    (activity: ExplorePageContent['home']['activities'][number]) => {
+    (activity: ExploreActivityCardContent) => {
         return {
             pathname: '/explore/[slug]' as const,
             params: { slug: activity.experienceSlug },
@@ -906,7 +925,7 @@ const ExploreContent = memo(function ExploreContent({
   );
 
   const handlePressActivity = useCallback(
-    (activity: ExplorePageContent['home']['activities'][number]) => {
+    (activity: ExploreActivityCardContent) => {
       if (onSelectActivity) {
         onSelectActivity(activity.experienceSlug);
         return;
@@ -953,6 +972,21 @@ const ExploreContent = memo(function ExploreContent({
         .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
     });
   }, [contentActivities, discoveryActivities, normalizedSearchQuery]);
+  const hiddenGemItems = useMemo(
+    () => (discoveryHiddenGems ?? []).map(toHiddenGemDiscoveryItem),
+    [discoveryHiddenGems]
+  );
+  const discoveryItems = useMemo<ExploreDiscoveryItem[]>(
+    () => [
+      ...searchedActivities.map((activity) => ({
+        kind: 'experience' as const,
+        card: activity,
+        key: `experience-${activity.experienceSlug}`,
+      })),
+      ...hiddenGemItems,
+    ],
+    [hiddenGemItems, searchedActivities]
+  );
   const { isLargeScreen } = useResponsive();
   const ScrollComponent = isLargeScreen ? ScrollView : BottomSheetScrollView;
 
@@ -1031,43 +1065,29 @@ const ExploreContent = memo(function ExploreContent({
             </ScrollView>
           </View>
         ) : null}
-        <ExploreActivityCardList
-          activities={searchedActivities}
-          getHref={getActivityHref}
-          onPressActivity={handlePressActivity}
-        />
-        {discoveryHiddenGems && discoveryHiddenGems.length > 0 ? (
-          <View style={styles.groupTripSection}>
-            <ThemedText style={styles.groupTripTitle}>Local detours worth keeping</ThemedText>
-            <View style={styles.hiddenGemStack}>
-              {discoveryHiddenGems.map((item) => {
-                const slug = getHiddenGemSlug(item.title);
+        {discoveryItems.map((item) => {
+          if (item.kind === 'hiddenGem') {
+            return (
+              <ExploreActivityCard
+                card={item.card}
+                href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.slug } }}
+                key={item.key}
+                marker="gem"
+                onPress={() => handlePressHiddenGem(item.slug)}
+              />
+            );
+          }
 
-                return (
-                  <ExploreActivityCard
-                    card={{
-                      badge: item.badge ?? 'Hidden gem',
-                      badgeTone: 'soft',
-                      ctaLabel: item.primaryLabel ?? 'Open gem',
-                      experienceSlug: slug,
-                      imageUri: item.imageUri,
-                      price: '',
-                      priceSuffix: '',
-                      subtitle: item.locationLabel ?? item.summary ?? item.description,
-                      title: item.title,
-                      countryLabel: item.countryLabel,
-                    }}
-                    href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug } }}
-                    key={item.title}
-                    marker="gem"
-                    onPress={() => handlePressHiddenGem(slug)}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
-        {searchedActivities.length === 0 ? (
+          return (
+              <ExploreActivityCard
+                card={item.card}
+                href={getActivityHref(item.card)}
+                key={item.key}
+                onPress={() => handlePressActivity(item.card)}
+              />
+            );
+        })}
+        {discoveryItems.length === 0 ? (
           <View
             style={[
               styles.emptyLocationCard,
@@ -1100,6 +1120,7 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   isCardLoading,
   isDark,
   locationActivities,
+  locationHiddenGems,
   locationJoinableTripCards,
   locationLabel,
   locationTrips,
@@ -1114,6 +1135,7 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   isCardLoading: boolean;
   isDark: boolean;
   locationActivities: ExplorePageContent['home']['activities'];
+  locationHiddenGems: ExplorePageContent['search']['hiddenGems']['items'];
   locationJoinableTripCards: readonly ExploreJoinableTripCard[];
   locationLabel: string;
   locationTrips: readonly TripListItem[];
@@ -1124,11 +1146,26 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   onSelectTrip: (tripId: string) => void;
 }) {
   const getActivityHref = useCallback(
-    (activity: ExplorePageContent['home']['activities'][number]) => ({
+    (activity: ExploreActivityCardContent) => ({
       pathname: '/explore/[slug]' as const,
       params: { slug: activity.experienceSlug },
     }),
     []
+  );
+  const hiddenGemItems = useMemo(
+    () => locationHiddenGems.map(toHiddenGemDiscoveryItem),
+    [locationHiddenGems]
+  );
+  const discoveryItems = useMemo<ExploreDiscoveryItem[]>(
+    () => [
+      ...locationActivities.map((activity) => ({
+        kind: 'experience' as const,
+        card: activity,
+        key: `experience-${activity.experienceSlug}`,
+      })),
+      ...hiddenGemItems,
+    ],
+    [hiddenGemItems, locationActivities]
   );
 
   return (
@@ -1209,12 +1246,35 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
               ))}
             </View>
           ) : null}
-          <ExploreActivityCardList
-            activities={locationActivities}
-            getHref={getActivityHref}
-            isLoading={isCardLoading}
-          />
-          {!isCardLoading && locationActivities.length === 0 ? (
+          {isCardLoading ? (
+            <ExploreActivityCardList
+              activities={[]}
+              getHref={getActivityHref}
+              isLoading
+            />
+          ) : (
+            discoveryItems.map((item) => {
+              if (item.kind === 'hiddenGem') {
+                return (
+                  <ExploreActivityCard
+                    card={item.card}
+                    href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.slug } }}
+                    key={item.key}
+                    marker="gem"
+                  />
+                );
+              }
+
+              return (
+                <ExploreActivityCard
+                  card={item.card}
+                  href={getActivityHref(item.card)}
+                  key={item.key}
+                />
+              );
+            })
+          )}
+          {!isCardLoading && discoveryItems.length === 0 ? (
             <View
               style={[
                 styles.emptyLocationCard,
@@ -1441,9 +1501,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 4,
   },
-  hiddenGemStack: {
-    gap: 14,
-  },
   openTripsSection: {
     gap: 12,
   },
@@ -1520,43 +1577,30 @@ function toTrendingActivityCard(
   };
 }
 
+function toHiddenGemDiscoveryItem(item: ExploreHiddenGem): ExploreDiscoveryItem {
+  const slug = getHiddenGemSlug(item.title);
+
+  return {
+    kind: 'hiddenGem',
+    key: `hidden-gem-${slug}`,
+    slug,
+    card: {
+      badge: item.badge ?? 'Hidden gem',
+      badgeTone: 'soft',
+      ctaLabel: item.primaryLabel ?? 'Open gem',
+      experienceSlug: slug,
+      imageUri: item.imageUri,
+      price: '',
+      priceSuffix: '',
+      subtitle: item.locationLabel ?? item.summary ?? item.description,
+      title: item.title,
+      countryLabel: item.countryLabel,
+    },
+  };
+}
+
 function getPlanningLocationCopy(_locationId: string, locationLabel: string) {
   return {
     exploreTitle: `Top 10 places in ${locationLabel}`,
   };
-}
-
-function getPlanningLocationRouteStart(location: PlanningLocation) {
-  if (location.id === 'namibia') {
-    return {
-      label: 'Windhoek Craft Walk',
-      coordinate: [17.0832, -22.57] as const,
-    };
-  }
-
-  if (location.id === 'south-africa') {
-    return {
-      label: 'Cape Town Waterfront',
-      coordinate: [18.4213, -33.9036] as const,
-    };
-  }
-
-  if (location.centerCoordinate) {
-    return {
-      label: location.label,
-      coordinate: location.centerCoordinate,
-    };
-  }
-
-  return null;
-}
-
-function coordinatesAreClose(
-  first: readonly [number, number],
-  second: readonly [number, number]
-) {
-  const [firstLng, firstLat] = first;
-  const [secondLng, secondLat] = second;
-
-  return Math.abs(firstLng - secondLng) < 0.005 && Math.abs(firstLat - secondLat) < 0.005;
 }

@@ -11,7 +11,6 @@ import { useResponsive } from '@/hooks/use-responsive';
 import type { ExploreActivityCard as ExploreActivityCardContent } from '@/constants/explore-content';
 
 const CARD_RADIUS = 28;
-const FALLBACK_ACTIVITY_IMAGE = 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1200&q=80&fit=crop';
 
 export type ExploreActivityCardProps = {
   card: ExploreActivityCardContent;
@@ -24,8 +23,7 @@ export function ExploreActivityCard({ card, marker, href, onPress }: ExploreActi
   const router = useRouter();
   const { isLargeScreen } = useResponsive();
   const [imageFailed, setImageFailed] = useState(false);
-  const hasPlaceholderImage = !card.imageUri || card.imageUri.includes('example.com');
-  const imageUri = imageFailed || hasPlaceholderImage ? FALLBACK_ACTIVITY_IMAGE : card.imageUri;
+  const shouldShowImage = Boolean(card.imageUri) && !imageFailed;
 
   useEffect(() => {
     setImageFailed(false);
@@ -46,12 +44,14 @@ export function ExploreActivityCard({ card, marker, href, onPress }: ExploreActi
       style={[styles.pressable, isLargeScreen && styles.pressableLarge]}
     >
       <View style={[styles.imageWrap, isLargeScreen && styles.imageWrapLarge]}>
-        <Image
-          source={imageUri}
-          contentFit="cover"
-          onError={() => setImageFailed(true)}
-          style={styles.image}
-        />
+        {shouldShowImage ? (
+          <Image
+            source={card.imageUri}
+            contentFit="cover"
+            onError={() => setImageFailed(true)}
+            style={styles.image}
+          />
+        ) : null}
         {marker === 'gem' ? (
           <View style={styles.gemMarker}>
             <Diamond color={designSystem.colors.white} size={18} weight="fill" />

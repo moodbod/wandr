@@ -37,8 +37,6 @@ export function ChatOptionsSheet({
   const insets = useSafeAreaInsets();
   const [renameDraft, setRenameDraft] = useState(title);
   const [isEditingName, setIsEditingName] = useState(false);
-  const firstSnapPoint = Array.isArray(snapPoints) ? snapPoints[0] : undefined;
-  const desktopHeight = Platform.OS === 'web' && typeof firstSnapPoint === 'number' ? firstSnapPoint : undefined;
 
   useEffect(() => {
     setRenameDraft(title);
@@ -60,8 +58,7 @@ export function ChatOptionsSheet({
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
-      onChange={onChange}
-      desktopPopupHostStyle={desktopHeight ? { height: desktopHeight } : undefined}>
+      onChange={onChange}>
       <BottomSheetScrollView
         contentContainerStyle={[
           styles.sheetContent,

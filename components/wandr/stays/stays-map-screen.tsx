@@ -27,8 +27,10 @@ import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery
 import { StaysRailCard } from '@/components/wandr/stays/stays-rail-card';
 import { designSystem } from '@/constants/design-system';
 import {
+  buildPlanningLocationsFromDestinations,
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
+  getPlanningLocationCenterCoordinate,
 } from '@/constants/planning-countries';
 import { rankStayProperties } from '@/constants/stays-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -103,11 +105,15 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const rankedStays = useMemo(
     () =>
       rankStayProperties({
-        stays: (dbStays || []) as any,
+        stays: (dbStays ?? []) as any,
         trip,
         currentCoordinate: currentLocation.coordinate,
       }),
     [dbStays, currentLocation.coordinate, trip]
+  );
+  const availablePlanningLocations = useMemo(
+    () => buildPlanningLocationsFromDestinations(rankedStays),
+    [rankedStays]
   );
   const routeCoordinates = useMemo(() => {
     return buildTripRouteCoordinates(trip, { onlyRemaining: false });
@@ -127,30 +133,18 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         labels: [stay.name, stay.town, stay.region, stay.locationLabel],
       })
     );
-    const locationPool = locationBase.length > 0 ? locationBase : rankedStays;
     const locationSearchMatches = query
-      ? locationPool.filter((stay) => getStaySearchText(stay).includes(query))
-      : locationPool;
-    const globalSearchMatches = query
-      ? rankedStays.filter((stay) => getStaySearchText(stay).includes(query))
-      : [];
-    const base = query
-      ? locationSearchMatches.length > 0
-        ? locationSearchMatches
-        : globalSearchMatches.length > 0
-          ? globalSearchMatches
-          : locationPool
-      : locationPool;
+      ? locationBase.filter((stay) => getStaySearchText(stay).includes(query))
+      : locationBase;
 
     const proximityFiltered = filterStaysByDiscoveryMode({
-      stays: base,
+      stays: locationSearchMatches,
       discoveryMode,
       routeCoordinates: locationRouteCoordinates,
       currentCoordinate: coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
         ? currentLocation.coordinate
         : null,
     });
-    const relatedStays = proximityFiltered.length > 0 ? proximityFiltered : base;
     const ordered = [...proximityFiltered].sort((a, b) => {
       if (sortMode === 'price') {
         return a.pricePerNight - b.pricePerNight;
@@ -168,12 +162,10 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       return getDistanceFromRoute(a, locationRouteCoordinates) - getDistanceFromRoute(b, locationRouteCoordinates);
     });
 
-    return ordered.length > 0
-      ? ordered
-      : [...relatedStays].sort((a, b) => a.matchScore - b.matchScore);
+    return ordered;
   }, [locationRouteCoordinates, currentLocation.coordinate, discoveryMode, planningLocation, rankedStays, searchQuery, sortMode]);
 
-  const featuredStay = filteredStays[selectedIndex] ?? filteredStays[0] ?? null;
+  const featuredStay = filteredStays[selectedIndex] ?? null;
   const featuredStayKey = featuredStay ? ((featuredStay as any).id || (featuredStay as any)._id) : null;
   const mapStays = useMemo(() => {
     if (!featuredStay) {
@@ -253,13 +245,13 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const tripCenterInPlanningLocation = coordinateIsInPlanningLocation(trip?.centerCoordinate, planningLocation)
     ? trip?.centerCoordinate
     : null;
+  const planningCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
   const centerCoordinate =
     featuredStay?.coordinate ??
     (discoveryMode === 'nearby' && coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
       ? currentLocation.coordinate
       : tripCenterInPlanningLocation) ??
-    mapMarkers[0]?.coordinate ??
-    planningLocation.centerCoordinate ??
+    planningCenterCoordinate ??
     null;
   const userCoordinate = coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
     ? currentLocation.coordinate
@@ -420,6 +412,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           ) : null}
         </LargeScreenWorkspace>
         <PlanningLocationSheet
+          availableLocations={availablePlanningLocations}
           currentCoordinate={currentLocation.coordinate}
           selectedLocation={planningLocation}
           visible={locationSheetVisible}
@@ -449,6 +442,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         bottomContentVisible
       />
       <PlanningLocationSheet
+        availableLocations={availablePlanningLocations}
         currentCoordinate={currentLocation.coordinate}
         selectedLocation={planningLocation}
         visible={locationSheetVisible}
@@ -591,7 +585,7 @@ function filterStaysByDiscoveryMode(
   const hasUsableDistance = stays.some((stay) => Number.isFinite(getDistance(stay)));
 
   if (!hasUsableDistance) {
-    return [...stays];
+    return [];
   }
 
   const rankedByDistance = [...stays].sort((a, b) => {

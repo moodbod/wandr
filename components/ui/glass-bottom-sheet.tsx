@@ -1,6 +1,15 @@
 import BottomSheet, { BottomSheetBackgroundProps, BottomSheetProps } from '@gorhom/bottom-sheet';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -107,9 +116,9 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
   const sheetRef = useRef<BottomSheet>(null);
   const { height, width } = useWindowDimensions();
   const { isLargeScreen } = useResponsive();
-  const modalWidth = Math.min(460, Math.max(340, width * 0.28));
+  const modalWidth = Math.min(390, Math.max(320, width * 0.24));
   const modalHeightRatio = getDesktopSnapRatio(snapPoints);
-  const modalHeight = Math.min(height - 56, Math.max(240, height * modalHeightRatio));
+  const modalHeight = Math.min(height - 88, Math.max(240, height * modalHeightRatio));
   const [isMobileVisible, setIsMobileVisible] = useState(() => (typeof index === 'number' ? index >= 0 : true));
   const [mobileIndex, setMobileIndex] = useState(() => (typeof index === 'number' ? Math.max(index, 0) : 0));
   const [isDesktopVisible, setIsDesktopVisible] = useState(false);
@@ -129,10 +138,10 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
       return;
     }
 
-    if (nextIndex === -1) {
-      setIsDesktopVisible(false);
+    if (nextIndex === -1 && isDesktopVisible) {
+      sheetRef.current?.close();
     }
-  }, [index, isLargeScreen]);
+  }, [index, isDesktopVisible, isLargeScreen]);
 
   useEffect(() => {
     if (isLargeScreen) {
@@ -181,14 +190,18 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
 
   const closeDesktopSheet = useCallback(() => {
     sheetRef.current?.close();
-    setIsDesktopVisible(false);
   }, []);
 
   useImperativeHandle(ref, () => ({
     snapToIndex: (index, animationConfigs) => {
       if (isLargeScreen) {
+        if (index < 0) {
+          sheetRef.current?.close(animationConfigs);
+          return;
+        }
+
         setDesktopIndex(index);
-        setIsDesktopVisible(index >= 0);
+        setIsDesktopVisible(true);
         requestAnimationFrame(() => {
           sheetRef.current?.snapToIndex(0, animationConfigs);
         });
@@ -256,7 +269,6 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
     close: (animationConfigs) => {
       if (isLargeScreen) {
         sheetRef.current?.close(animationConfigs);
-        setIsDesktopVisible(false);
         return;
       }
 
@@ -266,7 +278,6 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
     forceClose: (animationConfigs) => {
       if (isLargeScreen) {
         sheetRef.current?.forceClose(animationConfigs);
-        setIsDesktopVisible(false);
         return;
       }
 
@@ -298,7 +309,7 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
               backgroundComponent={CustomBackground}
               backdropComponent={undefined}
               handleComponent={null}
-              enableContentPanningGesture
+              enableContentPanningGesture={Platform.OS !== 'web'}
               enableHandlePanningGesture={false}
               detached={false}
               enablePanDownToClose={false}
@@ -349,7 +360,7 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
 GlassBottomSheet.displayName = 'GlassBottomSheet';
 
 function getDesktopSnapRatio(snapPoints: BottomSheetProps['snapPoints']) {
-  const fallback = 0.58;
+  const fallback = 0.52;
 
   if (!Array.isArray(snapPoints)) {
     return fallback;
@@ -358,11 +369,11 @@ function getDesktopSnapRatio(snapPoints: BottomSheetProps['snapPoints']) {
   const firstPoint = snapPoints[0];
   if (typeof firstPoint === 'string') {
     const percentage = Number(firstPoint.replace('%', ''));
-    return Number.isFinite(percentage) ? Math.min(0.72, Math.max(0.38, percentage / 100)) : fallback;
+    return Number.isFinite(percentage) ? Math.min(0.62, Math.max(0.34, percentage / 100)) : fallback;
   }
 
   if (typeof firstPoint === 'number') {
-    return Math.min(0.72, Math.max(0.38, firstPoint / 900));
+    return Math.min(0.62, Math.max(0.34, firstPoint / 900));
   }
 
   return fallback;
@@ -383,8 +394,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.24)',
   },
   popupHost: {
-    maxWidth: 460,
-    maxHeight: '82%',
+    maxWidth: 390,
+    maxHeight: '72%',
   },
   sheetContainer: {
     zIndex: 1000,

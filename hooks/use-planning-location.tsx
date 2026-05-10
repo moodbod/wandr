@@ -8,6 +8,7 @@ import {
 } from '@/constants/planning-countries';
 
 type OpenPlanningLocationSheetOptions = {
+  availableLocations?: readonly PlanningLocation[];
   currentCoordinate?: readonly [number, number] | null;
   onSelectLocation?: (location: PlanningLocation) => void;
 };
@@ -25,6 +26,7 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
   const [planningLocation, setPlanningLocationState] = useState<PlanningLocation>(defaultPlanningLocation);
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerAvailableLocations, setPickerAvailableLocations] = useState<readonly PlanningLocation[] | undefined>(undefined);
   const [pickerCoordinate, setPickerCoordinate] = useState<readonly [number, number] | null | undefined>(undefined);
   const [pickerSelectCallback, setPickerSelectCallback] = useState<((location: PlanningLocation) => void) | null>(null);
 
@@ -38,6 +40,7 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
   }, []);
 
   const openPlanningLocationSheet = useCallback((options?: OpenPlanningLocationSheetOptions) => {
+    setPickerAvailableLocations(options?.availableLocations);
     setPickerCoordinate(options?.currentCoordinate);
     setPickerSelectCallback(() => options?.onSelectLocation ?? null);
     setPickerVisible(true);
@@ -70,6 +73,7 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
       {children}
       {pickerVisible ? (
         <PlanningLocationSheet
+          availableLocations={pickerAvailableLocations}
           currentCoordinate={pickerCoordinate}
           selectedLocation={planningLocation}
           visible={pickerVisible}

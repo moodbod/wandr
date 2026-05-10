@@ -56,7 +56,6 @@ export function StaysDiscoveryControls({
   const isDark = useColorScheme() === 'dark';
   const iconColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
   const isDesktopMap = variant === 'desktopMap';
-  const desktopSurfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassHigh;
   const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
   const desktopInputSurfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassMax;
   const desktopDockSurfaceColor = isDark ? 'rgba(8, 11, 8, 0.38)' : designSystem.colors.whiteGlassMedium;
@@ -68,10 +67,6 @@ export function StaysDiscoveryControls({
       style={[
         styles.discoveryBar,
         isDesktopMap && styles.desktopDiscoveryBar,
-        isDesktopMap && {
-          backgroundColor: desktopSurfaceColor,
-          borderColor: desktopBorderColor,
-        },
       ]}
     >
       <View style={[styles.searchRow, isDesktopMap && styles.desktopSearchRow]}>
@@ -247,8 +242,6 @@ const styles = StyleSheet.create({
     maxWidth: 860,
     gap: 8,
     padding: 8,
-    borderRadius: 32,
-    borderWidth: 1,
   },
   searchRow: {
     flexDirection: 'row',

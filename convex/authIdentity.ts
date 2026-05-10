@@ -1,16 +1,16 @@
-import { getAuthUserId as getConvexAuthUserId } from '@convex-dev/auth/server';
+import { getAuthUserId } from '@convex-dev/auth/server';
 
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 
 type AuthCtx = QueryCtx | MutationCtx;
-type AuthIdentity = NonNullable<Awaited<ReturnType<AuthCtx['auth']['getUserIdentity']>>>;
+type ConvexIdentity = NonNullable<Awaited<ReturnType<AuthCtx['auth']['getUserIdentity']>>>;
 
 export type CurrentAuthRecord = {
   authUser: Doc<'users'> | null;
   authUserId: Id<'users'>;
   email?: string;
-  identity: AuthIdentity;
+  identity: ConvexIdentity;
   name: string;
 };
 
@@ -19,15 +19,15 @@ export function normalizeEmail(email?: string | null) {
   return normalized && normalized.includes('@') ? normalized : undefined;
 }
 
-function getClaimString(identity: AuthIdentity, key: 'email' | 'preferred_username' | 'name' | 'given_name') {
-  const value = (identity as AuthIdentity & Record<string, unknown>)[key];
+function identityString(identity: ConvexIdentity, key: 'email' | 'preferred_username' | 'name' | 'given_name') {
+  const value = (identity as ConvexIdentity & Record<string, unknown>)[key];
   return typeof value === 'string' ? value.trim() : undefined;
 }
 
 export async function getCurrentAuthRecord(ctx: AuthCtx): Promise<CurrentAuthRecord | null> {
   const [identity, authUserId] = await Promise.all([
     ctx.auth.getUserIdentity(),
-    getConvexAuthUserId(ctx),
+    getAuthUserId(ctx),
   ]);
 
   if (!identity || !authUserId) {
@@ -35,11 +35,15 @@ export async function getCurrentAuthRecord(ctx: AuthCtx): Promise<CurrentAuthRec
   }
 
   const authUser = await ctx.db.get(authUserId);
-  const email = normalizeEmail(authUser?.email ?? getClaimString(identity, 'email') ?? getClaimString(identity, 'preferred_username'));
+  const email = normalizeEmail(
+    authUser?.email ??
+      identityString(identity, 'email') ??
+      identityString(identity, 'preferred_username')
+  );
   const name =
     authUser?.name?.trim() ||
-    getClaimString(identity, 'name') ||
-    getClaimString(identity, 'given_name') ||
+    identityString(identity, 'name') ||
+    identityString(identity, 'given_name') ||
     email?.split('@')[0] ||
     'Traveler';
 
@@ -53,14 +57,14 @@ export async function getCurrentAuthRecord(ctx: AuthCtx): Promise<CurrentAuthRec
 }
 
 export async function requireCurrentAuthRecord(ctx: AuthCtx) {
-  const authRecord = await getCurrentAuthRecord(ctx);
-  if (!authRecord) {
+  const record = await getCurrentAuthRecord(ctx);
+  if (!record) {
     throw new Error('Not authenticated');
   }
-  return authRecord;
+
+  return record;
 }
 
-/** Look up a user row by slug. */
 export async function getUserBySlug(ctx: AuthCtx, slug: string) {
   return await ctx.db
     .query('users')

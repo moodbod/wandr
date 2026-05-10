@@ -805,9 +805,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailHeroSkeleton: {
-    height: 340,
+    alignSelf: 'center',
     borderRadius: 34,
-    marginHorizontal: designSystem.spacing.lg,
+    height: 500,
+    maxWidth: 344,
+    width: '88%',
   },
   detailBadgeSkeleton: {
     width: 104,

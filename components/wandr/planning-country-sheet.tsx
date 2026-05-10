@@ -12,12 +12,14 @@ import {
   allPlanningCountryOptions,
   defaultPlanningLocationPickerOptions,
   getPlanningLocationForCoordinate,
+  otherCountriesPlanningLocationOption,
   type PlanningLocation,
 } from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type PlanningLocationSheetProps = {
+  availableLocations?: readonly PlanningLocation[];
   currentCoordinate?: readonly [number, number] | null;
   selectedLocation: PlanningLocation;
   visible: boolean;
@@ -26,6 +28,7 @@ type PlanningLocationSheetProps = {
 };
 
 export function PlanningLocationSheet({
+  availableLocations,
   currentCoordinate,
   selectedLocation,
   visible,
@@ -39,22 +42,65 @@ export function PlanningLocationSheet({
   const isDark = useColorScheme() === 'dark';
   const currentLocation = getPlanningLocationForCoordinate(currentCoordinate);
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
+  const selectedAccentColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
+  const currentPillBackgroundColor = isDark ? designSystem.colors.lime : designSystem.colors.limeMist;
+  const currentPillBorderColor = isDark ? designSystem.colors.lime : designSystem.colors.borderAccent;
+  const currentPillTextColor = isDark ? designSystem.colors.darkGreen : designSystem.colors.fern;
   const snapPoints = useMemo(() => ['48%', '70%'], []);
   const normalizedQuery = query.trim().toLowerCase();
-  const countryOptions = useMemo(
-    () =>
-      [...allPlanningCountryOptions].sort((a, b) => {
-        const aSupported = a.isSupported !== false;
-        const bSupported = b.isSupported !== false;
+  const availabilityByCountryCode = useMemo(() => {
+    const locations = new Map<string, PlanningLocation>();
 
-        if (aSupported !== bSupported) {
-          return aSupported ? -1 : 1;
-        }
+    availableLocations?.forEach((location) => {
+      if (location.countryCode) {
+        locations.set(location.countryCode.toUpperCase(), location);
+      }
+    });
 
-        return a.label.localeCompare(b.label);
-      }),
-    []
-  );
+    return locations;
+  }, [availableLocations]);
+  const hasDataBackedAvailability = availableLocations !== undefined;
+  const countryOptions = useMemo(() => {
+    const mergedOptions = allPlanningCountryOptions.map((location) => {
+      const availableLocation = location.countryCode
+        ? availabilityByCountryCode.get(location.countryCode.toUpperCase())
+        : undefined;
+
+      if (availableLocation) {
+        return {
+          ...location,
+          ...availableLocation,
+          isSupported: true,
+        };
+      }
+
+      return hasDataBackedAvailability
+        ? {
+            ...location,
+            isSupported: false,
+          }
+        : location;
+    });
+    const knownCountryCodes = new Set(
+      allPlanningCountryOptions
+        .map((location) => location.countryCode?.toUpperCase())
+        .filter((countryCode): countryCode is string => Boolean(countryCode))
+    );
+    const extraAvailableLocations = (availableLocations ?? []).filter(
+      (location) => !location.countryCode || !knownCountryCodes.has(location.countryCode.toUpperCase())
+    );
+
+    return [...mergedOptions, ...extraAvailableLocations].sort((a, b) => {
+      const aSupported = a.isSupported !== false;
+      const bSupported = b.isSupported !== false;
+
+      if (aSupported !== bSupported) {
+        return aSupported ? -1 : 1;
+      }
+
+      return a.label.localeCompare(b.label);
+    });
+  }, [availabilityByCountryCode, availableLocations, hasDataBackedAvailability]);
   const searchOptions = useMemo(() => {
     if (!normalizedQuery) {
       return countryOptions;
@@ -67,7 +113,13 @@ export function PlanningLocationSheet({
         .includes(normalizedQuery)
     );
   }, [countryOptions, normalizedQuery]);
-  const options = isSearchExpanded ? searchOptions : defaultPlanningLocationPickerOptions;
+  const defaultOptions =
+    hasDataBackedAvailability
+      ? availableLocations && availableLocations.length > 0
+        ? [...availableLocations, otherCountriesPlanningLocationOption]
+        : [otherCountriesPlanningLocationOption]
+      : defaultPlanningLocationPickerOptions;
+  const options = isSearchExpanded ? searchOptions : defaultOptions;
 
   useEffect(() => {
     if (visible) {
@@ -99,7 +151,7 @@ export function PlanningLocationSheet({
   return (
     <GlassBottomSheet
       ref={sheetRef}
-      index={0}
+      index={visible ? 0 : -1}
       snapPoints={snapPoints}
       enableDynamicSizing={false}
       enablePanDownToClose
@@ -122,21 +174,13 @@ export function PlanningLocationSheet({
         extraData={`${selectedLocation.id}-${isSearchExpanded}-${query}`}
         keyExtractor={(location) => location.id}
         keyboardShouldPersistTaps="handled"
-        stickyHeaderIndices={[0]}
+        stickyHeaderIndices={isSearchExpanded ? [0] : undefined}
         contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <ThemedText style={styles.title}>Choose location</ThemedText>
-            {isSearchExpanded ? (
-              <ThemedText style={[styles.description, { color: mutedColor }]}>
-                Type a city, country, or region to plan somewhere else.
-              </ThemedText>
-            ) : null}
-
-            {isSearchExpanded ? (
+          isSearchExpanded ? (
+            <View style={styles.header}>
               <GlassInput
                 autoCapitalize="words"
-                containerStyle={styles.searchInput}
                 leftIcon={<MapPin color={mutedColor} size={20} weight="bold" />}
                 placeholder="Where are you planning?"
                 returnKeyType="done"
@@ -149,8 +193,8 @@ export function PlanningLocationSheet({
                   }
                 }}
               />
-            ) : null}
-          </View>
+            </View>
+          ) : null
         }
         ListEmptyComponent={
           isSearchExpanded ? (
@@ -185,12 +229,20 @@ export function PlanningLocationSheet({
                 ) : null}
                 <View style={styles.optionCopy}>
                   <View style={styles.optionTitleRow}>
-                    <ThemedText style={[styles.optionTitle, selected ? styles.selectedText : null]}>
+                    <ThemedText style={[styles.optionTitle, selected ? { color: selectedAccentColor } : null]}>
                       {location.label}
                     </ThemedText>
                     {isCurrent ? (
-                      <View style={styles.currentPill}>
-                        <ThemedText style={styles.currentPillText}>Near you</ThemedText>
+                      <View
+                        style={[
+                          styles.currentPill,
+                          {
+                            backgroundColor: currentPillBackgroundColor,
+                            borderColor: currentPillBorderColor,
+                          },
+                        ]}
+                      >
+                        <ThemedText style={[styles.currentPillText, { color: currentPillTextColor }]}>Near you</ThemedText>
                       </View>
                     ) : null}
                     {isDisabled ? (
@@ -199,7 +251,7 @@ export function PlanningLocationSheet({
                       </View>
                     ) : null}
                   </View>
-                  <ThemedText style={[styles.optionDetail, { color: selected ? designSystem.colors.lime : mutedColor }]}>
+                  <ThemedText style={[styles.optionDetail, { color: selected ? selectedAccentColor : mutedColor }]}>
                     {location.detail}
                   </ThemedText>
                 </View>
@@ -210,11 +262,11 @@ export function PlanningLocationSheet({
                     style={[
                       styles.radio,
                       {
-                        borderColor: selected ? designSystem.colors.lime : mutedColor,
+                        borderColor: selected ? selectedAccentColor : mutedColor,
                       },
                     ]}
                   >
-                    {selected ? <View style={styles.radioDot} /> : null}
+                    {selected ? <View style={[styles.radioDot, { backgroundColor: selectedAccentColor }]} /> : null}
                   </View>
                 )}
               </Pressable>
@@ -233,18 +285,6 @@ const styles = StyleSheet.create({
     paddingTop: designSystem.spacing.md,
     paddingBottom: designSystem.spacing.md,
     backgroundColor: 'transparent',
-  },
-  title: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: '600',
-  },
-  description: {
-    ...designSystem.type.body,
-    marginTop: designSystem.spacing.xs,
-  },
-  searchInput: {
-    marginTop: designSystem.spacing.lg,
   },
   listContent: {
     paddingBottom: designSystem.spacing.lg,
@@ -285,14 +325,12 @@ const styles = StyleSheet.create({
     ...designSystem.type.bodyStrong,
     fontSize: 16,
   },
-  selectedText: {
-    color: designSystem.colors.lime,
-  },
   optionDetail: {
     ...designSystem.type.caption,
   },
   currentPill: {
     borderRadius: designSystem.radii.pill,
+    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
     backgroundColor: designSystem.colors.lime,

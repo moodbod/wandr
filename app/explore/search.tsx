@@ -39,6 +39,19 @@ const intentOptions: readonly DiscoveryOption[] = [
   { key: 'popular', label: 'Popular with Travelers' },
 ];
 
+type SearchResultCard =
+  | {
+      kind: 'experience';
+      card: ExploreActivityCardContent;
+      key: string;
+    }
+  | {
+      kind: 'hiddenGem';
+      card: ExploreActivityCardContent;
+      key: string;
+      slug: string;
+    };
+
 export default function ExploreSearchScreen() {
   return <ConnectedExploreSearchScreen />;
 }
@@ -122,7 +135,7 @@ function ConnectedExploreSearchScreen() {
             searchMatchedGems,
             coordinateIsInPlanningLocation(currentLocation, planningLocation)
               ? currentLocation ?? undefined
-              : planningLocation.centerCoordinate ?? page.home.hero.centerCoordinate
+              : page.home.hero.centerCoordinate
           )
         : [],
     [currentLocation, page, planningLocation, searchMatchedExperiences, searchMatchedGems]
@@ -267,6 +280,18 @@ function ExploreSearchScreenView({
   regionOptions: readonly DiscoveryOption[];
   searchQuery: string;
 }) {
+  const resultCards = useMemo<SearchResultCard[]>(
+    () => [
+      ...previewCards.map((card) => ({
+        kind: 'experience' as const,
+        card,
+        key: `experience-${card.experienceSlug}`,
+      })),
+      ...filteredHiddenGems.map(toHiddenGemResultCard),
+    ],
+    [filteredHiddenGems, previewCards]
+  );
+
   return (
     <ThemedView style={styles.root}>
       <WandrHeader
@@ -293,21 +318,34 @@ function ExploreSearchScreenView({
           searchPlaceholder={page?.search.intro.searchPlaceholder ?? 'Search by place, activity, or mood'}
         />
 
-        {(isLoading || previewCards.length > 0) && (
+        {(isLoading || resultCards.length > 0) && (
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <ThemedText style={styles.sectionTitle}>Start with these</ThemedText>
             </View>
             <View style={styles.cardStack}>
               {isLoading
-                ? Array.from({ length: 2 }).map((_, index) => <ExploreActivityCardSkeleton key={`search-activity-skeleton-${index}`} />)
-                : previewCards.map((card) => (
-                    <ExploreActivityCard
-                      key={card.experienceSlug}
-                      card={card}
-                      href={{ pathname: '/explore/[slug]', params: { slug: card.experienceSlug } }}
-                    />
-                  ))}
+                ? Array.from({ length: 4 }).map((_, index) => <ExploreActivityCardSkeleton key={`search-activity-skeleton-${index}`} />)
+                : resultCards.map((item) => {
+                    if (item.kind === 'hiddenGem') {
+                      return (
+                        <ExploreActivityCard
+                          key={item.key}
+                          card={item.card}
+                          href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.slug } }}
+                          marker="gem"
+                        />
+                      );
+                    }
+
+                    return (
+                      <ExploreActivityCard
+                        key={item.key}
+                        card={item.card}
+                        href={{ pathname: '/explore/[slug]', params: { slug: item.card.experienceSlug } }}
+                      />
+                    );
+                  })}
             </View>
           </View>
         )}
@@ -325,37 +363,6 @@ function ExploreSearchScreenView({
                   href={{ pathname: '/explore/group/[circleId]', params: { circleId: card.circleId } }}
                 />
               ))}
-            </View>
-          </View>
-        )}
-
-        {(isLoading || filteredHiddenGems.length > 0) && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <ThemedText style={styles.sectionTitle}>Local detours worth keeping</ThemedText>
-            </View>
-            <View style={styles.cardStack}>
-              {isLoading
-                ? Array.from({ length: 2 }).map((_, index) => <ExploreActivityCardSkeleton key={`search-gem-skeleton-${index}`} />)
-                : filteredHiddenGems.map((item) => (
-                    <ExploreActivityCard
-                      key={item.title}
-                      card={{
-                        badge: item.badge ?? 'Hidden gem',
-                        badgeTone: 'soft',
-                        ctaLabel: item.primaryLabel ?? 'Open gem',
-                        experienceSlug: getHiddenGemSlug(item.title),
-                        imageUri: item.imageUri,
-                        price: '',
-                        priceSuffix: '',
-                        subtitle: item.locationLabel ?? item.summary ?? item.description,
-                        title: item.title,
-                        countryLabel: item.countryLabel,
-                      }}
-                      href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
-                      marker="gem"
-                    />
-                  ))}
             </View>
           </View>
         )}
@@ -432,3 +439,25 @@ const styles = StyleSheet.create({
     color: designSystem.colors.warmDark,
   },
 });
+
+function toHiddenGemResultCard(item: ExploreHiddenGem): SearchResultCard {
+  const slug = getHiddenGemSlug(item.title);
+
+  return {
+    kind: 'hiddenGem',
+    key: `hidden-gem-${slug}`,
+    slug,
+    card: {
+      badge: item.badge ?? 'Hidden gem',
+      badgeTone: 'soft',
+      ctaLabel: item.primaryLabel ?? 'Open gem',
+      experienceSlug: slug,
+      imageUri: item.imageUri,
+      price: '',
+      priceSuffix: '',
+      subtitle: item.locationLabel ?? item.summary ?? item.description,
+      title: item.title,
+      countryLabel: item.countryLabel,
+    },
+  };
+}

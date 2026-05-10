@@ -1,74 +1,68 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { type ComponentProps } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
-
+import { useResponsive } from '@/hooks/use-responsive';
 import { AUTH_LAYOUT, type AuthPalette } from './auth-palette';
 
-type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
-
-type PrimaryButtonProps = {
+type AuthPrimaryButtonProps = {
   disabled?: boolean;
-  iconName?: MaterialIconName;
   label: string;
   loading?: boolean;
   palette: AuthPalette;
   onPress: () => void;
 };
 
-export function AuthPrimaryButton({ disabled, iconName, label, loading, palette, onPress }: PrimaryButtonProps) {
+export function AuthPrimaryButton({ disabled, label, loading, palette, onPress }: AuthPrimaryButtonProps) {
+  const { isLargeScreen } = useResponsive();
+  const isDesktop = Platform.OS === 'web' && isLargeScreen;
+
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
+      onPress={onPress}
       style={({ pressed }) => [
-        styles.primaryButton,
+        styles.button,
+        isDesktop ? styles.desktopButton : null,
         { backgroundColor: palette.primary },
-        disabled && styles.primaryButtonDisabled,
-        pressed && styles.filledButtonPressed,
-      ]}
-      onPress={onPress}>
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}>
       {loading ? (
         <ActivityIndicator color={palette.primaryText} />
       ) : (
-        <View style={styles.primaryButtonContent}>
-          {iconName ? <MaterialCommunityIcons color={palette.primaryText} name={iconName} size={AUTH_LAYOUT.iconSizeMd} /> : null}
-          <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={styles.primaryButtonText}>
-            {label}
-          </ThemedText>
-        </View>
+        <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={[styles.label, isDesktop ? styles.desktopLabel : null]}>
+          {label}
+        </ThemedText>
       )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  primaryButton: {
+  button: {
     alignItems: 'center',
-    alignSelf: 'stretch',
     borderRadius: designSystem.radii.pill,
+    height: AUTH_LAYOUT.primaryButtonHeight,
     justifyContent: 'center',
-    minHeight: AUTH_LAYOUT.primaryButtonHeight,
     paddingHorizontal: designSystem.spacing.lg,
-    width: '100%',
   },
-  primaryButtonDisabled: {
-    opacity: AUTH_LAYOUT.disabledOpacity,
+  disabled: {
+    opacity: 0.45,
   },
-  primaryButtonText: {
+  desktopButton: {
+    height: 44,
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  desktopLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  label: {
     ...designSystem.type.bodyStrong,
-    color: designSystem.colors.darkGreen,
   },
-  primaryButtonContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: designSystem.spacing.xs,
-    justifyContent: 'center',
-  },
-  filledButtonPressed: {
+  pressed: {
     opacity: 0.82,
-    transform: [{ scale: 0.98 }],
   },
 });

@@ -46,6 +46,7 @@ export type ExploreHiddenGem = {
     title: string;
     body: string;
   }[];
+  sectionsTitle?: string;
   visitTips?: readonly string[];
   primaryLabel?: string;
   secondaryLabel?: string;

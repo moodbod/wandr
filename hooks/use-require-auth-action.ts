@@ -1,11 +1,12 @@
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname } from 'expo-router';
 import { useCallback } from 'react';
 
 import { useAuthSession } from '@/providers/auth-session';
+import { useAuthSheet } from '@/providers/auth-sheet';
 
 export function useRequireAuthAction() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { openAuthSheet } = useAuthSheet();
   const { session } = useAuthSession();
 
   return useCallback(() => {
@@ -13,10 +14,10 @@ export function useRequireAuthAction() {
       return true;
     }
 
-    router.push({
-      pathname: '/sign-in' as never,
-      params: { returnTo: pathname || '/(tabs)/explore' },
+    openAuthSheet({
+      initialMode: 'signIn',
+      returnTo: pathname || '/(tabs)/explore',
     });
     return false;
-  }, [pathname, router, session]);
+  }, [openAuthSheet, pathname, session]);
 }

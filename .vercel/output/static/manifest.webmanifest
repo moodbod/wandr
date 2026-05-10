@@ -1,0 +1,24 @@
+{
+  "name": "Wandr",
+  "short_name": "Wandr",
+  "description": "Plan trips, coordinate with friends, and keep useful trip details close.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#11130f",
+  "theme_color": "#11130f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/wandr-favicon.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "/wandr-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

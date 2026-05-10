@@ -7,8 +7,6 @@ import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { ProfilePlaceItem } from '@/types/trip';
 
-import { fallbackTripImages } from './profile-data';
-
 type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designSystem.semantic];
 
 type RecentExpeditionsProps = {
@@ -27,7 +25,7 @@ export function RecentExpeditions({ emptyBody, emptyTitle, items, title }: Recen
       <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
       <View style={styles.tripList}>
         {items.length > 0 ? (
-          items.map((item, index) => <ExpeditionRow colors={colors} item={item} key={item._id} index={index} />)
+          items.map((item) => <ExpeditionRow colors={colors} item={item} key={item._id} />)
         ) : (
           <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
             <ThemedText style={styles.emptyTitle}>{emptyTitle}</ThemedText>
@@ -41,15 +39,12 @@ export function RecentExpeditions({ emptyBody, emptyTitle, items, title }: Recen
 
 function ExpeditionRow({
   colors,
-  index,
   item,
 }: {
   colors: ProfileSemanticColors;
-  index: number;
   item: ProfilePlaceItem;
 }) {
   const router = useRouter();
-  const imageUri = item.imageUri ?? fallbackTripImages[index % fallbackTripImages.length];
   const dateLabel = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(
     new Date(item.createdAt)
   );
@@ -70,7 +65,11 @@ function ExpeditionRow({
         router.push({ pathname: '/explore/[slug]', params: { slug: item.slug } });
       }}
       style={styles.tripRow}>
-      <ExpoImage source={{ uri: imageUri }} style={[styles.tripImage, { backgroundColor: colors.surface }]} contentFit="cover" />
+      {item.imageUri ? (
+        <ExpoImage source={{ uri: item.imageUri }} style={[styles.tripImage, { backgroundColor: colors.surface }]} contentFit="cover" />
+      ) : (
+        <View style={[styles.tripImage, { backgroundColor: colors.surface }]} />
+      )}
       <View style={styles.tripTextWrap}>
         <ThemedText numberOfLines={2} style={styles.tripTitle}>
           {item.title}

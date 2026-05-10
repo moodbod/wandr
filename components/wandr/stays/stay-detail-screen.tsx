@@ -27,7 +27,6 @@ import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/w
 import { FaceHashAvatar } from '@/components/wandr/facehash-avatar';
 import { WandrHeader } from '@/components/wandr/header';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
-import { getStayBookingProfile } from '@/constants/stays-content';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -190,24 +189,23 @@ export function StayDetailScreen({
   const [reviewNote, setReviewNote] = useState('');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  const staySlugForProfile = stay?.slug;
   const explicitBookingProfile = stay?.bookingProfile;
   const bookingProfile: StayBookingProfile | null = useMemo(
-    () => (staySlugForProfile ? explicitBookingProfile ?? getStayBookingProfile(staySlugForProfile) : null),
-    [explicitBookingProfile, staySlugForProfile]
+    () => explicitBookingProfile ?? null,
+    [explicitBookingProfile]
   );
   const roomOptions = bookingProfile?.roomOptions ?? [];
   const selectedRoomOption =
-    roomOptions.find((option) => option.id === selectedRoomTypeId) ?? roomOptions[0];
+    roomOptions.find((option) => option.id === selectedRoomTypeId);
   const bedOptions = selectedRoomOption?.bedOptions ?? [];
   const selectedBedOption =
-    bedOptions.find((option) => option.id === selectedBedOptionId) ?? bedOptions[0];
+    bedOptions.find((option) => option.id === selectedBedOptionId);
   const arrivalOptions = bookingProfile?.arrivalOptions ?? [];
   const selectedArrivalOption =
-    arrivalOptions.find((option) => option.id === selectedArrivalWindowId) ?? arrivalOptions[0];
-  const maxAdults = selectedRoomOption?.maxAdults ?? 2;
+    arrivalOptions.find((option) => option.id === selectedArrivalWindowId);
+  const maxAdults = selectedRoomOption?.maxAdults ?? 0;
   const maxChildren = selectedRoomOption?.maxChildren ?? 0;
-  const maxRooms = selectedRoomOption?.maxRooms ?? 1;
+  const maxRooms = selectedRoomOption?.maxRooms ?? 0;
   const bookingSheetHeaderAnimatedStyle = useAnimatedStyle(() => {
     return {
       paddingTop: interpolate(bookingSheetAnimatedIndex.value, [0, 1], [0, insets.top], 'clamp'),
@@ -221,19 +219,23 @@ export function StayDetailScreen({
 
     const initialRoomOption = bookingProfile.roomOptions.find(
       (option) => option.id === bookingProfile.defaultRoomOptionId
-    ) ?? bookingProfile.roomOptions[0];
+    );
     const initialBedOption = initialRoomOption?.bedOptions[0];
     const initialArrivalOption = bookingProfile.arrivalOptions.find(
       (option) => option.id === bookingProfile.defaultArrivalOptionId
-    ) ?? bookingProfile.arrivalOptions[0];
+    );
 
-    setSelectedRoomTypeId(initialRoomOption?.id ?? '');
-    setSelectedBedOptionId(initialBedOption?.id ?? '');
-    setSelectedArrivalWindowId(initialArrivalOption?.id ?? '');
+    if (!initialRoomOption || !initialBedOption || !initialArrivalOption) {
+      return;
+    }
+
+    setSelectedRoomTypeId(initialRoomOption.id);
+    setSelectedBedOptionId(initialBedOption.id);
+    setSelectedArrivalWindowId(initialArrivalOption.id);
     setRoomCount(1);
-    setAdults(Math.min(2, initialRoomOption?.maxAdults ?? 2));
+    setAdults(Math.min(adults, initialRoomOption.maxAdults));
     setChildren(0);
-  }, [bookingProfile, existingStayBooking]);
+  }, [adults, bookingProfile, existingStayBooking]);
 
   useEffect(() => {
     if (!selectedRoomOption) {
@@ -241,7 +243,7 @@ export function StayDetailScreen({
     }
 
     if (!selectedRoomOption.bedOptions.some((option) => option.id === selectedBedOptionId)) {
-      setSelectedBedOptionId(selectedRoomOption.bedOptions[0]?.id ?? '');
+      setSelectedBedOptionId('');
     }
 
     if (roomCount > selectedRoomOption.maxRooms) {
@@ -329,6 +331,11 @@ export function StayDetailScreen({
 
   const handleBookPress = () => {
     if (!requireAuthAction()) {
+      return;
+    }
+
+    if (!bookingProfile || !selectedRoomOption || !selectedBedOption || !selectedArrivalOption) {
+      Alert.alert('Booking unavailable', 'This stay does not have complete booking details yet.');
       return;
     }
 
@@ -447,7 +454,7 @@ export function StayDetailScreen({
   };
 
   const confirmBooking = async () => {
-    if (!requireAuthAction() || !travelerSlug) {
+    if (!requireAuthAction() || !travelerSlug || !selectedRoomOption || !selectedBedOption || !selectedArrivalOption) {
       return;
     }
 

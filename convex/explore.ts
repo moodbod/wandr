@@ -45,12 +45,42 @@ const hiddenGemValidator = v.object({
   title: v.string(),
   description: v.string(),
   imageUri: v.string(),
+  countryCode: v.optional(v.string()),
+  countryLabel: v.optional(v.string()),
+  planningLocationId: v.optional(v.string()),
+  coordinate: v.optional(v.array(v.number())),
   geography: v.optional(
     v.object({
       region: v.string(),
       town: v.optional(v.string()),
     })
   ),
+  badge: v.optional(v.string()),
+  locationLabel: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  tripFit: v.optional(
+    v.array(
+      v.object({
+        label: v.string(),
+        value: v.string(),
+        detail: v.string(),
+        icon: v.union(v.literal('compass'), v.literal('clock'), v.literal('users')),
+        tone: v.optional(v.union(v.literal('dark'), v.literal('light'), v.literal('accent'))),
+      })
+    )
+  ),
+  sections: v.optional(
+    v.array(
+      v.object({
+        title: v.string(),
+        body: v.string(),
+      })
+    )
+  ),
+  sectionsTitle: v.optional(v.string()),
+  visitTips: v.optional(v.array(v.string())),
+  primaryLabel: v.optional(v.string()),
+  secondaryLabel: v.optional(v.string()),
 });
 
 const experienceValidator = v.object({
@@ -261,8 +291,6 @@ export const getPageContent = query({
     travelerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Mocking page content for now as it was originally based on hardcoded content
-    // and community enrichment.
     return null;
   },
 });

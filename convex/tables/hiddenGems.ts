@@ -37,6 +37,7 @@ export const hiddenGemsTable = defineTable({
       })
     )
   ),
+  sectionsTitle: v.optional(v.string()),
   visitTips: v.optional(v.array(v.string())),
   primaryLabel: v.optional(v.string()),
   secondaryLabel: v.optional(v.string()),

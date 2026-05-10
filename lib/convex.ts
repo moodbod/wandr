@@ -4,6 +4,7 @@ import { makeFunctionReference } from 'convex/server';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import type { ExploreGroupTripDetail, ExploreJoinableTrip, ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
+import type { StayBookingProfile } from '@/types/stays';
 import type { TripDashboard, TripItineraryItem } from '@/types/trip';
 
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -409,25 +410,6 @@ export const getCurrentAuthIdentityRef = makeFunctionReference<
   } | null
 >;
 
-export const linkCurrentAuthIdentityRef = makeFunctionReference<
-  'mutation',
-  Record<string, never>,
-  {
-    linked: boolean;
-    travelerSlug: string | null;
-    role: 'traveler' | 'admin';
-  }
->('auth:linkCurrentAuthIdentity') as FunctionReference<
-  'mutation',
-  'public',
-  Record<string, never>,
-  {
-    linked: boolean;
-    travelerSlug: string | null;
-    role: 'traveler' | 'admin';
-  }
->;
-
 export const createTripRef = makeFunctionReference<
   'mutation',
   { name: string; travelerSlug: string },
@@ -567,17 +549,28 @@ export const createManagedStayRef = makeFunctionReference<
   {
     managerSlug: string;
     name: string;
+    locationLabel: string;
+    town: string;
+    region: string;
+    countryCode?: string;
+    countryLabel?: string;
+    planningLocationId?: string;
     summary: string;
     coordinate: number[];
     imageUri: string;
     galleryImages: string[];
     priceUsd: number;
+    currencyCode: string;
+    rating: number;
+    reviewCount: number;
     bookingNote: string;
     stayStyle: 'design' | 'lodge' | 'roadside' | 'wellness';
     routeVibe: 'city reset' | 'coast base' | 'wildlife stop' | 'desert night';
+    sleepSignal: string;
     idealFor: string[];
     amenities: string[];
     nearbyHighlights: string[];
+    bookingProfile: StayBookingProfile;
   },
   { slug: string; roomId: string }
 >('trip:createManagedStay') as FunctionReference<
@@ -586,17 +579,28 @@ export const createManagedStayRef = makeFunctionReference<
   {
     managerSlug: string;
     name: string;
+    locationLabel: string;
+    town: string;
+    region: string;
+    countryCode?: string;
+    countryLabel?: string;
+    planningLocationId?: string;
     summary: string;
     coordinate: number[];
     imageUri: string;
     galleryImages: string[];
     priceUsd: number;
+    currencyCode: string;
+    rating: number;
+    reviewCount: number;
     bookingNote: string;
     stayStyle: 'design' | 'lodge' | 'roadside' | 'wellness';
     routeVibe: 'city reset' | 'coast base' | 'wildlife stop' | 'desert night';
+    sleepSignal: string;
     idealFor: string[];
     amenities: string[];
     nearbyHighlights: string[];
+    bookingProfile: StayBookingProfile;
   },
   { slug: string; roomId: string }
 >;

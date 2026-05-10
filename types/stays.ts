@@ -59,6 +59,7 @@ export type StayProperty = {
   galleryImages: readonly string[];
   pricePerNight: number;
   priceLabel: string;
+  currencyCode?: string;
   rating: number;
   reviewCount: number;
   stayStyle: 'design' | 'lodge' | 'roadside' | 'wellness';
@@ -82,6 +83,6 @@ export type RankedStayProperty = StayProperty & {
   distanceFromRouteKm: number;
   distanceFromCurrentKm: number | null;
   matchScore: number;
-  matchedStopLabel: string;
-  matchedStopCoordinate: readonly [number, number];
+  matchedStopLabel?: string;
+  matchedStopCoordinate?: readonly [number, number];
 };

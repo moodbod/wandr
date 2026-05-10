@@ -8,7 +8,7 @@ type StaysRailCardProps = {
   imageUri: string;
   isDark: boolean;
   isSelected: boolean;
-  locationLabel: string;
+  locationLabel?: string;
   name: string;
   presentation?: 'list' | 'floating';
   priceLabel: string;
@@ -69,12 +69,14 @@ export function StaysRailCard({
               {rating.toFixed(1)}
             </ThemedText>
           </View>
-          <ThemedText
-            style={[styles.propertyLocation, isDark && styles.propertyLocationDark]}
-            numberOfLines={1}
-          >
-            {locationLabel}
-          </ThemedText>
+          {locationLabel ? (
+            <ThemedText
+              style={[styles.propertyLocation, isDark && styles.propertyLocationDark]}
+              numberOfLines={1}
+            >
+              {locationLabel}
+            </ThemedText>
+          ) : null}
         </View>
 
         <View style={styles.propertyTitleBlock}>

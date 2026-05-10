@@ -86,7 +86,7 @@ export async function fetchMapboxLocationSuggestions({
     const contextParts = Object.values(properties.context ?? {})
       .map((item) => item?.name)
       .filter((value): value is string => Boolean(value));
-    const detail = properties.full_address ?? properties.place_formatted ?? contextParts.join(', ') ?? 'Map location';
+    const detail = properties.full_address ?? properties.place_formatted ?? contextParts.join(', ');
     const aliases = [
       properties.name,
       properties.name_preferred,
@@ -144,8 +144,11 @@ async function fetchOpenStreetMapSuggestions({
       result.address?.state,
       result.address?.country,
     ].filter((value): value is string => Boolean(value));
-    const label = result.name || result.address?.road || result.display_name?.split(',')[0]?.trim() || 'OpenStreetMap result';
-    const detail = result.display_name ?? (addressParts.join(', ') || 'OpenStreetMap location');
+    const label = result.name || result.address?.road || result.display_name?.split(',')[0]?.trim();
+    if (!label) {
+      return [];
+    }
+    const detail = result.display_name ?? addressParts.join(', ');
     const aliases = [
       result.name,
       result.display_name,

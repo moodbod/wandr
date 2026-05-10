@@ -27,12 +27,6 @@ type DeviceContact = {
   phoneNumber: string;
 };
 
-const inviteStoreUrl = Platform.select({
-  android: 'https://play.google.com/store/apps/details?id=app.wandr',
-  ios: 'https://apps.apple.com/app/wandr/id0000000000',
-  default: 'https://wandr.app',
-});
-
 function formatFilterLabel(value: string) {
   return value
     .trim()
@@ -243,7 +237,7 @@ export default function FriendsDiscoverScreen({
 
   const handleInvitePhone = async (phoneNumber: string, name?: string) => {
     const message = encodeURIComponent(
-      `Hey${name ? ` ${name}` : ''}, join me on Wandr so we can plan trips together: ${inviteStoreUrl}`
+      `Hey${name ? ` ${name}` : ''}, join me on Wandr so we can plan trips together: ${Linking.createURL('/')}`
     );
     const separator = Platform.OS === 'ios' ? '&' : '?';
     await Linking.openURL(`sms:${encodeURIComponent(phoneNumber)}${separator}body=${message}`);

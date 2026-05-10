@@ -47,8 +47,6 @@ const profileTabs = [
   { key: 'gallery', label: 'Gallery' },
   { key: 'bookings', label: 'Bookings' },
 ] as const;
-const generatedPlanningLabels = new Set(['Open to the next good route']);
-
 export function ProfileOverviewScreen({ showBackButton = false }: ProfileOverviewScreenProps) {
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
@@ -86,7 +84,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const avatarUri = traveler?.avatarUri ?? null;
   const baseLabel = traveler?.countryLabel ?? traveler?.regionName ?? '';
   const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
-  const planningLabel = rawPlanningLabel && !generatedPlanningLabels.has(rawPlanningLabel) ? rawPlanningLabel : null;
+  const planningLabel = rawPlanningLabel || null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
   const canUseManagerMode = session?.role === 'admin' && isManagerMode;
 

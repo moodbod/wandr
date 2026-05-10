@@ -4,6 +4,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchRoutePath } from '@/lib/routing';
 
@@ -13,6 +14,8 @@ import { MapRouteOverlays } from './mapbox/mapbox-routes';
 import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
+const DEFAULT_MAP_CENTER: readonly [number, number] =
+  getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
 
 function MapPreviewComponent({
   centerCoordinate,
@@ -33,6 +36,7 @@ function MapPreviewComponent({
 }: MapPreviewProps) {
   const cameraRef = useRef<Camera | null>(null);
   const hasSettledOnUserRef = useRef(false);
+  const hasCenteredOnResolvedDataRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
   const lastCameraTargetKeyRef = useRef<string | null>(null);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
@@ -48,6 +52,7 @@ function MapPreviewComponent({
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate =
     centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
+  const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -144,27 +149,35 @@ function MapPreviewComponent({
   }, [isWeb, stayMarkers, showRoutes, userCoordinate]);
 
   useEffect(() => {
-    if (isWeb || !MapboxGL || !cameraRef.current || !resolvedCenterCoordinate) return;
+    if (isWeb || !MapboxGL || !cameraRef.current) return;
 
-    const cameraTargetKey = getCameraTargetKey(resolvedCenterCoordinate, zoomLevel);
+    const cameraTargetKey = getCameraTargetKey(mapCenterCoordinate, zoomLevel);
     if (cameraTargetKey === lastCameraTargetKeyRef.current) {
       return;
     }
 
-    if (hasUserInteractedRef.current && !centerCoordinate) {
+    if (
+      hasUserInteractedRef.current &&
+      !centerCoordinate &&
+      resolvedCenterCoordinate &&
+      hasCenteredOnResolvedDataRef.current
+    ) {
       return;
     }
 
     lastCameraTargetKeyRef.current = cameraTargetKey;
     hasUserInteractedRef.current = false;
     cameraRef.current.setCamera({
-      centerCoordinate: toMapboxPosition(resolvedCenterCoordinate),
+      centerCoordinate: toMapboxPosition(mapCenterCoordinate),
       padding: cameraPadding,
       zoomLevel,
       animationDuration: 1000,
       animationMode: 'easeTo',
     });
-  }, [MapboxGL, cameraPadding, centerCoordinate, isWeb, resolvedCenterCoordinate, zoomLevel]);
+    if (resolvedCenterCoordinate) {
+      hasCenteredOnResolvedDataRef.current = true;
+    }
+  }, [MapboxGL, cameraPadding, centerCoordinate, isWeb, mapCenterCoordinate, resolvedCenterCoordinate, zoomLevel]);
 
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || hasSettledOnUserRef.current) return;
@@ -230,7 +243,7 @@ function MapPreviewComponent({
           styleURL={styleURL ?? undefined}
         >
            <MapboxGL.Camera
-              centerCoordinate={resolvedCenterCoordinate ? (toMapboxPosition(resolvedCenterCoordinate) as [number, number]) : undefined}
+              centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
               padding={cameraPadding}
               zoomLevel={zoomLevel}
             />
@@ -272,10 +285,10 @@ function MapPreviewComponent({
     );
   }
 
-  if (!resolvedCenterCoordinate || !styleURL) {
+  if (!styleURL) {
     return (
       <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map data is still loading.</ThemedText>
+        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map style is still loading.</ThemedText>
       </View>
     );
   }
@@ -323,11 +336,11 @@ function MapPreviewComponent({
         <MapboxGL.Camera
           ref={cameraRef}
           defaultSettings={{
-            centerCoordinate: toMapboxPosition(resolvedCenterCoordinate),
+            centerCoordinate: toMapboxPosition(mapCenterCoordinate),
             padding: cameraPadding,
             zoomLevel,
           }}
-          centerCoordinate={toMapboxPosition(resolvedCenterCoordinate)}
+          centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
           padding={cameraPadding}
           zoomLevel={zoomLevel}
           animationMode="none"

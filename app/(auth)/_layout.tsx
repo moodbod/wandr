@@ -2,27 +2,11 @@ import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-      }}>
-      <Stack.Screen
-        name="sign-in"
-        options={{ title: 'Sign In | Wandr' }}
-      />
-      <Stack.Screen
-        name="sign-up"
-        options={{ title: 'Sign Up | Wandr' }}
-      />
-      <Stack.Screen
-        name="onboarding"
-        options={{
-          title: 'Welcome | Wandr',
-          gestureEnabled: false,
-          animation: 'fade',
-        }}
-      />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="sign-in" />
+      <Stack.Screen name="sign-up" />
+      <Stack.Screen name="onboarding" />
     </Stack>
   );
 }

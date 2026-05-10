@@ -97,50 +97,7 @@ function getMediaMessage(body: string | null) {
     }
   }
 
-  const mediaByBody: Record<string, { accessibilityLabel: string; uri: string }> = {
-    'wandr:sticker:noto-map': {
-      accessibilityLabel: 'Trip map sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f5fa.png',
-    },
-    'wandr:sticker:noto-camera': {
-      accessibilityLabel: 'Photo op sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f4f8.png',
-    },
-    'wandr:sticker:noto-compass': {
-      accessibilityLabel: 'Compass sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9ed.png',
-    },
-    'wandr:sticker:noto-beach': {
-      accessibilityLabel: 'Beach day sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3d6.png',
-    },
-    'wandr:sticker:noto-landmark': {
-      accessibilityLabel: 'Landmark sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3db.png',
-    },
-    'wandr:sticker:noto-luggage': {
-      accessibilityLabel: 'Packed luggage sticker',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9f3.png',
-    },
-    'wandr:gif:noto-sunrise': {
-      accessibilityLabel: 'Sunrise travel GIF',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f305/512.gif',
-    },
-    'wandr:gif:noto-camp': {
-      accessibilityLabel: 'Camping travel GIF',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f3d5_fe0f/512.gif',
-    },
-    'wandr:gif:noto-car': {
-      accessibilityLabel: 'Road trip GIF',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f697/512.gif',
-    },
-    'wandr:gif:noto-globe': {
-      accessibilityLabel: 'Explore the world GIF',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f30d/512.gif',
-    },
-  };
-
-  return mediaByBody[body] ?? null;
+  return null;
 }
 
 function ReplyQuote({ replyTo }: { replyTo?: { senderName: string; preview: string } | null }) {

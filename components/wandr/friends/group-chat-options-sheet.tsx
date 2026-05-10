@@ -118,8 +118,7 @@ export function GroupChatOptionsSheet({
         ref={memberSheetRef}
         index={-1}
         snapPoints={Platform.OS === 'web' ? [520] : ['72%', '92%']}
-        enablePanDownToClose
-        desktopPopupHostStyle={Platform.OS === 'web' ? { height: 520 } : undefined}>
+        enablePanDownToClose>
         <BottomSheetScrollView
           contentContainerStyle={[
             localStyles.expandedSheetContent,

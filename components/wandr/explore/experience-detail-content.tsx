@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     height: 420,
     maxWidth: 344,
-    width: '82%',
+    width: '88%',
   },
   loadingBadge: {
     borderRadius: 20,

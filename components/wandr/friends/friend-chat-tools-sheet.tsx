@@ -18,73 +18,10 @@ type MediaAction = {
   uri: string;
 };
 
-const TENOR_API_KEY = process.env.EXPO_PUBLIC_TENOR_API_KEY || 'LIVDSRZULELA';
+const TENOR_API_KEY = process.env.EXPO_PUBLIC_TENOR_API_KEY;
 const TENOR_DEFAULT_QUERY: Record<MediaMode, string> = {
   stickers: 'travel tourist vacation',
   gifs: 'travel vacation road trip',
-};
-
-const FALLBACK_MEDIA_ACTIONS: Record<MediaMode, MediaAction[]> = {
-  stickers: [
-    {
-      id: 'fallback-sticker:noto-map',
-      title: 'Trip map',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f5fa.png',
-    },
-    {
-      id: 'fallback-sticker:noto-camera',
-      title: 'Photo op',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f4f8.png',
-    },
-    {
-      id: 'fallback-sticker:noto-compass',
-      title: 'Compass',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9ed.png',
-    },
-    {
-      id: 'fallback-sticker:noto-beach',
-      title: 'Beach day',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3d6.png',
-    },
-    {
-      id: 'fallback-sticker:noto-landmark',
-      title: 'Landmark',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f3db.png',
-    },
-    {
-      id: 'fallback-sticker:noto-luggage',
-      title: 'Packed',
-      uri: 'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f9f3.png',
-    },
-  ].map((item) => ({
-    ...item,
-    body: encodeMediaBody('stickers', item),
-  })),
-  gifs: [
-    {
-      id: 'fallback-gif:noto-sunrise',
-      title: 'Sunrise',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f305/512.gif',
-    },
-    {
-      id: 'fallback-gif:noto-camp',
-      title: 'Camping',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f3d5_fe0f/512.gif',
-    },
-    {
-      id: 'fallback-gif:noto-car',
-      title: 'Road trip',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f697/512.gif',
-    },
-    {
-      id: 'fallback-gif:noto-globe',
-      title: 'Explore',
-      uri: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f30d/512.gif',
-    },
-  ].map((item) => ({
-    ...item,
-    body: encodeMediaBody('gifs', item),
-  })),
 };
 
 type TenorMediaFormat = {
@@ -123,6 +60,10 @@ async function searchTenorMedia({
   query: string;
   signal: AbortSignal;
 }) {
+  if (!TENOR_API_KEY) {
+    return { actions: [], next: null };
+  }
+
   const params = new URLSearchParams({
     ar_range: 'standard',
     client_key: 'wandr',
@@ -165,7 +106,7 @@ async function searchTenorMedia({
     .filter((item): item is MediaAction => item !== null);
 
   return {
-    actions: actions.length > 0 ? actions : FALLBACK_MEDIA_ACTIONS[mode],
+    actions,
     next: payload.next ?? null,
   };
 }
@@ -279,7 +220,7 @@ export function FriendChatToolsSheet({
           if (controller.signal.aborted) {
             return;
           }
-          setMediaActions(FALLBACK_MEDIA_ACTIONS[mediaMode]);
+          setMediaActions([]);
           setMediaError(error instanceof Error ? error.message : 'Could not load media.');
         })
         .finally(() => {
@@ -316,9 +257,6 @@ export function FriendChatToolsSheet({
       });
       setNextMediaCursor(result.next);
     } catch (error) {
-      if (mediaActions.length === 0) {
-        setMediaActions(FALLBACK_MEDIA_ACTIONS[mediaMode]);
-      }
       setMediaError(error instanceof Error ? error.message : 'Could not load more media.');
     } finally {
       setIsLoadingMoreMedia(false);

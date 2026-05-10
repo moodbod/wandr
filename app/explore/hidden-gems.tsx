@@ -14,24 +14,6 @@ import { getHiddenGemSlug } from '@/constants/hidden-gems-content';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getExplorePageContentRef } from '@/lib/convex';
 
-const hiddenGemMeta: Record<string, { district: string; moment: string; note: string }> = {
-  'The Red Lighthouse': {
-    district: 'Jetty edge',
-    moment: 'Sunset stop',
-    note: 'A scenic pause when you want salt air, slower pacing, and an easy photo payoff.',
-  },
-  'Pink Salt Pans': {
-    district: 'Outside town',
-    moment: 'Early outing',
-    note: 'Feels a little surreal and works best when you want a quick escape before the main day starts.',
-  },
-  'Art Alleyway': {
-    district: 'Town center',
-    moment: 'Late afternoon',
-    note: 'Best folded into a walking loop with coffee, small shopping, or a casual meal nearby.',
-  },
-};
-
 export default function ExploreHiddenGemsScreen() {
   return <ConnectedExploreHiddenGemsScreen />;
 }
@@ -85,12 +67,14 @@ function ExploreHiddenGemsScreenView({
               <View style={styles.leadHeader}>
                 <View style={styles.leadCopy}>
                   <ThemedText style={styles.leadTitle}>{leadGem.title}</ThemedText>
-                  <ThemedText style={styles.leadDescription}>{getGemMeta(leadGem).note}</ThemedText>
+                  <ThemedText style={styles.leadDescription}>{leadGem.summary ?? leadGem.description}</ThemedText>
                 </View>
-                <View style={styles.statGrid}>
-                  <GemStat label="Pocket" value={getGemMeta(leadGem).district} />
-                  <GemStat label="Best for" value={getGemMeta(leadGem).moment} />
-                </View>
+                {leadGem.locationLabel || leadGem.geography?.region ? (
+                  <View style={styles.statGrid}>
+                    {leadGem.locationLabel ? <GemStat label="Location" value={leadGem.locationLabel} /> : null}
+                    {leadGem.geography?.region ? <GemStat label="Region" value={leadGem.geography.region} /> : null}
+                  </View>
+                ) : null}
               </View>
             ) : null}
             {isLoading ? (
@@ -138,10 +122,12 @@ function ExploreHiddenGemsScreenView({
                         href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
                         marker="gem"
                       />
-                      <View style={styles.noteRow}>
-                        <GemTag label={getGemMeta(item).district} />
-                        <GemTag label={getGemMeta(item).moment} />
-                      </View>
+                      {item.locationLabel || item.geography?.region ? (
+                        <View style={styles.noteRow}>
+                          {item.locationLabel ? <GemTag label={item.locationLabel} /> : null}
+                          {item.geography?.region ? <GemTag label={item.geography.region} /> : null}
+                        </View>
+                      ) : null}
                     </View>
                   ))}
             </View>
@@ -175,21 +161,11 @@ function GemTag({ label }: { label: string }) {
   );
 }
 
-function getGemMeta(item: ExploreHiddenGem) {
-  return (
-    hiddenGemMeta[item.title] ?? {
-      district: 'Swakopmund',
-      moment: 'Open window',
-      note: item.description,
-    }
-  );
-}
-
 function toHiddenGemActivityCard(item: ExploreHiddenGem) {
   return {
-    badge: item.badge ?? 'Hidden gem',
+    badge: item.badge ?? '',
     badgeTone: 'soft' as const,
-    ctaLabel: item.primaryLabel ?? 'Open gem',
+    ctaLabel: item.primaryLabel ?? '',
     experienceSlug: getHiddenGemSlug(item.title),
     imageUri: item.imageUri,
     price: '',
@@ -201,55 +177,23 @@ function toHiddenGemActivityCard(item: ExploreHiddenGem) {
 }
 
 function buildGemGroups(items: readonly ExploreHiddenGem[]) {
-  const groups = [
-    {
-      key: 'coastal',
-      title: 'Coastal detours',
-      eyebrow: 'Airy and scenic',
-      description: 'When the day needs space, sea air, and somewhere to slow down for a minute.',
-      matcher: (item: ExploreHiddenGem) => item.title === 'The Red Lighthouse',
-    },
-    {
-      key: 'offbeat',
-      title: 'Off-grid moments',
-      eyebrow: 'A little stranger',
-      description: 'Small excursions that feel more like discoveries than checklist stops.',
-      matcher: (item: ExploreHiddenGem) => item.title === 'Pink Salt Pans',
-    },
-    {
-      key: 'urban',
-      title: 'Town details',
-      eyebrow: 'Close to the center',
-      description: 'Quieter corners you can stack with coffee, shops, or an easy walk.',
-      matcher: (item: ExploreHiddenGem) => item.title === 'Art Alleyway',
-    },
-  ];
+  const groups = new Map<string, ExploreHiddenGem[]>();
 
-  return groups
-    .map((group) => ({
-      ...group,
-      items: items.filter(group.matcher),
-    }))
-    .filter((group) => group.items.length > 0);
+  for (const item of items) {
+    const title = item.geography?.region ?? item.countryLabel ?? 'Hidden gems';
+    groups.set(title, [...(groups.get(title) ?? []), item]);
+  }
+
+  return Array.from(groups, ([title, groupItems]) => ({
+    key: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    title,
+    description: '',
+    items: groupItems,
+  }));
 }
 
 function buildLoadingGemGroups() {
-  return [
-    {
-      key: 'loading-coastal',
-      title: 'Coastal detours',
-      eyebrow: 'Airy and scenic',
-      description: 'When the day needs space, sea air, and somewhere to slow down for a minute.',
-      items: [],
-    },
-    {
-      key: 'loading-offbeat',
-      title: 'Off-grid moments',
-      eyebrow: 'A little stranger',
-      description: 'Small excursions that feel more like discoveries than checklist stops.',
-      items: [],
-    },
-  ];
+  return [];
 }
 
 const styles = StyleSheet.create({

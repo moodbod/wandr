@@ -143,7 +143,9 @@ const styles = StyleSheet.create({
   },
   sheetHeaderCopy: {
     flex: 1,
+    flexShrink: 1,
     gap: 8,
+    minWidth: 0,
     paddingTop: 2,
   },
   sheetTitleLine: {
@@ -157,6 +159,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   sheetSearchButton: {
+    flexShrink: 0,
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -169,17 +172,22 @@ const styles = StyleSheet.create({
   },
   mobileHeaderCopy: {
     flex: 1,
+    flexShrink: 1,
     gap: 8,
+    minWidth: 0,
+    overflow: 'hidden',
     paddingTop: 2,
     paddingRight: 8,
   },
   mobileTitleLine: {
     width: '56%',
+    maxWidth: 280,
     height: 28,
     borderRadius: 14,
   },
   mobileSubtitleLine: {
     width: '58%',
+    maxWidth: 220,
     height: 14,
     borderRadius: 7,
   },

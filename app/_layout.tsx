@@ -22,6 +22,7 @@ import { convexAuthStorage } from '@/lib/convex-auth-storage';
 import { convexClient } from '@/lib/convex';
 import { getNavigationBackground, getNavigationTheme, getStackScreenOptions } from '@/lib/navigation-theme';
 import { AuthSessionProvider, useAuthSession } from '@/providers/auth-session';
+import { AuthSheetProvider, useAuthSheet } from '@/providers/auth-sheet';
 
 const ActiveFriendCallOverlay = lazy(() => import('@/components/wandr/friends/active-friend-call-overlay'));
 const PUBLIC_ROUTE_ROOTS = new Set(['explore', 'stays']);
@@ -54,9 +55,11 @@ export default function RootLayout() {
         storage={convexAuthStorage}>
         <PlanningLocationProvider>
           <AuthSessionProvider>
-            <ThemeProvider value={navigationTheme}>
-              <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
-            </ThemeProvider>
+            <AuthSheetProvider>
+              <ThemeProvider value={navigationTheme}>
+                <AppShell backgroundColor={backgroundColor} stackScreenOptions={stackScreenOptions} />
+              </ThemeProvider>
+            </AuthSheetProvider>
           </AuthSessionProvider>
         </PlanningLocationProvider>
       </ConvexAuthProvider>
@@ -92,18 +95,6 @@ function AppShell({
   const canUseNativeCalls = Platform.OS !== 'web' && !isRunningInExpoGo();
   const canUseCallOverlay = Platform.OS === 'web' || canUseNativeCalls;
   const isSignedIn = Boolean(session);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    if (url.searchParams.has('code') && isSignedIn) {
-      url.searchParams.delete('code');
-      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-    }
-  }, [isSignedIn]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
@@ -225,7 +216,7 @@ function AppShell({
     <ActiveFriendCallProvider>
       <View style={[styles.shellViewport, { backgroundColor }]}>
         <View style={styles.shellRoot}>
-          {isSignedIn && isLargeScreen && <AppSidebar />}
+          {isLargeScreen && <AppSidebar />}
           <View style={styles.content}>
             <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -259,7 +250,8 @@ function AppShell({
 function AuthRouteGate() {
   const segments = useSegments();
   const pathname = usePathname();
-  const { isLoading, isAuthenticated, onboardingRequired, session } = useAuthSession();
+  const { openAuthSheet } = useAuthSheet();
+  const { isAuthenticated, isLoading, onboardingRequired, session } = useAuthSession();
   const isAuthRoute = String(segments[0]) === '(auth)';
   const isOnboardingRoute = pathname === '/onboarding' || pathname === '/(auth)/onboarding';
   const isRootRoute = pathname === '/' || pathname === '';
@@ -274,18 +266,22 @@ function AuthRouteGate() {
     }
 
     if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
-      router.replace({
-        pathname: '/(auth)/sign-in' as never,
-        params: { returnTo: pathname || '/(tabs)/explore' },
+      openAuthSheet({
+        dismissTo: '/(tabs)/explore',
+        initialMode: 'signIn',
+        returnTo: pathname || '/(tabs)/explore',
       });
       return;
     }
 
     if (isAuthenticated && onboardingRequired && !isOnboardingRoute) {
-      router.replace('/(auth)/onboarding' as never);
       return;
     }
-  }, [isAuthenticated, isLoading, isPublicRoute, isOnboardingRoute, onboardingRequired, pathname]);
+
+    if (session && isAuthRoute && !isOnboardingRoute) {
+      router.replace('/(tabs)/explore');
+    }
+  }, [isAuthRoute, isAuthenticated, isLoading, isOnboardingRoute, isPublicRoute, onboardingRequired, openAuthSheet, pathname, session]);
 
   return null;
 }

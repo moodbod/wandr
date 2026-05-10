@@ -15,7 +15,7 @@ import { TripFitSummary } from '@/components/wandr/explore/trip-fit-summary';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
-import { getHiddenGemSlug, hiddenGemDetails, type HiddenGemDetailContent } from '@/constants/hidden-gems-content';
+import { getHiddenGemSlug, type HiddenGemDetailContent } from '@/constants/hidden-gems-content';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
@@ -61,7 +61,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   }
 
   const card = page.search.hiddenGems.items.find((item) => getHiddenGemSlug(item.title) === slug);
-  const detail = hiddenGemDetails[slug] ?? (card ? buildHiddenGemDetail(slug, card) : undefined);
+  const detail = card ? buildHiddenGemDetail(slug, card) : null;
 
   if (!detail || !card) {
     return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
@@ -179,31 +179,35 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
 
           <ThemedText style={styles.description}>{detail.summary}</ThemedText>
 
-          <TripFitSummary items={detail.tripFit} />
+          {detail.tripFit.length > 0 ? <TripFitSummary items={detail.tripFit} /> : null}
 
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>{detail.sectionsTitle}</ThemedText>
-            <View style={styles.storyStack}>
-              {detail.sections.map((section) => (
-                <View key={section.title} style={styles.storyBlock}>
-                  <ThemedText style={styles.storyTitle}>{section.title}</ThemedText>
-                  <ThemedText style={styles.storyBody}>{section.body}</ThemedText>
-                </View>
-              ))}
+          {detail.sections.length > 0 ? (
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>{detail.sectionsTitle}</ThemedText>
+              <View style={styles.storyStack}>
+                {detail.sections.map((section) => (
+                  <View key={section.title} style={styles.storyBlock}>
+                    <ThemedText style={styles.storyTitle}>{section.title}</ThemedText>
+                    <ThemedText style={styles.storyBody}>{section.body}</ThemedText>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          ) : null}
 
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Before You Go</ThemedText>
-            <View style={styles.tipList}>
-              {detail.visitTips.map((tip) => (
-                <View key={tip} style={styles.tipRow}>
-                  <View style={styles.bullet} />
-                  <ThemedText style={styles.tipText}>{tip}</ThemedText>
-                </View>
-              ))}
+          {detail.visitTips.length > 0 ? (
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Before You Go</ThemedText>
+              <View style={styles.tipList}>
+                {detail.visitTips.map((tip) => (
+                  <View key={tip} style={styles.tipRow}>
+                    <View style={styles.bullet} />
+                    <ThemedText style={styles.tipText}>{tip}</ThemedText>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          ) : null}
 
           <JourneyMapCta
             centerCoordinate={mapCenterCoordinate}
@@ -258,14 +262,18 @@ function HiddenGemDetailLoadingScreen({
           styles.content,
           { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + designSystem.spacing.xxxl },
         ]}>
-        <View style={styles.titleBlock}>
-          <SkeletonBlock style={styles.detailBadgeSkeleton} />
-          <SkeletonBlock style={styles.detailTitleSkeleton} />
-          <SkeletonBlock style={styles.detailSubtitleSkeleton} />
+        <View style={styles.carouselContainer}>
+          <SkeletonBlock style={styles.heroSkeleton} />
         </View>
-        <SkeletonBlock style={styles.heroSkeleton} />
-        <SkeletonBlock style={styles.summarySkeleton} />
-        <SkeletonBlock style={styles.sectionSkeleton} />
+        <View style={styles.paddedContent}>
+          <View style={styles.titleBlock}>
+            <SkeletonBlock style={styles.detailBadgeSkeleton} />
+            <SkeletonBlock style={styles.detailTitleSkeleton} />
+            <SkeletonBlock style={styles.detailSubtitleSkeleton} />
+          </View>
+          <SkeletonBlock style={styles.summarySkeleton} />
+          <SkeletonBlock style={styles.sectionSkeleton} />
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -278,39 +286,10 @@ function buildHiddenGemDetail(slug: string, card: ExploreHiddenGem): HiddenGemDe
     badge: card.badge ?? 'Hidden Gem',
     locationLabel: card.locationLabel ?? card.geography?.town ?? card.geography?.region ?? card.countryLabel ?? 'Local detour',
     summary: card.summary ?? card.description,
-    tripFit: card.tripFit ?? [
-      {
-        label: 'Best vibe',
-        value: 'LOW-FRICTION DETOUR',
-        detail: 'A flexible stop when you want texture between larger trip anchors.',
-        icon: 'compass',
-        tone: 'dark',
-      },
-      {
-        label: 'Time ask',
-        value: 'SHORT STOP',
-        detail: 'Easy to add around meals, drives, or quieter parts of the day.',
-        icon: 'clock',
-        tone: 'accent',
-      },
-      {
-        label: 'Who it suits',
-        value: 'CURIOUS TRAVELERS',
-        detail: 'Works best for people who like smaller places with a specific sense of place.',
-        icon: 'users',
-        tone: 'light',
-      },
-    ],
-    sectionsTitle: 'Why it is worth the detour',
-    sections: card.sections?.length
-      ? card.sections
-      : [
-          {
-            title: 'Why it lands',
-            body: card.description,
-          },
-        ],
-    visitTips: card.visitTips?.length ? card.visitTips : ['Keep it flexible in the route plan', 'Check local access and timing before you go'],
+    tripFit: card.tripFit ?? [],
+    sectionsTitle: card.sectionsTitle ?? 'More to know',
+    sections: card.sections ?? [],
+    visitTips: card.visitTips ?? [],
     primaryLabel: card.primaryLabel ?? 'Add to trip',
     secondaryLabel: card.secondaryLabel ?? 'Back to gems',
   };
@@ -425,8 +404,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   heroSkeleton: {
+    alignSelf: 'center',
     height: 420,
     borderRadius: designSystem.radii.feature,
+    maxWidth: 344,
+    width: '88%',
   },
   summarySkeleton: {
     height: 96,
