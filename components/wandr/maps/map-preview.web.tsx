@@ -536,9 +536,19 @@ function createUserMarkerElement({
 
 function clearRenderedMarkers(markers: RenderedMapMarker[]) {
   markers.forEach(({ marker, root }) => {
-    root?.unmount();
+    scheduleMarkerRootUnmount(root);
     marker.remove();
   });
+}
+
+function scheduleMarkerRootUnmount(root?: Root) {
+  if (!root) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    root.unmount();
+  }, 0);
 }
 
 function upsertRouteLayer(
