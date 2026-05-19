@@ -313,9 +313,9 @@ function ExploreScreenView({
     () =>
       buildPlanningLocationsFromDestinations([
         ...pageContent.experiences,
-        ...pageContent.search.hiddenGems.items,
+        ...pageContent.search.gems.items,
       ]),
-    [pageContent.experiences, pageContent.search.hiddenGems.items]
+    [pageContent.experiences, pageContent.search.gems.items]
   );
   const routeExperienceSlug = Array.isArray(params.experienceSlug)
     ? params.experienceSlug[0]
@@ -451,7 +451,7 @@ function ExploreScreenView({
   );
   const locationHiddenGems = useMemo(
     () =>
-      pageContent.search.hiddenGems.items.filter((item) =>
+      pageContent.search.gems.items.filter((item) =>
         destinationMatchesPlanningLocation({
           countryCode: item.countryCode,
           countryLabel: item.countryLabel,
@@ -460,7 +460,7 @@ function ExploreScreenView({
           labels: [item.title, item.description, item.geography?.region, item.geography?.town],
         })
       ),
-    [pageContent.search.hiddenGems.items, planningLocation]
+    [pageContent.search.gems.items, planningLocation]
   );
   const searchMatchedExperiences = useMemo(
     () =>
@@ -895,7 +895,7 @@ const ExploreContent = memo(function ExploreContent({
   onSelectHiddenGem,
 }: {
   discoveryActivities?: ExplorePageContent['home']['activities'];
-  discoveryHiddenGems?: ExplorePageContent['search']['hiddenGems']['items'];
+  discoveryHiddenGems?: ExplorePageContent['search']['gems']['items'];
   discoveryJoinableTripCards?: readonly ExploreJoinableTripCard[];
   isDark: boolean;
   locationActivities: ExplorePageContent['home']['activities'];
@@ -1142,7 +1142,7 @@ const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   isCardLoading: boolean;
   isDark: boolean;
   locationActivities: ExplorePageContent['home']['activities'];
-  locationHiddenGems: ExplorePageContent['search']['hiddenGems']['items'];
+  locationHiddenGems: ExplorePageContent['search']['gems']['items'];
   locationJoinableTripCards: readonly ExploreJoinableTripCard[];
   locationLabel: string;
   locationTrips: readonly TripListItem[];

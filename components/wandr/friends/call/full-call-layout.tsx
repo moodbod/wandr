@@ -27,7 +27,7 @@ export function FullCallLayout({
     <View style={styles.fullOverlay}>
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(159,232,112,0.08)', 'rgba(5,8,5,0)', 'rgba(161,75,26,0.08)']}
+        colors={['rgba(255,255,255,0.04)', 'rgba(8,10,15,0)', 'rgba(161,75,26,0.08)']}
         locations={[0, 0.46, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   fullOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
-    backgroundColor: '#050704',
+    backgroundColor: '#080a0f',
   },
   callHeader: {
     paddingHorizontal: 24,

@@ -15,10 +15,14 @@ import { fetchRoutePath } from '@/lib/routing';
 import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
+const MAPBOX_STREET_STYLE_URL = 'mapbox://styles/mapbox/streets-v12';
+const MAPBOX_DARK_STYLE_URL = 'mapbox://styles/mapbox/dark-v11';
+const HIDDEN_MAPBOX_LAYER_KEYWORDS = ['poi', 'transit', 'airport', 'housenum', 'building', 'landmark'];
 const DEFAULT_MAP_CENTER: readonly [number, number] =
   getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
 
 type MapboxModule = typeof mapboxgl;
+type MapboxStyleLayer = mapboxgl.Layer & { 'source-layer'?: string };
 type RenderedMapMarker = {
   marker: mapboxgl.Marker;
   root?: Root;
@@ -51,14 +55,15 @@ function MapPreviewWebComponent({
   const onMapPressRef = useRef(onMapPress);
   const hasCenteredOnResolvedDataRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
+  const currentMapStyleURLRef = useRef<string | null>(null);
   const lastCameraTargetKeyRef = useRef<string | null>(null);
   const initialMapConfigRef = useRef<{
     centerCoordinate: readonly [number, number];
-    isDark: boolean;
+    mapStyleURL: string;
     zoomLevel: number;
   }>({
     centerCoordinate: DEFAULT_MAP_CENTER,
-    isDark: false,
+    mapStyleURL: MAPBOX_STREET_STYLE_URL,
     zoomLevel,
   });
   const [mapbox, setMapbox] = useState<MapboxModule | null>(null);
@@ -67,6 +72,7 @@ function MapPreviewWebComponent({
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
   const colorScheme = useColorScheme();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
+  const mapStyleURL = isDark ? MAPBOX_DARK_STYLE_URL : MAPBOX_STREET_STYLE_URL;
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
@@ -101,10 +107,10 @@ function MapPreviewWebComponent({
   useEffect(() => {
     initialMapConfigRef.current = {
       centerCoordinate: mapCenterCoordinate,
-      isDark,
+      mapStyleURL,
       zoomLevel,
     };
-  }, [isDark, mapCenterCoordinate, zoomLevel]);
+  }, [mapCenterCoordinate, mapStyleURL, zoomLevel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,12 +149,13 @@ function MapPreviewWebComponent({
       logoPosition: 'bottom-left',
       pitch: 0,
       pitchWithRotate: false,
-      style: initialConfig.isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12',
+      style: initialConfig.mapStyleURL,
       touchPitch: false,
       zoom: initialConfig.zoomLevel,
     });
 
     mapRef.current = map;
+    currentMapStyleURLRef.current = initialConfig.mapStyleURL;
     map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
     const handleUserInteract = () => {
       hasUserInteractedRef.current = true;
@@ -180,9 +187,12 @@ function MapPreviewWebComponent({
     };
     map.on('load', () => {
       hasLoaded = true;
+      hideWebBaseMapDetails(map);
       setIsMapReady(true);
       resizeMap();
     });
+    map.on('styledata', () => hideWebBaseMapDetails(map));
+    map.on('idle', () => hideWebBaseMapDetails(map));
     const resizeObserver = new ResizeObserver(resizeMap);
     resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', resizeMap);
@@ -198,6 +208,7 @@ function MapPreviewWebComponent({
       markerRefs.current = [];
       map.remove();
       mapRef.current = null;
+      currentMapStyleURLRef.current = null;
       setIsMapReady(false);
     };
   }, [mapbox]);
@@ -207,8 +218,14 @@ function MapPreviewWebComponent({
       return;
     }
 
-    mapRef.current.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/streets-v12');
-  }, [isDark, isMapReady]);
+    if (currentMapStyleURLRef.current === mapStyleURL) {
+      hideWebBaseMapDetails(mapRef.current);
+      return;
+    }
+
+    currentMapStyleURLRef.current = mapStyleURL;
+    mapRef.current.setStyle(mapStyleURL);
+  }, [isMapReady, mapStyleURL]);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -417,6 +434,32 @@ function MapPreviewWebComponent({
 
 export const MapPreview = memo(MapPreviewWebComponent);
 export type { MapMarker, MapPreviewProps };
+
+function hideWebBaseMapDetails(map: mapboxgl.Map) {
+  if (!map.isStyleLoaded()) {
+    return;
+  }
+
+  const layers = (map.getStyle().layers ?? []) as MapboxStyleLayer[];
+
+  layers.forEach((layer) => {
+    const sourceLayer = layer['source-layer']?.toLowerCase() ?? '';
+    const layerId = layer.id.toLowerCase();
+    const shouldHideLayer = HIDDEN_MAPBOX_LAYER_KEYWORDS.some(
+      (keyword) => sourceLayer.includes(keyword) || layerId.includes(keyword)
+    );
+
+    if (!shouldHideLayer || !map.getLayer(layer.id)) {
+      return;
+    }
+
+    try {
+      map.setLayoutProperty(layer.id, 'visibility', 'none');
+    } catch {
+      // The style can change while Mapbox is settling; the next style event will retry.
+    }
+  });
+}
 
 function normalizeMarkers(markers: readonly MapMarker[]) {
   const seen = new Set<string>();

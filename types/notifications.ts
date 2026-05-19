@@ -1,7 +1,7 @@
 import type { Id } from '@/convex/_generated/dataModel';
 
 export type AppNotification = {
-  _id: Id<'appNotifications'>;
+  _id: Id<'notices'>;
   recipientSlug: string;
   actorSlug?: string;
   kind:

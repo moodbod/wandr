@@ -15,7 +15,7 @@ import {
 } from '@/lib/notifications';
 
 type IncomingFriendCall = {
-  _id: Id<'friendCalls'>;
+  _id: Id<'calls'>;
   circleName: string;
   createdByName: string;
   createdByAvatarUri: string | null;
@@ -44,7 +44,7 @@ export function IncomingFriendCallCenter() {
   );
 
   const answerCall = useCallback(
-    (callId: Id<'friendCalls'>) => {
+    (callId: Id<'calls'>) => {
       setPresentedCallIds((value) => new Set(value).add(callId));
       answerNativeCall(callId);
       openCall(callId);
@@ -53,7 +53,7 @@ export function IncomingFriendCallCenter() {
   );
 
   const declineCall = useCallback(
-    (callId: Id<'friendCalls'>) => {
+    (callId: Id<'calls'>) => {
       setPresentedCallIds((value) => new Set(value).add(callId));
       endNativeCall(callId);
     },
@@ -77,7 +77,7 @@ export function IncomingFriendCallCenter() {
         return;
       }
 
-      const callId = data.callId as Id<'friendCalls'>;
+      const callId = data.callId as Id<'calls'>;
       void Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(() => {});
       if (response.actionIdentifier === FRIEND_CALL_DECLINE_ACTION_ID) {
         declineCall(callId);

@@ -166,7 +166,7 @@ export function StayDetailScreen({
     listLocationPhotosRef,
     slug ? { locationKind: 'stay', locationSlug: slug } : 'skip'
   );
-  const stayRatings = useQuery(listStayRatingsRef, { staySlug: slug ?? '' });
+  const reviews = useQuery(listStayRatingsRef, { staySlug: slug ?? '' });
 
   const [isBooking, setIsBooking] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -293,8 +293,8 @@ export function StayDetailScreen({
     ? getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut)
     : nights;
   const confirmedAvailabilityCount = availability?.length ?? 0;
-  const reviewItems = stayRatings ?? [];
-  const reviewsAreLoading = stayRatings === undefined;
+  const reviewItems = reviews ?? [];
+  const reviewsAreLoading = reviews === undefined;
   const realReviewCount = reviewItems.length;
   const realRating =
     realReviewCount > 0

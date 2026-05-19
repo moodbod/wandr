@@ -30,7 +30,8 @@ export default function RootHtml({ children }: PropsWithChildren) {
             __html: `
               html,
               body {
-                background: ${designSystem.semantic.dark.background};
+                background: ${designSystem.semantic.light.background};
+                color-scheme: light dark;
                 margin: 0;
                 overscroll-behavior: none;
                 touch-action: manipulation;
@@ -42,9 +43,17 @@ export default function RootHtml({ children }: PropsWithChildren) {
               }
 
               #root {
-                background: ${designSystem.semantic.dark.background};
+                background: ${designSystem.semantic.light.background};
                 min-height: 100vh;
                 min-height: 100dvh;
+              }
+
+              @media (prefers-color-scheme: dark) {
+                html,
+                body,
+                #root {
+                  background: ${designSystem.semantic.dark.background};
+                }
               }
             `,
           }}

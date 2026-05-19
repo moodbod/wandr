@@ -1,4 +1,4 @@
-import type { Camera } from '@rnmapbox/maps';
+import type { Camera, MapView as MapboxMapView } from '@rnmapbox/maps';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
@@ -16,6 +16,14 @@ import type { MapMarker, MapPreviewProps } from './mapbox/types';
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 const DEFAULT_MAP_CENTER: readonly [number, number] =
   getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
+const HIDDEN_MAPBOX_SOURCE_LAYER_IDS = [
+  'poi_label',
+  'transit_stop_label',
+  'airport_label',
+  'housenum_label',
+  'building',
+  'landmark_label',
+];
 
 function MapPreviewComponent({
   centerCoordinate,
@@ -37,6 +45,7 @@ function MapPreviewComponent({
   onMarkerPress,
   style,
 }: MapPreviewProps) {
+  const mapRef = useRef<MapboxMapView | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const hasSettledOnUserRef = useRef(false);
   const hasCenteredOnResolvedDataRef = useRef(false);
@@ -50,7 +59,11 @@ function MapPreviewComponent({
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
-  const styleURL = MapboxGL ? (isDark ? MapboxGL.StyleURL.Dark : MapboxGL.StyleURL.Street) : null;
+  const styleURL = MapboxGL
+    ? isDark
+      ? MapboxGL.StyleURL.Dark
+      : MapboxGL.StyleURL.Street
+    : null;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate =
@@ -305,8 +318,12 @@ function MapPreviewComponent({
       }}>
       <MapboxGL.MapView
         key="map-preview"
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         styleURL={styleURL}
+        onDidFinishLoadingStyle={() => {
+          hideNativeBaseMapDetails(mapRef.current);
+        }}
         onPress={(feature) => {
           const coordinate = feature.geometry?.coordinates;
           if (Array.isArray(coordinate) && coordinate.length >= 2) {
@@ -385,6 +402,18 @@ function MapPreviewComponent({
 
 export const MapPreview = memo(MapPreviewComponent);
 export type { MapMarker, MapPreviewProps };
+
+function hideNativeBaseMapDetails(map: MapboxMapView | null) {
+  if (!map) return;
+
+  HIDDEN_MAPBOX_SOURCE_LAYER_IDS.forEach((sourceLayerId) => {
+    try {
+      map.setSourceVisibility(false, 'composite', sourceLayerId);
+    } catch {
+      // Some Mapbox styles omit specific source layers; the rest should still be hidden.
+    }
+  });
+}
 
 function normalizeMarkers(markers: readonly MapMarker[]) {
   const seen = new Set<string>();

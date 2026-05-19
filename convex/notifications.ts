@@ -6,7 +6,7 @@ import { internalAction, internalQuery, mutation, query } from './_generated/ser
 import { getPublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug } from './authHelpers';
 
-function getRequestActionStatus(notification: Doc<'appNotifications'>) {
+function getRequestActionStatus(notification: Doc<'notices'>) {
   if (notification.actionStatus === 'approved' || notification.actionStatus === 'declined') {
     return notification.actionStatus;
   }
@@ -35,7 +35,7 @@ export const listNotifications = query({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const notifications = await ctx.db
-      .query('appNotifications')
+      .query('notices')
       .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', travelerSlug))
       .order('desc')
       .take(100);
@@ -63,7 +63,7 @@ export const listNotifications = query({
 export const markNotificationsViewed = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationIds: v.optional(v.array(v.id('appNotifications'))),
+    notificationIds: v.optional(v.array(v.id('notices'))),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -83,7 +83,7 @@ export const markNotificationsViewed = mutation({
     }
 
     const unviewed = await ctx.db
-      .query('appNotifications')
+      .query('notices')
       .withIndex('by_recipientSlug_and_viewedAt', (q) => q.eq('recipientSlug', travelerSlug))
       .collect();
 
@@ -101,7 +101,7 @@ export const markNotificationsViewed = mutation({
 export const markNotificationsRead = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationIds: v.optional(v.array(v.id('appNotifications'))),
+    notificationIds: v.optional(v.array(v.id('notices'))),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -121,7 +121,7 @@ export const markNotificationsRead = mutation({
     }
 
     const unread = await ctx.db
-      .query('appNotifications')
+      .query('notices')
       .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', travelerSlug))
       .collect();
 
@@ -148,7 +148,7 @@ export const createTripNotification = mutation({
   },
   handler: async (ctx, args) => {
     const recipientSlug = await assertCurrentTravelerSlug(ctx, args.recipientSlug);
-    await ctx.db.insert('appNotifications', {
+    await ctx.db.insert('notices', {
       recipientSlug,
       kind: args.kind,
       title: args.title,
@@ -174,7 +174,7 @@ export const registerDevicePushToken = mutation({
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const now = Date.now();
     const existingForInstallation = await ctx.db
-      .query('devicePushTokens')
+      .query('tokens')
       .withIndex('by_installationId', (q) => q.eq('installationId', args.installationId))
       .unique();
 
@@ -189,7 +189,7 @@ export const registerDevicePushToken = mutation({
     }
 
     const existingForToken = await ctx.db
-      .query('devicePushTokens')
+      .query('tokens')
       .withIndex('by_expoPushToken', (q) => q.eq('expoPushToken', args.expoPushToken))
       .unique();
 
@@ -203,7 +203,7 @@ export const registerDevicePushToken = mutation({
       return true;
     }
 
-    await ctx.db.insert('devicePushTokens', {
+    await ctx.db.insert('tokens', {
       travelerSlug,
       installationId: args.installationId,
       expoPushToken: args.expoPushToken,
@@ -222,7 +222,7 @@ export const listDevicePushTokensForTraveler = internalQuery({
   },
   handler: async (ctx, args) => {
     return await ctx.db
-      .query('devicePushTokens')
+      .query('tokens')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
       .collect();
   },
@@ -237,7 +237,7 @@ export const sendIncomingCallPush = internalAction({
     mode: v.union(v.literal('voice'), v.literal('video')),
   },
   handler: async (ctx, args): Promise<{ sent: number }> => {
-    const tokens: Doc<'devicePushTokens'>[] = await ctx.runQuery(internal.notifications.listDevicePushTokensForTraveler, {
+    const tokens: Doc<'tokens'>[] = await ctx.runQuery(internal.notifications.listDevicePushTokensForTraveler, {
       travelerSlug: args.recipientSlug,
     });
     if (tokens.length === 0) {
@@ -296,7 +296,7 @@ export const sendChatPush = internalAction({
         ctx.runQuery(internal.notifications.listDevicePushTokensForTraveler, { travelerSlug })
       )
     );
-    const tokens: Doc<'devicePushTokens'>[] = tokenGroups.flat();
+    const tokens: Doc<'tokens'>[] = tokenGroups.flat();
     if (tokens.length === 0) {
       return { sent: 0 };
     }

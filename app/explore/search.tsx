@@ -103,7 +103,7 @@ function ConnectedExploreSearchScreen() {
 
   const locationHiddenGems = useMemo(
     () =>
-      page?.search.hiddenGems.items.filter((item) =>
+      page?.search.gems.items.filter((item) =>
         destinationMatchesPlanningLocation({
           countryCode: item.countryCode,
           countryLabel: item.countryLabel,

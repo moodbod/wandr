@@ -4,9 +4,9 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { registerNativeCallHandlers, setupNativeCallSystem } from '@/lib/native-calls';
 
 type ActiveFriendCallContextValue = {
-  activeCallId: Id<'friendCalls'> | null;
+  activeCallId: Id<'calls'> | null;
   isMinimized: boolean;
-  openCall: (callId: Id<'friendCalls'>, options?: { minimized?: boolean }) => void;
+  openCall: (callId: Id<'calls'>, options?: { minimized?: boolean }) => void;
   minimizeCall: () => void;
   expandCall: () => void;
   clearCall: () => void;
@@ -24,9 +24,9 @@ const missingActiveFriendCallContext: ActiveFriendCallContextValue = {
 };
 
 export function ActiveFriendCallProvider({ children }: { children: ReactNode }) {
-  const [activeCallId, setActiveCallId] = useState<Id<'friendCalls'> | null>(null);
+  const [activeCallId, setActiveCallId] = useState<Id<'calls'> | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
-  const openCall = useCallback((callId: Id<'friendCalls'>, options?: { minimized?: boolean }) => {
+  const openCall = useCallback((callId: Id<'calls'>, options?: { minimized?: boolean }) => {
     setActiveCallId(callId);
     setIsMinimized(Boolean(options?.minimized));
   }, []);

@@ -268,7 +268,7 @@ function FriendLiveKitRoom({
   shouldSendAudio,
   shouldSendVideo,
 }: {
-  callId: Id<'friendCalls'>;
+  callId: Id<'calls'>;
   children: ReactNode;
   connection: LiveKitConnection;
   onMediaError: (error: string | null) => void;
@@ -360,7 +360,7 @@ function formatNativeLiveKitError(error: unknown) {
   return 'Unable to publish call media.';
 }
 
-function NativeCallConnectionReporter({ callId }: { callId: Id<'friendCalls'> }) {
+function NativeCallConnectionReporter({ callId }: { callId: Id<'calls'> }) {
   const room = useRoomContext();
   const connectionState = useConnectionState(room);
 

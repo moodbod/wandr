@@ -6,9 +6,9 @@ import { internalMutation, internalQuery, mutation, query, type MutationCtx, typ
 import { getPublicTravelerProfile, type PublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug } from './authHelpers';
 
-type FriendCircleDoc = Doc<'friendCircles'>;
-type FriendMemberDoc = Doc<'friendCircleMembers'>;
-type FriendDirectThreadDoc = Doc<'friendDirectThreads'>;
+type FriendCircleDoc = Doc<'circles'>;
+type FriendMemberDoc = Doc<'members'>;
+type FriendDirectThreadDoc = Doc<'threads'>;
 const INCOMING_CALL_WINDOW_MS = 90_000;
 
 type PhoneContactMatch = {
@@ -21,8 +21,8 @@ type PhoneContactMatch = {
 };
 
 function isPendingFriendRequestNotification(
-  notification: Doc<'appNotifications'>
-): notification is Doc<'appNotifications'> & { actorSlug: string } {
+  notification: Doc<'notices'>
+): notification is Doc<'notices'> & { actorSlug: string } {
   if (
     notification.kind !== 'friend_invite' ||
     !notification.actorSlug ||
@@ -89,7 +89,7 @@ async function getFriendProfile(ctx: QueryCtx | MutationCtx, travelerSlug: strin
 
 async function getActiveCircleMemberships(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   return await ctx.db
-    .query('friendCircleMembers')
+    .query('members')
     .withIndex('by_travelerSlug_and_status', (q) => q.eq('travelerSlug', travelerSlug).eq('status', 'active'))
     .collect();
 }
@@ -124,10 +124,10 @@ async function getActiveCirclesForTraveler(
 
 async function getCircleMembers(
   ctx: QueryCtx | MutationCtx,
-  circleId: Id<'friendCircles'>
+  circleId: Id<'circles'>
 ): Promise<FriendMemberDoc[]> {
   const members = await ctx.db
-    .query('friendCircleMembers')
+    .query('members')
     .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
     .collect();
 
@@ -144,7 +144,7 @@ async function getCircleMembers(
 
 async function getActionMap(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const actions = await ctx.db
-    .query('friendMatchActions')
+    .query('matches')
     .withIndex('by_travelerSlug_and_state', (q) => q.eq('travelerSlug', travelerSlug))
     .collect();
 
@@ -153,7 +153,7 @@ async function getActionMap(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
 
 async function getFriendConnectionSet(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const connections = await ctx.db
-    .query('friendConnections')
+    .query('connections')
     .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
     .collect();
 
@@ -162,7 +162,7 @@ async function getFriendConnectionSet(ctx: QueryCtx | MutationCtx, travelerSlug:
 
 async function getFriendPickerItems(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const connections = await ctx.db
-    .query('friendConnections')
+    .query('connections')
     .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
     .collect();
 
@@ -194,11 +194,11 @@ async function getFriendPickerItems(ctx: QueryCtx | MutationCtx, travelerSlug: s
 async function getDirectThreadsForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const [asA, asB] = await Promise.all([
     ctx.db
-      .query('friendDirectThreads')
+      .query('threads')
       .withIndex('by_participantA_and_updatedAt', (q) => q.eq('participantA', travelerSlug))
       .collect(),
     ctx.db
-      .query('friendDirectThreads')
+      .query('threads')
       .withIndex('by_participantB_and_updatedAt', (q) => q.eq('participantB', travelerSlug))
       .collect(),
   ]);
@@ -220,7 +220,7 @@ async function getDirectThreadsForTraveler(ctx: QueryCtx | MutationCtx, traveler
 async function getOrCreateDirectThread(ctx: MutationCtx, travelerSlug: string, otherSlug: string) {
   const [participantA, participantB] = normalizeThreadPair(travelerSlug, otherSlug);
   const existing = await ctx.db
-    .query('friendDirectThreads')
+    .query('threads')
     .withIndex('by_participantA_and_participantB', (q) =>
       q.eq('participantA', participantA).eq('participantB', participantB)
     )
@@ -231,7 +231,7 @@ async function getOrCreateDirectThread(ctx: MutationCtx, travelerSlug: string, o
   }
 
   const now = Date.now();
-  const threadId = await ctx.db.insert('friendDirectThreads', {
+  const threadId = await ctx.db.insert('threads', {
     participantA,
     participantB,
     createdAt: now,
@@ -250,13 +250,13 @@ async function ensureFriendConnectionPair(
   const now = Date.now();
   const [existingConnection, existingReverseConnection] = await Promise.all([
     ctx.db
-      .query('friendConnections')
+      .query('connections')
       .withIndex('by_travelerSlug_and_friendSlug', (q) =>
         q.eq('travelerSlug', travelerSlug).eq('friendSlug', friendSlug)
       )
       .unique(),
     ctx.db
-      .query('friendConnections')
+      .query('connections')
       .withIndex('by_travelerSlug_and_friendSlug', (q) =>
         q.eq('travelerSlug', friendSlug).eq('friendSlug', travelerSlug)
       )
@@ -264,7 +264,7 @@ async function ensureFriendConnectionPair(
   ]);
 
   if (!existingConnection) {
-    await ctx.db.insert('friendConnections', {
+    await ctx.db.insert('connections', {
       travelerSlug,
       friendSlug,
       createdAt: now,
@@ -273,7 +273,7 @@ async function ensureFriendConnectionPair(
   }
 
   if (!existingReverseConnection) {
-    await ctx.db.insert('friendConnections', {
+    await ctx.db.insert('connections', {
       travelerSlug: friendSlug,
       friendSlug: travelerSlug,
       createdAt: now,
@@ -282,18 +282,18 @@ async function ensureFriendConnectionPair(
   }
 }
 
-async function deleteFriendCircleDocuments(ctx: MutationCtx, circleId: Id<'friendCircles'>) {
+async function deleteFriendCircleDocuments(ctx: MutationCtx, circleId: Id<'circles'>) {
   const [messages, members, readStates, trips] = await Promise.all([
     ctx.db
-      .query('friendMessages')
+      .query('messages')
       .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circleId))
       .take(200),
     ctx.db
-      .query('friendCircleMembers')
+      .query('members')
       .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
       .take(100),
     ctx.db
-      .query('friendCircleReadStates')
+      .query('reads')
       .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
       .take(100),
     ctx.db
@@ -318,14 +318,14 @@ async function deleteFriendCircleDocuments(ctx: MutationCtx, circleId: Id<'frien
   await ctx.db.delete(circleId);
 }
 
-async function deleteDirectThreadDocuments(ctx: MutationCtx, threadId: Id<'friendDirectThreads'>) {
+async function deleteDirectThreadDocuments(ctx: MutationCtx, threadId: Id<'threads'>) {
   const [messages, readStates] = await Promise.all([
     ctx.db
-      .query('friendDirectMessages')
+      .query('dms')
       .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', threadId))
       .take(200),
     ctx.db
-      .query('friendDirectReadStates')
+      .query('receipts')
       .withIndex('by_threadId', (q) => q.eq('threadId', threadId))
       .take(100),
   ]);
@@ -361,7 +361,7 @@ async function insertAppNotification(
     actionStatus?: 'pending' | 'approved' | 'declined';
   }
 ) {
-  await ctx.db.insert('appNotifications', {
+  await ctx.db.insert('notices', {
     recipientSlug: args.recipientSlug,
     actorSlug: args.actorSlug,
     kind: args.kind,
@@ -375,7 +375,7 @@ async function insertAppNotification(
   });
 }
 
-function buildCallRoomName(scopeId: Id<'friendCircles'> | Id<'friendDirectThreads'>, createdAt: number) {
+function buildCallRoomName(scopeId: Id<'circles'> | Id<'threads'>, createdAt: number) {
   return `wandr-${scopeId}-${createdAt}`;
 }
 
@@ -385,7 +385,7 @@ function formatCallMode(mode: 'voice' | 'video') {
 
 async function requireActiveCircleMember(
   ctx: QueryCtx | MutationCtx,
-  circleId: Id<'friendCircles'>,
+  circleId: Id<'circles'>,
   travelerSlug: string
 ) {
   const circle = await ctx.db.get(circleId);
@@ -394,7 +394,7 @@ async function requireActiveCircleMember(
   }
 
   const membership = await ctx.db
-    .query('friendCircleMembers')
+    .query('members')
     .withIndex('by_circleId_and_travelerSlug', (q) => q.eq('circleId', circleId).eq('travelerSlug', travelerSlug))
     .unique();
 
@@ -407,7 +407,7 @@ async function requireActiveCircleMember(
 
 async function requireDirectThreadParticipant(
   ctx: QueryCtx | MutationCtx,
-  threadId: Id<'friendDirectThreads'>,
+  threadId: Id<'threads'>,
   travelerSlug: string
 ) {
   const thread = await ctx.db.get(threadId);
@@ -443,9 +443,9 @@ async function buildDirectCallMemberViews(ctx: QueryCtx | MutationCtx, thread: F
 async function notifyCircleMembersAboutCall(
   ctx: MutationCtx,
   args: {
-    circleId: Id<'friendCircles'>;
+    circleId: Id<'circles'>;
     actorSlug: string;
-    callId: Id<'friendCalls'>;
+    callId: Id<'calls'>;
     title: string;
     body: string;
     kind: 'friend_call' | 'friend_call_reminder';
@@ -487,7 +487,7 @@ async function notifyDirectParticipantAboutCall(
   args: {
     thread: FriendDirectThreadDoc;
     actorSlug: string;
-    callId: Id<'friendCalls'>;
+    callId: Id<'calls'>;
     title: string;
     body: string;
     kind: 'friend_call' | 'friend_call_reminder';
@@ -564,7 +564,7 @@ async function buildCircleSummary(
   const [memberships, messages] = await Promise.all([
     getCircleMembers(ctx, circle._id),
     ctx.db
-      .query('friendMessages')
+      .query('messages')
       .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circle._id))
       .order('desc')
       .take(1),
@@ -656,8 +656,8 @@ function getMessageReplyPreview(message: {
 
 async function getGroupReplySnapshot(
   ctx: MutationCtx,
-  circleId: Id<'friendCircles'>,
-  replyToMessageId?: Id<'friendMessages'>
+  circleId: Id<'circles'>,
+  replyToMessageId?: Id<'messages'>
 ) {
   if (!replyToMessageId) {
     return null;
@@ -679,8 +679,8 @@ async function getGroupReplySnapshot(
 
 async function getDirectReplySnapshot(
   ctx: MutationCtx,
-  threadId: Id<'friendDirectThreads'>,
-  replyToMessageId?: Id<'friendDirectMessages'>
+  threadId: Id<'threads'>,
+  replyToMessageId?: Id<'dms'>
 ) {
   if (!replyToMessageId) {
     return null;
@@ -700,9 +700,9 @@ async function getDirectReplySnapshot(
   };
 }
 
-async function getLatestGroupMessages(ctx: QueryCtx, circleId: Id<'friendCircles'>, limit: number) {
+async function getLatestGroupMessages(ctx: QueryCtx, circleId: Id<'circles'>, limit: number) {
   const messages = await ctx.db
-    .query('friendMessages')
+    .query('messages')
     .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', circleId))
     .order('desc')
     .take(limit);
@@ -710,9 +710,9 @@ async function getLatestGroupMessages(ctx: QueryCtx, circleId: Id<'friendCircles
   return messages.reverse();
 }
 
-async function getLatestDirectMessages(ctx: QueryCtx, threadId: Id<'friendDirectThreads'>, limit: number) {
+async function getLatestDirectMessages(ctx: QueryCtx, threadId: Id<'threads'>, limit: number) {
   const messages = await ctx.db
-    .query('friendDirectMessages')
+    .query('dms')
     .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', threadId))
     .order('desc')
     .take(limit);
@@ -722,12 +722,12 @@ async function getLatestDirectMessages(ctx: QueryCtx, threadId: Id<'friendDirect
 
 async function getJoinableCirclesForTraveler(ctx: QueryCtx | MutationCtx, travelerSlug: string) {
   const memberships = await ctx.db
-    .query('friendCircleMembers')
+    .query('members')
     .withIndex('by_travelerSlug_and_status', (q) => q.eq('travelerSlug', travelerSlug).eq('status', 'active'))
     .collect();
 
   const joinedCircleIds = new Set(memberships.map((membership) => membership.circleId));
-  const openCircles = (await ctx.db.query('friendCircles').collect()).filter(
+  const openCircles = (await ctx.db.query('circles').collect()).filter(
     (circle) => circle.visibility === 'open' && !joinedCircleIds.has(circle._id) && circle.createdBySlug !== travelerSlug
   );
 
@@ -838,7 +838,7 @@ async function buildRouteShare(ctx: QueryCtx | MutationCtx, travelerSlug: string
   }
 
   const bookings = (await ctx.db
-    .query('experienceBookings')
+    .query('bookings')
     .withIndex('by_travelerSlug_and_experienceSlug', (q) => q.eq('travelerSlug', travelerSlug))
     .collect()).filter((booking) => booking.tripId === activeTrip._id);
 
@@ -910,12 +910,12 @@ async function cloneTripBookingsToTrip(
   travelerSlug: string
 ) {
   const sourceBookings = await ctx.db
-    .query('experienceBookings')
+    .query('bookings')
     .withIndex('by_tripId', (q) => q.eq('tripId', sourceTripId))
     .collect();
 
   for (const booking of sourceBookings) {
-    await ctx.db.insert('experienceBookings', {
+    await ctx.db.insert('bookings', {
       experienceSlug: booking.experienceSlug,
       travelerSlug,
       tripId: targetTripId,
@@ -933,7 +933,7 @@ async function createGroupTripCopy(
   ctx: MutationCtx,
   args: {
     travelerSlug: string;
-    circleId: Id<'friendCircles'>;
+    circleId: Id<'circles'>;
     name: string;
     role: 'host' | 'member';
     sourceTripId: Id<'trips'>;
@@ -1057,7 +1057,7 @@ export const getFriendViewerProfile = query({
       connection,
       action,
       directThread,
-      friendConnections,
+      connections,
     ] =
       await Promise.all([
         getFriendProfile(ctx, travelerSlug),
@@ -1065,25 +1065,25 @@ export const getFriendViewerProfile = query({
         getTravelerProfile(ctx, args.profileSlug),
         getFriendProfile(ctx, args.profileSlug),
         ctx.db
-          .query('friendConnections')
+          .query('connections')
           .withIndex('by_travelerSlug_and_friendSlug', (q) =>
             q.eq('travelerSlug', travelerSlug).eq('friendSlug', args.profileSlug)
           )
           .unique(),
         ctx.db
-          .query('friendMatchActions')
+          .query('matches')
           .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
             q.eq('travelerSlug', travelerSlug).eq('candidateSlug', args.profileSlug)
           )
           .unique(),
         ctx.db
-          .query('friendDirectThreads')
+          .query('threads')
           .withIndex('by_participantA_and_participantB', (q) =>
             q.eq('participantA', participantA).eq('participantB', participantB)
           )
           .unique(),
         ctx.db
-          .query('friendConnections')
+          .query('connections')
           .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.profileSlug))
           .collect(),
       ]);
@@ -1128,7 +1128,7 @@ export const getFriendViewerProfile = query({
         directThreadId: directThread?._id ?? null,
       },
       stats: {
-        friendCount: friendConnections.length,
+        friendCount: connections.length,
       },
     };
   },
@@ -1195,7 +1195,7 @@ export const getFriendChatList = query({
           getAppUser(ctx, otherSlug),
           getTravelerProfile(ctx, otherSlug),
           ctx.db
-            .query('friendDirectMessages')
+            .query('dms')
             .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
             .order('desc')
             .take(1),
@@ -1250,19 +1250,19 @@ export const getHeaderBadgeCounts = query({
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const [activeMemberships, participantAThreads, participantBThreads, unreadNotifications] = await Promise.all([
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_travelerSlug_and_status', (q) => q.eq('travelerSlug', travelerSlug).eq('status', 'active'))
         .collect(),
       ctx.db
-        .query('friendDirectThreads')
+        .query('threads')
         .withIndex('by_participantA_and_updatedAt', (q) => q.eq('participantA', travelerSlug))
         .collect(),
       ctx.db
-        .query('friendDirectThreads')
+        .query('threads')
         .withIndex('by_participantB_and_updatedAt', (q) => q.eq('participantB', travelerSlug))
         .collect(),
       ctx.db
-        .query('appNotifications')
+        .query('notices')
         .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', travelerSlug))
         .collect(),
     ]);
@@ -1271,13 +1271,13 @@ export const getHeaderBadgeCounts = query({
     for (const membership of activeMemberships) {
       const [readState, latestMessage] = await Promise.all([
         ctx.db
-          .query('friendCircleReadStates')
+          .query('reads')
           .withIndex('by_circleId_and_travelerSlug', (q) =>
             q.eq('circleId', membership.circleId).eq('travelerSlug', travelerSlug)
           )
           .unique(),
         ctx.db
-          .query('friendMessages')
+          .query('messages')
           .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', membership.circleId))
           .order('desc')
           .take(1),
@@ -1297,13 +1297,13 @@ export const getHeaderBadgeCounts = query({
     for (const thread of [...participantAThreads, ...participantBThreads]) {
       const [readState, latestMessage] = await Promise.all([
         ctx.db
-          .query('friendDirectReadStates')
+          .query('receipts')
           .withIndex('by_threadId_and_travelerSlug', (q) =>
             q.eq('threadId', thread._id).eq('travelerSlug', travelerSlug)
           )
           .unique(),
         ctx.db
-          .query('friendDirectMessages')
+          .query('dms')
           .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', thread._id))
           .order('desc')
           .take(1),
@@ -1396,7 +1396,7 @@ export const createOpenFriendGroup = mutation({
       return null;
     }
 
-    const circleId = await ctx.db.insert('friendCircles', {
+    const circleId = await ctx.db.insert('circles', {
       slug: `${slugifyGroupName(`${firstName}-${destinationLabel}`)}-${now.toString().slice(-5)}`,
       name: trimmedName || `${firstName}'s ${destinationLabel}`,
       destinationLabel,
@@ -1408,7 +1408,7 @@ export const createOpenFriendGroup = mutation({
       updatedAt: now,
     });
 
-    await ctx.db.insert('friendCircleMembers', {
+    await ctx.db.insert('members', {
       circleId,
       travelerSlug: travelerSlug,
       role: 'host',
@@ -1417,7 +1417,7 @@ export const createOpenFriendGroup = mutation({
       note: 'Created as an open joinable group',
     });
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId,
       senderSlug: travelerSlug,
       kind: 'system',
@@ -1428,14 +1428,14 @@ export const createOpenFriendGroup = mutation({
     const inviteeSlugs = [...new Set(args.inviteeSlugs ?? [])].filter((slug) => slug !== travelerSlug);
     for (const inviteeSlug of inviteeSlugs) {
       const existingMembership = await ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', circleId).eq('travelerSlug', inviteeSlug)
         )
         .unique();
 
       if (!existingMembership) {
-        await ctx.db.insert('friendCircleMembers', {
+        await ctx.db.insert('members', {
           circleId,
           travelerSlug: inviteeSlug,
           role: 'member',
@@ -1458,7 +1458,7 @@ export const createOpenFriendGroup = mutation({
     }
 
     if (inviteeSlugs.length > 0) {
-      await ctx.db.insert('friendMessages', {
+      await ctx.db.insert('messages', {
         circleId,
         senderSlug: travelerSlug,
         kind: 'system',
@@ -1488,7 +1488,7 @@ export const createOpenFriendGroup = mutation({
 export const joinFriendCircle = mutation({
   args: {
     travelerSlug: v.string(),
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1499,7 +1499,7 @@ export const joinFriendCircle = mutation({
 
     const [existingMembership, joiningUser] = await Promise.all([
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
         )
@@ -1510,7 +1510,7 @@ export const joinFriendCircle = mutation({
     const now = Date.now();
 
     if (!existingMembership) {
-      await ctx.db.insert('friendCircleMembers', {
+      await ctx.db.insert('members', {
         circleId: args.circleId,
         travelerSlug: travelerSlug,
         role: 'member',
@@ -1527,7 +1527,7 @@ export const joinFriendCircle = mutation({
       return true;
     }
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'system',
@@ -1556,7 +1556,7 @@ export const joinFriendCircle = mutation({
 export const renameFriendCircle = mutation({
   args: {
     travelerSlug: v.string(),
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     name: v.string(),
   },
   handler: async (ctx, args) => {
@@ -1569,7 +1569,7 @@ export const renameFriendCircle = mutation({
     const [circle, membership, user] = await Promise.all([
       ctx.db.get(args.circleId),
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
         )
@@ -1602,7 +1602,7 @@ export const renameFriendCircle = mutation({
       await ctx.db.patch(trip._id, { name: nextName });
     }
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'system',
@@ -1617,14 +1617,14 @@ export const renameFriendCircle = mutation({
 export const leaveFriendCircle = mutation({
   args: {
     travelerSlug: v.string(),
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const [circle, membership, user] = await Promise.all([
       ctx.db.get(args.circleId),
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
         )
@@ -1652,7 +1652,7 @@ export const leaveFriendCircle = mutation({
     await ctx.db.delete(membership._id);
 
     const readState = await ctx.db
-      .query('friendCircleReadStates')
+      .query('reads')
       .withIndex('by_circleId_and_travelerSlug', (q) =>
         q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
       )
@@ -1671,7 +1671,7 @@ export const leaveFriendCircle = mutation({
       await ctx.db.delete(trip._id);
     }
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'system',
@@ -1688,14 +1688,14 @@ export const leaveFriendCircle = mutation({
 export const deleteFriendCircle = mutation({
   args: {
     travelerSlug: v.string(),
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const [circle, membership] = await Promise.all([
       ctx.db.get(args.circleId),
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
         )
@@ -1718,7 +1718,7 @@ export const deleteFriendCircle = mutation({
 export const acceptFriendRequest = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationId: v.id('appNotifications'),
+    notificationId: v.id('notices'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1737,13 +1737,13 @@ export const acceptFriendRequest = mutation({
       getAppUser(ctx, requesterSlug),
       getAppUser(ctx, travelerSlug),
       ctx.db
-        .query('friendMatchActions')
+        .query('matches')
         .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
           q.eq('travelerSlug', requesterSlug).eq('candidateSlug', travelerSlug)
         )
         .unique(),
       ctx.db
-        .query('friendMatchActions')
+        .query('matches')
         .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
           q.eq('travelerSlug', travelerSlug).eq('candidateSlug', requesterSlug)
         )
@@ -1785,7 +1785,7 @@ export const acceptFriendRequest = mutation({
 export const rejectFriendRequest = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationId: v.id('appNotifications'),
+    notificationId: v.id('notices'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1800,7 +1800,7 @@ export const rejectFriendRequest = mutation({
 
     const requesterSlug = notification.actorSlug;
     const requesterAction = await ctx.db
-      .query('friendMatchActions')
+      .query('matches')
       .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
         q.eq('travelerSlug', requesterSlug).eq('candidateSlug', travelerSlug)
       )
@@ -1827,11 +1827,11 @@ export const repairOneSidedFriendConnections = mutation({
   },
   handler: async (ctx) => {
     let deleted = 0;
-    const connections = await ctx.db.query('friendConnections').collect();
+    const connections = await ctx.db.query('connections').collect();
 
     for (const connection of connections) {
       const reverseConnection = await ctx.db
-        .query('friendConnections')
+        .query('connections')
         .withIndex('by_travelerSlug_and_friendSlug', (q) =>
           q.eq('travelerSlug', connection.friendSlug).eq('friendSlug', connection.travelerSlug)
         )
@@ -1852,7 +1852,7 @@ export const repairOneSidedFriendConnections = mutation({
 export const approveTripJoinRequest = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationId: v.id('appNotifications'),
+    notificationId: v.id('notices'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1869,7 +1869,7 @@ export const approveTripJoinRequest = mutation({
       return false;
     }
 
-    const circle = await ctx.db.get(notification.entityId as Id<'friendCircles'>);
+    const circle = await ctx.db.get(notification.entityId as Id<'circles'>);
     if (!circle || circle.createdBySlug !== travelerSlug) {
       return false;
     }
@@ -1878,7 +1878,7 @@ export const approveTripJoinRequest = mutation({
     const requesterSlug = notification.actorSlug;
     const [existingMembership, joiningUser] = await Promise.all([
       ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', circle._id).eq('travelerSlug', requesterSlug)
         )
@@ -1887,7 +1887,7 @@ export const approveTripJoinRequest = mutation({
     ]);
 
     if (!existingMembership) {
-      await ctx.db.insert('friendCircleMembers', {
+      await ctx.db.insert('members', {
         circleId: circle._id,
         travelerSlug: requesterSlug,
         role: 'member',
@@ -1903,7 +1903,7 @@ export const approveTripJoinRequest = mutation({
       });
     }
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: circle._id,
       senderSlug: requesterSlug,
       kind: 'system',
@@ -1949,7 +1949,7 @@ export const approveTripJoinRequest = mutation({
 export const declineTripJoinRequest = mutation({
   args: {
     travelerSlug: v.string(),
-    notificationId: v.id('appNotifications'),
+    notificationId: v.id('notices'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1965,7 +1965,7 @@ export const declineTripJoinRequest = mutation({
       return false;
     }
 
-    const circle = await ctx.db.get(notification.entityId as Id<'friendCircles'>);
+    const circle = await ctx.db.get(notification.entityId as Id<'circles'>);
     if (!circle || circle.createdBySlug !== travelerSlug) {
       return false;
     }
@@ -1984,7 +1984,7 @@ export const declineTripJoinRequest = mutation({
 export const getFriendChat = query({
   args: {
     travelerSlug: v.string(),
-    circleId: v.optional(v.id('friendCircles')),
+    circleId: v.optional(v.id('circles')),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -2092,7 +2092,7 @@ export const getFriendChat = query({
 export const getDirectChat = query({
   args: {
     travelerSlug: v.string(),
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -2192,7 +2192,7 @@ export const actOnFriendCandidate = mutation({
     const candidate = await getAppUser(ctx, args.candidateSlug);
 
     const matchAction = await ctx.db
-      .query('friendMatchActions')
+      .query('matches')
       .withIndex('by_travelerSlug_and_candidateSlug', (q) =>
         q.eq('travelerSlug', travelerSlug).eq('candidateSlug', args.candidateSlug)
       )
@@ -2201,13 +2201,13 @@ export const actOnFriendCandidate = mutation({
     if (args.action === 'friended') {
       const [existingConnection, existingReverseConnection] = await Promise.all([
         ctx.db
-          .query('friendConnections')
+          .query('connections')
           .withIndex('by_travelerSlug_and_friendSlug', (q) =>
             q.eq('travelerSlug', travelerSlug).eq('friendSlug', args.candidateSlug)
           )
           .unique(),
         ctx.db
-          .query('friendConnections')
+          .query('connections')
           .withIndex('by_travelerSlug_and_friendSlug', (q) =>
             q.eq('travelerSlug', args.candidateSlug).eq('friendSlug', travelerSlug)
           )
@@ -2229,7 +2229,7 @@ export const actOnFriendCandidate = mutation({
       }
 
       const reversePendingRequest = await ctx.db
-        .query('appNotifications')
+        .query('notices')
         .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', travelerSlug))
         .filter((q) =>
           q.and(
@@ -2251,7 +2251,7 @@ export const actOnFriendCandidate = mutation({
         });
       } else if (candidate && actor) {
         const existingRequest = await ctx.db
-          .query('appNotifications')
+          .query('notices')
           .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', candidate.slug as string))
           .filter((q) =>
             q.and(
@@ -2284,7 +2284,7 @@ export const actOnFriendCandidate = mutation({
           updatedAt: Date.now(),
         });
       } else {
-        await ctx.db.insert('friendMatchActions', {
+        await ctx.db.insert('matches', {
           travelerSlug: travelerSlug,
           candidateSlug: args.candidateSlug,
           state: 'invited',
@@ -2298,7 +2298,7 @@ export const actOnFriendCandidate = mutation({
           updatedAt: Date.now(),
         });
       } else {
-        await ctx.db.insert('friendMatchActions', {
+        await ctx.db.insert('matches', {
           travelerSlug: travelerSlug,
           candidateSlug: args.candidateSlug,
           state: args.action,
@@ -2310,14 +2310,14 @@ export const actOnFriendCandidate = mutation({
     const circle = await getActiveCircleForTraveler(ctx, travelerSlug);
     if (args.action === 'invited' && circle) {
       const existingMembership = await ctx.db
-        .query('friendCircleMembers')
+        .query('members')
         .withIndex('by_circleId_and_travelerSlug', (q) =>
           q.eq('circleId', circle._id).eq('travelerSlug', args.candidateSlug)
         )
         .unique();
 
       if (!existingMembership) {
-        await ctx.db.insert('friendCircleMembers', {
+        await ctx.db.insert('members', {
           circleId: circle._id,
           travelerSlug: args.candidateSlug,
           role: 'member',
@@ -2332,7 +2332,7 @@ export const actOnFriendCandidate = mutation({
         });
       }
 
-      await ctx.db.insert('friendMessages', {
+      await ctx.db.insert('messages', {
         circleId: circle._id,
         senderSlug: travelerSlug,
         kind: 'system',
@@ -2367,10 +2367,10 @@ export const actOnFriendCandidate = mutation({
 
 export const sendFriendMessage = mutation({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.string(),
     body: v.string(),
-    replyToMessageId: v.optional(v.id('friendMessages')),
+    replyToMessageId: v.optional(v.id('messages')),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -2380,7 +2380,7 @@ export const sendFriendMessage = mutation({
     }
 
     const replySnapshot = await getGroupReplySnapshot(ctx, args.circleId, args.replyToMessageId);
-    const messageId = await ctx.db.insert('friendMessages', {
+    const messageId = await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'text',
@@ -2418,10 +2418,10 @@ export const sendFriendMessage = mutation({
 
 export const sendDirectFriendMessage = mutation({
   args: {
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
     travelerSlug: v.string(),
     body: v.string(),
-    replyToMessageId: v.optional(v.id('friendDirectMessages')),
+    replyToMessageId: v.optional(v.id('dms')),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -2440,7 +2440,7 @@ export const sendDirectFriendMessage = mutation({
     }
 
     const replySnapshot = await getDirectReplySnapshot(ctx, args.threadId, args.replyToMessageId);
-    const messageId = await ctx.db.insert('friendDirectMessages', {
+    const messageId = await ctx.db.insert('dms', {
       threadId: args.threadId,
       senderSlug: travelerSlug,
       body: trimmedBody,
@@ -2469,7 +2469,7 @@ export const sendDirectFriendMessage = mutation({
 
 export const startDirectFriendCall = mutation({
   args: {
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
     travelerSlug: v.string(),
     mode: v.union(v.literal('voice'), v.literal('video')),
   },
@@ -2487,7 +2487,7 @@ export const startDirectFriendCall = mutation({
       getAppUser(ctx, access.otherSlug),
     ]);
     const title = `${actor?.name ?? travelerSlug} ${callLabel}`;
-    const callId = await ctx.db.insert('friendCalls', {
+    const callId = await ctx.db.insert('calls', {
       directThreadId: args.threadId,
       roomName: buildCallRoomName(args.threadId, now),
       createdBySlug: travelerSlug,
@@ -2498,7 +2498,7 @@ export const startDirectFriendCall = mutation({
       updatedAt: now,
     });
 
-    await ctx.db.insert('friendDirectMessages', {
+    await ctx.db.insert('dms', {
       threadId: args.threadId,
       senderSlug: travelerSlug,
       kind: 'call',
@@ -2528,7 +2528,7 @@ export const startDirectFriendCall = mutation({
 export const renameDirectFriendThread = mutation({
   args: {
     travelerSlug: v.string(),
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
     title: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2555,7 +2555,7 @@ export const renameDirectFriendThread = mutation({
 export const deleteDirectFriendThread = mutation({
   args: {
     travelerSlug: v.string(),
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -2571,7 +2571,7 @@ export const deleteDirectFriendThread = mutation({
 
 export const deleteFriendMessage = mutation({
   args: {
-    messageId: v.id('friendMessages'),
+    messageId: v.id('messages'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2592,7 +2592,7 @@ export const deleteFriendMessage = mutation({
 
 export const deleteDirectFriendMessage = mutation({
   args: {
-    messageId: v.id('friendDirectMessages'),
+    messageId: v.id('dms'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2617,13 +2617,13 @@ export const deleteDirectFriendMessage = mutation({
 
 export const markFriendChatRead = mutation({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const membership = await ctx.db
-      .query('friendCircleMembers')
+      .query('members')
       .withIndex('by_circleId_and_travelerSlug', (q) =>
         q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
       )
@@ -2634,14 +2634,14 @@ export const markFriendChatRead = mutation({
     }
 
     const latestMessage = await ctx.db
-      .query('friendMessages')
+      .query('messages')
       .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', args.circleId))
       .order('desc')
       .take(1);
 
     const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
     const existing = await ctx.db
-      .query('friendCircleReadStates')
+      .query('reads')
       .withIndex('by_circleId_and_travelerSlug', (q) =>
         q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
       )
@@ -2655,7 +2655,7 @@ export const markFriendChatRead = mutation({
       return true;
     }
 
-    await ctx.db.insert('friendCircleReadStates', {
+    await ctx.db.insert('reads', {
       circleId: args.circleId,
       travelerSlug: travelerSlug,
       lastReadAt,
@@ -2667,7 +2667,7 @@ export const markFriendChatRead = mutation({
 
 export const markDirectChatRead = mutation({
   args: {
-    threadId: v.id('friendDirectThreads'),
+    threadId: v.id('threads'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2682,14 +2682,14 @@ export const markDirectChatRead = mutation({
     }
 
     const latestMessage = await ctx.db
-      .query('friendDirectMessages')
+      .query('dms')
       .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', args.threadId))
       .order('desc')
       .take(1);
 
     const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
     const existing = await ctx.db
-      .query('friendDirectReadStates')
+      .query('receipts')
       .withIndex('by_threadId_and_travelerSlug', (q) =>
         q.eq('threadId', args.threadId).eq('travelerSlug', travelerSlug)
       )
@@ -2703,7 +2703,7 @@ export const markDirectChatRead = mutation({
       return true;
     }
 
-    await ctx.db.insert('friendDirectReadStates', {
+    await ctx.db.insert('receipts', {
       threadId: args.threadId,
       travelerSlug: travelerSlug,
       lastReadAt,
@@ -2715,13 +2715,13 @@ export const markDirectChatRead = mutation({
 
 export const shareTripRouteInFriendChat = mutation({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const routeShare = await buildRouteShare(ctx, travelerSlug);
-    const messageId = await ctx.db.insert('friendMessages', {
+    const messageId = await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'route',
@@ -2744,7 +2744,7 @@ export const shareTripRouteInFriendChat = mutation({
 
 export const startFriendCall = mutation({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.string(),
     mode: v.union(v.literal('voice'), v.literal('video')),
   },
@@ -2756,7 +2756,7 @@ export const startFriendCall = mutation({
     }
 
     const now = Date.now();
-    const callId = await ctx.db.insert('friendCalls', {
+    const callId = await ctx.db.insert('calls', {
       circleId: args.circleId,
       roomName: buildCallRoomName(args.circleId, now),
       createdBySlug: travelerSlug,
@@ -2768,7 +2768,7 @@ export const startFriendCall = mutation({
     });
 
     const callLabel = formatCallMode(args.mode);
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'call',
@@ -2798,7 +2798,7 @@ export const startFriendCall = mutation({
 
 export const scheduleFriendCall = mutation({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.string(),
     mode: v.union(v.literal('voice'), v.literal('video')),
     scheduledFor: v.number(),
@@ -2821,7 +2821,7 @@ export const scheduleFriendCall = mutation({
     const callLabel = formatCallMode(args.mode);
     const title = args.title?.trim() || `${access.circle.name} ${callLabel}`;
     const description = args.description?.trim() || undefined;
-    const callId = await ctx.db.insert('friendCalls', {
+    const callId = await ctx.db.insert('calls', {
       circleId: args.circleId,
       roomName: buildCallRoomName(args.circleId, now),
       createdBySlug: travelerSlug,
@@ -2836,7 +2836,7 @@ export const scheduleFriendCall = mutation({
       updatedAt: now,
     });
 
-    await ctx.db.insert('friendMessages', {
+    await ctx.db.insert('messages', {
       circleId: args.circleId,
       senderSlug: travelerSlug,
       kind: 'scheduled_call',
@@ -2879,7 +2879,7 @@ export const scheduleFriendCall = mutation({
 
 export const joinScheduledFriendCall = mutation({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2920,7 +2920,7 @@ export const joinScheduledFriendCall = mutation({
 
 export const endFriendCall = mutation({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2949,7 +2949,7 @@ export const endFriendCall = mutation({
 
     if (call.circleId) {
       const callMessages = await ctx.db
-        .query('friendMessages')
+        .query('messages')
         .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', call.circleId!))
         .order('desc')
         .take(50);
@@ -2964,7 +2964,7 @@ export const endFriendCall = mutation({
 
     if (call.directThreadId) {
       const callMessages = await ctx.db
-        .query('friendDirectMessages')
+        .query('dms')
         .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', call.directThreadId!))
         .order('desc')
         .take(50);
@@ -2983,7 +2983,7 @@ export const endFriendCall = mutation({
 
 export const getFriendCall = query({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -3051,7 +3051,7 @@ export const listIncomingFriendCalls = query({
 
     for (const membership of memberships) {
       const calls = await ctx.db
-        .query('friendCalls')
+        .query('calls')
         .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', membership.circleId))
         .order('desc')
         .take(6);
@@ -3092,7 +3092,7 @@ export const listIncomingFriendCalls = query({
 
     for (const thread of directThreads) {
       const calls = await ctx.db
-        .query('friendCalls')
+        .query('calls')
         .withIndex('by_directThreadId_and_createdAt', (q) => q.eq('directThreadId', thread._id))
         .order('desc')
         .take(6);
@@ -3132,7 +3132,7 @@ export const listIncomingFriendCalls = query({
 
 export const getFriendCallTokenContext = internalQuery({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -3164,7 +3164,7 @@ export const getFriendCallTokenContext = internalQuery({
 
 export const sendScheduledCallReminder = internalMutation({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
   },
   handler: async (ctx, args) => {
     const call = await ctx.db.get(args.callId);

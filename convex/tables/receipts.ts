@@ -1,8 +1,8 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendDirectReadStatesTable = defineTable({
-  threadId: v.id('friendDirectThreads'),
+export const receiptsTable = defineTable({
+  threadId: v.id('threads'),
   travelerSlug: v.string(),
   lastReadAt: v.number(),
 })

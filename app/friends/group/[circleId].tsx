@@ -289,7 +289,7 @@ export default function FriendsChatScreen({ circleId: circleIdProp, onClose }: F
       });
       if (call?._id) {
         if (isLargeScreen) {
-          openCall(call._id as Id<'friendCalls'>);
+          openCall(call._id as Id<'calls'>);
           return;
         }
         router.push(`/friends/call/${call._id}`);

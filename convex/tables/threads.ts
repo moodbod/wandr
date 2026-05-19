@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendDirectThreadsTable = defineTable({
+export const threadsTable = defineTable({
   participantA: v.string(),
   participantB: v.string(),
   title: v.optional(v.string()),

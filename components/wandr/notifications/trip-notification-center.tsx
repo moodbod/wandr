@@ -154,7 +154,7 @@ export function TripNotificationCenter() {
     handledBookingIdsRef.current.add(activeItem._id);
 
     void recordArrival({
-      bookingId: activeItem._id as Id<'experienceBookings'>,
+      bookingId: activeItem._id as Id<'bookings'>,
       travelerSlug,
       source: 'gps',
       coordinate: [currentLocation[0], currentLocation[1]],

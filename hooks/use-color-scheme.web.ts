@@ -1,21 +1,54 @@
 import { useEffect, useState } from 'react';
-import { useColorScheme as useRNColorScheme } from 'react-native';
+import type { ColorSchemeName } from 'react-native';
 
 /**
- * To support static rendering, this value needs to be re-calculated on the client side for web
+ * Static web renders do not have access to the user's device theme, so fall back
+ * to light on the server and then follow the browser preference on the client.
  */
 export function useColorScheme() {
-  const [hasHydrated, setHasHydrated] = useState(false);
+  const [browserColorScheme, setBrowserColorScheme] = useState<NonNullable<ColorSchemeName>>(
+    getBrowserColorScheme
+  );
 
   useEffect(() => {
-    setHasHydrated(true);
+    const mediaQuery = getColorSchemeMediaQuery();
+
+    if (!mediaQuery) {
+      return;
+    }
+
+    const updateBrowserColorScheme = () => {
+      setBrowserColorScheme(getBrowserColorScheme());
+    };
+
+    updateBrowserColorScheme();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateBrowserColorScheme);
+
+      return () => {
+        mediaQuery.removeEventListener('change', updateBrowserColorScheme);
+      };
+    }
+
+    mediaQuery.addListener(updateBrowserColorScheme);
+
+    return () => {
+      mediaQuery.removeListener(updateBrowserColorScheme);
+    };
   }, []);
 
-  const colorScheme = useRNColorScheme();
+  return browserColorScheme;
+}
 
-  if (hasHydrated) {
-    return colorScheme;
+function getColorSchemeMediaQuery() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null;
   }
 
-  return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)');
+}
+
+function getBrowserColorScheme(): NonNullable<ColorSchemeName> {
+  return getColorSchemeMediaQuery()?.matches ? 'dark' : 'light';
 }

@@ -1,8 +1,8 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendMessagesTable = defineTable({
-  circleId: v.id('friendCircles'),
+export const messagesTable = defineTable({
+  circleId: v.id('circles'),
   senderSlug: v.string(),
   kind: v.union(
     v.literal('text'),
@@ -12,7 +12,7 @@ export const friendMessagesTable = defineTable({
     v.literal('scheduled_call')
   ),
   body: v.optional(v.string()),
-  replyToMessageId: v.optional(v.id('friendMessages')),
+  replyToMessageId: v.optional(v.id('messages')),
   replyToSenderName: v.optional(v.string()),
   replyToPreview: v.optional(v.string()),
   replyToKind: v.optional(v.string()),
@@ -21,7 +21,7 @@ export const friendMessagesTable = defineTable({
   routeDistanceLabel: v.optional(v.string()),
   routeStopCount: v.optional(v.number()),
   routeStopsPreview: v.optional(v.array(v.string())),
-  callId: v.optional(v.id('friendCalls')),
+  callId: v.optional(v.id('calls')),
   callMode: v.optional(v.union(v.literal('voice'), v.literal('video'))),
   callStatus: v.optional(v.union(v.literal('active'), v.literal('scheduled'), v.literal('ended'), v.literal('cancelled'))),
   callScheduledFor: v.optional(v.number()),

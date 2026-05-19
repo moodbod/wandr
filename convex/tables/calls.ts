@@ -1,9 +1,9 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendCallsTable = defineTable({
-  circleId: v.optional(v.id('friendCircles')),
-  directThreadId: v.optional(v.id('friendDirectThreads')),
+export const callsTable = defineTable({
+  circleId: v.optional(v.id('circles')),
+  directThreadId: v.optional(v.id('threads')),
   roomName: v.string(),
   createdBySlug: v.string(),
   mode: v.union(v.literal('voice'), v.literal('video')),

@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendCirclesTable = defineTable({
+export const circlesTable = defineTable({
   slug: v.string(),
   name: v.string(),
   destinationLabel: v.string(),

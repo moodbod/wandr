@@ -1,5 +1,6 @@
 import { usePathname, useRouter } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { AuthBottomSheet, type AuthSheetMode } from '@/components/wandr/auth/auth-bottom-sheet';
 import { useAuthSession } from '@/providers/auth-session';
@@ -27,6 +28,43 @@ const AuthSheetContext = createContext<AuthSheetContextValue | null>(null);
 
 function getSafeReturnTo(value?: string | null) {
   return value && value.startsWith('/') ? value : DEFAULT_RETURN_TO;
+}
+
+function decodeSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getWebOAuthReturnTo() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('authMode') && !params.has('returnTo')) {
+    return null;
+  }
+
+  return getSafeReturnTo(decodeSearchParam(params.get('returnTo')));
+}
+
+function clearWebOAuthParams() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete('authMode');
+  url.searchParams.delete('returnTo');
+  url.searchParams.delete('code');
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 export function AuthSheetProvider({ children }: { children: ReactNode }) {
@@ -94,6 +132,23 @@ export function AuthSheetProvider({ children }: { children: ReactNode }) {
       router.replace(returnTo as never);
     }
   }, [pathname, router, session, state.isOpen, state.returnTo]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const returnTo = getWebOAuthReturnTo();
+    if (!returnTo) {
+      return;
+    }
+
+    clearWebOAuthParams();
+
+    if (pathname !== returnTo) {
+      router.replace(returnTo as never);
+    }
+  }, [pathname, router, session]);
 
   const value = useMemo(
     () => ({

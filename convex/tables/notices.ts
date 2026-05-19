@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const appNotificationsTable = defineTable({
+export const noticesTable = defineTable({
   recipientSlug: v.string(),
   actorSlug: v.optional(v.string()),
   kind: v.union(

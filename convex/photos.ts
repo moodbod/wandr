@@ -22,7 +22,7 @@ export const submitLocationPhoto = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    return await ctx.db.insert('locationPhotos', {
+    return await ctx.db.insert('photos', {
       locationKind: args.locationKind,
       locationSlug: args.locationSlug,
       travelerSlug,
@@ -46,10 +46,10 @@ export const listManagedLocationPhotos = query({
     const status = args.status;
     const query = status
       ? ctx.db
-          .query('locationPhotos')
+          .query('photos')
           .withIndex('by_status_and_createdAt', (q) => q.eq('status', status))
           .order('desc')
-      : ctx.db.query('locationPhotos').order('desc');
+      : ctx.db.query('photos').order('desc');
     const photos = await query.take(80);
 
     const resolved = await Promise.all(
@@ -97,7 +97,7 @@ export const listManagedLocationPhotos = query({
 
 export const updateLocationPhotoStatus = mutation({
   args: {
-    photoId: v.id('locationPhotos'),
+    photoId: v.id('photos'),
     status: v.union(v.literal('approved'), v.literal('rejected')),
   },
   handler: async (ctx, args) => {
@@ -124,8 +124,8 @@ export const listLocationPhotos = query({
     locationSlug: v.string(),
   },
   handler: async (ctx, args) => {
-    const photos = await ctx.db
-      .query('locationPhotos')
+    const approvedPhotos = await ctx.db
+      .query('photos')
       .withIndex('by_location_and_status', (q) =>
         q
           .eq('locationKind', args.locationKind)
@@ -136,7 +136,7 @@ export const listLocationPhotos = query({
       .take(60);
 
     const resolved = await Promise.all(
-      photos.map(async (photo) => {
+      approvedPhotos.map(async (photo) => {
         const imageUri = await ctx.storage.getUrl(photo.storageId);
 
         if (!imageUri) {

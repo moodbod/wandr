@@ -38,7 +38,8 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
-  const { isLoading: managerModeIsLoading, isManagerMode, setManagerMode } = useManagerMode();
+  const isAdmin = session?.role === 'admin';
+  const { isLoading: managerModeIsLoading, isManagerMode, setManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
   const { openManager } = useManagerResourceMode();
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
@@ -53,7 +54,6 @@ export default function EditProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const hasLoadedTravelerRef = useRef(false);
-  const isAdmin = session?.role === 'admin';
 
   useEffect(() => {
     if (!traveler) {
@@ -70,12 +70,6 @@ export default function EditProfileScreen() {
     setClearAvatar(false);
     hasLoadedTravelerRef.current = true;
   }, [traveler]);
-
-  useEffect(() => {
-    if (!isAdmin && isManagerMode) {
-      setManagerMode(false);
-    }
-  }, [isAdmin, isManagerMode, setManagerMode]);
 
   useEffect(() => {
     if (!traveler?.slug || !hasLoadedTravelerRef.current) {

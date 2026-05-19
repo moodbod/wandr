@@ -56,7 +56,8 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const { isLargeScreen } = useResponsive();
   const { session } = useAuthSession();
-  const { isManagerMode } = useManagerMode();
+  const isAdmin = session?.role === 'admin';
+  const { isManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
   const { surface: managerSurface } = useManagerResourceMode();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -86,7 +87,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
   const planningLabel = rawPlanningLabel || null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
-  const canUseManagerMode = session?.role === 'admin' && isManagerMode;
+  const canUseManagerMode = isAdmin && isManagerMode;
 
   const mainContent = (
     <>
@@ -310,10 +311,10 @@ function ProfileBookings({
   colors: ProfileSemanticColors;
   preferredCurrency: string;
 }) {
-  const stayBookings = bookings.filter((booking) => booking.kind === 'stay');
-  const experienceBookings = bookings.filter((booking) => booking.kind === 'experience');
+  const reservations = bookings.filter((booking) => booking.kind === 'stay');
+  const experienceItems = bookings.filter((booking) => booking.kind === 'experience');
 
-  if (bookings.length === 0) {
+  if (reservations.length === 0 && experienceItems.length === 0) {
     return (
       <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
         <Ticket size={22} color={colors.textMuted} weight="duotone" />
@@ -333,17 +334,17 @@ function ProfileBookings({
           <ThemedText style={styles.sectionSubtitle}>Manage rooms and places separately</ThemedText>
         </View>
       </View>
-      {stayBookings.length > 0 ? (
+      {reservations.length > 0 ? (
         <BookingGroupSection
-          bookings={stayBookings}
+          bookings={reservations}
           colors={colors}
           preferredCurrency={preferredCurrency}
           title="Rooms & stays"
         />
       ) : null}
-      {experienceBookings.length > 0 ? (
+      {experienceItems.length > 0 ? (
         <BookingGroupSection
-          bookings={experienceBookings}
+          bookings={experienceItems}
           colors={colors}
           preferredCurrency={preferredCurrency}
           title="Places & experiences"

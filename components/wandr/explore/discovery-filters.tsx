@@ -40,24 +40,16 @@ export function DiscoveryFilters({
 }: DiscoveryFiltersProps) {
   const isDark = useColorScheme() === 'dark';
   const isDesktopMap = variant === 'desktopMap';
-  const desktopSurfaceColor = isDark ? designSystem.colors.darkOliveGlassSoft : designSystem.colors.whiteGlassHigh;
   const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
   const desktopInputSurfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassMax;
-  const desktopDockSurfaceColor = isDark ? 'rgba(8, 11, 8, 0.38)' : designSystem.colors.whiteGlassMedium;
   const desktopInactiveTabColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
   const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
+  const showRegionTabs = regions.length > 1;
+  const showIntentTabs = intents.length > 1;
+  const showFilterTabs = showRegionTabs || showIntentTabs;
 
   return (
-    <View
-      style={[
-        styles.shell,
-        isDesktopMap && styles.desktopShell,
-        isDesktopMap && {
-          backgroundColor: desktopSurfaceColor,
-          borderColor: desktopBorderColor,
-        },
-      ]}
-    >
+    <View style={[styles.shell, isDesktopMap && styles.desktopShell]}>
       <View style={[styles.searchRow, isDesktopMap && styles.desktopSearchRow]}>
         {leadingSearchAccessory ? (
           <View style={[styles.searchAccessory, isDesktopMap && styles.desktopLeadingAccessory]}>
@@ -100,69 +92,63 @@ export function DiscoveryFilters({
         ) : null}
       </View>
 
-      <View
-        style={
-          isDesktopMap
-            ? [
-                styles.desktopFilterDock,
-                {
-                  backgroundColor: desktopDockSurfaceColor,
-                  borderColor: desktopBorderColor,
-                },
-              ]
-            : undefined
-        }
-      >
-        <SegmentedTabs
-          value={activeRegion}
-          options={regions}
-          onChange={onRegionChange}
-          style={fullBleed ? styles.fullBleedTabs : undefined}
-          tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
-          activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
-          inactiveTabStyle={
-            isDesktopMap
-              ? [styles.desktopInactiveTab, { backgroundColor: desktopInactiveTabColor }]
-              : undefined
-          }
-          labelStyle={isDesktopMap ? styles.desktopTabLabel : undefined}
-          activeLabelStyle={isDesktopMap ? styles.desktopActiveTabLabel : undefined}
-          inactiveLabelStyle={
-            isDesktopMap
-              ? [styles.desktopInactiveTabLabel, { color: desktopInactiveTextColor }]
-              : undefined
-          }
-          contentContainerStyle={[
-            fullBleed ? styles.fullBleedTabContent : undefined,
-            isDesktopMap && styles.desktopTabContent,
-          ]}
-        />
+      {showFilterTabs ? (
+        <View style={isDesktopMap ? styles.desktopFilterDock : undefined}>
+          {showRegionTabs ? (
+            <SegmentedTabs
+              value={activeRegion}
+              options={regions}
+              onChange={onRegionChange}
+              style={fullBleed ? styles.fullBleedTabs : undefined}
+              tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
+              activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
+              inactiveTabStyle={
+                isDesktopMap
+                  ? [styles.desktopInactiveTab, { backgroundColor: desktopInactiveTabColor }]
+                  : undefined
+              }
+              labelStyle={isDesktopMap ? styles.desktopTabLabel : undefined}
+              activeLabelStyle={isDesktopMap ? styles.desktopActiveTabLabel : undefined}
+              inactiveLabelStyle={
+                isDesktopMap
+                  ? [styles.desktopInactiveTabLabel, { color: desktopInactiveTextColor }]
+                  : undefined
+              }
+              contentContainerStyle={[
+                fullBleed ? styles.fullBleedTabContent : undefined,
+                isDesktopMap && styles.desktopTabContent,
+              ]}
+            />
+          ) : null}
 
-        <SegmentedTabs
-          value={activeIntent}
-          options={intents}
-          onChange={onIntentChange}
-          style={fullBleed ? styles.fullBleedTabs : undefined}
-          tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
-          activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
-          inactiveTabStyle={
-            isDesktopMap
-              ? [styles.desktopInactiveTab, { backgroundColor: desktopInactiveTabColor }]
-              : undefined
-          }
-          labelStyle={isDesktopMap ? styles.desktopTabLabel : undefined}
-          activeLabelStyle={isDesktopMap ? styles.desktopActiveTabLabel : undefined}
-          inactiveLabelStyle={
-            isDesktopMap
-              ? [styles.desktopInactiveTabLabel, { color: desktopInactiveTextColor }]
-              : undefined
-          }
-          contentContainerStyle={[
-            fullBleed ? styles.fullBleedTabContent : undefined,
-            isDesktopMap && styles.desktopTabContent,
-          ]}
-        />
-      </View>
+          {showIntentTabs ? (
+            <SegmentedTabs
+              value={activeIntent}
+              options={intents}
+              onChange={onIntentChange}
+              style={fullBleed ? styles.fullBleedTabs : undefined}
+              tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
+              activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
+              inactiveTabStyle={
+                isDesktopMap
+                  ? [styles.desktopInactiveTab, { backgroundColor: desktopInactiveTabColor }]
+                  : undefined
+              }
+              labelStyle={isDesktopMap ? styles.desktopTabLabel : undefined}
+              activeLabelStyle={isDesktopMap ? styles.desktopActiveTabLabel : undefined}
+              inactiveLabelStyle={
+                isDesktopMap
+                  ? [styles.desktopInactiveTabLabel, { color: desktopInactiveTextColor }]
+                  : undefined
+              }
+              contentContainerStyle={[
+                fullBleed ? styles.fullBleedTabContent : undefined,
+                isDesktopMap && styles.desktopTabContent,
+              ]}
+            />
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -174,10 +160,7 @@ const styles = StyleSheet.create({
   desktopShell: {
     width: '100%',
     alignSelf: 'center',
-    gap: 8,
-    padding: 8,
-    borderRadius: 32,
-    borderWidth: 1,
+    gap: 12,
   },
   searchRow: {
     flexDirection: 'row',
@@ -217,11 +200,8 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkTextWarm,
   },
   desktopFilterDock: {
-    gap: 6,
-    paddingVertical: 6,
-    borderRadius: 26,
-    borderWidth: 1,
-    overflow: 'hidden',
+    gap: 8,
+    alignItems: 'flex-start',
   },
   fullBleedTabs: {
     marginHorizontal: -designSystem.spacing.lg,

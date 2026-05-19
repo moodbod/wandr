@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendMatchActionsTable = defineTable({
+export const matchesTable = defineTable({
   travelerSlug: v.string(),
   candidateSlug: v.string(),
   state: v.union(v.literal('invited'), v.literal('passed')),

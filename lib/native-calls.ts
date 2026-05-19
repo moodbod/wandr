@@ -10,15 +10,15 @@ declare const require: (
 type NativeCallMode = 'voice' | 'video';
 
 type NativeIncomingCall = {
-  callId: Id<'friendCalls'>;
+  callId: Id<'calls'>;
   callerName: string;
   groupName: string;
   mode: NativeCallMode;
 };
 
 type NativeCallHandlers = {
-  onAnswer: (callId: Id<'friendCalls'>) => void;
-  onEnd: (callId: Id<'friendCalls'>) => void;
+  onAnswer: (callId: Id<'calls'>) => void;
+  onEnd: (callId: Id<'calls'>) => void;
 };
 
 type NativeCallKeepModule = {
@@ -42,7 +42,7 @@ type NativeCallKeepModule = {
   endCall: (uuid: string) => void;
 };
 
-const callIdsByUuid = new Map<string, Id<'friendCalls'>>();
+const callIdsByUuid = new Map<string, Id<'calls'>>();
 const uuidsByCallId = new Map<string, string>();
 const incomingCallsByUuid = new Map<string, NativeIncomingCall>();
 let setupPromise: Promise<boolean> | null = null;
@@ -109,7 +109,7 @@ function segment(value: string, salt: string, length: number) {
   return hashString(`${salt}:${value}`).toString(16).padStart(8, '0').slice(0, length);
 }
 
-export function getNativeCallUuid(callId: Id<'friendCalls'>) {
+export function getNativeCallUuid(callId: Id<'calls'>) {
   const existingUuid = uuidsByCallId.get(callId);
   if (existingUuid) {
     return existingUuid;
@@ -273,7 +273,7 @@ export async function showNativeIncomingCall({ callId, callerName, groupName, mo
   return true;
 }
 
-export function answerNativeCall(callId: Id<'friendCalls'>) {
+export function answerNativeCall(callId: Id<'calls'>) {
   if (!canUseNativeCallSystem()) {
     return;
   }
@@ -283,14 +283,14 @@ export function answerNativeCall(callId: Id<'friendCalls'>) {
   }
 }
 
-export function markNativeCallConnected(callId: Id<'friendCalls'>) {
+export function markNativeCallConnected(callId: Id<'calls'>) {
   if (!canUseNativeCallSystem()) {
     return;
   }
   getNativeCallUuid(callId);
 }
 
-export function endNativeCall(callId: Id<'friendCalls'>) {
+export function endNativeCall(callId: Id<'calls'>) {
   if (!canUseNativeCallSystem()) {
     return;
   }

@@ -1,8 +1,8 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendCircleReadStatesTable = defineTable({
-  circleId: v.id('friendCircles'),
+export const readsTable = defineTable({
+  circleId: v.id('circles'),
   travelerSlug: v.string(),
   lastReadAt: v.number(),
 })

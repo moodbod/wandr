@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const friendConnectionsTable = defineTable({
+export const connectionsTable = defineTable({
   travelerSlug: v.string(),
   friendSlug: v.string(),
   createdAt: v.number(),

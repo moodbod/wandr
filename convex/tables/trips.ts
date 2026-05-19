@@ -5,7 +5,7 @@ export const tripsTable = defineTable({
   name: v.string(),
   travelerSlug: v.string(),
   visibility: v.optional(v.union(v.literal('private'), v.literal('public'))),
-  circleId: v.optional(v.id('friendCircles')),
+  circleId: v.optional(v.id('circles')),
   groupRole: v.optional(v.union(v.literal('host'), v.literal('member'))),
   sourceTripId: v.optional(v.id('trips')),
   createdAt: v.number(),

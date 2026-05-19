@@ -33,7 +33,8 @@ export function AppSidebar() {
   const insets = useSafeAreaInsets();
   const traveler = useCurrentTraveler();
   const { session } = useAuthSession();
-  const { isManagerMode } = useManagerMode();
+  const isAdmin = session?.role === 'admin';
+  const { isManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
   const { mode: managerResourceMode, openManager, setSurface, surface: managerSurface } = useManagerResourceMode();
 
   const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
@@ -42,7 +43,7 @@ export function AppSidebar() {
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteBorder;
   const activeBackground = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.limeMist;
   const activeHref = getActiveNavHref(pathname);
-  const canUseManagerMode = session?.role === 'admin' && isManagerMode;
+  const canUseManagerMode = isAdmin && isManagerMode;
 
   return (
     <View

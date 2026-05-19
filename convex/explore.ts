@@ -19,7 +19,7 @@ const DEFAULT_EXPLORE_CENTER = [17.0832, -22.5597] as const;
 const DEFAULT_EXPLORE_LOCATION_LABEL = 'Namibia';
 
 type ExperienceDoc = Doc<'experiences'>;
-type HiddenGemDoc = Doc<'hiddenGems'>;
+type HiddenGemDoc = Doc<'gems'>;
 type Coordinate = readonly [number, number];
 
 function toCoordinate(coordinate?: readonly number[]): Coordinate | null {
@@ -408,7 +408,7 @@ async function enrichExperiencesWithCommunity(
 
   for (const experience of experiences) {
     const bookings = await ctx.db
-      .query('experienceBookings')
+      .query('bookings')
       .withIndex('by_experienceSlug', (q) => q.eq('experienceSlug', experience.slug))
       .take(200);
 
@@ -492,7 +492,7 @@ async function getPersonalizedTravelerAudience(
   }
 
   const bookings = await ctx.db
-    .query('experienceBookings')
+    .query('bookings')
     .withIndex('by_experienceSlug', (q) => q.eq('experienceSlug', experienceSlug))
     .take(200);
 
@@ -530,7 +530,7 @@ async function getPersonalizedTravelerAudience(
 
 async function getExperiencePopularityCounts(ctx: QueryCtx) {
   const [bookings, visits] = await Promise.all([
-    ctx.db.query('experienceBookings').collect(),
+    ctx.db.query('bookings').collect(),
     ctx.db.query('experiences').collect(),
   ]);
 
@@ -550,14 +550,14 @@ export const getPageContent = query({
   handler: async (ctx, args) => {
     const [experienceDocs, hiddenGemDocs] = await Promise.all([
       ctx.db.query('experiences').collect(),
-      ctx.db.query('hiddenGems').collect(),
+      ctx.db.query('gems').collect(),
     ]);
     const baseExperiences = experienceDocs
       .sort((a, b) => b._creationTime - a._creationTime)
       .map(toExploreExperience);
     const experiences = (await enrichExperiencesWithCommunity(ctx, baseExperiences))
       .sort(compareExperiencesByPopularity);
-    const hiddenGems = hiddenGemDocs
+    const gems = hiddenGemDocs
       .sort((a, b) => b._creationTime - a._creationTime)
       .map(toExploreHiddenGem);
     const featuredExperience =
@@ -566,11 +566,11 @@ export const getPageContent = query({
       null;
     const centerCoordinate =
       featuredExperience?.coordinate ??
-      hiddenGems.find((item) => item.coordinate)?.coordinate ??
+      gems.find((item) => item.coordinate)?.coordinate ??
       DEFAULT_EXPLORE_CENTER;
     const markers = [
       ...experiences.map(toExperienceMapMarker),
-      ...hiddenGems.map(toHiddenGemMapMarker),
+      ...gems.map(toHiddenGemMapMarker),
     ].filter((marker): marker is ExploreMapMarker => Boolean(marker));
     const updatedAt = Math.max(
       0,
@@ -604,10 +604,10 @@ export const getPageContent = query({
           hero: toFeatureHero(featuredExperience),
           detail: toFeatureDetail(featuredExperience),
         },
-        hiddenGems: {
+        gems: {
           title: 'Hidden gems',
           ctaLabel: 'View all',
-          items: hiddenGems,
+          items: gems,
         },
         map: {
           title: 'Explore map',
@@ -692,7 +692,7 @@ export const getExploreJoinableTripCards = query({
   },
   handler: async (ctx, args) => {
     const circles = await ctx.db
-      .query('friendCircles')
+      .query('circles')
       .collect();
 
     const openCircles = circles.filter(c => c.status === 'active' && c.visibility === 'open');
@@ -732,7 +732,7 @@ export const getExploreJoinableTrips = query({
 
 export const getExploreGroupTripDetail = query({
   args: {
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     travelerSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -757,7 +757,7 @@ export const getExploreGroupTripDetail = query({
 export const requestJoinExploreTrip = mutation({
   args: {
     travelerSlug: v.string(),
-    circleId: v.id('friendCircles'),
+    circleId: v.id('circles'),
     experienceSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -776,7 +776,7 @@ export const getLocationLikeState = query({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const like = await ctx.db
-      .query('locationLikes')
+      .query('likes')
       .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
         q.eq('travelerSlug', travelerSlug).eq('locationKind', args.locationKind).eq('locationSlug', args.locationSlug)
       )
@@ -794,7 +794,7 @@ export const toggleLocationLike = mutation({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const existing = await ctx.db
-      .query('locationLikes')
+      .query('likes')
       .withIndex('by_travelerSlug_and_locationKind_and_locationSlug', (q) =>
         q.eq('travelerSlug', travelerSlug).eq('locationKind', args.locationKind).eq('locationSlug', args.locationSlug)
       )
@@ -804,7 +804,7 @@ export const toggleLocationLike = mutation({
       await ctx.db.delete(existing._id);
       return { liked: false };
     } else {
-      await ctx.db.insert('locationLikes', {
+      await ctx.db.insert('likes', {
         travelerSlug,
         locationKind: args.locationKind,
         locationSlug: args.locationSlug,
@@ -822,7 +822,7 @@ export const listSavedPlaces = query({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const likes = await ctx.db
-      .query('locationLikes')
+      .query('likes')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .collect();
     
@@ -848,7 +848,7 @@ export const addExperienceToTrip = mutation({
     }
 
     const existingBooking = await ctx.db
-      .query('experienceBookings')
+      .query('bookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
         q.eq('travelerSlug', travelerSlug)
       )
@@ -862,7 +862,7 @@ export const addExperienceToTrip = mutation({
       return matchingBooking._id;
     }
 
-    return await ctx.db.insert('experienceBookings', {
+    return await ctx.db.insert('bookings', {
       experienceSlug: args.experienceSlug,
       travelerSlug,
       bookedAt: Date.now(),

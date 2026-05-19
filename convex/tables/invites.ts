@@ -1,9 +1,9 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const tripInvitesTable = defineTable({
+export const invitesTable = defineTable({
   tripId: v.id('trips'),
-  circleId: v.optional(v.id('friendCircles')),
+  circleId: v.optional(v.id('circles')),
   inviterSlug: v.string(),
   inviteeSlug: v.string(),
   createdAt: v.number(),

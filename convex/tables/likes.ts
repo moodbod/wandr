@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const locationLikesTable = defineTable({
+export const likesTable = defineTable({
   travelerSlug: v.string(),
   locationKind: v.union(v.literal('experience'), v.literal('hiddenGem')),
   locationSlug: v.string(),

@@ -1,28 +1,26 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { authTables } from '@convex-dev/auth/server';
-import { appNotificationsTable } from './tables/appNotifications';
-import { devicePushTokensTable } from './tables/devicePushTokens';
-import { experienceBookingsTable } from './tables/experienceBookings';
+import { noticesTable } from './tables/notices';
+import { tokensTable } from './tables/tokens';
+import { bookingsTable } from './tables/bookings';
 import { experiencesTable } from './tables/experiences';
-import { friendCircleMembersTable } from './tables/friendCircleMembers';
-import { friendCircleReadStatesTable } from './tables/friendCircleReadStates';
-import { friendConnectionsTable } from './tables/friendConnections';
-import { friendCallsTable } from './tables/friendCalls';
-import { friendCirclesTable } from './tables/friendCircles';
-import { friendDirectMessagesTable } from './tables/friendDirectMessages';
-import { friendDirectReadStatesTable } from './tables/friendDirectReadStates';
-import { friendDirectThreadsTable } from './tables/friendDirectThreads';
-import { friendMatchActionsTable } from './tables/friendMatchActions';
-import { friendMessagesTable } from './tables/friendMessages';
-import { friendProfilesTable } from './tables/friendProfiles';
-import { hiddenGemsTable } from './tables/hiddenGems';
-import { locationLikesTable } from './tables/locationLikes';
+import { membersTable } from './tables/members';
+import { readsTable } from './tables/reads';
+import { connectionsTable } from './tables/connections';
+import { callsTable } from './tables/calls';
+import { circlesTable } from './tables/circles';
+import { dmsTable } from './tables/dms';
+import { receiptsTable } from './tables/receipts';
+import { threadsTable } from './tables/threads';
+import { matchesTable } from './tables/matches';
+import { messagesTable } from './tables/messages';
+import { gemsTable } from './tables/gems';
+import { likesTable } from './tables/likes';
 import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
-import { tripInvitesTable } from './tables/tripInvites';
+import { invitesTable } from './tables/invites';
 import { tripsTable } from './tables/trips';
-import { userSettingsTable } from './tables/userSettings';
 
 const { users: _authUsersTable, ...authTablesWithoutUsers } = authTables;
 
@@ -66,6 +64,19 @@ export default defineSchema({
     arrivalWindowLabel: v.optional(v.string()),
     interests: v.optional(v.array(v.string())),
     profileUpdatedAt: v.optional(v.number()),
+
+    preferredCurrency: v.optional(v.string()),
+    distanceUnit: v.optional(v.union(v.literal('km'), v.literal('mi'))),
+    temperatureUnit: v.optional(v.union(v.literal('celsius'), v.literal('fahrenheit'))),
+    profileVisibility: v.optional(v.union(v.literal('friends'), v.literal('public'), v.literal('private'))),
+    showSavedPlaces: v.optional(v.boolean()),
+    showTripActivity: v.optional(v.boolean()),
+    locationSharing: v.optional(v.union(v.literal('off'), v.literal('whileUsing'), v.literal('tripOnly'))),
+    tripAlertsEnabled: v.optional(v.boolean()),
+    messagesEnabled: v.optional(v.boolean()),
+    bookingUpdatesEnabled: v.optional(v.boolean()),
+    productUpdatesEnabled: v.optional(v.boolean()),
+    settingsUpdatedAt: v.optional(v.number()),
   })
     .index('email', ['email'])
     .index('phone', ['phone'])
@@ -74,10 +85,10 @@ export default defineSchema({
 
   regions: regionsTable,
   trips: tripsTable,
-  tripInvites: tripInvitesTable,
+  invites: invitesTable,
   experiences: experiencesTable,
 
-  experienceRatings: defineTable({
+  ratings: defineTable({
     experienceSlug: v.string(),
     travelerSlug: v.string(),
     rating: v.number(),
@@ -87,7 +98,7 @@ export default defineSchema({
     .index('by_experience', ['experienceSlug'])
     .index('by_experienceSlug_and_travelerSlug', ['experienceSlug', 'travelerSlug']),
 
-  stayRatings: defineTable({
+  reviews: defineTable({
     staySlug: v.string(),
     travelerSlug: v.string(),
     rating: v.number(),
@@ -97,34 +108,24 @@ export default defineSchema({
     .index('by_staySlug', ['staySlug'])
     .index('by_staySlug_and_travelerSlug', ['staySlug', 'travelerSlug']),
 
-  travelerProfiles: defineTable({
-    travelerSlug: v.string(),
-    name: v.string(),
-    avatarUri: v.optional(v.string()),
-    avatarStorageId: v.optional(v.id('_storage')),
-    regionCode: v.string(), // e.g. "DE", "ZA", "NA"
-    regionName: v.string(), // e.g. "Germany", "South Africa"
-  }).index('by_slug', ['travelerSlug']),
-  hiddenGems: hiddenGemsTable,
+  gems: gemsTable,
   stays: staysTable,
-  appNotifications: appNotificationsTable,
-  devicePushTokens: devicePushTokensTable,
-  friendProfiles: friendProfilesTable,
-  friendCircles: friendCirclesTable,
-  friendCircleMembers: friendCircleMembersTable,
-  friendCircleReadStates: friendCircleReadStatesTable,
-  friendMessages: friendMessagesTable,
-  friendDirectReadStates: friendDirectReadStatesTable,
-  friendDirectThreads: friendDirectThreadsTable,
-  friendDirectMessages: friendDirectMessagesTable,
-  friendMatchActions: friendMatchActionsTable,
-  friendConnections: friendConnectionsTable,
-  friendCalls: friendCallsTable,
+  notices: noticesTable,
+  tokens: tokensTable,
+  circles: circlesTable,
+  members: membersTable,
+  reads: readsTable,
+  messages: messagesTable,
+  receipts: receiptsTable,
+  threads: threadsTable,
+  dms: dmsTable,
+  matches: matchesTable,
+  connections: connectionsTable,
+  calls: callsTable,
 
-  userSettings: userSettingsTable,
-  experienceBookings: experienceBookingsTable,
-  locationLikes: locationLikesTable,
-  locationPhotos: defineTable({
+  bookings: bookingsTable,
+  likes: likesTable,
+  photos: defineTable({
     locationKind: v.union(v.literal('experience'), v.literal('stay')),
     locationSlug: v.string(),
     travelerSlug: v.string(),
@@ -139,8 +140,8 @@ export default defineSchema({
     .index('by_location_and_status', ['locationKind', 'locationSlug', 'status'])
     .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_travelerSlug_and_createdAt', ['travelerSlug', 'createdAt']),
-  tripVisits: defineTable({
-    bookingId: v.id('experienceBookings'),
+  visits: defineTable({
+    bookingId: v.id('bookings'),
     tripId: v.optional(v.id('trips')),
     travelerSlug: v.string(),
     experienceSlug: v.string(),
@@ -151,7 +152,7 @@ export default defineSchema({
     .index('by_bookingId', ['bookingId'])
     .index('by_tripId_and_arrivedAt', ['tripId', 'arrivedAt'])
     .index('by_travelerSlug_and_arrivedAt', ['travelerSlug', 'arrivedAt']),
-  stayBookings: defineTable({
+  reservations: defineTable({
     staySlug: v.string(),
     travelerSlug: v.string(),
     checkIn: v.number(),

@@ -7,6 +7,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ChatWidgetGlassCard } from '@/components/wandr/friends/chat-widgets/chat-widget-glass-card';
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { FriendChatMessage } from '@/types/friends';
 
 type RouteCard = NonNullable<FriendChatMessage['routeCard']>;
@@ -19,6 +20,11 @@ type RouteMapWidgetProps = {
 type ExpoMapsModule = typeof import('expo-maps');
 
 let cachedExpoMaps: ExpoMapsModule | null | undefined;
+const GOOGLE_MAP_WITHOUT_POI_STYLE = JSON.stringify([
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+]);
 
 function formatRouteWidgetTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
@@ -96,6 +102,8 @@ function ExpoRouteMapPreview({
   marker: RouteCard['mapMarkers'][number] | null;
 }) {
   const expoMaps = getExpoMapsModule();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const cameraPosition: CameraPosition = {
     coordinates: toExpoCoordinate(centerCoordinate),
     zoom: 13,
@@ -132,6 +140,7 @@ function ExpoRouteMapPreview({
         }
         properties={{
           mapType: AppleMaps.MapType.STANDARD,
+          pointsOfInterest: { including: [] },
           selectionEnabled: false,
           isTrafficEnabled: false,
         }}
@@ -164,12 +173,13 @@ function ExpoRouteMapPreview({
               ]
             : []
         }
-        colorScheme={GoogleMaps.MapColorScheme.DARK}
+        colorScheme={isDark ? GoogleMaps.MapColorScheme.DARK : GoogleMaps.MapColorScheme.LIGHT}
         properties={{
           isBuildingEnabled: false,
           isIndoorEnabled: false,
           isMyLocationEnabled: false,
           isTrafficEnabled: false,
+          mapStyleOptions: { json: GOOGLE_MAP_WITHOUT_POI_STYLE },
           mapType: GoogleMaps.MapType.NORMAL,
           selectionEnabled: false,
         }}

@@ -62,7 +62,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
 
-  const card = page.search.hiddenGems.items.find((item) => getHiddenGemSlug(item.title) === slug);
+  const card = page.search.gems.items.find((item) => getHiddenGemSlug(item.title) === slug);
   const detail = card ? buildHiddenGemDetail(slug, card) : null;
 
   if (!detail || !card) {

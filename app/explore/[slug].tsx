@@ -211,7 +211,7 @@ function ConnectedExploreExperienceScreen() {
     try {
       const requested = await requestJoinTrip({
         travelerSlug,
-        circleId: joinableTrip.circleId as Id<'friendCircles'>,
+        circleId: joinableTrip.circleId as Id<'circles'>,
         experienceSlug: experience.slug,
       });
 

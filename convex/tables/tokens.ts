@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const devicePushTokensTable = defineTable({
+export const tokensTable = defineTable({
   travelerSlug: v.string(),
   installationId: v.string(),
   expoPushToken: v.string(),

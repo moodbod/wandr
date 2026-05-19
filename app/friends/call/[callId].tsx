@@ -23,7 +23,7 @@ function ActiveCallRouteBridge() {
   const router = useRouter();
   const params = useLocalSearchParams<{ callId?: string | string[] }>();
   const callIdParam = Array.isArray(params.callId) ? params.callId[0] : params.callId;
-  const callId = callIdParam as Id<'friendCalls'> | undefined;
+  const callId = callIdParam as Id<'calls'> | undefined;
   const { activeCallId, isMinimized, openCall } = useActiveFriendCall();
   const didOpenCall = useRef(false);
   const didSeeActiveCall = useRef(false);
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   routeHost: {
     flex: 1,
-    backgroundColor: '#050704',
+    backgroundColor: '#080a0f',
   },
   panel: {
     width: '100%',

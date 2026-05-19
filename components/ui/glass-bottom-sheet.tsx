@@ -95,6 +95,7 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
 type GlassBottomSheetProps = BottomSheetProps & {
   desktopModalHostStyle?: StyleProp<ViewStyle>;
   desktopPopupHostStyle?: StyleProp<ViewStyle>;
+  renderInModal?: boolean;
 };
 
 export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((props, ref) => {
@@ -107,6 +108,7 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
     detached,
     enablePanDownToClose,
     index,
+    renderInModal,
     snapPoints,
     style,
     topInset,
@@ -189,6 +191,9 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
   }, [isLargeScreen, isMobileVisible, mobileIndex]);
 
   const closeDesktopSheet = useCallback(() => {
+    sheetRef.current?.close();
+  }, []);
+  const closeMobileSheet = useCallback(() => {
     sheetRef.current?.close();
   }, []);
 
@@ -332,6 +337,43 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
     return null;
   }
 
+  if (renderInModal) {
+    return (
+      <Modal
+        animationType="fade"
+        hardwareAccelerated
+        onRequestClose={enablePanDownToClose === false ? undefined : closeMobileSheet}
+        statusBarTranslucent
+        transparent
+        visible={isMobileVisible}
+      >
+        <View style={styles.mobileModalHost}>
+          <BottomSheet
+            ref={sheetRef}
+            backgroundComponent={CustomBackground}
+            backdropComponent={backdropComponent}
+            handleComponent={null}
+            enableContentPanningGesture
+            enableHandlePanningGesture
+            detached={detached}
+            bottomInset={bottomInset}
+            topInset={topInset}
+            enablePanDownToClose={enablePanDownToClose}
+            index={mobileIndex}
+            snapPoints={snapPoints}
+            style={style}
+            containerStyle={[styles.sheetContainer, containerStyle]}
+            onClose={() => {
+              setIsMobileVisible(false);
+              onClose?.();
+            }}
+            {...bottomSheetProps}
+          />
+        </View>
+      </Modal>
+    );
+  }
+
   return (
     <BottomSheet
       ref={sheetRef}
@@ -392,6 +434,9 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  mobileModalHost: {
+    flex: 1,
   },
   popupHost: {
     maxWidth: 390,

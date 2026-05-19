@@ -1,7 +1,7 @@
 import { defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const hiddenGemsTable = defineTable({
+export const gemsTable = defineTable({
   title: v.string(),
   description: v.string(),
   imageUri: v.string(),

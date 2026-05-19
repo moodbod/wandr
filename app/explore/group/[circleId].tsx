@@ -48,7 +48,7 @@ export default function ExploreGroupTripDetailScreen({
   const detail = useQuery(
     getExploreGroupTripDetailRef,
     circleId && !shouldRedirectToExploreShell
-      ? { circleId: circleId as Id<'friendCircles'>, travelerSlug: traveler?.slug }
+      ? { circleId: circleId as Id<'circles'>, travelerSlug: traveler?.slug }
       : 'skip'
   );
   const requestJoin = useMutation(requestJoinExploreTripRef);
@@ -67,7 +67,7 @@ export default function ExploreGroupTripDetailScreen({
     try {
       await requestJoin({
         travelerSlug: traveler.slug,
-        circleId: detail.circleId as Id<'friendCircles'>,
+        circleId: detail.circleId as Id<'circles'>,
         experienceSlug: detail.itinerary[0].experienceSlug,
       });
     } finally {

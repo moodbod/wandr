@@ -8,7 +8,7 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { type Country, type CountryCode } from 'react-native-country-picker-modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
@@ -50,7 +50,17 @@ WebBrowser.maybeCompleteAuthSession();
 
 function getErrorMessage(cause: unknown, fallback: string) {
   if (cause && typeof cause === 'object' && 'message' in cause && typeof (cause as { message?: unknown }).message === 'string') {
-    return (cause as { message: string }).message;
+    const message = (cause as { message: string }).message;
+    if (message.includes('InvalidAccountId') || message.includes('InvalidSecret') || message.includes('Invalid credentials')) {
+      return 'Email or password does not match. Try again or create an account.';
+    }
+    if (message.includes('TooManyFailedAttempts')) {
+      return 'Too many sign-in attempts. Wait a few minutes and try again.';
+    }
+    if (message.includes('Invalid `redirectTo`') || message.includes('Invalid auth redirect target')) {
+      return 'Google sign-in could not return to Wandr. Try again in a moment.';
+    }
+    return message;
   }
 
   return fallback;
@@ -62,12 +72,45 @@ function getCodeFromUrl(url: string) {
 }
 
 function getOAuthRedirectTo(mode: Exclude<AuthSheetMode, 'onboarding'>, returnTo: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const url = new URL('/', window.location.origin);
+    url.searchParams.set('authMode', mode);
+    url.searchParams.set('returnTo', returnTo);
+    return url.toString();
+  }
+
   return Linking.createURL('/', {
     queryParams: {
       authMode: mode,
       returnTo,
     },
   });
+}
+
+async function completeGoogleOAuth(
+  signIn: ReturnType<typeof useAuthActions>['signIn'],
+  redirectTo: string
+) {
+  const result = await signIn('google', { redirectTo });
+  if (Platform.OS === 'web') {
+    return;
+  }
+
+  if (!result?.redirect) {
+    return;
+  }
+
+  const authResult = await WebBrowser.openAuthSessionAsync(result.redirect.toString(), redirectTo);
+  if (authResult.type !== 'success') {
+    return;
+  }
+
+  const code = getCodeFromUrl(authResult.url);
+  if (!code) {
+    throw new Error('Google did not return an auth code.');
+  }
+
+  await (signIn as unknown as (provider: undefined, params: { code: string }) => Promise<unknown>)(undefined, { code });
 }
 
 function useIsDesktopAuthSheet() {
@@ -85,8 +128,17 @@ export function AuthBottomSheet({
 }: AuthBottomSheetProps) {
   const sheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
+  const { isLargeScreen } = useResponsive();
   const isOnboarding = mode === 'onboarding';
+  const isDesktopSheet = Platform.OS === 'web' && isLargeScreen;
   const snapPoints = useMemo(() => [isOnboarding ? '92%' : '84%'], [isOnboarding]);
+  const desktopPopupHostStyle = useMemo<ViewStyle[] | undefined>(
+    () =>
+      isDesktopSheet
+        ? [styles.desktopPopupHost, { height: isOnboarding ? '92%' : '84%' }]
+        : undefined,
+    [isDesktopSheet, isOnboarding]
+  );
   const renderBackdrop = useMemo(
     () =>
       function AuthSheetBackdrop(props: BottomSheetBackdropProps) {
@@ -114,6 +166,7 @@ export function AuthBottomSheet({
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
       containerStyle={styles.sheetLayer}
+      desktopPopupHostStyle={desktopPopupHostStyle}
       onClose={onClose}>
       <BottomSheetView style={[styles.sheetBody, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardFrame}>
@@ -184,22 +237,7 @@ function SignInSheetForm({
     setIsSubmitting(true);
     try {
       const redirectTo = getOAuthRedirectTo('signIn', returnTo);
-      const result = await signIn('google', { redirectTo });
-      if (!result?.redirect) {
-        return;
-      }
-
-      const authResult = await WebBrowser.openAuthSessionAsync(result.redirect.toString(), redirectTo);
-      if (authResult.type !== 'success') {
-        return;
-      }
-
-      const code = getCodeFromUrl(authResult.url);
-      if (!code) {
-        throw new Error('Google did not return an auth code.');
-      }
-
-      await (signIn as unknown as (provider: undefined, params: { code: string }) => Promise<unknown>)(undefined, { code });
+      await completeGoogleOAuth(signIn, redirectTo);
     } catch (cause) {
       setError(getErrorMessage(cause, 'Could not continue with Google.'));
     } finally {
@@ -324,22 +362,7 @@ function SignUpSheetForm({
     setIsSubmitting(true);
     try {
       const redirectTo = getOAuthRedirectTo('signUp', returnTo);
-      const result = await signIn('google', { redirectTo });
-      if (!result?.redirect) {
-        return;
-      }
-
-      const authResult = await WebBrowser.openAuthSessionAsync(result.redirect.toString(), redirectTo);
-      if (authResult.type !== 'success') {
-        return;
-      }
-
-      const code = getCodeFromUrl(authResult.url);
-      if (!code) {
-        throw new Error('Google did not return an auth code.');
-      }
-
-      await (signIn as unknown as (provider: undefined, params: { code: string }) => Promise<unknown>)(undefined, { code });
+      await completeGoogleOAuth(signIn, redirectTo);
     } catch (cause) {
       setError(getErrorMessage(cause, 'Could not continue with Google.'));
     } finally {
@@ -586,6 +609,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     height: 20,
     lineHeight: 20,
+  },
+  desktopPopupHost: {
+    maxHeight: '100%',
   },
   desktopLabel: {
     fontSize: 12,

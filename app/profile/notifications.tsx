@@ -14,7 +14,7 @@ export default function NotificationSettingsScreen() {
   const settings = useCurrentUserSettings();
   const updateNotificationSettings = useMutation(updateNotificationSettingsRef);
   const [tripAlertsEnabled, setTripAlertsEnabled] = useState(true);
-  const [friendMessagesEnabled, setFriendMessagesEnabled] = useState(true);
+  const [messagesEnabled, setFriendMessagesEnabled] = useState(true);
   const [bookingUpdatesEnabled, setBookingUpdatesEnabled] = useState(true);
   const [productUpdatesEnabled, setProductUpdatesEnabled] = useState(false);
 
@@ -24,14 +24,14 @@ export default function NotificationSettingsScreen() {
     }
 
     setTripAlertsEnabled(settings.tripAlertsEnabled);
-    setFriendMessagesEnabled(settings.friendMessagesEnabled);
+    setFriendMessagesEnabled(settings.messagesEnabled);
     setBookingUpdatesEnabled(settings.bookingUpdatesEnabled);
     setProductUpdatesEnabled(settings.productUpdatesEnabled);
   }, [settings]);
 
   const saveNotifications = async ({
     nextTripAlertsEnabled = tripAlertsEnabled,
-    nextFriendMessagesEnabled = friendMessagesEnabled,
+    nextFriendMessagesEnabled = messagesEnabled,
     nextBookingUpdatesEnabled = bookingUpdatesEnabled,
     nextProductUpdatesEnabled = productUpdatesEnabled,
   }: {
@@ -48,7 +48,7 @@ export default function NotificationSettingsScreen() {
       await updateNotificationSettings({
         travelerSlug: traveler.slug,
         tripAlertsEnabled: nextTripAlertsEnabled,
-        friendMessagesEnabled: nextFriendMessagesEnabled,
+        messagesEnabled: nextFriendMessagesEnabled,
         bookingUpdatesEnabled: nextBookingUpdatesEnabled,
         productUpdatesEnabled: nextProductUpdatesEnabled,
       });
@@ -69,7 +69,7 @@ export default function NotificationSettingsScreen() {
       />
       <SettingSwitchRow
         label="Friend messages"
-        value={friendMessagesEnabled}
+        value={messagesEnabled}
         onValueChange={(nextFriendMessagesEnabled) => {
           setFriendMessagesEnabled(nextFriendMessagesEnabled);
           void saveNotifications({ nextFriendMessagesEnabled });

@@ -12,7 +12,7 @@ What distinguishes Wise is its green-on-white-on-black material palette. Lime Gr
 - Wise Sans at weight 900, 0.85 line-height — billboard-scale bold headlines
 - Lime Green (`#9fe870`) accent with dark green text (`#163300`) — nature-inspired fintech
 - Inter body at weight 600 as default — confident, not light
-- Near-black (`#0e0f0c`) primary with warm green undertone
+- Near-black (`#0e0f0c`) primary for text; dark-mode surfaces should stay neutral charcoal rather than olive-tinted
 - Scale(1.05) hover animations — buttons physically grow
 - OpenType `"calt"` on all text
 - Pill buttons (9999px) and large rounded cards (30px–40px)

@@ -37,33 +37,28 @@ const defaultUserSettings = {
   showTripActivity: false,
   locationSharing: 'tripOnly' as const,
   tripAlertsEnabled: true,
-  friendMessagesEnabled: true,
+  messagesEnabled: true,
   bookingUpdatesEnabled: true,
   productUpdatesEnabled: false,
 };
 
+type UserSettingsPatch = Partial<{
+  preferredCurrency: string;
+  distanceUnit: 'km' | 'mi';
+  temperatureUnit: 'celsius' | 'fahrenheit';
+  profileVisibility: 'friends' | 'public' | 'private';
+  showSavedPlaces: boolean;
+  showTripActivity: boolean;
+  locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+  tripAlertsEnabled: boolean;
+  messagesEnabled: boolean;
+  bookingUpdatesEnabled: boolean;
+  productUpdatesEnabled: boolean;
+}>;
+
 function getDefaultCurrencyForCountry(countryCode?: string | null) {
   const normalizedCode = countryCode?.trim().toUpperCase();
   return normalizedCode ? countryCurrencyMap[normalizedCode] ?? 'USD' : 'USD';
-}
-
-async function getDefaultSettingsForTraveler(ctx: MutationCtx, travelerSlug: string) {
-  const user = await ctx.db
-    .query('users')
-    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-    .unique();
-
-  return {
-    ...defaultUserSettings,
-    preferredCurrency: getDefaultCurrencyForCountry(user?.countryCode),
-  };
-}
-
-async function getSettingsDocument(ctx: MutationCtx, travelerSlug: string) {
-  return await ctx.db
-    .query('userSettings')
-    .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-    .unique();
 }
 
 function normalizeCurrency(currencyCode: string) {
@@ -74,29 +69,38 @@ function normalizeCurrency(currencyCode: string) {
   return normalized;
 }
 
-async function upsertSettings(
-  ctx: MutationCtx,
-  travelerSlug: string,
-  patch: Partial<Omit<Doc<'userSettings'>, '_id' | '_creationTime' | 'travelerSlug' | 'updatedAt'>>
-) {
-  const existing = await getSettingsDocument(ctx, travelerSlug);
-  const nextSettings = {
-    ...patch,
-    updatedAt: Date.now(),
+function resolveSettingsFromUser(user: Doc<'users'>, travelerSlug: string) {
+  return {
+    travelerSlug,
+    ...defaultUserSettings,
+    preferredCurrency: user.preferredCurrency ?? getDefaultCurrencyForCountry(user.countryCode),
+    distanceUnit: user.distanceUnit ?? defaultUserSettings.distanceUnit,
+    temperatureUnit: user.temperatureUnit ?? defaultUserSettings.temperatureUnit,
+    profileVisibility: user.profileVisibility ?? defaultUserSettings.profileVisibility,
+    showSavedPlaces: user.showSavedPlaces ?? defaultUserSettings.showSavedPlaces,
+    showTripActivity: user.showTripActivity ?? defaultUserSettings.showTripActivity,
+    locationSharing: user.locationSharing ?? defaultUserSettings.locationSharing,
+    tripAlertsEnabled: user.tripAlertsEnabled ?? defaultUserSettings.tripAlertsEnabled,
+    messagesEnabled: user.messagesEnabled ?? defaultUserSettings.messagesEnabled,
+    bookingUpdatesEnabled: user.bookingUpdatesEnabled ?? defaultUserSettings.bookingUpdatesEnabled,
+    productUpdatesEnabled: user.productUpdatesEnabled ?? defaultUserSettings.productUpdatesEnabled,
+    updatedAt: user.settingsUpdatedAt ?? null,
   };
+}
 
-  if (existing) {
-    await ctx.db.patch(existing._id, nextSettings);
-    return existing._id;
+async function patchUserSettings(ctx: MutationCtx, travelerSlug: string, patch: UserSettingsPatch) {
+  const user = await ctx.db
+    .query('users')
+    .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
+    .unique();
+
+  if (!user) {
+    throw new Error('Traveler not found.');
   }
 
-  const travelerDefaults = await getDefaultSettingsForTraveler(ctx, travelerSlug);
-
-  return await ctx.db.insert('userSettings', {
-    travelerSlug,
-    ...travelerDefaults,
+  await ctx.db.patch(user._id, {
     ...patch,
-    updatedAt: Date.now(),
+    settingsUpdatedAt: Date.now(),
   });
 }
 
@@ -118,24 +122,16 @@ export const getUserSettings = query({
     }
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
 
-    const [settings, user] = await Promise.all([
-      ctx.db
-        .query('userSettings')
-        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-        .unique(),
-      ctx.db
-        .query('users')
-        .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
-        .unique(),
-    ]);
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_slug', (q) => q.eq('slug', travelerSlug))
+      .unique();
 
-    return {
-      travelerSlug,
-      ...defaultUserSettings,
-      preferredCurrency: getDefaultCurrencyForCountry(user?.countryCode),
-      ...(settings ?? {}),
-      updatedAt: settings?.updatedAt ?? null,
-    };
+    if (!user) {
+      return null;
+    }
+
+    return resolveSettingsFromUser(user, travelerSlug);
   },
 });
 
@@ -194,7 +190,7 @@ export const updateExperiencePreferences = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    await upsertSettings(ctx, travelerSlug, {
+    await patchUserSettings(ctx, travelerSlug, {
       preferredCurrency: normalizeCurrency(args.preferredCurrency),
       distanceUnit: args.distanceUnit,
       temperatureUnit: args.temperatureUnit,
@@ -213,7 +209,7 @@ export const updatePrivacySettings = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    await upsertSettings(ctx, travelerSlug, {
+    await patchUserSettings(ctx, travelerSlug, {
       profileVisibility: args.profileVisibility,
       showSavedPlaces: args.showSavedPlaces,
       showTripActivity: args.showTripActivity,
@@ -227,15 +223,15 @@ export const updateNotificationSettings = mutation({
   args: {
     travelerSlug: v.string(),
     tripAlertsEnabled: v.boolean(),
-    friendMessagesEnabled: v.boolean(),
+    messagesEnabled: v.boolean(),
     bookingUpdatesEnabled: v.boolean(),
     productUpdatesEnabled: v.boolean(),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    await upsertSettings(ctx, travelerSlug, {
+    await patchUserSettings(ctx, travelerSlug, {
       tripAlertsEnabled: args.tripAlertsEnabled,
-      friendMessagesEnabled: args.friendMessagesEnabled,
+      messagesEnabled: args.messagesEnabled,
       bookingUpdatesEnabled: args.bookingUpdatesEnabled,
       productUpdatesEnabled: args.productUpdatesEnabled,
     });

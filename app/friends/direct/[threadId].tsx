@@ -155,7 +155,7 @@ export default function DirectChatScreen({ onClose, threadId: threadIdProp }: Di
       });
       if (call?._id) {
         if (isLargeScreen) {
-          openCall(call._id as Id<'friendCalls'>);
+          openCall(call._id as Id<'calls'>);
           return;
         }
         router.push(`/friends/call/${call._id}`);

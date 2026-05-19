@@ -7,7 +7,7 @@ import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 import { getPublicTravelerProfile } from './appProfiles';
 
 type TripItineraryItem = {
-  _id: Id<'experienceBookings'>;
+  _id: Id<'bookings'>;
   _creationTime: number;
   experienceSlug: string;
   travelerSlug: string;
@@ -19,7 +19,7 @@ type TripItineraryItem = {
   checkIn?: number;
   checkOut?: number;
   totalPrice?: number;
-  stayBookingDetails?: Doc<'stayBookings'>['stayBookingDetails'];
+  stayBookingDetails?: Doc<'reservations'>['stayBookingDetails'];
 };
 
 export const getCurrentTravelerProfile = query({
@@ -132,7 +132,7 @@ function getHiddenGemSlug(title: string) {
     .replace(/^-+|-+$/g, '');
 }
 
-function hiddenGemToExperience(gem: Doc<'hiddenGems'>): ExploreExperience {
+function hiddenGemToExperience(gem: Doc<'gems'>): ExploreExperience {
   return {
     slug: getHiddenGemSlug(gem.title),
     itemKind: 'hiddenGem',
@@ -248,7 +248,7 @@ async function getTripGroupDetails(
   }
 
   const members = await ctx.db
-    .query('friendCircleMembers')
+    .query('members')
     .withIndex('by_circleId', (q) => q.eq('circleId', circleId))
     .collect();
   const memberProfiles = await Promise.all(
@@ -291,17 +291,17 @@ async function getResolvedItinerary(
   }
 
   let bookingsQuery = ctx.db
-    .query('experienceBookings')
+    .query('bookings')
     .withIndex('by_travelerSlug_and_experienceSlug', (q) => q.eq('travelerSlug', travelerSlug));
 
   const bookings = (await bookingsQuery.collect()).filter((b) => b.tripId === trip._id);
 
-  const [allExperiences, allHiddenGems, allStays, stayBookings] = await Promise.all([
+  const [allExperiences, allHiddenGems, allStays, reservations] = await Promise.all([
     ctx.db.query('experiences').collect(),
-    ctx.db.query('hiddenGems').collect(),
+    ctx.db.query('gems').collect(),
     ctx.db.query('stays').collect(),
     ctx.db
-      .query('stayBookings')
+      .query('reservations')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .collect(),
   ]);
@@ -343,7 +343,7 @@ async function getResolvedItinerary(
       }
 
       const normalizedStay = normalizeStayForTrip(stay);
-      const stayBooking = stayBookings
+      const stayBooking = reservations
         .filter((item) => item.staySlug === stay.slug)
         .sort((a, b) => b.bookedAt - a.bookedAt)[0];
 
@@ -384,7 +384,7 @@ export const getTripDashboard = query({
     const resolvedTrip = await getResolvedTrip(ctx, travelerSlug, args.tripId);
     const itinerary = resolvedTrip ? await getResolvedItinerary(ctx, travelerSlug, resolvedTrip._id) : [];
     const visits = await ctx.db
-      .query('tripVisits')
+      .query('visits')
       .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', travelerSlug))
       .collect();
 
@@ -502,7 +502,7 @@ export const listTravelerHistory = query({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const visits = await ctx.db
-      .query('tripVisits')
+      .query('visits')
       .withIndex('by_travelerSlug_and_arrivedAt', (q) => q.eq('travelerSlug', travelerSlug))
       .order('desc')
       .take(50);
@@ -535,14 +535,14 @@ export const listTravelerBookings = query({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const [experienceBookings, stayBookings, trips] = await Promise.all([
+    const [bookings, reservations, trips] = await Promise.all([
       ctx.db
-        .query('experienceBookings')
+        .query('bookings')
         .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', travelerSlug))
         .order('desc')
         .take(50),
       ctx.db
-        .query('stayBookings')
+        .query('reservations')
         .withIndex('by_travelerSlug_and_bookedAt', (q) => q.eq('travelerSlug', travelerSlug))
         .order('desc')
         .take(50),
@@ -555,7 +555,7 @@ export const listTravelerBookings = query({
     const tripNameById = new Map(trips.map((trip) => [trip._id, trip.name]));
 
     const experiences = await Promise.all(
-      experienceBookings.map(async (booking) => {
+      bookings.map(async (booking) => {
         const experience = await ctx.db
           .query('experiences')
           .withIndex('by_slug', (q) => q.eq('slug', booking.experienceSlug))
@@ -581,7 +581,7 @@ export const listTravelerBookings = query({
     );
 
     const stays = await Promise.all(
-      stayBookings.map(async (booking) => {
+      reservations.map(async (booking) => {
         const stay = await ctx.db
           .query('stays')
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
@@ -619,25 +619,25 @@ export const listManagedBookings = query({
     const manager = await requireAdmin(ctx);
     const managerSlug = manager.slug;
     const status = args.status;
-    const [experienceBookings, stayBookings] = await Promise.all([
+    const [bookings, reservations] = await Promise.all([
       status
         ? ctx.db
-            .query('experienceBookings')
+            .query('bookings')
             .withIndex('by_status_and_bookedAt', (q) => q.eq('status', status))
             .order('desc')
             .take(80)
-        : ctx.db.query('experienceBookings').order('desc').take(80),
+        : ctx.db.query('bookings').order('desc').take(80),
       status
         ? ctx.db
-            .query('stayBookings')
+            .query('reservations')
             .withIndex('by_status_and_bookedAt', (q) => q.eq('status', status))
             .order('desc')
             .take(80)
-        : ctx.db.query('stayBookings').order('desc').take(80),
+        : ctx.db.query('reservations').order('desc').take(80),
     ]);
 
     const experiences = await Promise.all(
-      experienceBookings.map(async (booking) => {
+      bookings.map(async (booking) => {
         const [experience, trip] = await Promise.all([
           ctx.db
             .query('experiences')
@@ -674,7 +674,7 @@ export const listManagedBookings = query({
     );
 
     const stays = await Promise.all(
-      stayBookings.map(async (booking) => {
+      reservations.map(async (booking) => {
         const stay = await ctx.db
           .query('stays')
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
@@ -716,14 +716,14 @@ export const listManagedBookings = query({
 
 export const updateManagedBookingStatus = mutation({
   args: {
-    bookingId: v.union(v.id('experienceBookings'), v.id('stayBookings')),
+    bookingId: v.union(v.id('bookings'), v.id('reservations')),
     source: v.union(v.literal('experienceBooking'), v.literal('stayBooking')),
     status: v.union(v.literal('confirmed'), v.literal('cancelled')),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
     if (args.source === 'experienceBooking') {
-      const bookingId = args.bookingId as Id<'experienceBookings'>;
+      const bookingId = args.bookingId as Id<'bookings'>;
       const booking = await ctx.db.get(bookingId);
 
       if (!booking) {
@@ -734,7 +734,7 @@ export const updateManagedBookingStatus = mutation({
       return true;
     }
 
-    const bookingId = args.bookingId as Id<'stayBookings'>;
+    const bookingId = args.bookingId as Id<'reservations'>;
     const booking = await ctx.db.get(bookingId);
 
     if (!booking) {
@@ -801,7 +801,7 @@ export const inviteFriendsToTrip = mutation({
 
     const now = Date.now();
     for (const friendSlug of [...new Set(args.friendSlugs)].filter((slug) => slug !== travelerSlug)) {
-      await ctx.db.insert('tripInvites', {
+      await ctx.db.insert('invites', {
         tripId: args.tripId,
         inviterSlug: travelerSlug,
         inviteeSlug: friendSlug,
@@ -834,7 +834,7 @@ export const addExperienceToTrip = mutation({
 
     // Check if already in this trip
     const existing = await ctx.db
-      .query('experienceBookings')
+      .query('bookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) => 
         q.eq('travelerSlug', travelerSlug)
       )
@@ -843,7 +843,7 @@ export const addExperienceToTrip = mutation({
     const matching = existing.find(b => b.experienceSlug === args.experienceSlug && b.tripId === resolvedTripId);
     if (matching) return matching._id;
 
-    return await ctx.db.insert('experienceBookings', {
+    return await ctx.db.insert('bookings', {
       experienceSlug: args.experienceSlug,
       travelerSlug,
       tripId: resolvedTripId,
@@ -855,7 +855,7 @@ export const addExperienceToTrip = mutation({
 
 export const removeExperienceFromTrip = mutation({
   args: {
-    bookingId: v.id('experienceBookings'),
+    bookingId: v.id('bookings'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
@@ -885,7 +885,7 @@ export const deleteTrip = mutation({
     }
 
     const bookings = await ctx.db
-      .query('experienceBookings')
+      .query('bookings')
       .withIndex('by_tripId', (q) => q.eq('tripId', args.tripId))
       .collect();
 
@@ -908,9 +908,9 @@ export const bookStay = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    // Stays are booked using the same experienceBookings table for simplicity in the itinerary
+    // Stays are booked using the same bookings table for simplicity in the itinerary
     const existingBooking = await ctx.db
-      .query('experienceBookings')
+      .query('bookings')
       .withIndex('by_travelerSlug_and_experienceSlug', (q) =>
         q.eq('travelerSlug', travelerSlug).eq('experienceSlug', args.staySlug)
       )
@@ -923,7 +923,7 @@ export const bookStay = mutation({
       return existingBooking._id;
     }
 
-    return await ctx.db.insert('experienceBookings', {
+    return await ctx.db.insert('bookings', {
       experienceSlug: args.staySlug,
       travelerSlug,
       tripId: args.tripId,
@@ -934,7 +934,7 @@ export const bookStay = mutation({
 
 export const recordTripArrival = mutation({
   args: {
-    bookingId: v.id('experienceBookings'),
+    bookingId: v.id('bookings'),
     travelerSlug: v.string(),
     source: v.union(v.literal('gps'), v.literal('manual')),
     coordinate: v.optional(v.array(v.number())),
@@ -948,7 +948,7 @@ export const recordTripArrival = mutation({
     }
 
     const existingVisit = await ctx.db
-      .query('tripVisits')
+      .query('visits')
       .withIndex('by_bookingId', (q) => q.eq('bookingId', args.bookingId))
       .unique();
 
@@ -956,7 +956,7 @@ export const recordTripArrival = mutation({
       return { created: false, experienceSlug: existingVisit.experienceSlug };
     }
 
-    await ctx.db.insert('tripVisits', {
+    await ctx.db.insert('visits', {
       bookingId: booking._id,
       tripId: booking.tripId,
       travelerSlug: booking.travelerSlug,
@@ -981,7 +981,7 @@ export const submitExperienceRating = mutation({
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const review = args.review?.trim();
     const existingRating = await ctx.db
-      .query('experienceRatings')
+      .query('ratings')
       .withIndex('by_experienceSlug_and_travelerSlug', (q) =>
         q.eq('experienceSlug', args.experienceSlug).eq('travelerSlug', travelerSlug)
       )
@@ -997,7 +997,7 @@ export const submitExperienceRating = mutation({
       return existingRating._id;
     }
 
-    return await ctx.db.insert('experienceRatings', {
+    return await ctx.db.insert('ratings', {
       experienceSlug: args.experienceSlug,
       travelerSlug,
       rating: args.rating,
@@ -1037,7 +1037,7 @@ export const createStayBooking = mutation({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     // 1. Create the official property booking
-    const bookingId = await ctx.db.insert('stayBookings', {
+    const bookingId = await ctx.db.insert('reservations', {
       staySlug: args.staySlug,
       travelerSlug,
       checkIn: args.checkIn,
@@ -1051,7 +1051,7 @@ export const createStayBooking = mutation({
     // 2. If a tripId is provided, also link it to the trip itinerary
     // This allows the stay to appear on the trip map and branching routes
     if (args.tripId) {
-      await ctx.db.insert('experienceBookings', {
+      await ctx.db.insert('bookings', {
         experienceSlug: args.staySlug,
         travelerSlug,
         tripId: args.tripId,
@@ -1224,7 +1224,7 @@ export const getTravelerStayBooking = query({
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const bookings = await ctx.db
-      .query('stayBookings')
+      .query('reservations')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
       .collect();
 
@@ -1238,7 +1238,7 @@ export const listStayRatings = query({
   },
   handler: async (ctx, args) => {
     const ratings = await ctx.db
-      .query('stayRatings')
+      .query('reviews')
       .withIndex('by_staySlug', (q) => q.eq('staySlug', args.staySlug))
       .order('desc')
       .take(50);
@@ -1270,7 +1270,7 @@ export const submitStayRating = mutation({
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const review = args.review?.trim();
     const existingRating = await ctx.db
-      .query('stayRatings')
+      .query('reviews')
       .withIndex('by_staySlug_and_travelerSlug', (q) =>
         q.eq('staySlug', args.staySlug).eq('travelerSlug', travelerSlug)
       )
@@ -1285,7 +1285,7 @@ export const submitStayRating = mutation({
       return existingRating._id;
     }
 
-    return await ctx.db.insert('stayRatings', {
+    return await ctx.db.insert('reviews', {
       staySlug: args.staySlug,
       travelerSlug,
       rating: args.rating,
@@ -1299,7 +1299,7 @@ export const getStayAvailability = query({
   args: { staySlug: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
-      .query('stayBookings')
+      .query('reservations')
       .withIndex('by_staySlug', (q) => q.eq('staySlug', args.staySlug))
       .filter((q) => q.eq(q.field('status'), 'confirmed'))
       .collect();

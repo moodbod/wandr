@@ -21,7 +21,7 @@ type FriendCallTokenResponse = {
 
 export const createFriendCallToken = action({
   args: {
-    callId: v.id('friendCalls'),
+    callId: v.id('calls'),
     travelerSlug: v.string(),
   },
   handler: async (ctx, args): Promise<FriendCallTokenResponse> => {
@@ -31,7 +31,7 @@ export const createFriendCallToken = action({
     }
 
     const context: FriendCallTokenContext | null = await ctx.runQuery(internal.friends.getFriendCallTokenContext, {
-      callId: args.callId as Id<'friendCalls'>,
+      callId: args.callId as Id<'calls'>,
       travelerSlug: args.travelerSlug,
     });
     if (!context) {

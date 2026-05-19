@@ -3,6 +3,7 @@ import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { isRunningInExpoGo } from 'expo';
 import { Stack, usePathname, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { lazy, Suspense, useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -38,6 +39,14 @@ export default function RootLayout() {
   const stackScreenOptions = getStackScreenOptions(isDark);
   const backgroundColor = getNavigationBackground(isDark);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    SystemUI.setBackgroundColorAsync(backgroundColor).catch(() => {});
+  }, [backgroundColor]);
+
   if (!convexClient) {
     return <LoadingSessionScreen backgroundColor={backgroundColor} label="Missing EXPO_PUBLIC_CONVEX_URL." />;
   }
@@ -51,7 +60,7 @@ export default function RootLayout() {
             window.history.replaceState({}, '', url);
           }
         }}
-        shouldHandleCode={false}
+        shouldHandleCode={Platform.OS === 'web'}
         storage={convexAuthStorage}>
         <PlanningLocationProvider>
           <AuthSessionProvider>

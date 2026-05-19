@@ -97,7 +97,7 @@ type ManagerDashboardProps = {
 type DashboardColors = (typeof designSystem.semantic)[keyof typeof designSystem.semantic];
 
 type ManagedLocationPhoto = {
-  id: Id<'locationPhotos'>;
+  id: Id<'photos'>;
   imageUri: string;
   locationKind: 'experience' | 'stay';
   locationSlug: string;
@@ -111,7 +111,7 @@ type ManagedLocationPhoto = {
 };
 
 type ManagedBooking = {
-  _id: Id<'experienceBookings'> | Id<'stayBookings'>;
+  _id: Id<'bookings'> | Id<'reservations'>;
   source: 'experienceBooking' | 'stayBooking';
   slug: string;
   title: string;
@@ -198,13 +198,13 @@ export function ManagerDashboard({ travelerSlug }: ManagerDashboardProps) {
   const experiencesQuery = useQuery(listManagedExperiencesRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
   const groups = useQuery(getExploreJoinableTripCardsRef, travelerSlug ? { travelerSlug } : 'skip');
   const stays = useQuery(listManagedStaysRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
-  const bookings = useQuery(listManagedBookingsRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
-  const locationPhotos = useQuery(listManagedLocationPhotosRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
+  const bookingsQuery = useQuery(listManagedBookingsRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
+  const photosQuery = useQuery(listManagedLocationPhotosRef, travelerSlug ? { managerSlug: travelerSlug } : 'skip');
 
   const experiences = useMemo(() => (experiencesQuery as ExploreExperience[] | undefined) ?? [], [experiencesQuery]);
   const stayItems = useMemo(() => (stays as StayProperty[] | undefined) ?? [], [stays]);
-  const managedBookings = (bookings as ManagedBooking[] | undefined) ?? [];
-  const photos = (locationPhotos as ManagedLocationPhoto[] | undefined) ?? [];
+  const managedBookings = (bookingsQuery as ManagedBooking[] | undefined) ?? [];
+  const photos = (photosQuery as ManagedLocationPhoto[] | undefined) ?? [];
   const groupItems = (groups as ExploreJoinableTripCard[] | undefined) ?? [];
   const rooms = useMemo(() => buildManagedRooms(stayItems), [stayItems]);
   const resources = useMemo<ManagedResource[]>(
@@ -655,10 +655,10 @@ function ResourceDetail({
   colors: DashboardColors;
   detailTab: DetailTab;
   groups: ExploreJoinableTripCard[];
-  onApprovePhoto: (photoId: Id<'locationPhotos'>) => void;
+  onApprovePhoto: (photoId: Id<'photos'>) => void;
   onChangeBookingFilter: (filter: BookingFilter) => void;
   onChangeTab: (tab: DetailTab) => void;
-  onRejectPhoto: (photoId: Id<'locationPhotos'>) => void;
+  onRejectPhoto: (photoId: Id<'photos'>) => void;
   onUpdateStatus: (booking: ManagedBooking, status: 'confirmed' | 'cancelled') => void;
   photos: ManagedLocationPhoto[];
   preferredCurrency: string;
@@ -1415,8 +1415,8 @@ function ImagesPanel({
   resource,
 }: {
   colors: DashboardColors;
-  onApprove: (photoId: Id<'locationPhotos'>) => void;
-  onReject: (photoId: Id<'locationPhotos'>) => void;
+  onApprove: (photoId: Id<'photos'>) => void;
+  onReject: (photoId: Id<'photos'>) => void;
   photos: ManagedLocationPhoto[];
   resource: ManagedResource;
 }) {
@@ -2483,7 +2483,7 @@ function compileDraftJson(jsonText: string, draft: DraftResource): { draft: Draf
       return row;
     }
 
-    const compiledValue = compileSchemaValue(row, importedValue, errors);
+    const compiledValue = compileSchemaValue(row, importedValue, errors, warnings);
     return { ...row, value: compiledValue };
   });
 
@@ -2559,7 +2559,7 @@ function analyzeDraftJsonText(jsonText: string, draft: DraftResource): JsonEdito
   try {
     const compiled = compileDraftJson(jsonText, draft);
     compiled.messages.forEach((message) => {
-      diagnostics.push({ message, severity: 'warning' });
+      diagnostics.push({ line: findDiagnosticLine(jsonText, message), message, severity: 'warning' });
     });
   } catch (error) {
     splitCompilerMessage(error instanceof Error ? error.message : 'Could not compile JSON.').forEach((message) => {
@@ -2611,24 +2611,6 @@ function getPlaceholderDiagnostics(jsonText: string, fields: { key: string; path
         line: findJsonLine(jsonText, field.key),
         message: `${field.path} still looks like placeholder text.`,
         severity: 'warning',
-      });
-    }
-
-    const isImageField = field.path === 'imageUri' || field.path.endsWith('.imageUri') || field.path === 'galleryImages' || field.path.endsWith('.galleryImages');
-
-    if (!isImageField && values.some((value) => typeof value === 'string' && looksLikeCorruptedImportedText(value))) {
-      diagnostics.push({
-        line: findJsonLine(jsonText, field.key),
-        message: `${field.path} looks corrupted with markdown, URLs, or JSON fragments.`,
-        severity: 'error',
-      });
-    }
-
-    if (isImageField && values.some((value) => typeof value !== 'string' || !isValidPublicImageUrl(value.trim()))) {
-      diagnostics.push({
-        line: findJsonLine(jsonText, field.key),
-        message: `${field.path} must contain bare public image URL strings only.`,
-        severity: 'error',
       });
     }
 
@@ -2723,7 +2705,7 @@ function dedupeDiagnostics(diagnostics: JsonEditorDiagnostic[]) {
   });
 }
 
-function compileSchemaValue(row: SchemaRow, value: unknown, errors: string[]) {
+function compileSchemaValue(row: SchemaRow, value: unknown, errors: string[], warnings: string[]) {
   const editor = row.editor ?? getSchemaEditor(row.label, row.multiline);
 
   if (editor === 'number') {
@@ -2758,34 +2740,41 @@ function compileSchemaValue(row: SchemaRow, value: unknown, errors: string[]) {
       errors.push(`${row.label} must be an image URL string.`);
       return '';
     }
-    const imageUri = value.trim();
-    if (!isValidPublicImageUrl(imageUri)) {
+    const normalizedImage = normalizeImportedImageUrl(value);
+    if (!normalizedImage) {
       errors.push(`${row.label} must be a bare public image URL starting with http:// or https://. Do not include markdown brackets or extra text.`);
+      return value.trim();
     }
-    return imageUri;
+    if (normalizedImage.cleaned) {
+      warnings.push(`${row.label} was cleaned to a bare image URL.`);
+    }
+    return normalizedImage.url;
   }
 
   if (editor === 'images') {
     if (Array.isArray(value)) {
-      const items = value.map((item) => String(item).trim()).filter(Boolean);
+      const items = value.map((item) => normalizeImportedImageUrl(item)).filter((item): item is NormalizedImageUrl => Boolean(item));
       if (items.length === 0) {
         errors.push(`${row.label} must include at least one item.`);
       }
-      items.forEach((item) => {
-        if (!isValidPublicImageUrl(item)) {
-          errors.push(`${row.label} contains an invalid image URL: ${item}`);
-        }
-      });
-      return items.join(', ');
+      if (items.length !== value.length) {
+        errors.push(`${row.label} contains an invalid image URL.`);
+      }
+      if (items.some((item) => item.cleaned)) {
+        warnings.push(`${row.label} was cleaned to bare image URLs.`);
+      }
+      return items.map((item) => item.url).join(', ');
     }
     if (typeof value === 'string' && value.trim()) {
-      const items = value.split(',').map((item) => item.trim()).filter(Boolean);
-      items.forEach((item) => {
-        if (!isValidPublicImageUrl(item)) {
-          errors.push(`${row.label} contains an invalid image URL: ${item}`);
-        }
-      });
-      return items.join(', ');
+      const rawItems = value.split(',').map((item) => item.trim()).filter(Boolean);
+      const items = rawItems.map((item) => normalizeImportedImageUrl(item)).filter((item): item is NormalizedImageUrl => Boolean(item));
+      if (items.length !== rawItems.length) {
+        errors.push(`${row.label} contains an invalid image URL.`);
+      }
+      if (items.some((item) => item.cleaned)) {
+        warnings.push(`${row.label} was cleaned to bare image URLs.`);
+      }
+      return items.map((item) => item.url).join(', ');
     }
     errors.push(`${row.label} must be a non-empty array or comma-separated string.`);
     return '';
@@ -2819,14 +2808,68 @@ function compileSchemaValue(row: SchemaRow, value: unknown, errors: string[]) {
     return JSON.stringify(value, null, 2);
   }
 
-  const textValue = String(value).trim();
+  const sanitizedText = normalizeImportedTextValue(String(value));
+  const textValue = sanitizedText.value;
   if (!textValue) {
     errors.push(`${row.label} must be populated.`);
+  }
+  if (sanitizedText.cleaned) {
+    warnings.push(`${row.label} was cleaned to plain text.`);
   }
   if (looksLikeCorruptedImportedText(textValue)) {
     errors.push(`${row.label} looks corrupted. Keep this as plain text only; move image URLs into imageUri/galleryImages and remove JSON or markdown fragments.`);
   }
   return textValue;
+}
+
+type NormalizedImageUrl = {
+  cleaned: boolean;
+  url: string;
+};
+
+function normalizeImportedImageUrl(value: unknown): NormalizedImageUrl | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  if (isValidPublicImageUrl(trimmedValue)) {
+    return { cleaned: false, url: trimmedValue };
+  }
+
+  const urlMatch = trimmedValue.match(/https?:\/\/[^\s\]"'<>]+/i);
+  if (!urlMatch) {
+    return null;
+  }
+
+  const extractedUrl = cleanExtractedUrl(urlMatch[0]);
+  if (!isValidPublicImageUrl(extractedUrl)) {
+    return null;
+  }
+
+  return { cleaned: extractedUrl !== trimmedValue, url: extractedUrl };
+}
+
+function cleanExtractedUrl(value: string) {
+  return value
+    .split(/%22|%27|%5B|%5D/i)[0]
+    .replace(/[),.;]+$/g, '')
+    .trim();
+}
+
+function normalizeImportedTextValue(value: string) {
+  const trimmedValue = value.trim();
+  const cleanedValue = trimmedValue
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/gi, '$1')
+    .replace(/\b([^\s[]+)\]\(https?:\/\/[^)]*\)/gi, '$1')
+    .replace(/\b([^\s[]+)\]\(https?:\/\/.*$/i, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    cleaned: cleanedValue !== trimmedValue,
+    value: cleanedValue,
+  };
 }
 
 function isValidPublicImageUrl(value: string) {
@@ -2846,7 +2889,7 @@ function looksLikeCorruptedImportedText(value: string) {
   const normalized = value.toLowerCase();
   return (
     /\[[^\]]*\]\(https?:\/\//i.test(value) ||
-    /https?:\/\//i.test(value) ||
+    /\b[^\s[]+\]\(https?:\/\//i.test(value) ||
     normalized.includes('%22') ||
     normalized.includes('"galleryimages"') ||
     normalized.includes('"imageuri"') ||

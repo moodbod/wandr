@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     minHeight: 220,
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: '#050704',
+    backgroundColor: '#080a0f',
   },
   videoPlaceholder: {
     flex: 1,

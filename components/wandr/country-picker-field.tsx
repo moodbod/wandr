@@ -104,6 +104,7 @@ export function CountryPickerField({
       <GlassBottomSheet
         ref={sheetRef}
         index={isOpen ? 0 : -1}
+        renderInModal
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose

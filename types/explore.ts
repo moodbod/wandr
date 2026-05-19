@@ -32,7 +32,7 @@ export type ExploreSearchContent = {
     hero: ExploreFeatureHero;
     detail: ExploreFeatureDetail;
   };
-  hiddenGems: {
+  gems: {
     title: string;
     ctaLabel: string;
     items: readonly ExploreHiddenGem[];

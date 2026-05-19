@@ -1,6 +1,14 @@
-import { ReactNode, useMemo, useRef } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
-import { Bubble, GiftedChat, Time, type BubbleProps, type IMessage } from 'react-native-gifted-chat';
+import { ReactNode, useRef } from 'react';
+import {
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { ArrowBendUpLeft, X } from 'phosphor-react-native';
 
 import { FriendChatComposer } from '@/components/wandr/friends/friend-chat-composer';
@@ -9,10 +17,6 @@ import type { MessageActionAnchor } from '@/components/wandr/friends/message-act
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type WandrGiftedMessage<TMessage> = IMessage & {
-  sourceMessage: TMessage;
-};
-
 type WandrMessageBase = {
   _id: string;
   body: string | null;
@@ -20,6 +24,7 @@ type WandrMessageBase = {
   senderAvatarUri: string | null;
   senderName: string;
   senderSlug: string;
+  isOwnMessage?: boolean;
   replyTo?: {
     senderName: string;
     preview: string;
@@ -68,115 +73,100 @@ export function WandrGiftedChat<TMessage extends WandrMessageBase>({
   userSlug: string | null | undefined;
 }) {
   const isDark = useColorScheme() === 'dark';
-  const giftedMessages = useMemo(
-    () =>
-      messages.map((message) => ({
-        _id: message._id,
-        text: message.body ?? '',
-        createdAt: new Date(message.createdAt),
-        sourceMessage: message,
-        user: {
-          _id: message.senderSlug,
-          name: message.senderName,
-          avatar: message.senderAvatarUri ?? undefined,
-        },
-      })),
-    [messages]
-  );
+  const listRef = useRef<FlatList<TMessage>>(null);
+
+  const scrollToLatestMessage = () => {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: false });
+    });
+  };
 
   return (
-    <GiftedChat<WandrGiftedMessage<TMessage>>
-      alwaysShowSend
-      bottomOffset={bottomOffset}
-      infiniteScroll={false}
-      inverted={false}
-      isKeyboardInternallyHandled
-      keyboardShouldPersistTaps="handled"
-      maxComposerHeight={144}
-      messages={giftedMessages}
-      messagesContainerStyle={[
-        styles.messagesContainer,
-        styles.content,
-        {
-          paddingTop: topInset,
-          paddingBottom: designSystem.spacing.xl,
-        },
-      ]}
-      minComposerHeight={52}
-      minInputToolbarHeight={72 + bottomOffset}
-      onInputTextChanged={onChangeText}
-      onSend={onSendText}
-      placeholder={placeholder}
-      renderAvatar={null}
-      renderBubble={(props) => {
-        const sourceMessage = (props.currentMessage as WandrGiftedMessage<TMessage>).sourceMessage;
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+      style={styles.root}>
+      <FlatList<TMessage>
+        ref={listRef}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: topInset,
+            paddingBottom: designSystem.spacing.xl,
+          },
+        ]}
+        data={messages}
+        keyExtractor={(message) => message._id}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={header ? <View style={styles.header}>{header}</View> : null}
+        onContentSizeChange={scrollToLatestMessage}
+        onLayout={scrollToLatestMessage}
+        renderItem={({ item }) => {
+          if (isWidgetMessage?.(item) && renderWidgetMessage) {
+            return <View style={styles.messageRow}>{renderWidgetMessage(item)}</View>;
+          }
 
-        if (isWidgetMessage?.(sourceMessage) && renderWidgetMessage) {
-          return <View style={styles.messageRow}>{renderWidgetMessage(sourceMessage)}</View>;
-        }
+          return (
+            <MeasuredWandrBubble
+              isDark={isDark}
+              isOwnMessage={item.isOwnMessage ?? Boolean(userSlug && item.senderSlug === userSlug)}
+              message={item}
+              onMeasuredLongPress={(anchor) => onLongPressMessage?.(item, anchor)}
+              onSwipeReply={() => onReplyMessage?.(item)}
+            />
+          );
+        }}
+        scrollIndicatorInsets={{ top: topInset, bottom: bottomOffset + 88 }}
+        showsVerticalScrollIndicator={false}
+        style={styles.list}
+      />
 
-        return (
-          <MeasuredGiftedBubble
-            isDark={isDark}
-            onMeasuredLongPress={(anchor) => onLongPressMessage?.(sourceMessage, anchor)}
-            onSwipeReply={() => onReplyMessage?.(sourceMessage)}
-            props={props as BubbleProps<WandrGiftedMessage<TMessage>>}
-          />
-        );
-      }}
-      renderChatEmpty={() => null}
-      renderDay={() => null}
-      renderInputToolbar={() => (
-        <View style={[styles.composerDock, { paddingBottom: Math.max(bottomOffset - 12, 8) }]}>
-          {replyPreview ? (
-            <View style={styles.replyComposerPreview}>
-              <View style={styles.replyComposerCopy}>
-                <ThemedText style={styles.replyComposerName} numberOfLines={1}>
-                  Replying to {replyPreview.senderName}
-                </ThemedText>
-                <ThemedText style={styles.replyComposerText} numberOfLines={1}>
-                  {replyPreview.preview}
-                </ThemedText>
-              </View>
-              <Pressable
-                accessibilityLabel="Cancel reply"
-                accessibilityRole="button"
-                onPress={onCancelReply}
-                style={styles.replyComposerCancelButton}>
-                <X color={designSystem.colors.copper} size={18} weight="bold" />
-              </Pressable>
+      <View style={[styles.composerDock, { paddingBottom: Math.max(bottomOffset - 12, 8) }]}>
+        {replyPreview ? (
+          <View style={styles.replyComposerPreview}>
+            <View style={styles.replyComposerCopy}>
+              <ThemedText style={styles.replyComposerName} numberOfLines={1}>
+                Replying to {replyPreview.senderName}
+              </ThemedText>
+              <ThemedText style={styles.replyComposerText} numberOfLines={1}>
+                {replyPreview.preview}
+              </ThemedText>
             </View>
-          ) : null}
-          <FriendChatComposer
-            value={text}
-            onChangeText={onChangeText}
-            onSubmit={onSendText}
-            onOpenTools={onOpenTools}
-            placeholder={placeholder}
-            isSending={isSending}
-          />
-        </View>
-      )}
-      renderUsernameOnMessage={false}
-      text={text}
-      user={{ _id: userSlug ?? 'wandr-user' }}
-      listViewProps={{
-        ListHeaderComponent: header ? <View style={styles.header}>{header}</View> : null,
-      } as any}
-    />
+            <Pressable
+              accessibilityLabel="Cancel reply"
+              accessibilityRole="button"
+              onPress={onCancelReply}
+              style={styles.replyComposerCancelButton}>
+              <X color={designSystem.colors.copper} size={18} weight="bold" />
+            </Pressable>
+          </View>
+        ) : null}
+        <FriendChatComposer
+          value={text}
+          onChangeText={onChangeText}
+          onSubmit={onSendText}
+          onOpenTools={onOpenTools}
+          placeholder={placeholder}
+          isSending={isSending}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
-function MeasuredGiftedBubble<TMessage extends WandrMessageBase>({
+function MeasuredWandrBubble<TMessage extends WandrMessageBase>({
   isDark,
+  isOwnMessage,
+  message,
   onMeasuredLongPress,
   onSwipeReply,
-  props,
 }: {
   isDark: boolean;
+  isOwnMessage: boolean;
+  message: TMessage;
   onMeasuredLongPress?: (anchor: MessageActionAnchor) => void;
   onSwipeReply?: () => void;
-  props: BubbleProps<WandrGiftedMessage<TMessage>>;
 }) {
   const bubbleRef = useRef<View>(null);
   const swipeX = useRef(new Animated.Value(0)).current;
@@ -221,96 +211,120 @@ function MeasuredGiftedBubble<TMessage extends WandrMessageBase>({
   ).current;
 
   return (
-    <View style={styles.swipeShell}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.swipeReplyHint,
-          {
-            opacity: swipeX.interpolate({ inputRange: [0, 34, 56], outputRange: [0, 0.4, 1], extrapolate: 'clamp' }),
-            transform: [{ scale: swipeX.interpolate({ inputRange: [0, 56], outputRange: [0.82, 1], extrapolate: 'clamp' }) }],
-          },
-        ]}>
-        <ArrowBendUpLeft color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
-      </Animated.View>
-      <Animated.View
-        ref={bubbleRef}
-        collapsable={false}
-        style={[styles.swipeBubbleLayer, { transform: [{ translateX: swipeX }] }]}
-        {...panResponder.panHandlers}>
-        <Bubble
-          {...props}
-          containerStyle={{
-            left: styles.libBubbleContainer,
-            right: styles.libBubbleContainer,
-          }}
-          textStyle={{
-            left: [styles.libBubbleText, isDark ? styles.libBubbleTextDark : styles.libBubbleTextLeft],
-            right: [styles.libBubbleText, styles.libBubbleTextRight],
-          }}
-          renderTime={(timeProps) => (
-            <Time
-              {...timeProps}
-              timeTextStyle={{
-                left: styles.libBubbleTimeLeft,
-                right: styles.libBubbleTimeRight,
-              }}
-            />
-          )}
-          renderCustomView={(bubbleProps) => {
-            const quotedMessage = (bubbleProps.currentMessage as WandrGiftedMessage<TMessage>).sourceMessage.replyTo;
-            if (!quotedMessage) {
-              return null;
-            }
-
-            const isOwnBubble = bubbleProps.position === 'right';
-            return (
-              <View
-                style={[
-                  styles.quotedInBubble,
-                  isOwnBubble ? styles.quotedInOwnBubble : null,
-                  !isOwnBubble && isDark ? styles.quotedInDarkBubble : null,
-                ]}>
-                <ThemedText
-                  style={[
-                    styles.quotedSender,
-                    isOwnBubble ? styles.quotedSenderOwn : null,
-                    !isOwnBubble && isDark ? styles.quotedSenderDark : null,
-                  ]}
-                  numberOfLines={1}>
-                  {quotedMessage.senderName}
-                </ThemedText>
-                <ThemedText
-                  style={[
-                    styles.quotedPreview,
-                    isOwnBubble ? styles.quotedPreviewOwn : null,
-                    !isOwnBubble && isDark ? styles.quotedPreviewDark : null,
-                  ]}
-                  numberOfLines={2}>
-                  {quotedMessage.preview}
-                </ThemedText>
-              </View>
-            );
-          }}
-          isCustomViewBottom={false}
-          onLongPress={() => {
-            bubbleRef.current?.measureInWindow((x, y, width, height) => {
-              onMeasuredLongPress?.({ x, y, width, height });
-            });
-          }}
-          wrapperStyle={{
-            left: [isDark ? styles.libBubbleLeftDark : null],
-            right: styles.libBubbleRight,
-          }}
-        />
-      </Animated.View>
+    <View style={[styles.messageWrap, isOwnMessage ? styles.messageWrapOwn : null]}>
+      <View style={styles.swipeShell}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.swipeReplyHint,
+            {
+              opacity: swipeX.interpolate({ inputRange: [0, 34, 56], outputRange: [0, 0.4, 1], extrapolate: 'clamp' }),
+              transform: [
+                { scale: swipeX.interpolate({ inputRange: [0, 56], outputRange: [0.82, 1], extrapolate: 'clamp' }) },
+              ],
+            },
+          ]}>
+          <ArrowBendUpLeft color={isDark ? designSystem.colors.lime : designSystem.colors.darkGreen} size={18} weight="bold" />
+        </Animated.View>
+        <Animated.View
+          ref={bubbleRef}
+          collapsable={false}
+          style={[
+            styles.swipeBubbleLayer,
+            isOwnMessage ? styles.swipeBubbleLayerOwn : null,
+            { transform: [{ translateX: swipeX }] },
+          ]}
+          {...panResponder.panHandlers}>
+          <Pressable
+            accessibilityRole="button"
+            delayLongPress={420}
+            onLongPress={() => {
+              bubbleRef.current?.measureInWindow((x, y, width, height) => {
+                onMeasuredLongPress?.({ x, y, width, height });
+              });
+            }}
+            style={[
+              styles.bubble,
+              isOwnMessage
+                ? styles.bubbleOwn
+                : [styles.bubbleOther, isDark ? styles.bubbleOtherDark : styles.bubbleOtherLight],
+            ]}>
+            <ReplyQuote isDark={isDark} isOwnMessage={isOwnMessage} replyTo={message.replyTo} />
+            <ThemedText
+              style={[
+                styles.messageText,
+                isOwnMessage ? styles.messageTextOwn : isDark ? styles.messageTextOtherDark : styles.messageTextOtherLight,
+              ]}>
+              {message.body ?? ''}
+            </ThemedText>
+            <ThemedText style={[styles.messageTime, isOwnMessage ? styles.messageTimeOwn : styles.messageTimeOther]}>
+              {formatChatTime(message.createdAt)}
+            </ThemedText>
+          </Pressable>
+        </Animated.View>
+      </View>
     </View>
   );
 }
 
+function ReplyQuote({
+  isDark,
+  isOwnMessage,
+  replyTo,
+}: {
+  isDark: boolean;
+  isOwnMessage: boolean;
+  replyTo?: {
+    senderName: string;
+    preview: string;
+  } | null;
+}) {
+  if (!replyTo) {
+    return null;
+  }
+
+  return (
+    <View
+      style={[
+        styles.quotedInBubble,
+        isOwnMessage ? styles.quotedInOwnBubble : null,
+        !isOwnMessage && isDark ? styles.quotedInDarkBubble : null,
+      ]}>
+      <ThemedText
+        style={[
+          styles.quotedSender,
+          isOwnMessage ? styles.quotedSenderOwn : null,
+          !isOwnMessage && isDark ? styles.quotedSenderDark : null,
+        ]}
+        numberOfLines={1}>
+        {replyTo.senderName}
+      </ThemedText>
+      <ThemedText
+        style={[
+          styles.quotedPreview,
+          isOwnMessage ? styles.quotedPreviewOwn : null,
+          !isOwnMessage && isDark ? styles.quotedPreviewDark : null,
+        ]}
+        numberOfLines={2}>
+        {replyTo.preview}
+      </ThemedText>
+    </View>
+  );
+}
+
+function formatChatTime(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
 const styles = StyleSheet.create({
-  messagesContainer: {
-    backgroundColor: 'transparent',
+  root: {
+    flex: 1,
+  },
+  list: {
+    flex: 1,
   },
   content: {
     flexGrow: 1,
@@ -322,13 +336,24 @@ const styles = StyleSheet.create({
   messageRow: {
     marginBottom: 16,
   },
+  messageWrap: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  messageWrapOwn: {
+    alignItems: 'flex-end',
+  },
   swipeShell: {
     justifyContent: 'center',
     width: '100%',
   },
   swipeBubbleLayer: {
-    width: '100%',
-    alignSelf: 'stretch',
+    maxWidth: '82%',
+    alignSelf: 'flex-start',
+  },
+  swipeBubbleLayerOwn: {
+    alignSelf: 'flex-end',
   },
   swipeReplyHint: {
     position: 'absolute',
@@ -340,43 +365,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: designSystem.colors.surfaceRaised,
   },
-  libBubbleContainer: {
-    marginBottom: 6,
+  bubble: {
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 7,
   },
-  libBubbleLeftDark: {
-    backgroundColor: designSystem.colors.darkSurface,
-  },
-  libBubbleRight: {
+  bubbleOwn: {
     backgroundColor: designSystem.colors.lime,
+    borderTopRightRadius: 8,
   },
-  libBubbleText: {
+  bubbleOther: {
+    borderTopLeftRadius: 8,
+    borderWidth: 1,
+    shadowColor: designSystem.colors.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  bubbleOtherLight: {
+    backgroundColor: designSystem.colors.surfaceRaised,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  bubbleOtherDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkSurfaceBorder,
+  },
+  messageText: {
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '400',
+    fontWeight: '500',
   },
-  libBubbleTextLeft: {
-    color: designSystem.colors.lightTextStrong,
-  },
-  libBubbleTextDark: {
-    color: designSystem.colors.darkText,
-  },
-  libBubbleTextRight: {
+  messageTextOwn: {
     color: designSystem.colors.oliveInk,
   },
-  libBubbleTimeLeft: {
-    color: designSystem.colors.placeholderText,
+  messageTextOtherLight: {
+    color: designSystem.colors.lightTextStrong,
+  },
+  messageTextOtherDark: {
+    color: designSystem.colors.darkText,
+  },
+  messageTime: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
     fontSize: 11,
+    lineHeight: 13,
     fontWeight: '600',
   },
-  libBubbleTimeRight: {
+  messageTimeOwn: {
     color: 'rgba(15,20,13,0.56)',
-    fontSize: 11,
-    fontWeight: '600',
+  },
+  messageTimeOther: {
+    color: designSystem.colors.placeholderText,
   },
   quotedInBubble: {
-    marginHorizontal: 7,
-    marginTop: 7,
-    marginBottom: 0,
+    marginBottom: 7,
     paddingLeft: 10,
     paddingVertical: 7,
     paddingRight: 12,

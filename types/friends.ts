@@ -40,7 +40,7 @@ export type FriendViewerProfile = {
   } | null;
   relationship: {
     state: 'self' | 'friend' | 'invited' | 'available';
-    directThreadId: Id<'friendDirectThreads'> | null;
+    directThreadId: Id<'threads'> | null;
   };
   stats: {
     friendCount: number;
@@ -57,7 +57,7 @@ export type FriendCircleMember = {
 };
 
 export type FriendCircleSummary = {
-  _id: Id<'friendCircles'>;
+  _id: Id<'circles'>;
   slug: string;
   name: string;
   destinationLabel: string;
@@ -72,7 +72,7 @@ export type FriendCircleSummary = {
 };
 
 export type FriendChatMessage = {
-  _id: Id<'friendMessages'>;
+  _id: Id<'messages'>;
   kind: 'text' | 'route' | 'system' | 'call' | 'scheduled_call';
   body: string | null;
   createdAt: number;
@@ -81,7 +81,7 @@ export type FriendChatMessage = {
   senderAvatarUri: string | null;
   isOwnMessage: boolean;
   replyTo: {
-    messageId: Id<'friendMessages'>;
+    messageId: Id<'messages'>;
     senderName: string;
     preview: string;
     kind: string;
@@ -103,7 +103,7 @@ export type FriendChatMessage = {
     }[];
   } | null;
   callCard: {
-    callId: Id<'friendCalls'> | null;
+    callId: Id<'calls'> | null;
     mode: 'voice' | 'video';
     status: 'active' | 'scheduled' | 'ended' | 'cancelled';
     scheduledFor: number | null;
@@ -115,9 +115,9 @@ export type FriendChatMessage = {
 };
 
 export type FriendCallDetail = {
-  _id: Id<'friendCalls'>;
-  circleId: Id<'friendCircles'> | null;
-  directThreadId?: Id<'friendDirectThreads'> | null;
+  _id: Id<'calls'>;
+  circleId: Id<'circles'> | null;
+  directThreadId?: Id<'threads'> | null;
   circleName: string;
   roomName: string;
   createdBySlug: string;
@@ -174,7 +174,7 @@ export type FriendsDashboard = {
 };
 
 export type DirectChatMessage = {
-  _id: Id<'friendDirectMessages'>;
+  _id: Id<'dms'>;
   kind: 'text' | 'call' | 'scheduled_call';
   body: string;
   createdAt: number;
@@ -183,13 +183,13 @@ export type DirectChatMessage = {
   senderAvatarUri: string | null;
   isOwnMessage: boolean;
   replyTo: {
-    messageId: Id<'friendDirectMessages'>;
+    messageId: Id<'dms'>;
     senderName: string;
     preview: string;
     kind: string;
   } | null;
   callCard: {
-    callId: Id<'friendCalls'> | null;
+    callId: Id<'calls'> | null;
     mode: 'voice' | 'video';
     status: 'active' | 'scheduled' | 'ended' | 'cancelled';
     scheduledFor: number | null;
@@ -230,7 +230,7 @@ export type FriendChatListItem = {
 };
 
 export type JoinableFriendGroup = {
-  id: Id<'friendCircles'>;
+  id: Id<'circles'>;
   kind: 'group';
   title: string;
   subtitle: string;
@@ -276,7 +276,7 @@ export type FriendChatPayload = {
 } | null;
 
 export type DirectChatPayload = {
-  threadId: Id<'friendDirectThreads'>;
+  threadId: Id<'threads'>;
   title: string;
   participant: {
     slug: string;

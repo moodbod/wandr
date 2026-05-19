@@ -241,7 +241,7 @@ export function FriendChatMessageBubble({
       return;
     }
     if (isLargeScreen) {
-      openCall(message.callCard.callId as Id<'friendCalls'>);
+      openCall(message.callCard.callId as Id<'calls'>);
       return;
     }
     router.push(`/friends/call/${message.callCard.callId}`);
@@ -502,7 +502,7 @@ export function DirectChatMessageBubble({
       return;
     }
     if (isLargeScreen) {
-      openCall(message.callCard.callId as Id<'friendCalls'>);
+      openCall(message.callCard.callId as Id<'calls'>);
       return;
     }
     router.push(`/friends/call/${message.callCard.callId}`);

@@ -26,7 +26,7 @@ export function inferGeography(
 
 export function buildRegionOptions(
   experiences: readonly ExploreExperience[],
-  hiddenGems: readonly ExploreHiddenGem[],
+  gems: readonly ExploreHiddenGem[],
   _currentRegionCenter?: readonly [number, number]
 ): DiscoveryOption[] {
   const seen = new Set<string>();
@@ -34,7 +34,7 @@ export function buildRegionOptions(
 
   for (const geography of [
     ...experiences.map((experience) => inferGeography(experience.geography, experience.locationLabel)),
-    ...hiddenGems.map((item) => inferGeography(item.geography, `${item.title} ${item.description}`)),
+    ...gems.map((item) => inferGeography(item.geography, `${item.title} ${item.description}`)),
   ]) {
     if (!geography?.region) {
       continue;

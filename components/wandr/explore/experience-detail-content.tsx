@@ -224,7 +224,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     try {
       const requested = await requestJoinTrip({
         travelerSlug,
-        circleId: joinableTrip.circleId as Id<'friendCircles'>,
+        circleId: joinableTrip.circleId as Id<'circles'>,
         experienceSlug: experience.slug,
       });
 

@@ -44,7 +44,7 @@ function ExploreHiddenGemsScreenView({
   notice: string | null;
   page: any | null | undefined;
 }) {
-  const items = page?.search.hiddenGems.items ?? [];
+  const items = page?.search.gems.items ?? [];
   const leadGem = items[0];
   const groupedGems = isLoading ? buildLoadingGemGroups() : buildGemGroups(items);
 

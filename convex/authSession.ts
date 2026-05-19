@@ -9,6 +9,8 @@ import {
 } from './appProfiles';
 import { getCurrentAuthRecord, requireCurrentAuthRecord } from './authIdentity';
 
+const DEFAULT_USER_ROLE = 'traveler' as const;
+
 export const getCurrentIdentity = query({
   args: {},
   handler: async (ctx) => {
@@ -89,6 +91,10 @@ async function createUniqueTravelerSlug(ctx: MutationCtx, name: string) {
   return `${base}-${Date.now().toString(36)}`;
 }
 
+function getBackendManagedRole(existingUser: AuthUserProfile | null) {
+  return existingUser?.role === 'admin' ? 'admin' : DEFAULT_USER_ROLE;
+}
+
 export const completeOnboarding = mutation({
   args: {
     name: v.string(),
@@ -114,7 +120,7 @@ export const completeOnboarding = mutation({
 
     const now = Date.now();
     const slug = existingUser?.slug ?? (await createUniqueTravelerSlug(ctx, name));
-    const role = getAuthUserRole(existingUser);
+    const role = getBackendManagedRole(existingUser);
     const defaults = getDefaultAuthProfileFields({
       countryCode: args.countryCode,
       countryLabel: args.countryLabel,
