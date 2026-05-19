@@ -144,7 +144,7 @@ export function AuthBottomSheet({
     [isDesktopSheet]
   );
 
-  const desktopPopupHostStyle = useMemo(
+  const desktopPopupHostStyle = useMemo<any>(
     () => {
       if (!isDesktopSheet) return undefined;
       if (isOnboarding) {
