@@ -131,14 +131,48 @@ export function AuthBottomSheet({
   const { isLargeScreen } = useResponsive();
   const isOnboarding = mode === 'onboarding';
   const isDesktopSheet = Platform.OS === 'web' && isLargeScreen;
-  const snapPoints = useMemo(() => [isOnboarding ? '92%' : '84%'], [isOnboarding]);
-  const desktopPopupHostStyle = useMemo<ViewStyle[] | undefined>(
-    () =>
-      isDesktopSheet
-        ? [styles.desktopPopupHost, { height: isOnboarding ? '92%' : '84%' }]
-        : undefined,
+  const snapPoints = useMemo(
+    () => [isDesktopSheet ? '100%' : (isOnboarding ? '92%' : '84%')],
     [isDesktopSheet, isOnboarding]
   );
+
+  const desktopModalHostStyle = useMemo(
+    () => {
+      if (!isDesktopSheet) return undefined;
+      return styles.desktopModalHostCentered; // Center both onboarding and auth popups
+    },
+    [isDesktopSheet]
+  );
+
+  const desktopPopupHostStyle = useMemo(
+    () => {
+      if (!isDesktopSheet) return undefined;
+      if (isOnboarding) {
+        return {
+          width: 520,
+          maxWidth: '90%',
+          height: 640,
+          maxHeight: '85%',
+          borderRadius: 24,
+          overflow: 'hidden',
+        };
+      }
+      return [styles.desktopPopupHost, { height: '84%', borderRadius: 24, overflow: 'hidden' }];
+    },
+    [isDesktopSheet, isOnboarding]
+  );
+
+  const desktopBackdropStyle = useMemo<ViewStyle | undefined>(
+    () =>
+      isDesktopSheet
+        ? ({
+            backgroundColor: 'rgba(14, 15, 12, 0.72)',
+            backdropFilter: 'blur(8px)',
+          } as any)
+        : undefined,
+    [isDesktopSheet]
+  );
+
   const renderBackdrop = useMemo(
     () =>
       function AuthSheetBackdrop(props: BottomSheetBackdropProps) {
@@ -166,7 +200,9 @@ export function AuthBottomSheet({
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
       containerStyle={styles.sheetLayer}
+      desktopModalHostStyle={desktopModalHostStyle}
       desktopPopupHostStyle={desktopPopupHostStyle}
+      desktopBackdropStyle={desktopBackdropStyle}
       onClose={onClose}>
       <BottomSheetView style={[styles.sheetBody, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardFrame}>
@@ -174,6 +210,7 @@ export function AuthBottomSheet({
             <SignInSheetForm
               returnTo={returnTo}
               onBack={onClose}
+              onClose={onClose}
               onSwitchMode={() => onModeChange('signUp')}
             />
           ) : null}
@@ -181,11 +218,12 @@ export function AuthBottomSheet({
             <SignUpSheetForm
               returnTo={returnTo}
               onBack={() => onModeChange('signIn')}
+              onClose={onClose}
               onSwitchMode={() => onModeChange('signIn')}
             />
           ) : null}
           {mode === 'onboarding' ? (
-            <OnboardingSheetForm returnTo={returnTo} onBack={onOnboardingBack} />
+            <OnboardingSheetForm returnTo={returnTo} onBack={onOnboardingBack} onClose={onClose} />
           ) : null}
         </KeyboardAvoidingView>
       </BottomSheetView>
@@ -196,10 +234,12 @@ export function AuthBottomSheet({
 function SignInSheetForm({
   returnTo,
   onBack,
+  onClose,
   onSwitchMode,
 }: {
   returnTo: string;
   onBack: () => void;
+  onClose: () => void;
   onSwitchMode: () => void;
 }) {
   const { signIn } = useAuthActions();
@@ -253,24 +293,23 @@ function SignInSheetForm({
       footer={
         <AuthPrimaryButton
           disabled={isSubmitting}
-          label={isSubmitting ? 'Signing in...' : 'Continue'}
+          label={isSubmitting ? 'Signing in...' : 'Sign In'}
           loading={isSubmitting}
           palette={palette}
           onPress={handleSubmit}
         />
       }
-      onBack={onBack}
-      scrollMode="bottomSheet"
-      showBackButton={false}>
+      onClose={onClose}
+      scrollMode="bottomSheet">
       <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
         keyboardType="email-address"
-        lightColor={palette.surface}
-        darkColor={palette.surface}
+        lightColor={palette.inputBackground}
+        darkColor={palette.inputBackground}
         style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="emailAddress"
         value={email}
@@ -284,9 +323,9 @@ function SignInSheetForm({
         autoCapitalize="none"
         autoComplete="current-password"
         autoCorrect={false}
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
-        darkColor={palette.surface}
-        lightColor={palette.surface}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
+        darkColor={palette.inputBackground}
+        lightColor={palette.inputBackground}
         secureTextEntry
         style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="password"
@@ -299,8 +338,10 @@ function SignInSheetForm({
       {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.error}>{error}</ThemedText> : null}
       <AuthPrimaryButton
         disabled={isSubmitting}
-        label="Continue with Google"
+        label="Sign in with Google"
         palette={palette}
+        variant="secondary"
+        icon="google"
         onPress={handleGoogleSignIn}
       />
       <View style={styles.switchRow}>
@@ -316,10 +357,12 @@ function SignInSheetForm({
 function SignUpSheetForm({
   returnTo,
   onBack,
+  onClose,
   onSwitchMode,
 }: {
   returnTo: string;
   onBack: () => void;
+  onClose: () => void;
   onSwitchMode: () => void;
 }) {
   const { signIn } = useAuthActions();
@@ -378,24 +421,24 @@ function SignUpSheetForm({
       footer={
         <AuthPrimaryButton
           disabled={isSubmitting}
-          label={isSubmitting ? 'Creating...' : 'Continue'}
+          label={isSubmitting ? 'Creating...' : 'Create Account'}
           loading={isSubmitting}
           palette={palette}
           onPress={handleSubmit}
         />
       }
       onBack={onBack}
-      scrollMode="bottomSheet"
-      showBackButton={false}>
+      onClose={onClose}
+      scrollMode="bottomSheet">
       <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
       <Input
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
         keyboardType="email-address"
-        lightColor={palette.surface}
-        darkColor={palette.surface}
+        lightColor={palette.inputBackground}
+        darkColor={palette.inputBackground}
         style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="emailAddress"
         value={email}
@@ -409,9 +452,9 @@ function SignUpSheetForm({
         autoCapitalize="none"
         autoComplete="new-password"
         autoCorrect={false}
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
-        darkColor={palette.surface}
-        lightColor={palette.surface}
+        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
+        darkColor={palette.inputBackground}
+        lightColor={palette.inputBackground}
         secureTextEntry
         style={isDesktopSheet ? styles.desktopInputText : null}
         textContentType="newPassword"
@@ -424,8 +467,10 @@ function SignUpSheetForm({
       {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.error}>{error}</ThemedText> : null}
       <AuthPrimaryButton
         disabled={isSubmitting}
-        label="Continue with Google"
+        label="Sign up with Google"
         palette={palette}
+        variant="secondary"
+        icon="google"
         onPress={handleGoogleSignUp}
       />
       <View style={styles.switchRow}>
@@ -440,9 +485,11 @@ function SignUpSheetForm({
 
 function OnboardingSheetForm({
   onBack,
+  onClose,
 }: {
   returnTo: string;
   onBack: () => void;
+  onClose: () => void;
 }) {
   const completeOnboarding = useMutation(completeOnboardingRef);
   const identity = useQuery(getCurrentAuthIdentityRef, {});
@@ -450,6 +497,7 @@ function OnboardingSheetForm({
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => createAuthPalette(isDark), [isDark]);
   const isDesktopSheet = useIsDesktopAuthSheet();
+  const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [homeCity, setHomeCity] = useState('');
   const [countryCode, setCountryCode] = useState<CountryCode | string>('');
@@ -494,101 +542,130 @@ function OnboardingSheetForm({
   }
 
   async function handleBack() {
-    await signOut();
-    onBack();
+    if (step === 2) {
+      setStep(1);
+    } else {
+      await signOut();
+      onBack();
+    }
   }
+
+  async function handleCancelOnboarding() {
+    await signOut();
+    onClose();
+  }
+
+  const stepTitle = step === 2 ? "How do you usually travel?" : "Welcome to Wandr";
+
+  const stepSubtitle = step === 2
+    ? "Choose the style that fits you best. We'll use this to customize your recommendations."
+    : "A few details to personalize your traveler profile.";
+
+  const stepFooter = step === 1 ? (
+    <AuthPrimaryButton
+      disabled={!canFinish}
+      label="Continue"
+      palette={palette}
+      onPress={() => setStep(2)}
+    />
+  ) : (
+    <AuthPrimaryButton
+      disabled={!canFinish || isSubmitting}
+      label={isSubmitting ? 'Saving...' : 'Finish'}
+      loading={isSubmitting}
+      palette={palette}
+      onPress={handleFinish}
+    />
+  );
 
   return (
     <AuthFormShell
-      title="A few details for your trips"
-      subtitle="Finish the traveler profile Wandr uses for trips, bookings, and friend features."
+      title={stepTitle}
+      subtitle={stepSubtitle}
       palette={palette}
-      footer={
-        <AuthPrimaryButton
-          disabled={!canFinish || isSubmitting}
-          label={isSubmitting ? 'Saving...' : 'Finish'}
-          loading={isSubmitting}
-          palette={palette}
-          onPress={handleFinish}
-        />
-      }
-      onBack={handleBack}
-      scrollMode="bottomSheet"
-      showBackButton={false}>
-      {identity?.email ? (
+      footer={stepFooter}
+      onBack={step === 2 ? handleBack : undefined}
+      onClose={handleCancelOnboarding}
+      scrollMode="bottomSheet">
+
+
+
+      {step === 1 ? (
         <>
-          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Email</ThemedText>
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Your name</ThemedText>
           <Input
-            containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
-            darkColor={palette.surface}
-            editable={false}
-            lightColor={palette.surface}
+            autoCapitalize="words"
+            autoCorrect={false}
+            containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
+            darkColor={palette.inputBackground}
+            lightColor={palette.inputBackground}
+            placeholder="Tuyoleni"
             style={isDesktopSheet ? styles.desktopInputText : null}
-            value={identity.email}
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              setError(null);
+            }}
           />
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.desktopHelperText}>
+            First name or nickname. Letters, numbers, spaces only.
+          </ThemedText>
+          <CountryPickerField
+            accessibilityLabel={`Change country, currently ${countryLabel}`}
+            countryCode={countryCode}
+            label="Country"
+            value={countryLabel}
+            onSelect={handleSelectCountry}
+          />
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Home city</ThemedText>
+          <Input
+            autoCapitalize="words"
+            containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null]}
+            darkColor={palette.inputBackground}
+            lightColor={palette.inputBackground}
+            placeholder="Home city"
+            style={isDesktopSheet ? styles.desktopInputText : null}
+            value={homeCity}
+            onChangeText={setHomeCity}
+          />
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.desktopHelperText}>
+            Where you spend most of your time.
+          </ThemedText>
         </>
       ) : null}
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Your name</ThemedText>
-      <Input
-        autoCapitalize="words"
-        autoCorrect={false}
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
-        darkColor={palette.surface}
-        lightColor={palette.surface}
-        placeholder="Tuyoleni"
-        style={isDesktopSheet ? styles.desktopInputText : null}
-        value={name}
-        onChangeText={(value) => {
-          setName(value);
-          setError(null);
-        }}
-      />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Country</ThemedText>
-      <CountryPickerField
-        accessibilityLabel={`Change country, currently ${countryLabel}`}
-        countryCode={countryCode}
-        label="Country"
-        value={countryLabel}
-        onSelect={handleSelectCountry}
-      />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>Home city</ThemedText>
-      <Input
-        autoCapitalize="words"
-        containerStyle={[styles.input, isDesktopSheet ? styles.desktopInput : null, { borderColor: palette.border }]}
-        darkColor={palette.surface}
-        lightColor={palette.surface}
-        placeholder="Home city"
-        style={isDesktopSheet ? styles.desktopInputText : null}
-        value={homeCity}
-        onChangeText={setHomeCity}
-      />
-      <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>How do you usually travel?</ThemedText>
-      <View style={styles.travelGrid}>
-        {travelStyles.map((item) => {
-          const selected = item.value === travelStyle;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              key={item.value}
-              onPress={() => setTravelStyle(item.value)}
-              style={[
-                styles.travelOption,
-                isDesktopSheet ? styles.desktopTravelOption : null,
-                {
-                  backgroundColor: selected ? palette.primary : palette.surface,
-                  borderColor: selected ? palette.primaryText : palette.border,
-                },
-              ]}>
-              <MaterialCommunityIcons color={palette.primaryText} name={item.icon} size={isDesktopSheet ? 18 : 22} />
-              <ThemedText lightColor={palette.text} darkColor={palette.text} style={[styles.travelLabel, isDesktopSheet ? styles.desktopTravelLabel : null]}>
-                {item.label}
-              </ThemedText>
-              {selected ? <MaterialCommunityIcons color={palette.primaryText} name="check" size={isDesktopSheet ? 18 : 20} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
+
+      {step === 2 ? (
+        <>
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.label, isDesktopSheet ? styles.desktopLabel : null]}>How do you usually travel?</ThemedText>
+          <View style={styles.travelGrid}>
+            {travelStyles.map((item) => {
+              const selected = item.value === travelStyle;
+              const iconColor = selected ? palette.primaryText : (isDark ? palette.text : palette.textMuted);
+              const textColor = selected ? palette.primaryText : palette.text;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={item.value}
+                  onPress={() => setTravelStyle(item.value)}
+                  style={[
+                    styles.travelOption,
+                    {
+                      backgroundColor: selected ? palette.primary : palette.surface,
+                      borderColor: selected ? palette.primaryText : palette.border,
+                    },
+                  ]}>
+                  <MaterialCommunityIcons color={iconColor} name={item.icon} size={20} />
+                  <ThemedText lightColor={textColor} darkColor={textColor} style={styles.travelLabel}>
+                    {item.label}
+                  </ThemedText>
+                  {selected ? <MaterialCommunityIcons color={palette.primaryText} name="check" size={20} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
       {error ? <ThemedText lightColor={palette.error} darkColor={palette.error} style={styles.error}>{error}</ThemedText> : null}
     </AuthFormShell>
   );
@@ -599,16 +676,26 @@ const styles = StyleSheet.create({
     ...designSystem.type.caption,
   },
   input: {
-    borderWidth: 1,
-  },
-  desktopInput: {
-    height: 44,
+    borderWidth: 0,
+    borderRadius: 12,
+    height: 48,
     paddingHorizontal: designSystem.spacing.md,
   },
+  desktopInput: {
+    height: 48,
+    paddingHorizontal: designSystem.spacing.md,
+    borderRadius: 12,
+  },
   desktopInputText: {
-    fontSize: 14,
+    fontSize: 15,
     height: 20,
     lineHeight: 20,
+  },
+  desktopHelperText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: -designSystem.spacing.xs,
+    marginBottom: designSystem.spacing.sm,
   },
   desktopPopupHost: {
     maxHeight: '100%',
@@ -616,16 +703,6 @@ const styles = StyleSheet.create({
   desktopLabel: {
     fontSize: 12,
     lineHeight: 15,
-  },
-  desktopTravelLabel: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  desktopTravelOption: {
-    borderRadius: designSystem.radii.card - 4,
-    gap: designSystem.spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: designSystem.spacing.sm,
   },
   keyboardFrame: {
     flex: 1,
@@ -651,23 +728,47 @@ const styles = StyleSheet.create({
     marginTop: designSystem.spacing.md,
   },
   travelGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: designSystem.spacing.sm,
+    flexDirection: 'column',
+    gap: designSystem.spacing.xs,
+  },
+  desktopTravelGrid: {
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+    gap: designSystem.spacing.xs,
   },
   travelLabel: {
     ...designSystem.type.bodyStrong,
     flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'left',
   },
   travelOption: {
     alignItems: 'center',
-    borderRadius: designSystem.radii.card,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 0,
     flexDirection: 'row',
     gap: designSystem.spacing.sm,
-    minHeight: 52,
-    justifyContent: 'center',
+    minHeight: 48,
     paddingHorizontal: designSystem.spacing.md,
-    width: '47%',
+    width: '100%',
+    justifyContent: 'flex-start',
+  },
+  desktopTravelOption: {
+    borderRadius: 12,
+    borderWidth: 0,
+    gap: designSystem.spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: designSystem.spacing.md,
+    width: '100%',
+    justifyContent: 'flex-start',
+  },
+  desktopModalHostCentered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
 });

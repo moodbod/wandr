@@ -95,6 +95,7 @@ const CustomBackground: React.FC<BottomSheetBackgroundProps> = ({
 type GlassBottomSheetProps = BottomSheetProps & {
   desktopModalHostStyle?: StyleProp<ViewStyle>;
   desktopPopupHostStyle?: StyleProp<ViewStyle>;
+  desktopBackdropStyle?: StyleProp<ViewStyle>;
   renderInModal?: boolean;
 };
 
@@ -105,6 +106,7 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
     containerStyle,
     desktopModalHostStyle,
     desktopPopupHostStyle,
+    desktopBackdropStyle,
     detached,
     enablePanDownToClose,
     index,
@@ -304,8 +306,10 @@ export const GlassBottomSheet = forwardRef<BottomSheet, GlassBottomSheetProps>((
         visible={isDesktopVisible}
       >
         <View style={[styles.modalHost, desktopModalHostStyle]}>
-          {enablePanDownToClose === false ? null : (
-            <Pressable accessibilityRole="button" onPress={closeDesktopSheet} style={styles.modalBackdrop} />
+          {enablePanDownToClose === false ? (
+            <View style={[styles.modalBackdrop, desktopBackdropStyle]} />
+          ) : (
+            <Pressable accessibilityRole="button" onPress={closeDesktopSheet} style={[styles.modalBackdrop, desktopBackdropStyle]} />
           )}
           <View style={[styles.popupHost, { width: modalWidth, height: modalHeight }, desktopPopupHostStyle]}>
             <BottomSheet

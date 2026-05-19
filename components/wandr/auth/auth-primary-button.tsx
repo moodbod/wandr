@@ -1,4 +1,6 @@
-import { ActivityIndicator, Platform, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { type ComponentProps } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
@@ -11,11 +13,27 @@ type AuthPrimaryButtonProps = {
   loading?: boolean;
   palette: AuthPalette;
   onPress: () => void;
+  variant?: 'primary' | 'secondary';
+  icon?: ComponentProps<typeof MaterialCommunityIcons>['name'];
 };
 
-export function AuthPrimaryButton({ disabled, label, loading, palette, onPress }: AuthPrimaryButtonProps) {
+export function AuthPrimaryButton({
+  disabled,
+  label,
+  loading,
+  palette,
+  onPress,
+  variant = 'primary',
+  icon,
+}: AuthPrimaryButtonProps) {
   const { isLargeScreen } = useResponsive();
   const isDesktop = Platform.OS === 'web' && isLargeScreen;
+
+  const isSecondary = variant === 'secondary';
+  const backgroundColor = isSecondary ? palette.surfaceRaised : palette.primary;
+  const textColor = isSecondary ? palette.text : palette.primaryText;
+  const borderColor = isSecondary ? palette.border : undefined;
+  const borderWidth = isSecondary ? 1 : 0;
 
   return (
     <Pressable
@@ -25,16 +43,30 @@ export function AuthPrimaryButton({ disabled, label, loading, palette, onPress }
       style={({ pressed }) => [
         styles.button,
         isDesktop ? styles.desktopButton : null,
-        { backgroundColor: palette.primary },
+        {
+          backgroundColor,
+          borderColor,
+          borderWidth,
+        },
         disabled && styles.disabled,
         pressed && styles.pressed,
       ]}>
       {loading ? (
-        <ActivityIndicator color={palette.primaryText} />
+        <ActivityIndicator color={textColor} />
       ) : (
-        <ThemedText lightColor={palette.primaryText} darkColor={palette.primaryText} style={[styles.label, isDesktop ? styles.desktopLabel : null]}>
-          {label}
-        </ThemedText>
+        <View style={styles.contentRow}>
+          {icon ? (
+            <MaterialCommunityIcons
+              name={icon}
+              size={isDesktop ? 18 : 20}
+              color={textColor}
+              style={styles.icon}
+            />
+          ) : null}
+          <ThemedText lightColor={textColor} darkColor={textColor} style={[styles.label, isDesktop ? styles.desktopLabel : null]}>
+            {label}
+          </ThemedText>
+        </View>
       )}
     </Pressable>
   );
@@ -47,6 +79,15 @@ const styles = StyleSheet.create({
     height: AUTH_LAYOUT.primaryButtonHeight,
     justifyContent: 'center',
     paddingHorizontal: designSystem.spacing.lg,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: designSystem.spacing.xs,
+  },
+  icon: {
+    marginRight: 2,
   },
   disabled: {
     opacity: 0.45,

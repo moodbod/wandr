@@ -9,10 +9,13 @@ export const AUTH_LAYOUT = {
 export function createAuthPalette(isDark: boolean) {
   return {
     background: isDark ? designSystem.semantic.dark.background : designSystem.semantic.light.background,
-    surface: isDark ? designSystem.semantic.dark.surfaceRaised : designSystem.colors.white,
+    modalBackground: isDark ? 'rgba(20, 20, 20, 0.65)' : 'rgba(255, 255, 255, 0.85)',
+    surface: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+    surfaceRaised: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+    inputBackground: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
     text: isDark ? designSystem.semantic.dark.text : designSystem.semantic.light.text,
-    textMuted: isDark ? designSystem.semantic.dark.textMuted : designSystem.semantic.light.textMuted,
-    border: isDark ? designSystem.semantic.dark.borderSoft : designSystem.semantic.light.border,
+    textMuted: isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
+    border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     primary: designSystem.colors.lime,
     primaryText: designSystem.colors.darkGreen,
     error: designSystem.colors.liked,

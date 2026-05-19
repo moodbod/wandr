@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { Check, MagnifyingGlass } from 'phosphor-react-native';
+import { Check, MagnifyingGlass, MapPin } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { type Country, type CountryCode } from 'react-native-country-picker-moda
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { allPlanningCountryOptions } from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
@@ -27,6 +27,7 @@ type CountryPickerFieldProps = {
 export function CountryPickerField({
   accessibilityLabel,
   countryCode,
+  label,
   value,
   onSelect,
   variant = 'card',
@@ -39,7 +40,7 @@ export function CountryPickerField({
   const { isLargeScreen } = useResponsive();
   const isDesktop = Platform.OS === 'web' && isLargeScreen;
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
-  const snapPoints = useMemo(() => ['58%', '78%'], []);
+  const snapPoints = useMemo(() => [isDesktop ? '100%' : '84%'], [isDesktop]);
   const countryOptions = useMemo(
     () =>
       allPlanningCountryOptions
@@ -79,6 +80,14 @@ export function CountryPickerField({
     closeSheet();
   }
 
+  const themeBackgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+  const themeBorderColor = 'transparent';
+  const themeTextColor = isDark ? designSystem.semantic.dark.text : designSystem.semantic.light.text;
+  const themePlaceholderColor = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)';
+
+  const updateBtnBg = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)';
+  const updateBtnText = isDark ? designSystem.colors.white : designSystem.colors.darkGreen;
+
   return (
     <>
       <Pressable
@@ -87,19 +96,59 @@ export function CountryPickerField({
         onPress={() => setIsOpen(true)}
         style={[
           variant === 'compact' ? styles.compactRow : styles.row,
-          isDesktop ? styles.desktopRow : null,
+          {
+            backgroundColor: themeBackgroundColor,
+            borderColor: themeBorderColor,
+            borderRadius: 12,
+            borderWidth: 0,
+          }
         ]}>
-        <CountryFlagAvatar countryCode={countryCode} size={isDesktop ? 26 : 30} />
+        
         {variant === 'compact' ? (
-          <ThemedText style={[styles.compactValue, isDesktop ? styles.desktopValue : null]}>{value}</ThemedText>
-        ) : (
-          <View style={styles.copy}>
-            <ThemedText style={[styles.value, isDesktop ? styles.desktopValue : null, !value && styles.placeholderValue]}>
-              {value || 'Select country'}
+          <>
+            <View style={[styles.iconBox, { width: 28, height: 28, borderRadius: 8 }]}>
+              {countryCode ? (
+                <CountryFlagAvatar countryCode={countryCode} size={18} />
+              ) : (
+                <MapPin color={designSystem.colors.lime} weight="fill" size={14} />
+              )}
+            </View>
+            <ThemedText
+              lightColor={themeTextColor}
+              darkColor={themeTextColor}
+              style={styles.compactValue}>
+              {value}
             </ThemedText>
-          </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.iconBox}>
+              {countryCode ? (
+                <CountryFlagAvatar countryCode={countryCode} size={24} />
+              ) : (
+                <MapPin color={designSystem.colors.lime} weight="fill" size={20} />
+              )}
+            </View>
+            
+            <View style={styles.copy}>
+              <ThemedText lightColor={themeTextColor} darkColor={themeTextColor} style={styles.valueTop}>
+                {value || 'Select country'}
+              </ThemedText>
+              <ThemedText
+                lightColor={themePlaceholderColor}
+                darkColor={themePlaceholderColor}
+                style={styles.valueBottom}>
+                {label}
+              </ThemedText>
+            </View>
+            
+            <View style={[styles.updateButton, { backgroundColor: updateBtnBg }]}>
+              <ThemedText lightColor={updateBtnText} darkColor={updateBtnText} style={styles.updateText}>
+                {value ? 'Change' : 'Select'}
+              </ThemedText>
+            </View>
+          </>
         )}
-        <MaterialCommunityIcons color={designSystem.colors.darkGreen} name="chevron-down" size={20} />
       </Pressable>
       <GlassBottomSheet
         ref={sheetRef}
@@ -108,6 +157,9 @@ export function CountryPickerField({
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose
+        backgroundStyle={{ backgroundColor: isDark ? 'rgba(20, 20, 20, 0.65)' : 'rgba(255, 255, 255, 0.85)' }}
+        desktopModalHostStyle={isDesktop ? { alignItems: 'center', justifyContent: 'center', paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } : undefined}
+        desktopPopupHostStyle={isDesktop ? { width: 520, maxWidth: '90%', height: 640, maxHeight: '85%', borderRadius: 24, overflow: 'hidden' } : undefined}
         onClose={resetSheetState}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} pressBehavior="close" />
@@ -118,10 +170,11 @@ export function CountryPickerField({
           keyExtractor={(country) => country.code}
           keyboardShouldPersistTaps="handled"
           stickyHeaderIndices={[0]}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.sheetListContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
           ListHeaderComponent={
             <View style={styles.sheetHeader}>
-              <GlassInput
+              <Input
                 autoCapitalize="words"
                 leftIcon={<MagnifyingGlass color={mutedColor} size={20} weight="bold" />}
                 placeholder="Search countries"
@@ -134,6 +187,9 @@ export function CountryPickerField({
                     handleSelectCountry(firstCountry);
                   }
                 }}
+                darkColor="rgba(255, 255, 255, 0.04)"
+                lightColor="rgba(0, 0, 0, 0.04)"
+                containerStyle={{ borderWidth: 0, borderRadius: 16, height: 48 }}
               />
             </View>
           }
@@ -151,14 +207,17 @@ export function CountryPickerField({
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => handleSelectCountry(item)}
-                  style={[styles.option, isDesktop ? styles.desktopOption : null]}>
-                  <CountryFlagAvatar countryCode={item.code} size={isDesktop ? 28 : 32} />
+                  style={[
+                    styles.option,
+                    isDesktop ? styles.desktopOption : null,
+                    selected ? { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)', borderRadius: 12 } : null
+                  ]}>
+                  <CountryFlagAvatar countryCode={item.code} size={isDesktop ? 24 : 32} />
                   <ThemedText style={[styles.optionTitle, isDesktop ? styles.desktopOptionTitle : null, selected ? styles.selectedText : null]}>
                     {item.label}
                   </ThemedText>
                   {selected ? <Check color={designSystem.colors.lime} size={20} weight="bold" /> : null}
                 </Pressable>
-                <View style={styles.optionDivider} />
               </View>
             );
           }}
@@ -171,54 +230,64 @@ export function CountryPickerField({
 const styles = StyleSheet.create({
   row: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.white,
-    borderColor: designSystem.colors.border,
-    borderRadius: designSystem.radii.card - designSystem.spacing.xxs / 2,
-    borderWidth: 1,
     flexDirection: 'row',
-    gap: designSystem.spacing.sm,
-    height: designSystem.layout.inputHeight,
-    paddingHorizontal: designSystem.spacing.sm,
-  },
-  copy: {
-    flex: 1,
-    gap: 4,
-  },
-  label: {
-    ...designSystem.type.caption,
-    color: designSystem.colors.gray,
-    textTransform: 'uppercase',
-  },
-  value: {
-    ...designSystem.type.bodyStrong,
+    gap: designSystem.spacing.md,
+    height: 64,
+    paddingHorizontal: designSystem.spacing.md,
+    borderRadius: 12,
   },
   compactRow: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.white,
-    borderColor: designSystem.colors.border,
-    borderRadius: designSystem.radii.pill,
-    borderWidth: 1,
     flexDirection: 'row',
     gap: designSystem.spacing.xs,
-    height: designSystem.layout.inputHeight,
-    paddingHorizontal: designSystem.spacing.xs,
+    height: 40,
+    paddingHorizontal: designSystem.spacing.sm,
+    borderRadius: 8,
   },
-  compactValue: {
-    ...designSystem.type.bodyStrong,
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(198, 239, 174, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  desktopOption: {
-    minHeight: 48,
-    paddingVertical: 8,
+  copy: {
+    flex: 1,
+    gap: 2,
   },
-  desktopOptionTitle: {
-    fontSize: 14,
+  valueTop: {
+    fontSize: 15,
+    fontWeight: '600',
     lineHeight: 20,
   },
-  desktopRow: {
-    height: 44,
-    paddingHorizontal: designSystem.spacing.sm,
+  valueBottom: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-  desktopValue: {
+  updateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  updateText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  compactValue: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  desktopOption: {
+    minHeight: 44,
+    paddingVertical: 6,
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  desktopOptionTitle: {
     fontSize: 14,
     lineHeight: 20,
   },
@@ -228,14 +297,10 @@ const styles = StyleSheet.create({
     gap: designSystem.spacing.sm,
     minHeight: 56,
     paddingVertical: 10,
-  },
-  optionDivider: {
-    backgroundColor: designSystem.colors.borderSoft,
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 44,
+    paddingHorizontal: designSystem.spacing.sm,
   },
   optionFrame: {
-    marginHorizontal: designSystem.spacing.lg,
+    paddingHorizontal: designSystem.spacing.xs,
   },
   optionTitle: {
     ...designSystem.type.bodyStrong,
@@ -250,12 +315,12 @@ const styles = StyleSheet.create({
   },
   sheetHeader: {
     backgroundColor: 'transparent',
-    paddingBottom: designSystem.spacing.md,
-    paddingHorizontal: designSystem.spacing.lg,
+    paddingHorizontal: designSystem.spacing.md,
     paddingTop: designSystem.spacing.md,
+    paddingBottom: designSystem.spacing.sm,
   },
   sheetListContent: {
-    paddingBottom: designSystem.spacing.lg,
+    paddingHorizontal: designSystem.spacing.sm,
   },
   statusRow: {
     justifyContent: 'center',

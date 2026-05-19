@@ -7,125 +7,143 @@ import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useResponsive } from '@/hooks/use-responsive';
-import { AUTH_LAYOUT, type AuthPalette } from './auth-palette';
+import { type AuthPalette } from './auth-palette';
 
 type AuthFormShellProps = {
   children: ReactNode;
   footer: ReactNode;
   palette: AuthPalette;
-  subtitle: string;
-  title: string;
+  subtitle?: string;
+  title?: string;
   onBack?: () => void;
+  onClose?: () => void;
   scrollMode?: 'default' | 'bottomSheet';
-  showBackButton?: boolean;
+  showBackButton?: boolean; // Kept for interface compatibility
 };
 
 export function AuthFormShell({
   children,
   footer,
   onBack,
+  onClose,
   palette,
   scrollMode = 'default',
-  showBackButton = true,
   subtitle,
   title,
 }: AuthFormShellProps) {
-  const router = useRouter();
   const { isLargeScreen } = useResponsive();
   const useDesktopScroll = scrollMode === 'bottomSheet' && Platform.OS === 'web' && isLargeScreen;
   const ScrollContainer = scrollMode === 'bottomSheet' && !useDesktopScroll ? BottomSheetScrollView : ScrollView;
+  const showHeader = !!onBack || !!onClose;
 
   return (
     <View style={styles.frame}>
-      {showBackButton ? (
+      {showHeader ? (
         <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            onPress={onBack ?? (() => router.back())}
-            style={[styles.backButton, { borderColor: palette.border, backgroundColor: palette.surface }]}>
-            <MaterialCommunityIcons color={palette.primaryText} name="arrow-left" size={24} />
-          </Pressable>
+          {onBack ? (
+            <Pressable
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+              onPress={onBack}
+              style={styles.headerButton}>
+              <MaterialCommunityIcons 
+                color={palette.primaryText} 
+                name="arrow-left" 
+                size={22} 
+              />
+            </Pressable>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
+
+          {onClose ? (
+            <Pressable
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              onPress={onClose}
+              style={styles.headerButton}>
+              <MaterialCommunityIcons 
+                color={palette.textMuted} 
+                name="close" 
+                size={22} 
+              />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
+      
       <ScrollContainer
-        contentContainerStyle={[styles.content, useDesktopScroll ? styles.desktopContent : null]}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         style={styles.scroller}>
-        <ThemedText lightColor={palette.text} darkColor={palette.text} style={[styles.title, useDesktopScroll ? styles.desktopTitle : null]}>
-          {title}
-        </ThemedText>
-        <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={[styles.subtitle, useDesktopScroll ? styles.desktopSubtitle : null]}>
-          {subtitle}
-        </ThemedText>
-        <View style={[styles.fields, useDesktopScroll ? styles.desktopFields : null]}>{children}</View>
+        {title ? (
+          <ThemedText lightColor={palette.text} darkColor={palette.text} style={styles.title}>
+            {title}
+          </ThemedText>
+        ) : null}
+        {subtitle ? (
+          <ThemedText lightColor={palette.textMuted} darkColor={palette.textMuted} style={styles.subtitle}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
+        <View style={styles.fields}>{children}</View>
       </ScrollContainer>
-      <View style={[styles.footer, useDesktopScroll ? styles.desktopFooter : null, { borderColor: palette.border }]}>{footer}</View>
+      <View style={[styles.footer, { borderColor: palette.border }]}>{footer}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    alignItems: 'center',
-    borderRadius: AUTH_LAYOUT.backButtonSize / 2,
-    borderWidth: 1,
-    height: AUTH_LAYOUT.backButtonSize,
-    justifyContent: 'center',
-    width: AUTH_LAYOUT.backButtonSize,
-  },
-  content: {
-    paddingBottom: designSystem.spacing.xxl,
-    paddingHorizontal: designSystem.spacing.xl,
-    paddingTop: designSystem.spacing.xxl,
-  },
-  fields: {
-    gap: designSystem.spacing.sm,
-    marginTop: designSystem.spacing.xl,
-  },
-  desktopContent: {
-    paddingBottom: designSystem.spacing.lg,
-    paddingHorizontal: designSystem.spacing.lg,
-    paddingTop: designSystem.spacing.lg,
-  },
-  desktopFields: {
-    gap: designSystem.spacing.xs,
-    marginTop: designSystem.spacing.md,
-  },
-  desktopFooter: {
-    padding: designSystem.spacing.md,
-  },
-  desktopSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: designSystem.spacing.xs,
-  },
-  desktopTitle: {
-    fontSize: 24,
-    lineHeight: 28,
-  },
-  footer: {
-    borderTopWidth: 1,
-    padding: designSystem.spacing.xl,
-  },
   frame: {
     flex: 1,
   },
   header: {
-    paddingHorizontal: designSystem.spacing.lg,
-    paddingTop: designSystem.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: designSystem.spacing.xl,
+    paddingTop: designSystem.spacing.lg,
+    paddingBottom: designSystem.spacing.xs,
+    minHeight: 48,
   },
-  subtitle: {
-    ...designSystem.type.body,
-    marginTop: designSystem.spacing.sm,
+  headerButton: {
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSpacer: {
+    width: 34,
+    height: 34,
+  },
+  content: {
+    paddingBottom: designSystem.spacing.xl,
+    paddingHorizontal: designSystem.spacing.xl,
+    paddingTop: designSystem.spacing.xs,
   },
   scroller: {
     flex: 1,
     outlineWidth: 0,
   },
   title: {
-    fontSize: 31,
+    fontSize: 24,
     fontWeight: '600',
-    lineHeight: designSystem.type.pageTitle.lineHeight,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: designSystem.spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: designSystem.spacing.md,
+  },
+  fields: {
+    gap: designSystem.spacing.xs,
+    marginTop: designSystem.spacing.md,
+  },
+  footer: {
+    borderTopWidth: 0,
+    padding: designSystem.spacing.md,
   },
 });
+
