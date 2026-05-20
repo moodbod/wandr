@@ -111,12 +111,14 @@ dev -> main
 - Releases happen through a pull request from `dev` into `main`.
 - `main` is production only.
 
-For risky or larger work, a developer can still use a short-lived branch from `dev` and merge it back into `dev` before release:
+Daily commits should go straight to `dev`:
 
 ```bash
 git switch dev
 git pull
-git switch -c feature/short-feature-name
+git add .
+git commit -m "Describe the change"
+git push origin dev
 ```
 
 GitHub Actions runs on PRs and pushes for both `dev` and `main`:
