@@ -18,6 +18,7 @@ export function AppMapWorkspace() {
         userAvatarUri={traveler?.avatarUri}
         userName={traveler?.name}
         markers={[]}
+        persistKey="app-background"
         routeCoordinates={[]}
         showRoutes={false}
         zoomLevel={12}

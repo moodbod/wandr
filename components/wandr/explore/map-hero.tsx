@@ -33,6 +33,7 @@ type ExploreMapHeroProps = {
   planningLocation?: PlanningLocation;
   showBackButton?: boolean;
   hideHeader?: boolean;
+  mapPersistKey?: string;
   shellStyle?: StyleProp<ViewStyle>;
 };
 
@@ -54,6 +55,7 @@ export function ExploreMapHero({
   planningLocation,
   showBackButton = false,
   hideHeader = false,
+  mapPersistKey,
   shellStyle,
 }: ExploreMapHeroProps) {
   const router = useRouter();
@@ -73,6 +75,7 @@ export function ExploreMapHero({
         routeCoordinates={routeCoordinates}
         zoomLevel={14}
         showRoutes={showRoutes}
+        persistKey={mapPersistKey}
         recenterToUserSignal={recenterToUserSignal}
         onInteract={onInteract}
         onMarkerPress={(marker) => {

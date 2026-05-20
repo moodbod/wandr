@@ -27,6 +27,16 @@ type RenderedMapMarker = {
   marker: mapboxgl.Marker;
   root?: Root;
 };
+type PersistentMapState = {
+  currentMapStyleURL: string | null;
+  host: HTMLDivElement;
+  hideTimer: number | null;
+  isReady: boolean;
+  map: mapboxgl.Map | null;
+  markers: RenderedMapMarker[];
+};
+
+const persistentMaps = new Map<string, PersistentMapState>();
 
 function MapPreviewWebComponent({
   centerCoordinate,
@@ -43,6 +53,7 @@ function MapPreviewWebComponent({
   recenterToUserSignal = 0,
   colorSchemeMode = 'system',
   markerVariant = 'default',
+  persistKey,
   onInteract,
   onMapPress,
   onMarkerPress,
@@ -134,41 +145,58 @@ function MapPreviewWebComponent({
 
   useEffect(() => {
     const initialConfig = initialMapConfigRef.current;
+    const persistentState = persistKey ? getPersistentMapState(persistKey) : null;
 
     if (!mapbox || !containerRef.current || mapRef.current) {
       return;
     }
 
-    const map = new mapbox.Map({
-      accessToken: MAPBOX_ACCESS_TOKEN ?? undefined,
-      attributionControl: false,
-      center: initialConfig.centerCoordinate as [number, number],
-      container: containerRef.current,
-      bearing: 0,
-      dragRotate: false,
-      logoPosition: 'bottom-left',
-      pitch: 0,
-      pitchWithRotate: false,
-      style: initialConfig.mapStyleURL,
-      touchPitch: false,
-      zoom: initialConfig.zoomLevel,
-    });
+    const mapHost = persistentState?.host ?? document.createElement('div');
+    if (persistentState) {
+      attachPersistentMapHost(persistentState);
+    } else {
+      applyEmbeddedMapHostStyle(mapHost);
+      containerRef.current.appendChild(mapHost);
+    }
+
+    const map =
+      persistentState?.map ??
+      new mapbox.Map({
+        accessToken: MAPBOX_ACCESS_TOKEN ?? undefined,
+        attributionControl: false,
+        center: initialConfig.centerCoordinate as [number, number],
+        container: mapHost,
+        bearing: 0,
+        dragRotate: false,
+        logoPosition: 'bottom-left',
+        pitch: 0,
+        pitchWithRotate: false,
+        style: initialConfig.mapStyleURL,
+        touchPitch: false,
+        zoom: initialConfig.zoomLevel,
+      });
 
     mapRef.current = map;
-    currentMapStyleURLRef.current = initialConfig.mapStyleURL;
-    map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
+    if (persistentState) {
+      markerRefs.current = persistentState.markers;
+    }
+    currentMapStyleURLRef.current = persistentState?.currentMapStyleURL ?? initialConfig.mapStyleURL;
+    if (!persistentState?.map) {
+      map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
+    }
     const handleUserInteract = () => {
       hasUserInteractedRef.current = true;
       onInteractRef.current?.();
     };
-    map.on('dragstart', handleUserInteract);
-    map.on('zoomstart', handleUserInteract);
-    map.on('click', (event) => {
+    const handleMapClick = (event: mapboxgl.MapMouseEvent) => {
       onMapPressRef.current?.([event.lngLat.lng, event.lngLat.lat]);
       handleUserInteract();
-    });
+    };
+    map.on('dragstart', handleUserInteract);
+    map.on('zoomstart', handleUserInteract);
+    map.on('click', handleMapClick);
 
-    let hasLoaded = false;
+    let hasLoaded = Boolean(persistentState?.isReady) || map.loaded();
     let resizeFrame: number | null = null;
     const resizeMap = () => {
       if (resizeFrame !== null) {
@@ -178,24 +206,35 @@ function MapPreviewWebComponent({
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = null;
 
-        if (!hasLoaded || mapRef.current !== map || !containerRef.current?.isConnected) {
+        if (!hasLoaded || mapRef.current !== map || !mapHost.isConnected) {
           return;
         }
 
         map.resize();
       });
     };
-    map.on('load', () => {
+    const handleMapLoad = () => {
       hasLoaded = true;
+      if (persistentState) {
+        persistentState.isReady = true;
+      }
       hideWebBaseMapDetails(map);
       setIsMapReady(true);
       resizeMap();
-    });
-    map.on('styledata', () => hideWebBaseMapDetails(map));
-    map.on('idle', () => hideWebBaseMapDetails(map));
+    };
+    const handleStyleData = () => hideWebBaseMapDetails(map);
+    const handleIdle = () => hideWebBaseMapDetails(map);
+    map.on('load', handleMapLoad);
+    map.on('styledata', handleStyleData);
+    map.on('idle', handleIdle);
     const resizeObserver = new ResizeObserver(resizeMap);
     resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', resizeMap);
+    if (hasLoaded) {
+      hideWebBaseMapDetails(map);
+      setIsMapReady(true);
+      resizeMap();
+    }
 
     return () => {
       hasLoaded = false;
@@ -204,6 +243,22 @@ function MapPreviewWebComponent({
       }
       window.removeEventListener('resize', resizeMap);
       resizeObserver.disconnect();
+      map.off('dragstart', handleUserInteract);
+      map.off('zoomstart', handleUserInteract);
+      map.off('click', handleMapClick);
+      map.off('load', handleMapLoad);
+      map.off('styledata', handleStyleData);
+      map.off('idle', handleIdle);
+      if (persistentState) {
+        persistentState.currentMapStyleURL = currentMapStyleURLRef.current;
+        persistentState.markers = markerRefs.current;
+        persistentState.map = map;
+        schedulePersistentMapHide(persistentState);
+        mapRef.current = null;
+        currentMapStyleURLRef.current = null;
+        setIsMapReady(false);
+        return;
+      }
       clearRenderedMarkers(markerRefs.current);
       markerRefs.current = [];
       map.remove();
@@ -211,7 +266,7 @@ function MapPreviewWebComponent({
       currentMapStyleURLRef.current = null;
       setIsMapReady(false);
     };
-  }, [mapbox]);
+  }, [mapbox, persistKey]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -459,6 +514,66 @@ function hideWebBaseMapDetails(map: mapboxgl.Map) {
       // The style can change while Mapbox is settling; the next style event will retry.
     }
   });
+}
+
+function getPersistentMapState(key: string) {
+  const existing = persistentMaps.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const state: PersistentMapState = {
+    currentMapStyleURL: null,
+    host: document.createElement('div'),
+    hideTimer: null,
+    isReady: false,
+    map: null,
+    markers: [],
+  };
+  persistentMaps.set(key, state);
+
+  return state;
+}
+
+function attachPersistentMapHost(state: PersistentMapState) {
+  if (state.hideTimer !== null) {
+    window.clearTimeout(state.hideTimer);
+    state.hideTimer = null;
+  }
+
+  const root = document.getElementById('root') ?? document.body;
+  applyPersistentMapHostStyle(state.host);
+  if (state.host.parentElement !== root) {
+    root.appendChild(state.host);
+  }
+}
+
+function schedulePersistentMapHide(state: PersistentMapState) {
+  if (state.hideTimer !== null) {
+    window.clearTimeout(state.hideTimer);
+  }
+
+  state.hideTimer = window.setTimeout(() => {
+    state.host.style.visibility = 'hidden';
+    state.hideTimer = null;
+  }, 2000);
+}
+
+function applyEmbeddedMapHostStyle(host: HTMLDivElement) {
+  Object.assign(host.style, webMapStyle);
+}
+
+function applyPersistentMapHostStyle(host: HTMLDivElement) {
+  Object.assign(host.style, {
+    ...webMapStyle,
+    bottom: '0',
+    height: '100vh',
+    position: 'fixed',
+    right: '0',
+    visibility: 'visible',
+    width: '100vw',
+    zIndex: '1',
+  } satisfies React.CSSProperties);
 }
 
 function normalizeMarkers(markers: readonly MapMarker[]) {

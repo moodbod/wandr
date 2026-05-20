@@ -33,6 +33,7 @@ export type MapPreviewProps = {
   recenterToUserSignal?: number;
   colorSchemeMode?: 'system' | 'dark' | 'light';
   markerVariant?: 'default' | 'routeWidget';
+  persistKey?: string;
   onInteract?: () => void;
   onMapPress?: (coordinate: readonly [number, number]) => void;
   onMarkerPress?: (marker: MapMarker) => void;

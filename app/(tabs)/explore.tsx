@@ -730,6 +730,7 @@ function ExploreScreenView({
         markers={mapMarkers}
         routeCoordinates={locationRouteCoordinates}
         showRoutes={locationRouteCoordinates.length > 1}
+        mapPersistKey={isLargeScreen ? 'app-background' : undefined}
         recenterToUserSignal={recenterToUserSignal}
         topInset={mapTopInset}
         onInteract={handleMapInteract}

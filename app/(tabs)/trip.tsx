@@ -547,6 +547,7 @@ function TripLoadingScreen({
             <MapPreview
               centerCoordinate={planningCenterCoordinate}
               markers={[]}
+              persistKey="app-background"
               routeCoordinates={[]}
               showRoutes={false}
               zoomLevel={12}
@@ -691,6 +692,7 @@ function TripScreenView({
             <MapPreview
               centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? planningCenterCoordinate}
               markers={mapMarkers}
+              persistKey="app-background"
               routeCoordinates={routeCoordinates}
               showRoutes={routeCoordinates.length > 1}
               zoomLevel={12}

@@ -272,6 +272,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       centerCoordinate={centerCoordinate}
       userCoordinate={userCoordinate}
       markers={mapMarkers}
+      persistKey={isLargeScreen ? 'app-background' : undefined}
       routeCoordinates={locationRouteCoordinates}
       showRoutes={locationRouteCoordinates.length > 1}
       zoomLevel={12}
