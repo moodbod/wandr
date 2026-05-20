@@ -260,11 +260,13 @@ function AuthRouteGate() {
   const pathname = usePathname();
   const { openAuthSheet } = useAuthSheet();
   const { isAuthenticated, isLoading } = useAuthSession();
+  const pathSegments = pathname.split('/').filter(Boolean);
+  const [routeRoot, routeLeaf] = pathSegments;
   const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
     isRootRoute ||
     PUBLIC_ROUTE_ROOTS.has(String(segments[0])) ||
-    (segments[0] === '(tabs)' && (!segments[1] || PUBLIC_TAB_ROUTES.has(String(segments[1]))));
+    (routeRoot === '(tabs)' && (!routeLeaf || PUBLIC_TAB_ROUTES.has(routeLeaf)));
 
   useEffect(() => {
     if (isLoading) {
