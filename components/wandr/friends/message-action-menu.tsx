@@ -157,10 +157,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    shadowColor: designSystem.colors.black,
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    boxShadow: '0 10px 18px rgba(0,0,0,0.12)',
     elevation: 12,
   },
   menuLight: {

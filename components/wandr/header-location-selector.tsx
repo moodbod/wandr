@@ -18,14 +18,12 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
   const isDark = useColorScheme() === 'dark';
   const isDesktopMap = variant === 'desktopMap';
   const textColor = isDesktopMap
-    ? isDark
-      ? designSystem.colors.darkTextWarm
-      : designSystem.colors.ink
+    ? designSystem.colors.darkTextWarm
     : isDark
       ? designSystem.colors.darkText
       : designSystem.colors.ink;
-  const desktopSurfaceColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.whiteGlassStrong;
-  const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
+  const desktopSurfaceColor = 'rgba(8, 9, 14, 0.82)';
+  const desktopBorderColor = 'rgba(255, 255, 255, 0.12)';
 
   if (isDesktopMap) {
     return (
@@ -43,7 +41,9 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
       >
         <View style={styles.desktopContent}>
           {location.countryCode ? (
-            <CountryFlagAvatar countryCode={location.countryCode} size={40} />
+            <View style={styles.desktopAvatarGlow}>
+              <CountryFlagAvatar countryCode={location.countryCode} size={40} />
+            </View>
           ) : null}
           <View style={styles.copy}>
             <ThemedText numberOfLines={1} style={[styles.label, styles.desktopLabel, { color: textColor }]}>
@@ -85,20 +85,18 @@ const styles = StyleSheet.create({
     width: 'auto',
     minWidth: 132,
     maxWidth: 230,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
+    boxShadow: '0 8px 14px rgba(0,0,0,0.12)',
     elevation: 8,
   },
   desktopSelector: {
-    height: designSystem.layout.inputHeight,
+    height: 58,
     minWidth: 0,
     maxWidth: 220,
     borderRadius: designSystem.radii.pill,
     borderWidth: 1,
     justifyContent: 'center',
     overflow: 'hidden',
+    boxShadow: '0 18px 38px rgba(0,0,0,0.38)',
   },
   content: {
     height: '100%',
@@ -111,12 +109,20 @@ const styles = StyleSheet.create({
   },
   desktopContent: {
     height: '100%',
-    paddingLeft: 6,
-    paddingRight: 10,
+    paddingLeft: 7,
+    paddingRight: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 7,
+    gap: 12,
+  },
+  desktopAvatarGlow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 24px rgba(198,239,174,0.28)',
   },
   copy: {
     flexShrink: 1,
@@ -127,7 +133,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   desktopLabel: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
   },
 });

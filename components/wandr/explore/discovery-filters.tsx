@@ -1,4 +1,5 @@
 import type React from 'react';
+import { MagnifyingGlass } from 'phosphor-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { GlassInput } from '@/components/ui/glass-input';
@@ -40,10 +41,12 @@ export function DiscoveryFilters({
 }: DiscoveryFiltersProps) {
   const isDark = useColorScheme() === 'dark';
   const isDesktopMap = variant === 'desktopMap';
-  const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
-  const desktopInputSurfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassMax;
+  const desktopBorderColor = 'rgba(255, 255, 255, 0.12)';
+  const desktopControlSurfaceColor = 'rgba(8, 9, 14, 0.82)';
   const desktopInactiveTabColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
   const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
+  const desktopPlaceholderTextColor = 'rgba(243, 244, 239, 0.58)';
+  const desktopSearchIconColor = isDark ? 'rgba(243, 244, 239, 0.78)' : designSystem.colors.fern;
   const showRegionTabs = regions.length > 1;
   const showIntentTabs = intents.length > 1;
   const showFilterTabs = showRegionTabs || showIntentTabs;
@@ -65,22 +68,24 @@ export function DiscoveryFilters({
               ? [
                   styles.desktopSearchInputContent,
                   {
-                    backgroundColor: desktopInputSurfaceColor,
+                    backgroundColor: desktopControlSurfaceColor,
                     borderColor: desktopBorderColor,
                   },
                 ]
               : undefined
           }
           intensity={70}
-          onChangeText={onSearchQueryChange}
-          placeholder={searchPlaceholder}
-          placeholderTextColor={
-            isDesktopMap
-              ? isDark
-                ? designSystem.colors.darkPlaceholderTextSoft
-                : designSystem.colors.placeholderTextSoft
-              : undefined
+          leftIcon={
+            isDesktopMap ? (
+              <View style={styles.desktopSearchIconBadge}>
+                <MagnifyingGlass color={desktopSearchIconColor} size={15} weight="bold" />
+              </View>
+            ) : undefined
           }
+          onChangeText={onSearchQueryChange}
+          plain={isDesktopMap}
+          placeholder={searchPlaceholder}
+          placeholderTextColor={isDesktopMap ? desktopPlaceholderTextColor : undefined}
           returnKeyType="search"
           style={isDesktopMap ? [styles.desktopSearchText, { color: desktopInactiveTextColor }] : undefined}
           value={searchQuery}
@@ -191,11 +196,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   desktopSearchInputContent: {
-    gap: 8,
-    paddingHorizontal: 12,
+    height: 58,
+    gap: 14,
+    paddingLeft: 14,
+    paddingRight: 18,
+    borderRadius: designSystem.radii.pill,
+    borderWidth: 1,
+    overflow: 'hidden',
+    boxShadow: '0 18px 38px rgba(0,0,0,0.38)',
+  },
+  desktopSearchIconBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    boxShadow: '0 8px 18px rgba(0,0,0,0.22)',
   },
   desktopSearchText: {
     color: designSystem.colors.darkTextWarm,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
   },
   desktopFilterDock: {
     gap: 8,

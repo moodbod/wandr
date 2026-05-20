@@ -186,10 +186,7 @@ const styles = StyleSheet.create({
     maxWidth: 620,
     minHeight: 76,
     padding: designSystem.spacing.sm,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { height: 16, width: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 34,
+    boxShadow: '0 16px 34px rgba(0,0,0,0.2)',
     width: '100%',
   },
   iconShell: {

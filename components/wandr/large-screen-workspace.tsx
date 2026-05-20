@@ -11,9 +11,9 @@ export const largeScreenWorkspace = {
   inset: 12,
   sidebarWidth: 76,
   panelRadius: 32,
-  mainColumnWidth: 420,
-  mainColumnTabletWidth: 360,
-  detailColumnWidth: 430,
+  mainColumnWidth: 390,
+  mainColumnTabletWidth: 340,
+  detailColumnWidth: 390,
   detailColumnTabletWidth: 340,
 } as const;
 

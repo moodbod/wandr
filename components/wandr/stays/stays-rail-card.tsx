@@ -106,10 +106,7 @@ const styles = StyleSheet.create({
   propertyRowFloating: {
     borderRadius: designSystem.radii.card,
     paddingHorizontal: 12,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
+    boxShadow: '0 10px 20px rgba(0,0,0,0.16)',
     elevation: 8,
   },
   propertyImageShell: {

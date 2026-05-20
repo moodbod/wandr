@@ -371,7 +371,7 @@ function MapPreviewComponent({
             avatarPaletteKey={userAvatarPaletteKey}
             avatarUri={userAvatarUri}
             coordinate={userCoordinate}
-            isDark={isDark}
+            heading={userHeading}
             name={userName}
           />
         ) : null}

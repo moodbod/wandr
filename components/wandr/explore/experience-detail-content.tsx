@@ -2,7 +2,7 @@ import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -15,6 +15,7 @@ import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
 import { WandrHeader } from '@/components/wandr/header';
+import { largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
@@ -50,8 +51,11 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { isLargeScreen } = useResponsive();
+  const { isLargeScreen, isTablet } = useResponsive();
   const largeDetailTopInset = isLargeScreen && !hideHeader ? 16 : 0;
+  const useWebActivityCardFrame = Platform.OS === 'web' && isLargeScreen;
+  const webActivityCardImageWidth =
+    (isTablet ? largeScreenWorkspace.mainColumnTabletWidth : largeScreenWorkspace.mainColumnWidth) - 32;
   const traveler = useCurrentTraveler();
   const requireAuthAction = useRequireAuthAction();
   const travelerSlug = traveler?.slug ?? '';
@@ -384,10 +388,18 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
           { paddingTop: hideHeader ? 20 : insets.top + 72 + largeDetailTopInset, paddingBottom: insets.bottom + designSystem.spacing.xxxl },
         ]}>
         
-        <View style={styles.carouselContainer}>
+        <View
+          style={[
+            styles.carouselContainer,
+            useWebActivityCardFrame ? { height: webActivityCardImageWidth / 1.5 } : null,
+          ]}
+        >
           <ExperienceGalleryCarousel
-            height={420}
+            cardHorizontalInset={useWebActivityCardFrame ? 16 : undefined}
+            frameBorderRadius={useWebActivityCardFrame ? 9 : undefined}
+            height={useWebActivityCardFrame ? webActivityCardImageWidth / 1.5 : 420}
             images={galleryImages}
+            maxCardWidth={useWebActivityCardFrame ? webActivityCardImageWidth : undefined}
           />
         </View>
 
@@ -429,6 +441,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             onSecondaryPress={handleStartJourney}
             primaryLabel={isAlreadyBooked ? 'Add another' : 'Add to trip'}
             secondaryLabel="Start journey"
+            variant={useWebActivityCardFrame ? 'webDetail' : 'default'}
           />
 
           {joinableTrips && joinableTrips.length > 0 ? (

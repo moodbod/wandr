@@ -378,10 +378,7 @@ const styles = StyleSheet.create({
   bubbleOther: {
     borderTopLeftRadius: 8,
     borderWidth: 1,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
+    boxShadow: '0 8px 16px rgba(0,0,0,0.05)',
     elevation: 2,
   },
   bubbleOtherLight: {

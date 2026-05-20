@@ -619,10 +619,7 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 3,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
     elevation: 3,
   },
   floatingBadge: {

@@ -145,10 +145,7 @@ const styles = StyleSheet.create({
     maxHeight: 144,
   },
   composerFloat: {
-    shadowColor: designSystem.colors.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 26,
+    boxShadow: '0 12px 26px rgba(14,15,12,0.18)',
   },
   composerGlassClip: {
     minHeight: 52,

@@ -743,42 +743,44 @@ function ExploreScreenView({
     />
   );
   const largeMapControls = (
-    <View style={[styles.largeMapControlsFrame, { width: mapControlsWidth }]}>
-      <DiscoveryFilters
-        activeIntent={activeDiscoveryIntent}
-        activeRegion={resolvedDiscoveryRegion}
-        intents={discoveryIntentOptions}
-        leadingSearchAccessory={
-          <HeaderLocationSelector
-            location={planningLocation}
-            onPress={handleOpenLocationSheet}
-            variant="desktopMap"
-          />
-        }
-        regions={discoveryRegionOptions}
-        searchPlaceholder={pageContent.search.intro.searchPlaceholder}
-        searchQuery={searchQuery}
-        trailingSearchAccessory={
-          <GlassButton
-            accessibilityLabel="Locate me"
-            height={52}
-            onPress={handleLocateMe}
-            radius={designSystem.radii.pill}
-            width={52}
-          >
-            <NavigationArrow
-              color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
-              size={20}
-              weight="bold"
+    <View pointerEvents="box-none" style={styles.largeMapControlsLayer}>
+      <View style={[styles.largeMapControlsFrame, { width: mapControlsWidth }]}>
+        <DiscoveryFilters
+          activeIntent={activeDiscoveryIntent}
+          activeRegion={resolvedDiscoveryRegion}
+          intents={discoveryIntentOptions}
+          leadingSearchAccessory={
+            <HeaderLocationSelector
+              location={planningLocation}
+              onPress={handleOpenLocationSheet}
+              variant="desktopMap"
             />
-          </GlassButton>
-        }
-        onIntentChange={setActiveDiscoveryIntent}
-        onRegionChange={setActiveDiscoveryRegion}
-        onSearchQueryChange={setSearchQuery}
-        fullBleed={false}
-        variant="desktopMap"
-      />
+          }
+          regions={discoveryRegionOptions}
+          searchPlaceholder={pageContent.search.intro.searchPlaceholder}
+          searchQuery={searchQuery}
+          onIntentChange={setActiveDiscoveryIntent}
+          onRegionChange={setActiveDiscoveryRegion}
+          onSearchQueryChange={setSearchQuery}
+          fullBleed={false}
+          variant="desktopMap"
+        />
+      </View>
+      <Pressable
+        accessibilityLabel="Locate me"
+        accessibilityRole="button"
+        hitSlop={10}
+        onPress={handleLocateMe}
+        style={({ pressed }) => [
+          styles.desktopMapLocateButton,
+          styles.desktopMapLocateFloating,
+          {
+            opacity: pressed ? 0.78 : 1,
+          },
+        ]}
+      >
+        <NavigationArrow color={designSystem.colors.darkTextWarm} size={28} weight="fill" />
+      </Pressable>
     </View>
   );
 
@@ -788,10 +790,9 @@ function ExploreScreenView({
         <LargeScreenWorkspace
           mapContent={mapLayerContent}
           mapControls={largeMapControls}
-          mapControlsStyle={{ left: mapControlsInsetLeft }}
+          mapControlsStyle={{ left: mapControlsInsetLeft, bottom: largeScreenWorkspace.inset }}
         >
-          <LargeScreenPanel kind="main"
-          >
+          <LargeScreenPanel kind="main" style={styles.exploreMainPanel}>
             <ExploreContent
               discoveryActivities={discoveryActivities}
               discoveryHiddenGems={discoveryHiddenGems}
@@ -1398,8 +1399,29 @@ const styles = StyleSheet.create({
   largeMapControlsFrame: {
     maxWidth: '100%',
   },
+  largeMapControlsLayer: {
+    flex: 1,
+    alignItems: 'center',
+    width: '100%',
+  },
+  exploreMainPanel: {
+    backgroundColor: '#090a0f',
+    borderColor: 'rgba(255,255,255,0.06)',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.34)',
+  },
+  desktopMapLocateButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  desktopMapLocateFloating: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+  },
   columnScroll: {
-    paddingTop: 18,
+    paddingTop: 26,
     paddingBottom: 48,
   },
   sheetContent: {
@@ -1414,10 +1436,10 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 14,
+    paddingTop: 2,
+    paddingBottom: 16,
     gap: 14,
   },
   sectionCopy: {
@@ -1425,9 +1447,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionTitle: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: '600',
+    alignSelf: 'stretch',
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   mobileSectionHeader: {
     flexDirection: 'row',
@@ -1436,9 +1460,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   mobileSectionTitle: {
+    alignSelf: 'stretch',
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '600',
+    textAlign: 'center',
   },
   mobileSectionSubtitle: {
     fontSize: 14,
@@ -1495,10 +1521,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   cardList: {
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: 16,
+    gap: 18,
   },
   mobileCardList: {
+    paddingHorizontal: 8,
     gap: 16,
   },
   groupTripSection: {
@@ -1618,6 +1645,6 @@ function toHiddenGemDiscoveryItem(item: ExploreHiddenGem): ExploreDiscoveryItem 
 
 function getPlanningLocationCopy(_locationId: string, locationLabel: string) {
   return {
-    exploreTitle: `Top 10 places in ${locationLabel}`,
+    exploreTitle: `Places that make ${locationLabel} unforgettable`,
   };
 }

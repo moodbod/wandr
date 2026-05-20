@@ -24,12 +24,18 @@ export type GalleryImageItem = {
 
 type ExperienceGalleryCarouselProps = {
   images: readonly (string | GalleryImageItem)[];
+  cardHorizontalInset?: number;
+  frameBorderRadius?: number;
   height?: number;
+  maxCardWidth?: number;
 };
 
 export function ExperienceGalleryCarousel({
+  cardHorizontalInset = 24,
+  frameBorderRadius = 32,
   images,
   height = 500,
+  maxCardWidth = 344,
 }: ExperienceGalleryCarouselProps) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const [containerWidth, setContainerWidth] = useState(0);
@@ -38,7 +44,7 @@ export function ExperienceGalleryCarousel({
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
 
   const availableWidth = containerWidth || windowWidth;
-  const cardWidth = Math.min(Math.max(availableWidth - 48, 240), 344);
+  const cardWidth = Math.min(Math.max(availableWidth - cardHorizontalInset * 2, 240), maxCardWidth);
   const itemGap = 18;
   const itemWidth = cardWidth + itemGap;
   const normalizedImages = images.map((image) => (typeof image === 'string' ? { uri: image, source: 'host' as const } : image));
@@ -55,6 +61,7 @@ export function ExperienceGalleryCarousel({
         style={[
           styles.frame,
           {
+            borderRadius: frameBorderRadius,
             width: cardWidth,
             height,
           },
@@ -107,8 +114,8 @@ export function ExperienceGalleryCarousel({
             contentContainerStyle={[
               styles.webCarouselContent,
               {
-                paddingLeft: Math.max((availableWidth - cardWidth) / 2, 18),
-                paddingRight: Math.max((availableWidth - cardWidth) / 2, 18),
+                paddingLeft: Math.max((availableWidth - cardWidth) / 2, cardHorizontalInset),
+                paddingRight: Math.max((availableWidth - cardWidth) / 2, cardHorizontalInset),
               },
             ]}
             {...({
@@ -134,7 +141,7 @@ export function ExperienceGalleryCarousel({
             mode="parallax"
             modeConfig={{
               parallaxScrollingScale: 0.96,
-              parallaxScrollingOffset: Math.max((availableWidth - cardWidth) / 2, 18),
+              parallaxScrollingOffset: Math.max((availableWidth - cardWidth) / 2, cardHorizontalInset),
               parallaxAdjacentItemScale: 0.84,
             }}
             data={previewImages}
@@ -266,7 +273,6 @@ const styles = StyleSheet.create({
   },
   frame: {
     overflow: 'hidden',
-    borderRadius: 32,
   },
   image: {
     width: '100%',

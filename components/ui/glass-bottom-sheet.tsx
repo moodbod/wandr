@@ -461,10 +461,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetShadow: {
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    boxShadow: '0 -4px 16px rgba(0,0,0,0.08)',
     elevation: 10,
   },
   sheetBorder: {

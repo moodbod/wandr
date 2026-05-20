@@ -3,7 +3,7 @@ import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { WandrAvatar } from '@/components/wandr/avatar';
+import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
 import { designSystem } from '@/constants/design-system';
 
 import { getMapboxModule } from './mapbox-module';
@@ -141,7 +141,7 @@ type MapboxUserMarkerProps = {
   avatarPaletteKey?: string | null;
   avatarUri?: string | null;
   coordinate: readonly [number, number];
-  isDark: boolean;
+  heading?: number | null;
   name?: string | null;
 };
 
@@ -149,7 +149,7 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
   avatarPaletteKey,
   avatarUri,
   coordinate,
-  isDark,
+  heading,
   name,
 }: MapboxUserMarkerProps) {
   const MapboxGL = getMapboxModule();
@@ -160,9 +160,7 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
 
   return (
     <MapboxGL.MarkerView coordinate={toMapboxPosition(coordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap style={styles.userMarkerView}>
-      <View style={[styles.userAvatarFrame, isDark && styles.userAvatarFrameDark]}>
-        <WandrAvatar name={name} paletteKey={avatarPaletteKey} size={42} uri={avatarUri} />
-      </View>
+      <UserLocationPuck avatarPaletteKey={avatarPaletteKey} avatarUri={avatarUri} heading={heading} name={name} />
     </MapboxGL.MarkerView>
   );
 });
@@ -181,22 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 20,
   },
-  userAvatarFrame: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: designSystem.colors.white,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  userAvatarFrameDark: {
-    backgroundColor: designSystem.colors.darkBackground,
-  },
   markerShell: {
     alignItems: 'center',
     gap: 6,
@@ -211,10 +193,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1.5,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
     elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -289,10 +268,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4f88e8',
     borderWidth: 3,
     borderColor: designSystem.colors.whiteOverlayBorder,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0,0,0,0.22)',
     elevation: 3,
   },
   thumbnailFallback: {

@@ -58,10 +58,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#111',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    boxShadow: '0 8px 14px rgba(0,0,0,0.25)',
     elevation: 8,
   },
   miniCallPressable: {

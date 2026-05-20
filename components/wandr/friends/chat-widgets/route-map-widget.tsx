@@ -283,10 +283,7 @@ const styles = StyleSheet.create({
   },
   routeInfoCard: {
     borderRadius: 18,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
+    boxShadow: '0 6px 12px rgba(0,0,0,0.16)',
     elevation: 6,
   },
   routeInfoContent: {

@@ -122,7 +122,7 @@ export function AppSidebar() {
             </Pressable>
           </View>
         ) : null}
-        <View style={[styles.bottomSection, { backgroundColor: surfaceColor, borderColor }]}>
+        <View style={styles.bottomSection}>
         <Pressable
           accessibilityLabel="Profile"
           accessibilityRole="button"
@@ -130,7 +130,7 @@ export function AppSidebar() {
             setSurface('profile');
             router.push('/profile');
           }}
-          style={[styles.navItem, activeHref === '/profile' && managerSurface === 'profile' && { backgroundColor: activeBackground }]}
+          style={styles.profileNavItem}
         >
           <WandrAvatar
             name={traveler?.name || 'Traveler'}
@@ -224,10 +224,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  profileNavItem: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bottomSection: {
     alignItems: 'center',
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: 6,
   },
 });

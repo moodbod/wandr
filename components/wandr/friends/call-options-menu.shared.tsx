@@ -109,10 +109,7 @@ const styles = StyleSheet.create({
   menuLight: {
     backgroundColor: designSystem.colors.whiteGlassMax,
     borderColor: designSystem.colors.borderSoft,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 22,
+    boxShadow: '0 10px 22px rgba(0,0,0,0.16)',
     elevation: 8,
   },
   menuDark: {

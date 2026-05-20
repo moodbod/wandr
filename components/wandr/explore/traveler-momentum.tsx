@@ -12,6 +12,7 @@ type TravelerMomentumProps = {
   rating?: number;
   reviewCount?: number;
   emptyLabel?: string;
+  tone?: 'default' | 'darkPanel';
 };
 
 export function TravelerMomentum({
@@ -21,9 +22,14 @@ export function TravelerMomentum({
   rating,
   reviewCount,
   emptyLabel,
+  tone = 'default',
 }: TravelerMomentumProps) {
   const resolvedEmptyLabel =
     emptyLabel ?? (regionName ? `Be the first traveler from ${regionName} to visit` : 'Be the first traveler to visit');
+  const isDarkPanel = tone === 'darkPanel';
+  const summaryColor = isDarkPanel ? 'rgba(243,244,239,0.72)' : designSystem.colors.warmDark;
+  const ratingColor = isDarkPanel ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
+  const reviewColor = isDarkPanel ? 'rgba(243,244,239,0.52)' : designSystem.colors.gray;
 
   return (
     <View style={styles.container}>
@@ -38,26 +44,28 @@ export function TravelerMomentum({
         ) : null}
 
         {visitorCount > 0 ? (
-          <ThemedText style={styles.summary}>
+          <ThemedText style={[styles.summary, { color: summaryColor }]}>
             {visitorCount === 1 ? '1 traveler' : `${visitorCount} travelers`}
             {regionName ? ` from ${regionName}` : ''}
             {' '}visited
           </ThemedText>
         ) : null}
 
-        {visitorCount === 0 ? <ThemedText style={styles.summary}>{resolvedEmptyLabel}</ThemedText> : null}
+        {visitorCount === 0 ? (
+          <ThemedText style={[styles.summary, { color: summaryColor }]}>{resolvedEmptyLabel}</ThemedText>
+        ) : null}
       </View>
 
       {(rating !== undefined || reviewCount !== undefined) && (
         <View style={styles.right}>
           {rating !== undefined && (
             <View style={styles.ratingGroup}>
-              <ThemedText style={styles.ratingText}>{rating.toFixed(1)}</ThemedText>
+              <ThemedText style={[styles.ratingText, { color: ratingColor }]}>{rating.toFixed(1)}</ThemedText>
               <Star size={16} color={designSystem.colors.lime} weight="fill" />
             </View>
           )}
           {reviewCount !== undefined && (
-            <ThemedText style={styles.reviewText}>({(reviewCount / 1000).toFixed(0)}k Reviews)</ThemedText>
+            <ThemedText style={[styles.reviewText, { color: reviewColor }]}>({(reviewCount / 1000).toFixed(0)}k Reviews)</ThemedText>
           )}
         </View>
       )}

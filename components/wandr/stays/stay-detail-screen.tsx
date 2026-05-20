@@ -1650,15 +1650,11 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     borderRadius: 40,
-    shadowColor: designSystem.colors.black,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
+    boxShadow: '0 16px 28px rgba(0,0,0,0.16)',
     elevation: 18,
   },
   bottomBarAndroidShadowless: {
-    shadowOpacity: 0,
-    shadowRadius: 0,
+    boxShadow: 'none',
     elevation: 0,
   },
   bottomBarGlassClip: {

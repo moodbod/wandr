@@ -32,6 +32,7 @@ export type MapPreviewProps = {
   showRoutes?: boolean;
   recenterToUserSignal?: number;
   colorSchemeMode?: 'system' | 'dark' | 'light';
+  interactionEnabled?: boolean;
   markerVariant?: 'default' | 'routeWidget';
   persistKey?: string;
   onInteract?: () => void;

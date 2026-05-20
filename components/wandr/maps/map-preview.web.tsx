@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { WandrAvatar } from '@/components/wandr/avatar';
+import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
 import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -52,6 +52,7 @@ function MapPreviewWebComponent({
   showRoutes = true,
   recenterToUserSignal = 0,
   colorSchemeMode = 'system',
+  interactionEnabled = true,
   markerVariant = 'default',
   persistKey,
   onInteract,
@@ -153,7 +154,7 @@ function MapPreviewWebComponent({
 
     const mapHost = persistentState?.host ?? document.createElement('div');
     if (persistentState) {
-      attachPersistentMapHost(persistentState);
+      attachPersistentMapHost(persistentState, containerRef.current);
     } else {
       applyEmbeddedMapHostStyle(mapHost);
       containerRef.current.appendChild(mapHost);
@@ -168,6 +169,7 @@ function MapPreviewWebComponent({
         container: mapHost,
         bearing: 0,
         dragRotate: false,
+        interactive: interactionEnabled,
         logoPosition: 'bottom-left',
         pitch: 0,
         pitchWithRotate: false,
@@ -181,9 +183,6 @@ function MapPreviewWebComponent({
       markerRefs.current = persistentState.markers;
     }
     currentMapStyleURLRef.current = persistentState?.currentMapStyleURL ?? initialConfig.mapStyleURL;
-    if (!persistentState?.map) {
-      map.addControl(new mapbox.NavigationControl({ showCompass: false }), 'top-right');
-    }
     const handleUserInteract = () => {
       hasUserInteractedRef.current = true;
       onInteractRef.current?.();
@@ -198,6 +197,7 @@ function MapPreviewWebComponent({
 
     let hasLoaded = Boolean(persistentState?.isReady) || map.loaded();
     let resizeFrame: number | null = null;
+    let resizeTimers: number[] = [];
     const resizeMap = () => {
       if (resizeFrame !== null) {
         cancelAnimationFrame(resizeFrame);
@@ -210,8 +210,23 @@ function MapPreviewWebComponent({
           return;
         }
 
+        hideMapboxControls(mapHost);
         map.resize();
+        if (!interactionEnabled) {
+          map.jumpTo({
+            bearing: 0,
+            center: mapCenterCoordinate as [number, number],
+            padding: cameraPadding,
+            pitch: 0,
+            zoom: zoomLevel,
+          });
+        }
       });
+    };
+    const resizeMapAfterLayout = () => {
+      resizeMap();
+      resizeTimers.forEach((timer) => window.clearTimeout(timer));
+      resizeTimers = [80, 220, 420].map((delay) => window.setTimeout(resizeMap, delay));
     };
     const handleMapLoad = () => {
       hasLoaded = true;
@@ -220,7 +235,7 @@ function MapPreviewWebComponent({
       }
       hideWebBaseMapDetails(map);
       setIsMapReady(true);
-      resizeMap();
+      resizeMapAfterLayout();
     };
     const handleStyleData = () => hideWebBaseMapDetails(map);
     const handleIdle = () => hideWebBaseMapDetails(map);
@@ -233,7 +248,7 @@ function MapPreviewWebComponent({
     if (hasLoaded) {
       hideWebBaseMapDetails(map);
       setIsMapReady(true);
-      resizeMap();
+      resizeMapAfterLayout();
     }
 
     return () => {
@@ -241,6 +256,7 @@ function MapPreviewWebComponent({
       if (resizeFrame !== null) {
         cancelAnimationFrame(resizeFrame);
       }
+      resizeTimers.forEach((timer) => window.clearTimeout(timer));
       window.removeEventListener('resize', resizeMap);
       resizeObserver.disconnect();
       map.off('dragstart', handleUserInteract);
@@ -266,7 +282,15 @@ function MapPreviewWebComponent({
       currentMapStyleURLRef.current = null;
       setIsMapReady(false);
     };
-  }, [mapbox, persistKey]);
+  }, [cameraPadding, interactionEnabled, mapCenterCoordinate, mapbox, persistKey, zoomLevel]);
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      return;
+    }
+
+    setWebMapInteraction(mapRef.current, interactionEnabled);
+  }, [interactionEnabled, isMapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -303,6 +327,7 @@ function MapPreviewWebComponent({
 
     lastCameraTargetKeyRef.current = cameraTargetKey;
     hasUserInteractedRef.current = false;
+    mapRef.current.resize();
     mapRef.current.easeTo({
       bearing: 0,
       center: mapCenterCoordinate as [number, number],
@@ -323,6 +348,7 @@ function MapPreviewWebComponent({
 
     lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, 17);
     hasUserInteractedRef.current = false;
+    mapRef.current.resize();
     mapRef.current.easeTo({
       bearing: userHeading ?? 0,
       center: userCoordinate as [number, number],
@@ -424,13 +450,13 @@ function MapPreviewWebComponent({
       const { element, root } = createUserMarkerElement({
         avatarPaletteKey: userAvatarPaletteKey,
         avatarUri: userAvatarUri,
-        isDark,
+        heading: userHeading,
         name: userName,
       });
       const marker = new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current);
       markerRefs.current.push({ marker, root });
     }
-  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userAvatarPaletteKey, userAvatarUri, userCoordinate, userName]);
+  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userAvatarPaletteKey, userAvatarUri, userCoordinate, userHeading, userName]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -479,10 +505,10 @@ function MapPreviewWebComponent({
 
   return (
     <View style={[styles.mapRoot, style]}>
-      <div
-        ref={containerRef}
-        style={webMapStyle}
-      />
+        <div
+          ref={containerRef}
+          style={webMapStyle}
+        />
     </View>
   );
 }
@@ -535,16 +561,16 @@ function getPersistentMapState(key: string) {
   return state;
 }
 
-function attachPersistentMapHost(state: PersistentMapState) {
+function attachPersistentMapHost(state: PersistentMapState, container: HTMLDivElement) {
   if (state.hideTimer !== null) {
     window.clearTimeout(state.hideTimer);
     state.hideTimer = null;
   }
 
-  const root = document.getElementById('root') ?? document.body;
-  applyPersistentMapHostStyle(state.host);
-  if (state.host.parentElement !== root) {
-    root.appendChild(state.host);
+  applyEmbeddedMapHostStyle(state.host);
+  state.host.style.visibility = 'visible';
+  if (state.host.parentElement !== container) {
+    container.appendChild(state.host);
   }
 }
 
@@ -554,26 +580,14 @@ function schedulePersistentMapHide(state: PersistentMapState) {
   }
 
   state.hideTimer = window.setTimeout(() => {
-    state.host.style.visibility = 'hidden';
+    state.host.remove();
     state.hideTimer = null;
   }, 2000);
 }
 
 function applyEmbeddedMapHostStyle(host: HTMLDivElement) {
   Object.assign(host.style, webMapStyle);
-}
-
-function applyPersistentMapHostStyle(host: HTMLDivElement) {
-  Object.assign(host.style, {
-    ...webMapStyle,
-    bottom: '0',
-    height: '100vh',
-    position: 'fixed',
-    right: '0',
-    visibility: 'visible',
-    width: '100vw',
-    zIndex: '1',
-  } satisfies React.CSSProperties);
+  hideMapboxControls(host);
 }
 
 function normalizeMarkers(markers: readonly MapMarker[]) {
@@ -658,34 +672,32 @@ function createMarkerElement(marker: MapMarker, isDark: boolean, variant: MapPre
 function createUserMarkerElement({
   avatarPaletteKey,
   avatarUri,
-  isDark,
+  heading,
   name,
 }: {
   avatarPaletteKey?: string | null;
   avatarUri?: string | null;
-  isDark: boolean;
+  heading?: number | null;
   name?: string | null;
 }) {
   const element = document.createElement('div');
   element.style.cssText = [
-    'width:50px',
-    'height:50px',
+    'width:58px',
+    'height:58px',
     'border-radius:999px',
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    `background:${isDark ? designSystem.colors.darkBackground : designSystem.colors.white}`,
-    'box-shadow:0 8px 14px rgba(0,0,0,0.18)',
     'overflow:hidden',
   ].join(';');
 
   const root = createRoot(element);
   root.render(
-    <WandrAvatar
+    <UserLocationPuck
+      avatarPaletteKey={avatarPaletteKey}
+      avatarUri={avatarUri}
+      heading={heading}
       name={name}
-      paletteKey={avatarPaletteKey}
-      size={42}
-      uri={avatarUri}
     />
   );
 
@@ -776,14 +788,33 @@ function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: nu
   return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}`;
 }
 
+function hideMapboxControls(host: HTMLDivElement) {
+  host.querySelectorAll<HTMLElement>('.mapboxgl-ctrl-logo, .mapboxgl-ctrl-attrib').forEach((element) => {
+    element.style.display = 'none';
+  });
+}
+
+function setWebMapInteraction(map: mapboxgl.Map, enabled: boolean) {
+  const method = enabled ? 'enable' : 'disable';
+
+  map.scrollZoom[method]();
+  map.boxZoom[method]();
+  map.dragPan[method]();
+  map.keyboard[method]();
+  map.doubleClickZoom[method]();
+  map.touchZoomRotate[method]();
+}
+
 const webMapStyle = {
-  width: '125%',
-  height: '125%',
+  bottom: 0,
+  height: 'auto',
+  left: 0,
   outline: 'none',
   border: 'none',
   position: 'absolute',
+  right: 0,
   top: 0,
-  left: 0,
+  width: 'auto',
 } satisfies React.CSSProperties;
 
 const styles = StyleSheet.create({
