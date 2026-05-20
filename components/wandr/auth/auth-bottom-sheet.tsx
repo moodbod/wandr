@@ -71,9 +71,14 @@ function getCodeFromUrl(url: string) {
   return typeof code === 'string' ? code : null;
 }
 
+function getWebCallbackPath(returnTo: string) {
+  const callbackPath = returnTo.replace(/\/\([^/]+\)(?=\/|$)/g, '') || '/';
+  return callbackPath.startsWith('/') ? callbackPath : '/';
+}
+
 function getOAuthRedirectTo(mode: Exclude<AuthSheetMode, 'onboarding'>, returnTo: string) {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const url = new URL('/', window.location.origin);
+    const url = new URL(getWebCallbackPath(returnTo), window.location.origin);
     url.searchParams.set('authMode', mode);
     url.searchParams.set('returnTo', returnTo);
     return url.toString();

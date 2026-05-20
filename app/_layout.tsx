@@ -110,6 +110,14 @@ function AppShell({
       return;
     }
 
+    document.title = 'Wandr';
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
     const root = document.getElementById('root');
     if (!root) {
       return;
@@ -227,7 +235,7 @@ function AppShell({
         <View style={styles.shellRoot}>
           {isLargeScreen && <AppSidebar />}
           <View style={styles.content}>
-            <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
+            <Stack screenOptions={{ ...stackScreenOptions, headerShown: false, title: 'Wandr' }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="explore" options={{ headerShown: false }} />
               <Stack.Screen name="trip" options={{ headerShown: false }} />
