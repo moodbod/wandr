@@ -153,7 +153,7 @@ function MapPreviewWebComponent({
 
     const mapHost = persistentState?.host ?? document.createElement('div');
     if (persistentState) {
-      attachPersistentMapHost(persistentState);
+      attachPersistentMapHost(persistentState, containerRef.current);
     } else {
       applyEmbeddedMapHostStyle(mapHost);
       containerRef.current.appendChild(mapHost);
@@ -210,6 +210,9 @@ function MapPreviewWebComponent({
           return;
         }
 
+        if (persistentState) {
+          applyPersistentMapHostStyle(mapHost);
+        }
         map.resize();
       });
     };
@@ -535,28 +538,45 @@ function getPersistentMapState(key: string) {
   return state;
 }
 
-function attachPersistentMapHost(state: PersistentMapState) {
+function attachPersistentMapHost(state: PersistentMapState, container: HTMLDivElement) {
   if (state.hideTimer !== null) {
     window.clearTimeout(state.hideTimer);
     state.hideTimer = null;
   }
 
-  const root = document.getElementById('root') ?? document.body;
   applyPersistentMapHostStyle(state.host);
-  if (state.host.parentElement !== root) {
-    root.appendChild(state.host);
+  if (state.host.parentElement !== container) {
+    container.appendChild(state.host);
   }
 }
 
 function schedulePersistentMapHide(state: PersistentMapState) {
   if (state.hideTimer !== null) {
     window.clearTimeout(state.hideTimer);
+    state.hideTimer = null;
   }
 
-  state.hideTimer = window.setTimeout(() => {
-    state.host.style.visibility = 'hidden';
-    state.hideTimer = null;
-  }, 2000);
+  parkPersistentMapHost(state.host);
+}
+
+function parkPersistentMapHost(host: HTMLDivElement) {
+  const root = document.getElementById('root') ?? document.body;
+  const hostStyle = host.style as CSSStyleDeclaration & { zoom?: string };
+
+  if (host.parentElement !== root) {
+    root.appendChild(host);
+  }
+
+  Object.assign(host.style, {
+    ...webMapStyle,
+    height: '1px',
+    pointerEvents: 'none',
+    position: 'fixed',
+    visibility: 'hidden',
+    width: '1px',
+    zIndex: '-1',
+  } satisfies React.CSSProperties);
+  hostStyle.zoom = '';
 }
 
 function applyEmbeddedMapHostStyle(host: HTMLDivElement) {
@@ -564,16 +584,28 @@ function applyEmbeddedMapHostStyle(host: HTMLDivElement) {
 }
 
 function applyPersistentMapHostStyle(host: HTMLDivElement) {
+  const rootZoom = getRootZoomScale();
+  const hostStyle = host.style as CSSStyleDeclaration & { zoom?: string };
+
   Object.assign(host.style, {
     ...webMapStyle,
-    bottom: '0',
+    bottom: 'auto',
     height: '100vh',
-    position: 'fixed',
-    right: '0',
+    pointerEvents: 'auto',
+    position: 'absolute',
+    right: 'auto',
     visibility: 'visible',
     width: '100vw',
-    zIndex: '1',
+    zIndex: '0',
   } satisfies React.CSSProperties);
+  hostStyle.zoom = rootZoom === 1 ? '' : `${1 / rootZoom}`;
+}
+
+function getRootZoomScale() {
+  const rootStyle = document.getElementById('root')?.style as (CSSStyleDeclaration & { zoom?: string }) | undefined;
+  const zoom = Number.parseFloat(rootStyle?.zoom ?? '');
+
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
 
 function normalizeMarkers(markers: readonly MapMarker[]) {

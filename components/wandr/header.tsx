@@ -37,6 +37,7 @@ import type { HeaderAction, HeaderConfig } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { getHeaderBadgeCountsRef } from '@/lib/convex';
 
@@ -81,7 +82,13 @@ export function WandrHeader({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
+  const { isMobile } = useResponsive();
   const isDark = colorScheme === 'dark';
+  const isMobileWeb = Platform.OS === 'web' && isMobile;
+  const headerHorizontalInset = isMobileWeb ? designSystem.spacing.sm : designSystem.spacing.lg;
+  const mobileWebTopInset = isMobileWeb ? designSystem.spacing.xs : 0;
+  const headerTopInset = insets.top + extraTopInset + mobileWebTopInset;
+  const plainSpacerTopInset = insets.top + mobileWebTopInset;
   const bottomAnimation = useRef(new Animated.Value(bottomContentVisible ? 1 : 0)).current;
   const trailingActions = config.trailingActions ?? [];
   const traveler = useCurrentTraveler();
@@ -134,13 +141,13 @@ export function WandrHeader({
 
   const HeaderContainer = config.overlay || isButtonOnlyHeader ? View : BlurView;
   const containerProps = config.overlay
-    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingTop: insets.top + extraTopInset }] }
+    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset }] }
     : isButtonOnlyHeader
-      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingTop: insets.top + extraTopInset }] }
+      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset }] }
     : {
         intensity: 80,
         tint: isDark ? 'dark' as const : 'light' as const,
-        style: [styles.shell, styles.overlayShell, { paddingTop: insets.top + extraTopInset, backgroundColor: blurBackgroundColor }]
+        style: [styles.shell, styles.overlayShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset, backgroundColor: blurBackgroundColor }]
       };
 
   useEffect(() => {
@@ -154,9 +161,9 @@ export function WandrHeader({
 
   if (!hasActions) {
     return config.overlay ? (
-      <View pointerEvents="none" style={[styles.plainSpacer, styles.overlayShell, { paddingTop: insets.top }]} />
+      <View pointerEvents="none" style={[styles.plainSpacer, styles.overlayShell, { paddingTop: plainSpacerTopInset }]} />
     ) : (
-      <View style={[styles.plainSpacer, { paddingTop: insets.top }]} />
+      <View style={[styles.plainSpacer, { paddingTop: plainSpacerTopInset }]} />
     );
   }
 
