@@ -18,7 +18,6 @@
     "preweb": "bun run ensure:expo-types",
     "web": "expo start --web",
     "build:web": "expo export -p web",
-    "deploy:web:prod": "bun ./scripts/deploy-web-prod.js",
     "lint": "expo lint --no-cache",
     "typecheck": "tsc --noEmit",
     "convex:dev": "convex dev"

@@ -87,6 +87,66 @@ convex/_generated/ai/guidelines.md
 
 Those project guidelines override generic Convex advice. Schema and data model changes should be treated as app-wide changes, because they can affect mobile, web, and backend behavior at the same time.
 
+## Development Pipeline
+
+GitHub is the source of truth for deploys. Do not deploy the web app from local machines or the Vercel CLI.
+
+Use this flow for team work:
+
+```bash
+git switch main
+git pull
+git switch -c feature/short-feature-name
+```
+
+Open pull requests in two stages:
+
+```text
+feature branch -> dev -> main
+```
+
+- Developers open PRs from feature branches into `dev`.
+- `dev` is the internal build branch for review and team testing.
+- Releases happen through a PR from `dev` into `main`.
+- `main` is production only.
+
+GitHub Actions runs on PRs and pushes for both `dev` and `main`:
+
+```bash
+bun install --frozen-lockfile
+bun run lint
+bun run typecheck
+bun run build:web
+```
+
+Vercel should be connected to GitHub with:
+
+```text
+Production branch: main
+Install: bun install --frozen-lockfile
+Build: bun run build:web
+Output: dist
+```
+
+Vercel will create an internal Preview Deployment for `dev`, and it will deploy production only when `main` changes.
+
+Recommended GitHub branch protection for `dev`:
+
+- Require pull requests before merging.
+- Require the `Web CI / Lint, typecheck, and build web` status check.
+- Require branches to be up to date before merging.
+- Block direct pushes to `dev` except for admins or release managers.
+
+Recommended GitHub branch protection for `main`:
+
+- Require pull requests before merging.
+- Require at least one approval.
+- Require the `Web CI / Lint, typecheck, and build web` status check.
+- Require branches to be up to date before merging.
+- Require conversation resolution.
+- Allow merges into `main` only from the `dev` release PR process.
+- Block direct pushes to `main` for everyone except admins or release managers.
+
 ## Checks Before a PR
 
 Run these before asking for review:
