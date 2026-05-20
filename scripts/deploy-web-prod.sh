@@ -12,7 +12,7 @@ fi
 echo "Deploying Wandr web from: $ROOT_DIR"
 echo "Target Vercel project: moodbods/wandr"
 
-npx vercel link --yes --scope moodbods --project wandr
-npx vercel pull --yes --environment production --scope moodbods
-npx vercel build --prod --yes --scope moodbods
-npx vercel deploy --prebuilt --prod --scope moodbods
+bunx vercel link --yes --scope moodbods --project wandr
+bunx vercel pull --yes --environment production --scope moodbods
+bunx vercel build --prod --yes --scope moodbods
+bunx vercel deploy --prebuilt --prod --scope moodbods
