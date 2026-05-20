@@ -91,27 +91,14 @@ Those project guidelines override generic Convex advice. Schema and data model c
 
 GitHub is the source of truth for deploys. Do not deploy the web app from local machines or the Vercel CLI.
 
-Use this flow for team work:
-
-```bash
-git switch dev
-git pull
-```
-
-Daily development happens on `dev`:
+Use two long-lived branches:
 
 ```text
-dev -> main
+dev  -> shared team branch and internal build
+main -> production branch
 ```
 
-- Developers pull the latest `dev`, commit there, and push to `dev`.
-- `dev` is the shared internal build branch for review and team testing.
-- GitHub Actions runs after every push to `dev`.
-- Vercel updates the internal Preview Deployment from `dev`.
-- Releases happen through a pull request from `dev` into `main`.
-- `main` is production only.
-
-Daily commits should go straight to `dev`:
+Developers work directly on `dev`:
 
 ```bash
 git switch dev
@@ -121,13 +108,21 @@ git commit -m "Describe the change"
 git push origin dev
 ```
 
-GitHub Actions runs on PRs and pushes for both `dev` and `main`:
+GitHub Actions runs after every push to `dev` and `main`:
 
 ```bash
 bun install --frozen-lockfile
 bun run lint
 bun run typecheck
 bun run build:web
+```
+
+If `dev` is red, fix `dev` before opening a release PR.
+
+Release production by opening a pull request:
+
+```text
+dev -> main
 ```
 
 Vercel should be connected to GitHub with:
@@ -141,23 +136,32 @@ Output: dist
 
 Vercel will create an internal Preview Deployment for `dev`, and it will deploy production only when `main` changes.
 
-Recommended GitHub branch protection for `dev`:
+GitHub rules for `dev`:
 
 - Allow the development team to push to `dev`.
 - Keep force pushes disabled.
 - Keep branch deletion disabled.
-- Watch the `Web CI / Lint, typecheck, and build web` check after each push.
-- If `dev` is red, fix `dev` before opening the release PR to `main`.
+- Do not require pull requests into `dev`.
+- Do not require status checks on `dev`.
+- Watch the Actions result after each push.
 
-Recommended GitHub branch protection for `main`:
+GitHub rules for `main`:
 
 - Require pull requests before merging.
 - Require at least one approval.
-- Require the `Web CI / Lint, typecheck, and build web` status check.
-- Require branches to be up to date before merging.
 - Require conversation resolution.
-- Allow merges into `main` only from the `dev` release PR process.
-- Block direct pushes to `main` for everyone except admins or release managers.
+- Keep force pushes disabled.
+- Keep branch deletion disabled.
+- Do not allow direct pushes to `main`.
+- Merge only release PRs from `dev` into `main`.
+
+After GitHub has seen one completed Actions run on `main`, enable required status checks for `main` and select:
+
+```text
+Web CI / Lint, typecheck, and build web
+```
+
+Then also enable `Require branches to be up to date before merging`.
 
 ## Checks Before a PR
 
