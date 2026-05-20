@@ -951,6 +951,14 @@ function BookingGlassBar({
   totalPriceRateLabel?: string;
 }) {
   const isAndroid = Platform.OS === 'android';
+  const shouldUseFallbackGlassFill = Platform.OS !== 'ios';
+  const glassEffectProps = shouldUseFallbackGlassFill
+    ? {}
+    : {
+        colorScheme: isDark ? 'dark' as const : 'light' as const,
+        glassEffectStyle: 'regular' as const,
+        isInteractive: true,
+      };
 
   return (
     <View style={containerStyle}>
@@ -958,20 +966,29 @@ function BookingGlassBar({
         style={[
           styles.bottomBarGlassClip,
           isDark && styles.bottomBarGlassClipDark,
-          isAndroid ? (isDark ? styles.bottomBarAndroidDark : styles.bottomBarAndroid) : null,
+          shouldUseFallbackGlassFill ? (isDark ? styles.bottomBarFallbackGlassClipDark : styles.bottomBarFallbackGlassClip) : null,
         ]}>
-        {isAndroid ? null : (
-          <>
-            <GlassView
-              colorScheme={isDark ? 'dark' : 'light'}
-              glassEffectStyle="regular"
-              isInteractive
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, styles.bottomBarGlassView]}
-            />
-            <View pointerEvents="none" style={[styles.bottomBarHighlight, isDark && styles.bottomBarHighlightDark]} />
-          </>
-        )}
+        <GlassView
+          {...glassEffectProps}
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            styles.bottomBarGlassView,
+            shouldUseFallbackGlassFill
+              ? (isDark ? styles.bottomBarFallbackGlassFillDark : styles.bottomBarFallbackGlassFill)
+              : null,
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.bottomBarHighlight,
+            isDark && styles.bottomBarHighlightDark,
+            shouldUseFallbackGlassFill
+              ? (isDark ? styles.bottomBarFallbackHighlightDark : styles.bottomBarFallbackHighlight)
+              : null,
+          ]}
+        />
         <View style={styles.bottomBarContent}>
           <View style={styles.bottomBarPriceBlock}>
             <View style={styles.bottomBarPriceRow}>
@@ -1672,16 +1689,22 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.whiteOverlayBarely,
     backgroundColor: designSystem.colors.transparentWhite,
   },
-  bottomBarAndroid: {
-    borderColor: designSystem.colors.lightSurfaceAlt,
-    backgroundColor: designSystem.colors.surfaceRaised,
+  bottomBarFallbackGlassClip: {
+    borderColor: designSystem.colors.whiteOverlayBorder,
+    backgroundColor: designSystem.colors.transparentWhite,
   },
-  bottomBarAndroidDark: {
-    borderColor: designSystem.colors.darkBorder,
-    backgroundColor: designSystem.colors.darkSurface,
+  bottomBarFallbackGlassClipDark: {
+    borderColor: designSystem.colors.whiteOverlayBarely,
+    backgroundColor: designSystem.colors.transparentWhite,
   },
   bottomBarGlassView: {
     borderRadius: 40,
+  },
+  bottomBarFallbackGlassFill: {
+    backgroundColor: designSystem.colors.whiteGlassMedium,
+  },
+  bottomBarFallbackGlassFillDark: {
+    backgroundColor: designSystem.colors.darkGlassHeader,
   },
   bottomBarHighlight: {
     ...StyleSheet.absoluteFillObject,
@@ -1693,6 +1716,12 @@ const styles = StyleSheet.create({
   bottomBarHighlightDark: {
     borderColor: designSystem.colors.whiteOverlayBarely,
     backgroundColor: designSystem.colors.nativeDarkWash,
+  },
+  bottomBarFallbackHighlight: {
+    backgroundColor: designSystem.colors.whiteOverlayFaint,
+  },
+  bottomBarFallbackHighlightDark: {
+    backgroundColor: designSystem.colors.whiteOverlayBarely,
   },
   bottomBarContent: {
     minHeight: 76,
