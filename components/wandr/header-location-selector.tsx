@@ -43,7 +43,7 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
       >
         <View style={styles.desktopContent}>
           {location.countryCode ? (
-            <CountryFlagAvatar countryCode={location.countryCode} size={28} />
+            <CountryFlagAvatar countryCode={location.countryCode} size={40} />
           ) : null}
           <View style={styles.copy}>
             <ThemedText numberOfLines={1} style={[styles.label, styles.desktopLabel, { color: textColor }]}>
@@ -93,9 +93,8 @@ const styles = StyleSheet.create({
   },
   desktopSelector: {
     height: designSystem.layout.inputHeight,
-    width: '100%',
     minWidth: 0,
-    maxWidth: 184,
+    maxWidth: 220,
     borderRadius: designSystem.radii.pill,
     borderWidth: 1,
     justifyContent: 'center',
@@ -112,12 +111,12 @@ const styles = StyleSheet.create({
   },
   desktopContent: {
     height: '100%',
-    paddingLeft: 7,
-    paddingRight: 12,
+    paddingLeft: 6,
+    paddingRight: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 8,
+    gap: 7,
   },
   copy: {
     flexShrink: 1,

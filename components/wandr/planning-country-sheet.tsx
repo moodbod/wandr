@@ -45,10 +45,10 @@ export function PlanningLocationSheet({
   const isDesktop = Platform.OS === 'web' && isLargeScreen;
   const currentLocation = getPlanningLocationForCoordinate(currentCoordinate);
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
-  const selectedAccentColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
-  const currentPillBackgroundColor = isDark ? designSystem.colors.lime : designSystem.colors.limeMist;
-  const currentPillBorderColor = isDark ? designSystem.colors.lime : designSystem.colors.borderAccent;
-  const currentPillTextColor = isDark ? designSystem.colors.darkGreen : designSystem.colors.fern;
+  const selectedAccentColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
+  const currentPillBackgroundColor = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.surface;
+  const currentPillBorderColor = isDark ? designSystem.colors.whiteOverlayFaint : designSystem.colors.borderSoft;
+  const currentPillTextColor = selectedAccentColor;
   const snapPoints = useMemo(() => ['48%', '70%'], []);
   const normalizedQuery = query.trim().toLowerCase();
   const availabilityByCountryCode = useMemo(() => {
@@ -215,6 +215,7 @@ export function PlanningLocationSheet({
           const isCurrent = currentLocation?.id === location.id;
           const isSearchPrompt = location.isSearchPrompt === true;
           const isDisabled = location.isSupported === false && !isSearchPrompt;
+          const shouldShowDetail = isSearchExpanded && Boolean(location.detail);
 
           return (
             <View style={styles.optionFrame}>
@@ -258,9 +259,11 @@ export function PlanningLocationSheet({
                       </View>
                     ) : null}
                   </View>
-                  <ThemedText style={[styles.optionDetail, isDesktop ? styles.desktopOptionDetail : null, { color: selected ? selectedAccentColor : mutedColor }]}>
-                    {location.detail}
-                  </ThemedText>
+                  {shouldShowDetail ? (
+                    <ThemedText style={[styles.optionDetail, isDesktop ? styles.desktopOptionDetail : null, { color: mutedColor }]}>
+                      {location.detail}
+                    </ThemedText>
+                  ) : null}
                 </View>
                 {isSearchPrompt ? (
                   <ArrowUp color={mutedColor} size={isDesktop ? 18 : 20} weight="bold" />
