@@ -175,10 +175,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   desktopLeadingAccessory: {
-    flexShrink: 1,
-    maxWidth: 184,
-    minWidth: 124,
-    width: 148,
+    flexShrink: 0,
+    maxWidth: 220,
   },
   desktopTrailingAccessory: {
     width: 52,
