@@ -210,6 +210,9 @@ function MapPreviewWebComponent({
           return;
         }
 
+        if (persistentState) {
+          applyPersistentMapHostStyle(mapHost);
+        }
         hideMapboxControls(mapHost);
         map.resize();
         if (!interactionEnabled) {
@@ -567,8 +570,7 @@ function attachPersistentMapHost(state: PersistentMapState, container: HTMLDivEl
     state.hideTimer = null;
   }
 
-  applyEmbeddedMapHostStyle(state.host);
-  state.host.style.visibility = 'visible';
+  applyPersistentMapHostStyle(state.host);
   if (state.host.parentElement !== container) {
     container.appendChild(state.host);
   }
@@ -577,17 +579,60 @@ function attachPersistentMapHost(state: PersistentMapState, container: HTMLDivEl
 function schedulePersistentMapHide(state: PersistentMapState) {
   if (state.hideTimer !== null) {
     window.clearTimeout(state.hideTimer);
+    state.hideTimer = null;
   }
 
-  state.hideTimer = window.setTimeout(() => {
-    state.host.remove();
-    state.hideTimer = null;
-  }, 2000);
+  parkPersistentMapHost(state.host);
+}
+
+function parkPersistentMapHost(host: HTMLDivElement) {
+  const root = document.getElementById('root') ?? document.body;
+  const hostStyle = host.style as CSSStyleDeclaration & { zoom?: string };
+
+  if (host.parentElement !== root) {
+    root.appendChild(host);
+  }
+
+  Object.assign(host.style, {
+    ...webMapStyle,
+    height: '1px',
+    pointerEvents: 'none',
+    position: 'fixed',
+    visibility: 'hidden',
+    width: '1px',
+    zIndex: '-1',
+  } satisfies React.CSSProperties);
+  hostStyle.zoom = '';
 }
 
 function applyEmbeddedMapHostStyle(host: HTMLDivElement) {
   Object.assign(host.style, webMapStyle);
   hideMapboxControls(host);
+}
+
+function applyPersistentMapHostStyle(host: HTMLDivElement) {
+  const rootZoom = getRootZoomScale();
+  const hostStyle = host.style as CSSStyleDeclaration & { zoom?: string };
+
+  Object.assign(host.style, {
+    ...webMapStyle,
+    bottom: 'auto',
+    height: '100vh',
+    pointerEvents: 'auto',
+    position: 'absolute',
+    right: 'auto',
+    visibility: 'visible',
+    width: '100vw',
+    zIndex: '0',
+  } satisfies React.CSSProperties);
+  hostStyle.zoom = rootZoom === 1 ? '' : `${1 / rootZoom}`;
+}
+
+function getRootZoomScale() {
+  const rootStyle = document.getElementById('root')?.style as (CSSStyleDeclaration & { zoom?: string }) | undefined;
+  const zoom = Number.parseFloat(rootStyle?.zoom ?? '');
+
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
 
 function normalizeMarkers(markers: readonly MapMarker[]) {

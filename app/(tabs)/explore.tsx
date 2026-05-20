@@ -174,6 +174,7 @@ function ConnectedExploreScreen({
           userCoordinate={currentLocationInPlanningLocation}
           userHeading={currentHeading}
           markers={[]}
+          mapPersistKey={isLargeScreen ? 'app-background' : undefined}
           routeCoordinates={[]}
           showRoutes={false}
           topInset={mapTopInset}

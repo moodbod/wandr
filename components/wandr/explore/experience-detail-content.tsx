@@ -103,7 +103,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     setOptimisticLiked(null);
   }, [slug]);
 
-  if (page === undefined || (travelerSlug && (itinerary === undefined || trip === undefined))) {
+  if (page === undefined || (travelerSlug && (trips === undefined || itinerary === undefined || trip === undefined))) {
     return (
       <ExperienceDetailLoadingContent
         hideHeader={hideHeader}
@@ -146,6 +146,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
 
   const bookedTrips = (itinerary || []).filter((item) => item.experienceSlug === slug);
   const isAlreadyBooked = bookedTrips.length > 0 || optimisticBookedSlug === slug;
+  const hasExistingTrips = (trips?.length ?? 0) > 0;
 
   const isLiked = optimisticLiked ?? likeState?.liked ?? false;
   const hostGalleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
@@ -183,6 +184,15 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             : null,
         ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as TripFitSummaryItem[];
 
+  const bookSelectedExperience = async (tripId?: Id<'trips'>) => {
+    await bookExperience({
+      experienceSlug: experience.slug,
+      travelerSlug,
+      tripId,
+    });
+    setOptimisticBookedSlug(experience.slug);
+  };
+
   const saveExperienceToTrip = async (action: 'primary' | 'secondary', tripId?: Id<'trips'>) => {
     if (!requireAuthAction() || !travelerSlug) {
       return false;
@@ -194,12 +204,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
 
     setBookingAction(action);
     try {
-      await bookExperience({
-        experienceSlug: experience.slug,
-        travelerSlug,
-        tripId,
-      });
-      setOptimisticBookedSlug(experience.slug);
+      await bookSelectedExperience(tripId);
       return true;
     } finally {
       setBookingAction(null);
@@ -240,7 +245,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     }
   };
 
-  const handleStartJourney = async () => {
+  const handleStartJourney = async (action: 'primary' | 'secondary' = 'secondary') => {
     if (!requireAuthAction() || !travelerSlug) {
       return;
     }
@@ -253,15 +258,17 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
       ? `${experience.locationLabel.split(',')[0]?.trim() ?? experience.title} Trip`
       : `${experience.title} Trip`;
 
-    const tripId = await createTrip({
-      name: tripTitle,
-      travelerSlug,
-    });
+    setBookingAction(action);
+    try {
+      const tripId = await createTrip({
+        name: tripTitle,
+        travelerSlug,
+      });
 
-    const didBook = await saveExperienceToTrip('secondary', tripId);
-
-    if (didBook) {
+      await bookSelectedExperience(tripId);
       router.push('/trip');
+    } finally {
+      setBookingAction(null);
     }
   };
 
@@ -437,10 +444,22 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             centerCoordinate={experience.coordinate ?? bookingMapCenter}
             loadingAction={bookingAction}
             markers={bookingMapMarkers}
-            onPrimaryPress={handleAddToTripPress}
-            onSecondaryPress={handleStartJourney}
-            primaryLabel={isAlreadyBooked ? 'Add another' : 'Add to trip'}
-            secondaryLabel="Start journey"
+            onPrimaryPress={
+              hasExistingTrips
+                ? handleAddToTripPress
+                : () => {
+                    void handleStartJourney('primary');
+                  }
+            }
+            onSecondaryPress={
+              hasExistingTrips
+                ? () => {
+                    void handleStartJourney('secondary');
+                  }
+                : undefined
+            }
+            primaryLabel={hasExistingTrips ? (isAlreadyBooked ? 'Add another' : 'Add to trip') : 'Start journey'}
+            secondaryLabel={hasExistingTrips ? 'Start new journey' : undefined}
             variant={useWebActivityCardFrame ? 'webDetail' : 'default'}
           />
 
