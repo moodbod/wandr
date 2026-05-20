@@ -15,8 +15,7 @@ if (!existsSync(resolve(rootDir, "vercel.json")) || !existsSync(resolve(rootDir,
 const steps = [
   ["vercel", "link", "--yes", "--scope", vercelScope, "--project", vercelProject],
   ["vercel", "pull", "--yes", "--environment", "production", "--scope", vercelScope],
-  ["vercel", "build", "--prod", "--yes", "--scope", vercelScope],
-  ["vercel", "deploy", "--prebuilt", "--prod", "--scope", vercelScope],
+  ["vercel", "--prod", "--yes", "--scope", vercelScope],
 ];
 
 console.log(`Deploying Wandr web from: ${rootDir}`);
