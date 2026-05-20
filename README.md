@@ -94,21 +94,30 @@ GitHub is the source of truth for deploys. Do not deploy the web app from local 
 Use this flow for team work:
 
 ```bash
-git switch main
+git switch dev
+git pull
+```
+
+Daily development happens on `dev`:
+
+```text
+dev -> main
+```
+
+- Developers pull the latest `dev`, commit there, and push to `dev`.
+- `dev` is the shared internal build branch for review and team testing.
+- GitHub Actions runs after every push to `dev`.
+- Vercel updates the internal Preview Deployment from `dev`.
+- Releases happen through a pull request from `dev` into `main`.
+- `main` is production only.
+
+For risky or larger work, a developer can still use a short-lived branch from `dev` and merge it back into `dev` before release:
+
+```bash
+git switch dev
 git pull
 git switch -c feature/short-feature-name
 ```
-
-Open pull requests in two stages:
-
-```text
-feature branch -> dev -> main
-```
-
-- Developers open PRs from feature branches into `dev`.
-- `dev` is the internal build branch for review and team testing.
-- Releases happen through a PR from `dev` into `main`.
-- `main` is production only.
 
 GitHub Actions runs on PRs and pushes for both `dev` and `main`:
 
@@ -132,10 +141,11 @@ Vercel will create an internal Preview Deployment for `dev`, and it will deploy 
 
 Recommended GitHub branch protection for `dev`:
 
-- Require pull requests before merging.
-- Require the `Web CI / Lint, typecheck, and build web` status check.
-- Require branches to be up to date before merging.
-- Block direct pushes to `dev` except for admins or release managers.
+- Allow the development team to push to `dev`.
+- Keep force pushes disabled.
+- Keep branch deletion disabled.
+- Watch the `Web CI / Lint, typecheck, and build web` check after each push.
+- If `dev` is red, fix `dev` before opening the release PR to `main`.
 
 Recommended GitHub branch protection for `main`:
 
