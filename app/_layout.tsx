@@ -353,7 +353,7 @@ function WebIdlePreloader({ isLargeScreen, isSignedIn }: { isLargeScreen: boolea
 }
 
 function AuthRouteGate() {
-  const segments = useSegments();
+  const segments: readonly string[] = useSegments();
   const pathname = usePathname();
   const { openAuthSheet } = useAuthSheet();
   const { isAuthenticated, isLoading } = useAuthSession();
