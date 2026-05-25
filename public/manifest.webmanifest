@@ -1,13 +1,16 @@
 {
   "name": "Wandr",
   "short_name": "Wandr",
+  "id": "/",
   "description": "Plan trips, coordinate with friends, and keep useful trip details close.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#111217",
   "theme_color": "#111217",
   "orientation": "portrait",
+  "categories": ["travel", "navigation", "lifestyle"],
   "shortcuts": [
     {
       "name": "Explore places",

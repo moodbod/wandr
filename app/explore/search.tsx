@@ -441,16 +441,16 @@ const styles = StyleSheet.create({
 });
 
 function toHiddenGemResultCard(item: ExploreHiddenGem): SearchResultCard {
-  const slug = getHiddenGemSlug(item.title);
+  const slug = getHiddenGemSlug(item.title, item.slug);
 
   return {
     kind: 'hiddenGem',
-    key: `hidden-gem-${slug}`,
+    key: `location-${slug}`,
     slug,
     card: {
-      badge: item.badge ?? 'Hidden gem',
+      badge: item.badge ?? 'Location',
       badgeTone: 'soft',
-      ctaLabel: item.primaryLabel ?? 'Open gem',
+      ctaLabel: item.primaryLabel ?? 'Open location',
       experienceSlug: slug,
       imageUri: item.imageUri,
       price: '',

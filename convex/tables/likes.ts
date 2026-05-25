@@ -3,7 +3,7 @@ import { v } from 'convex/values';
 
 export const likesTable = defineTable({
   travelerSlug: v.string(),
-  locationKind: v.union(v.literal('experience'), v.literal('hiddenGem')),
+  locationKind: v.union(v.literal('location'), v.literal('experience'), v.literal('hiddenGem')),
   locationSlug: v.string(),
   likedAt: v.number(),
 })

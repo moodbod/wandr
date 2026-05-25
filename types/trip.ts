@@ -1,12 +1,14 @@
 import type { ExploreExperience } from '@/constants/explore-content';
 import type { StayBookingDetails, StayProperty } from '@/types/stays';
 
-export type TripItemKind = 'experience' | 'stay' | 'hiddenGem';
+export type TripItemKind = 'location' | 'experience' | 'stay' | 'hiddenGem';
 
 export type TripItineraryItem = {
   _id: string;
   _creationTime: number;
   experienceSlug: string;
+  contentKind?: 'location' | 'experience' | 'stay';
+  contentSlug?: string;
   travelerSlug: string;
   tripId?: string;
   bookedAt: number;

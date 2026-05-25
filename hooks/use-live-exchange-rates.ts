@@ -56,10 +56,14 @@ function ensureLiveUsdRates() {
   return exchangeRatesPromise;
 }
 
-export function useLiveExchangeRates() {
+export function useLiveExchangeRates(enabled = true) {
   const [loadedAt, setLoadedAt] = useState(exchangeRatesLoadedAt);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const listener = () => setLoadedAt(exchangeRatesLoadedAt);
     listeners.add(listener);
     void ensureLiveUsdRates();
@@ -67,7 +71,7 @@ export function useLiveExchangeRates() {
     return () => {
       listeners.delete(listener);
     };
-  }, []);
+  }, [enabled]);
 
   return { loadedAt };
 }

@@ -1,15 +1,64 @@
+type RoutePoint = { latitude: number; longitude: number };
+type CachedRoute = {
+  expiresAt: number;
+  route: RoutePoint[];
+};
+
+const ROUTE_CACHE_TTL_MS = 5 * 60_000;
+const ROUTE_FETCH_TIMEOUT_MS = 10_000;
+const ROUTE_COORDINATE_PRECISION = 5;
+const routeCache = new Map<string, CachedRoute>();
+const inFlightRoutes = new Map<string, Promise<RoutePoint[]>>();
+
 export async function fetchRoutePath(
   coordinates: readonly (readonly [number, number])[]
 ): Promise<{ latitude: number; longitude: number }[]> {
   // Filter out invalid coordinates to prevent URL parsing errors
   const validCoords = coordinates.filter(
     (c) => Array.isArray(c) && typeof c[0] === 'number' && typeof c[1] === 'number' && !isNaN(c[0]) && !isNaN(c[1])
-  );
+  ).map(roundCoordinateForRoute);
 
   if (validCoords.length < 2) {
     return [];
   }
 
+  const cacheKey = getRouteCacheKey(validCoords);
+  const cachedRoute = routeCache.get(cacheKey);
+  if (cachedRoute && cachedRoute.expiresAt > Date.now()) {
+    return cachedRoute.route;
+  }
+
+  if (cachedRoute) {
+    routeCache.delete(cacheKey);
+  }
+
+  const inFlightRoute = inFlightRoutes.get(cacheKey);
+  if (inFlightRoute) {
+    return inFlightRoute;
+  }
+
+  const routePromise = fetchRoutePathUncached(validCoords)
+    .then((route) => {
+      if (route.length > 0) {
+        routeCache.set(cacheKey, {
+          expiresAt: Date.now() + ROUTE_CACHE_TTL_MS,
+          route,
+        });
+      }
+
+      return route;
+    })
+    .finally(() => {
+      inFlightRoutes.delete(cacheKey);
+    });
+
+  inFlightRoutes.set(cacheKey, routePromise);
+  return routePromise;
+}
+
+async function fetchRoutePathUncached(
+  validCoords: readonly (readonly [number, number])[]
+): Promise<RoutePoint[]> {
   const osrmServers = [
     'https://routing.openstreetmap.de/routed-car',
     'https://router.project-osrm.org',
@@ -65,8 +114,6 @@ async function fetchFirstOsrmRoute(
   return [];
 }
 
-type RoutePoint = { latitude: number; longitude: number };
-
 async function fetchMapboxRoute(
   coordinates: readonly (readonly [number, number])[],
   token: string
@@ -75,7 +122,7 @@ async function fetchMapboxRoute(
   const routeUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordString}?overview=full&geometries=geojson&access_token=${token}`;
 
   try {
-    const routeResponse = await fetch(routeUrl, {
+    const routeResponse = await fetchWithTimeout(routeUrl, {
       headers: { Accept: 'application/json' },
     });
 
@@ -100,7 +147,7 @@ async function fetchOsrmRoute(
   const routeUrl = `${server}/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
 
   try {
-    const routeResponse = await fetch(routeUrl, {
+    const routeResponse = await fetchWithTimeout(routeUrl, {
       headers: {
         Accept: 'application/json',
       },
@@ -144,6 +191,37 @@ async function fetchPairwiseRoute(
 
 function formatCoordinateString(coordinates: readonly (readonly [number, number])[]) {
   return coordinates.map((coordinate) => `${coordinate[0]},${coordinate[1]}`).join(';');
+}
+
+function roundCoordinateForRoute(coordinate: readonly [number, number]): readonly [number, number] {
+  return [
+    roundCoordinateValue(coordinate[0]),
+    roundCoordinateValue(coordinate[1]),
+  ];
+}
+
+function roundCoordinateValue(value: number) {
+  return Number(value.toFixed(ROUTE_COORDINATE_PRECISION));
+}
+
+function getRouteCacheKey(coordinates: readonly (readonly [number, number])[]) {
+  return coordinates.map((coordinate) => `${coordinate[0]},${coordinate[1]}`).join(';');
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, ROUTE_FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function geojsonToRoutePoints(geojson: { coordinates?: number[][] }): RoutePoint[] {

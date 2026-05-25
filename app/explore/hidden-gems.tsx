@@ -82,7 +82,7 @@ function ExploreHiddenGemsScreenView({
             ) : (
               <ExploreActivityCard
                 card={toHiddenGemActivityCard(leadGem)}
-                href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(leadGem.title) } }}
+                href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(leadGem.title, leadGem.slug) } }}
                 marker="gem"
               />
             )}
@@ -119,7 +119,7 @@ function ExploreHiddenGemsScreenView({
                     <View key={item.title} style={styles.groupedCard}>
                       <ExploreActivityCard
                         card={toHiddenGemActivityCard(item)}
-                        href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title) } }}
+                        href={{ pathname: '/explore/hidden-gems/[slug]', params: { slug: getHiddenGemSlug(item.title, item.slug) } }}
                         marker="gem"
                       />
                       {item.locationLabel || item.geography?.region ? (
@@ -166,7 +166,7 @@ function toHiddenGemActivityCard(item: ExploreHiddenGem) {
     badge: item.badge ?? '',
     badgeTone: 'soft' as const,
     ctaLabel: item.primaryLabel ?? '',
-    experienceSlug: getHiddenGemSlug(item.title),
+    experienceSlug: getHiddenGemSlug(item.title, item.slug),
     imageUri: item.imageUri,
     price: '',
     priceSuffix: '',

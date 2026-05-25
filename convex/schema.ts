@@ -16,6 +16,7 @@ import { threadsTable } from './tables/threads';
 import { matchesTable } from './tables/matches';
 import { messagesTable } from './tables/messages';
 import { gemsTable } from './tables/gems';
+import { locationsTable } from './tables/locations';
 import { likesTable } from './tables/likes';
 import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
@@ -109,6 +110,7 @@ export default defineSchema({
     .index('by_staySlug_and_travelerSlug', ['staySlug', 'travelerSlug']),
 
   gems: gemsTable,
+  locations: locationsTable,
   stays: staysTable,
   notices: noticesTable,
   tokens: tokensTable,
@@ -126,7 +128,7 @@ export default defineSchema({
   bookings: bookingsTable,
   likes: likesTable,
   photos: defineTable({
-    locationKind: v.union(v.literal('experience'), v.literal('stay')),
+    locationKind: v.union(v.literal('location'), v.literal('experience'), v.literal('stay')),
     locationSlug: v.string(),
     travelerSlug: v.string(),
     storageId: v.id('_storage'),

@@ -9,6 +9,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        <title>Wandr</title>
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
@@ -21,6 +22,12 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-title" content="Wandr" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="format-detection" content="telephone=no" />
+        <link rel="dns-prefetch" href="https://api.mapbox.com" />
+        <link rel="dns-prefetch" href="https://events.mapbox.com" />
+        <link rel="dns-prefetch" href="https://tiles.mapbox.com" />
+        <link rel="preconnect" href="https://api.mapbox.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://events.mapbox.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://tiles.mapbox.com" crossOrigin="anonymous" />
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="icon" href="/wandr-favicon.png" />
         <link rel="apple-touch-icon" href="/wandr-apple-touch-icon.png" />

@@ -3,6 +3,8 @@ import { v } from 'convex/values';
 
 export const bookingsTable = defineTable({
   experienceSlug: v.string(),
+  contentKind: v.optional(v.union(v.literal('location'), v.literal('experience'), v.literal('stay'))),
+  contentSlug: v.optional(v.string()),
   travelerSlug: v.string(),
   tripId: v.optional(v.id('trips')),
   bookedAt: v.number(),

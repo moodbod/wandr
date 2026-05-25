@@ -53,7 +53,7 @@ export function LiveLocationCard({
               return;
             }
 
-            if (marker.itemKind === 'hiddenGem' && marker.experienceSlug) {
+            if ((marker.itemKind === 'location' || marker.itemKind === 'hiddenGem') && marker.experienceSlug) {
               router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: marker.experienceSlug } });
               return;
             }

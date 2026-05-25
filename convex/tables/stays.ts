@@ -77,8 +77,16 @@ export const staysTable = defineTable({
   bookingUrl: v.optional(v.string()),
   bookingProvider: v.optional(v.string()),
   regionId: v.optional(v.id('regions')),
+  status: v.optional(v.union(v.literal('draft'), v.literal('live'), v.literal('archived'))),
+  createdByAdminSlug: v.optional(v.string()),
+  updatedByAdminSlug: v.optional(v.string()),
+  publishedAt: v.optional(v.number()),
+  archivedAt: v.optional(v.number()),
+  linkedLocationId: v.optional(v.id('locations')),
 })
   .index('by_slug', ['slug'])
   .index('by_managerSlug', ['managerSlug'])
+  .index('by_status', ['status'])
+  .index('by_status_and_planningLocationId', ['status', 'planningLocationId'])
   .index('by_region', ['region'])
   .index('by_town', ['town']);

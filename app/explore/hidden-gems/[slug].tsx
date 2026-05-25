@@ -45,7 +45,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   const likeState = useQuery(
     getLocationLikeStateRef,
     travelerSlug && typeof slug === 'string'
-      ? { travelerSlug, locationKind: 'hiddenGem', locationSlug: slug }
+      ? { travelerSlug, locationKind: 'location', locationSlug: slug }
       : 'skip'
   );
   const bookExperience = useMutation(bookExperienceRef);
@@ -62,7 +62,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
 
-  const card = page.search.gems.items.find((item) => getHiddenGemSlug(item.title) === slug);
+  const card = page.search.gems.items.find((item) => getHiddenGemSlug(item.title, item.slug) === slug);
   const detail = card ? buildHiddenGemDetail(slug, card) : null;
 
   if (!detail || !card) {
@@ -94,7 +94,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     try {
       const result = await toggleLocationLike({
         travelerSlug,
-        locationKind: 'hiddenGem',
+        locationKind: 'location',
         locationSlug: slug,
       });
       setOptimisticLiked(result.liked);
@@ -145,7 +145,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
           trailingActions: [
             {
               kind: 'favorite',
-              accessibilityLabel: isLiked ? 'Remove saved hidden gem' : 'Save hidden gem',
+              accessibilityLabel: isLiked ? 'Remove saved location' : 'Save location',
               isActive: isLiked,
               onPress: () => {
                 void handleToggleLike();
@@ -256,7 +256,7 @@ function HiddenGemDetailLoadingScreen({
         config={{
           overlay: true,
           leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save hidden gem' }],
+          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save location' }],
         }}
       />
       <ScrollView
@@ -285,7 +285,7 @@ function buildHiddenGemDetail(slug: string, card: ExploreHiddenGem): HiddenGemDe
   return {
     slug,
     title: card.title,
-    badge: card.badge ?? 'Hidden Gem',
+    badge: card.badge ?? 'Location',
     locationLabel: card.locationLabel ?? card.geography?.town ?? card.geography?.region ?? card.countryLabel ?? 'Local detour',
     summary: card.summary ?? card.description,
     tripFit: card.tripFit ?? [],

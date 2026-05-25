@@ -9,11 +9,8 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { AppSidebar } from '@/components/wandr/app-sidebar';
-import { IncomingFriendCallCenter } from '@/components/wandr/friends/incoming-friend-call-center';
-import { TripNotificationCenter } from '@/components/wandr/notifications/trip-notification-center';
-import { PwaInstallBanner } from '@/components/wandr/pwa-install-banner';
 import { ThemedText } from '@/components/themed-text';
+import { PwaCacheRegistrar } from '@/components/wandr/pwa-cache-registrar';
 import { designSystem } from '@/constants/design-system';
 import { ActiveFriendCallProvider } from '@/hooks/use-active-friend-call';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -26,6 +23,20 @@ import { AuthSessionProvider, useAuthSession } from '@/providers/auth-session';
 import { AuthSheetProvider, useAuthSheet } from '@/providers/auth-sheet';
 
 const ActiveFriendCallOverlay = lazy(() => import('@/components/wandr/friends/active-friend-call-overlay'));
+const AppSidebar = lazy(() => import('@/components/wandr/app-sidebar').then((module) => ({ default: module.AppSidebar })));
+const IncomingFriendCallCenter = lazy(() =>
+  import('@/components/wandr/friends/incoming-friend-call-center').then((module) => ({
+    default: module.IncomingFriendCallCenter,
+  }))
+);
+const PwaInstallBanner = lazy(() =>
+  import('@/components/wandr/pwa-install-banner').then((module) => ({ default: module.PwaInstallBanner }))
+);
+const TripNotificationCenter = lazy(() =>
+  import('@/components/wandr/notifications/trip-notification-center').then((module) => ({
+    default: module.TripNotificationCenter,
+  }))
+);
 const PUBLIC_ROUTE_ROOTS = new Set(['explore', 'stays']);
 const PUBLIC_TAB_ROUTES = new Set(['index', 'explore', 'stays']);
 
@@ -104,6 +115,14 @@ function AppShell({
   const canUseNativeCalls = Platform.OS !== 'web' && !isRunningInExpoGo();
   const canUseCallOverlay = Platform.OS === 'web' || canUseNativeCalls;
   const isSignedIn = Boolean(session);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    document.title = 'Wandr';
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
@@ -212,7 +231,7 @@ function AppShell({
     };
   }, [backgroundColor]);
 
-  if (isLoading) {
+  if (isLoading && Platform.OS !== 'web') {
     return (
       <>
         <LoadingSessionScreen backgroundColor={backgroundColor} />
@@ -225,9 +244,13 @@ function AppShell({
     <ActiveFriendCallProvider>
       <View style={[styles.shellViewport, { backgroundColor }]}>
         <View style={styles.shellRoot}>
-          {isLargeScreen && <AppSidebar />}
+          {isLargeScreen ? (
+            <Suspense fallback={null}>
+              <AppSidebar />
+            </Suspense>
+          ) : null}
           <View style={styles.content}>
-            <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
+            <Stack screenOptions={{ ...stackScreenOptions, headerShown: false, title: 'Wandr' }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="explore" options={{ headerShown: false }} />
               <Stack.Screen name="trip" options={{ headerShown: false }} />
@@ -242,17 +265,91 @@ function AppShell({
       </View>
 
       <AuthRouteGate />
-      {convexClient && isSignedIn ? <TripNotificationCenter /> : null}
-      {convexClient && isSignedIn && canUseNativeCalls ? <IncomingFriendCallCenter /> : null}
+      <WebIdlePreloader isLargeScreen={isLargeScreen} isSignedIn={isSignedIn} />
+      {convexClient && isSignedIn ? (
+        <Suspense fallback={null}>
+          <TripNotificationCenter />
+        </Suspense>
+      ) : null}
+      {convexClient && isSignedIn && canUseNativeCalls ? (
+        <Suspense fallback={null}>
+          <IncomingFriendCallCenter />
+        </Suspense>
+      ) : null}
       {convexClient && isSignedIn && canUseCallOverlay ? (
         <Suspense fallback={null}>
           <ActiveFriendCallOverlay />
         </Suspense>
       ) : null}
-      <PwaInstallBanner />
+      <PwaCacheRegistrar />
+      <Suspense fallback={null}>
+        <PwaInstallBanner />
+      </Suspense>
       <StatusBar style="auto" />
     </ActiveFriendCallProvider>
   );
+}
+
+type IdleWindow = Window & {
+  cancelIdleCallback?: (handle: number) => void;
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+};
+
+type NavigatorWithConnection = Navigator & {
+  connection?: {
+    saveData?: boolean;
+  };
+};
+
+function WebIdlePreloader({ isLargeScreen, isSignedIn }: { isLargeScreen: boolean; isSignedIn: boolean }) {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return;
+    }
+
+    const connection = (navigator as NavigatorWithConnection).connection;
+    if (connection?.saveData) {
+      return;
+    }
+
+    let cancelled = false;
+    const preload = () => {
+      if (cancelled) {
+        return;
+      }
+
+      void import('@/components/wandr/maps/map-preview');
+      void import('@/components/wandr/stays/stays-map-screen');
+      void import('@/app/(tabs)/stays');
+
+      if (isLargeScreen) {
+        void import('@/components/wandr/app-sidebar');
+      }
+
+      if (isSignedIn) {
+        void import('@/app/(tabs)/trip');
+        void import('@/app/(tabs)/friends');
+        void import('@/components/wandr/notifications/trip-notification-center');
+      }
+    };
+
+    const webWindow = window as IdleWindow;
+    if (typeof webWindow.requestIdleCallback === 'function') {
+      const idleId = webWindow.requestIdleCallback(preload, { timeout: 2400 });
+      return () => {
+        cancelled = true;
+        webWindow.cancelIdleCallback?.(idleId);
+      };
+    }
+
+    const timeoutId = globalThis.setTimeout(preload, 900);
+    return () => {
+      cancelled = true;
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [isLargeScreen, isSignedIn]);
+
+  return null;
 }
 
 function AuthRouteGate() {
@@ -262,10 +359,14 @@ function AuthRouteGate() {
   const { isAuthenticated, isLoading } = useAuthSession();
   const pathSegments = pathname.split('/').filter(Boolean);
   const [routeRoot, routeLeaf] = pathSegments;
+  const segmentRoot = String(segments[0] ?? '');
+  const segmentLeaf = String(segments[1] ?? '');
   const isRootRoute = pathname === '/' || pathname === '';
   const isPublicRoute =
     isRootRoute ||
-    PUBLIC_ROUTE_ROOTS.has(String(segments[0])) ||
+    PUBLIC_ROUTE_ROOTS.has(routeRoot ?? '') ||
+    PUBLIC_ROUTE_ROOTS.has(segmentRoot) ||
+    (segmentRoot === '(tabs)' && (!segmentLeaf || PUBLIC_TAB_ROUTES.has(segmentLeaf))) ||
     (routeRoot === '(tabs)' && (!routeLeaf || PUBLIC_TAB_ROUTES.has(routeLeaf)));
 
   useEffect(() => {

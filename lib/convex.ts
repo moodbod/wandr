@@ -7,6 +7,9 @@ import type { ExploreGroupTripDetail, ExploreJoinableTrip, ExploreJoinableTripCa
 import type { StayBookingProfile } from '@/types/stays';
 import type { TripDashboard, TripItineraryItem } from '@/types/trip';
 
+export type ContentStatus = 'draft' | 'live' | 'archived';
+export type CuratedContentKind = 'location' | 'experience' | 'stay';
+
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const hasConvexUrl = Boolean(convexUrl);
 
@@ -136,23 +139,23 @@ export const bookExperienceRef = makeFunctionReference<
 
 export const getLocationLikeStateRef = makeFunctionReference<
   'query',
-  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { travelerSlug: string; locationKind: 'location' | 'experience' | 'hiddenGem'; locationSlug: string },
   { liked: boolean }
 >('explore:getLocationLikeState') as FunctionReference<
   'query',
   'public',
-  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { travelerSlug: string; locationKind: 'location' | 'experience' | 'hiddenGem'; locationSlug: string },
   { liked: boolean }
 >;
 
 export const toggleLocationLikeRef = makeFunctionReference<
   'mutation',
-  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { travelerSlug: string; locationKind: 'location' | 'experience' | 'hiddenGem'; locationSlug: string },
   { liked: boolean }
 >('explore:toggleLocationLike') as FunctionReference<
   'mutation',
   'public',
-  { travelerSlug: string; locationKind: 'experience' | 'hiddenGem'; locationSlug: string },
+  { travelerSlug: string; locationKind: 'location' | 'experience' | 'hiddenGem'; locationSlug: string },
   { liked: boolean }
 >;
 
@@ -733,7 +736,7 @@ export const generateLocationPhotoUploadUrlRef = makeFunctionReference<'mutation
 export const submitLocationPhotoRef = makeFunctionReference<
   'mutation',
   {
-    locationKind: 'experience' | 'stay';
+    locationKind: 'location' | 'experience' | 'stay';
     locationSlug: string;
     travelerSlug: string;
     storageId: Id<'_storage'>;
@@ -744,7 +747,7 @@ export const submitLocationPhotoRef = makeFunctionReference<
   'mutation',
   'public',
   {
-    locationKind: 'experience' | 'stay';
+    locationKind: 'location' | 'experience' | 'stay';
     locationSlug: string;
     travelerSlug: string;
     storageId: Id<'_storage'>;
@@ -755,12 +758,12 @@ export const submitLocationPhotoRef = makeFunctionReference<
 
 export const listLocationPhotosRef = makeFunctionReference<
   'query',
-  { locationKind: 'experience' | 'stay'; locationSlug: string },
+  { locationKind: 'location' | 'experience' | 'stay'; locationSlug: string },
   any[]
 >('photos:listLocationPhotos') as FunctionReference<
   'query',
   'public',
-  { locationKind: 'experience' | 'stay'; locationSlug: string },
+  { locationKind: 'location' | 'experience' | 'stay'; locationSlug: string },
   any[]
 >;
 
@@ -1122,6 +1125,86 @@ export const approveTripJoinRequestRef = makeFunctionReference<
   { travelerSlug: string; notificationId: Id<'notices'> },
   boolean
 >('friends:approveTripJoinRequest') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; notificationId: Id<'notices'> },
+  boolean
+>;
+
+export const getLiveCatalogRef = makeFunctionReference<
+  'query',
+  Record<string, never>,
+  {
+    locations: any[];
+    experiences: any[];
+    stays: any[];
+    markers: any[];
+    updatedAt: number;
+  }
+>('catalog:getLiveCatalog') as FunctionReference<
+  'query',
+  'public',
+  Record<string, never>,
+  {
+    locations: any[];
+    experiences: any[];
+    stays: any[];
+    markers: any[];
+    updatedAt: number;
+  }
+>;
+
+export const listManagedCatalogRef = makeFunctionReference<
+  'query',
+  { status?: ContentStatus },
+  any
+>('catalog:listManagedCatalog') as FunctionReference<'query', 'public', { status?: ContentStatus }, any>;
+
+export const upsertManagedLocationRef = makeFunctionReference<
+  'mutation',
+  any,
+  { locationId: Id<'locations'>; slug: string }
+>('catalog:upsertManagedLocation') as FunctionReference<'mutation', 'public', any, { locationId: Id<'locations'>; slug: string }>;
+
+export const upsertManagedExperienceRef = makeFunctionReference<
+  'mutation',
+  any,
+  { experienceId: Id<'experiences'>; slug: string }
+>('catalog:upsertManagedExperience') as FunctionReference<'mutation', 'public', any, { experienceId: Id<'experiences'>; slug: string }>;
+
+export const upsertManagedStayRef = makeFunctionReference<
+  'mutation',
+  any,
+  { stayId: Id<'stays'>; roomId: string; slug: string }
+>('catalog:upsertManagedStay') as FunctionReference<'mutation', 'public', any, { stayId: Id<'stays'>; roomId: string; slug: string }>;
+
+export const updateManagedContentStatusRef = makeFunctionReference<
+  'mutation',
+  { kind: CuratedContentKind; id: Id<'locations'> | Id<'experiences'> | Id<'stays'>; status: ContentStatus },
+  boolean
+>('catalog:updateManagedContentStatus') as FunctionReference<
+  'mutation',
+  'public',
+  { kind: CuratedContentKind; id: Id<'locations'> | Id<'experiences'> | Id<'stays'>; status: ContentStatus },
+  boolean
+>;
+
+export const migrateLegacyContentAsLiveRef = makeFunctionReference<
+  'mutation',
+  { limit?: number },
+  { locationsCreated: number; experiencesUpdated: number; staysUpdated: number }
+>('catalog:migrateLegacyContentAsLive') as FunctionReference<
+  'mutation',
+  'public',
+  { limit?: number },
+  { locationsCreated: number; experiencesUpdated: number; staysUpdated: number }
+>;
+
+export const acceptTripInviteRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; notificationId: Id<'notices'> },
+  boolean
+>('friends:acceptTripInvite') as FunctionReference<
   'mutation',
   'public',
   { travelerSlug: string; notificationId: Id<'notices'> },
