@@ -6,6 +6,9 @@ import { useLiveExchangeRates } from './use-live-exchange-rates';
 
 export function useCurrentUserSettings() {
   const { session } = useAuthSession();
-  useLiveExchangeRates();
-  return useQuery(getUserSettingsRef, session?.travelerSlug ? { travelerSlug: session.travelerSlug } : 'skip');
+  const settings = useQuery(getUserSettingsRef, session?.travelerSlug ? { travelerSlug: session.travelerSlug } : 'skip');
+  const preferredCurrency = settings?.preferredCurrency;
+  useLiveExchangeRates(Boolean(preferredCurrency && preferredCurrency !== 'USD'));
+
+  return settings;
 }

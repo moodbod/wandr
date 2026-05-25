@@ -4,7 +4,7 @@ export type MapMarker = {
   id: string;
   coordinate: readonly [number, number];
   experienceSlug?: string;
-  itemKind?: 'experience' | 'stay' | 'hiddenGem';
+  itemKind?: 'location' | 'experience' | 'stay' | 'hiddenGem';
   imageUri?: string;
   label?: string;
   popularityScore?: number;
@@ -31,6 +31,7 @@ export type MapPreviewProps = {
   zoomLevel?: number;
   showRoutes?: boolean;
   recenterToUserSignal?: number;
+  followUserLocation?: boolean;
   colorSchemeMode?: 'system' | 'dark' | 'light';
   interactionEnabled?: boolean;
   markerVariant?: 'default' | 'routeWidget';

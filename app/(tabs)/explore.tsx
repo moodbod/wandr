@@ -1,13 +1,11 @@
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useQuery } from 'convex/react';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import ExploreGroupTripDetailScreen from '@/app/explore/group/[circleId]';
-import HiddenGemDetailScreen from '@/app/explore/hidden-gems/[slug]';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
@@ -21,12 +19,10 @@ import {
   ExploreTripFilterSkeleton,
 } from '@/components/wandr/explore/card-skeletons';
 import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
-import { ExperienceDetailContent } from '@/components/wandr/explore/experience-detail-content';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
-import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
 import type {
@@ -71,6 +67,18 @@ const INTENT_OPTIONS: readonly DiscoveryOption[] = [
   { key: 'food', label: 'Food & Drink' },
   { key: 'popular', label: 'Popular with Travelers' },
 ];
+const ExploreGroupTripDetailScreen = lazy(() => import('@/app/explore/group/[circleId]'));
+const HiddenGemDetailScreen = lazy(() => import('@/app/explore/hidden-gems/[slug]'));
+const ExperienceDetailContent = lazy(() =>
+  import('@/components/wandr/explore/experience-detail-content').then((module) => ({
+    default: module.ExperienceDetailContent,
+  }))
+);
+const StayDetailScreen = lazy(() =>
+  import('@/components/wandr/stays/stay-detail-screen').then((module) => ({
+    default: module.StayDetailScreen,
+  }))
+);
 
 type ExploreDiscoveryItem =
   | {
@@ -138,7 +146,7 @@ function ConnectedExploreScreen({
     traveler?.slug ? { travelerSlug: traveler.slug } : {}
   );
   const joinableTripCards = useRetainedQueryValue(joinableTripCardsQuery) ?? EMPTY_JOINABLE_TRIP_CARDS;
-  const [loadingMapResetKey, setLoadingMapResetKey] = useState(0);
+  const [loadingMapRecenterSignal, setLoadingMapRecenterSignal] = useState(0);
   const { planningLocation } = usePlanningLocation();
   const animatedIndex = useSharedValue(0);
 
@@ -163,22 +171,22 @@ function ConnectedExploreScreen({
     const currentLocationInPlanningLocation = coordinateIsInPlanningLocation(currentLocation, planningLocation)
       ? currentLocation
       : null;
-    const loadingMapCenterCoordinate =
-      currentLocationInPlanningLocation ?? getPlanningLocationCenterCoordinate(planningLocation);
+    const loadingMapCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
     const loadingMapContent = (
       loadingMapCenterCoordinate ? (
         <ExploreMapHero
-          key={loadingMapResetKey}
           centerCoordinate={loadingMapCenterCoordinate}
           locationLabel={planningLocation.label}
           userCoordinate={currentLocationInPlanningLocation}
           userHeading={currentHeading}
           markers={[]}
+          followUserLocation={Boolean(currentLocationInPlanningLocation)}
           mapPersistKey={isLargeScreen ? 'app-background' : undefined}
+          recenterToUserSignal={loadingMapRecenterSignal}
           routeCoordinates={[]}
           showRoutes={false}
           topInset={mapTopInset}
-          onLocateMe={() => setLoadingMapResetKey((current) => current + 1)}
+          onLocateMe={() => setLoadingMapRecenterSignal((current) => current + 1)}
           planningLocation={planningLocation}
           hideHeader={isLargeScreen}
           shellStyle={StyleSheet.absoluteFill}
@@ -190,18 +198,20 @@ function ConnectedExploreScreen({
       <ThemedView style={styles.root}>
         {isLargeScreen ? (
           <LargeScreenWorkspace mapContent={loadingMapContent}>
-            <LargeScreenPanel kind="main">
-              <ScrollView
-                contentContainerStyle={[styles.sheetContent, styles.columnScroll]}
-                showsVerticalScrollIndicator={false}
-              >
-                <ExploreSheetHeaderSkeleton />
-                <ExploreTripFilterSkeleton />
-                <View style={styles.cardList}>
-                  <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
-                </View>
-              </ScrollView>
-            </LargeScreenPanel>
+            {Platform.OS === 'web' ? null : (
+              <LargeScreenPanel kind="main">
+                <ScrollView
+                  contentContainerStyle={[styles.sheetContent, styles.columnScroll]}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <ExploreSheetHeaderSkeleton />
+                  <ExploreTripFilterSkeleton />
+                  <View style={styles.cardList}>
+                    <ExploreActivityCardList activities={[]} getHref={() => '/explore/search'} isLoading />
+                  </View>
+                </ScrollView>
+              </LargeScreenPanel>
+            )}
           </LargeScreenWorkspace>
         ) : (
           <View style={styles.body}>
@@ -617,7 +627,6 @@ function ExploreScreenView({
     ? content.hero.centerCoordinate
     : null;
   const mapCenterCoordinate =
-    currentLocationInPlanningLocation ??
     tripCenterInPlanningLocation ??
     mapMarkers[0]?.coordinate ??
     heroCenterInPlanningLocation ??
@@ -670,7 +679,7 @@ function ExploreScreenView({
         return;
       }
 
-      if (marker.itemKind === 'hiddenGem' && marker.experienceSlug) {
+      if ((marker.itemKind === 'location' || marker.itemKind === 'hiddenGem') && marker.experienceSlug) {
         if (isLargeScreen) {
           handleOpenHiddenGemDetail(marker.experienceSlug);
           return;
@@ -695,12 +704,16 @@ function ExploreScreenView({
   );
 
   const hasLargeDetailColumn = Boolean(selectedGroupCircleId || selectedHiddenGemSlug || selectedExperienceSlug || selectedStaySlug);
-  const largeContentColumnWidth = isTablet ? largeScreenWorkspace.mainColumnTabletWidth : largeScreenWorkspace.mainColumnWidth;
+  const showLargeExplorePanel = Platform.OS !== 'web';
+  const largeContentColumnWidth = showLargeExplorePanel
+    ? isTablet
+      ? largeScreenWorkspace.mainColumnTabletWidth
+      : largeScreenWorkspace.mainColumnWidth
+    : 0;
   const largeDetailColumnWidth = isTablet ? largeScreenWorkspace.detailColumnTabletWidth : largeScreenWorkspace.detailColumnWidth;
   const mapControlsInsetLeft =
     largeScreenWorkspace.inset +
-    largeContentColumnWidth +
-    largeScreenWorkspace.gap +
+    (showLargeExplorePanel ? largeContentColumnWidth + largeScreenWorkspace.gap : 0) +
     (hasLargeDetailColumn ? largeDetailColumnWidth + largeScreenWorkspace.gap : 0);
   const mapViewportPaddingLeft = Math.min(mapControlsInsetLeft, Math.max(24, viewportWidth - 360));
   const mapControlsAvailableWidth = Math.max(
@@ -729,6 +742,7 @@ function ExploreScreenView({
             : undefined
         }
         markers={mapMarkers}
+        followUserLocation={Boolean(currentLocationInPlanningLocation)}
         routeCoordinates={locationRouteCoordinates}
         showRoutes={locationRouteCoordinates.length > 1}
         mapPersistKey={isLargeScreen ? 'app-background' : undefined}
@@ -793,55 +807,65 @@ function ExploreScreenView({
           mapControls={largeMapControls}
           mapControlsStyle={{ left: mapControlsInsetLeft, bottom: largeScreenWorkspace.inset }}
         >
-          <LargeScreenPanel kind="main" style={styles.exploreMainPanel}>
-            <ExploreContent
-              discoveryActivities={discoveryActivities}
-              discoveryHiddenGems={discoveryHiddenGems}
-              discoveryJoinableTripCards={discoveryJoinableTripCards}
-              isDark={isDark}
-              locationActivities={locationActivities}
-              locationJoinableTripCards={locationJoinableTripCards}
-              locationLabel={planningLocation.label}
-              locationTrips={locationTrips}
-              planningCopy={planningCopy}
-              searchQuery={searchQuery}
-              selectedTripId={selectedTripId}
-              showInlineFilters={false}
-              onSelectGroupTrip={handleOpenGroupTripDetail}
-              onSelectHiddenGem={handleOpenHiddenGemDetail}
-              onSelectTrip={handleSelectTrip}
-              onSelectActivity={handleOpenExperienceDetail}
-              scrollContainerStyle={styles.columnScroll}
-            />
-          </LargeScreenPanel>
+          {showLargeExplorePanel ? (
+            <LargeScreenPanel kind="main" style={styles.exploreMainPanel}>
+              <ExploreContent
+                discoveryActivities={discoveryActivities}
+                discoveryHiddenGems={discoveryHiddenGems}
+                discoveryJoinableTripCards={discoveryJoinableTripCards}
+                isDark={isDark}
+                locationActivities={locationActivities}
+                locationJoinableTripCards={locationJoinableTripCards}
+                locationLabel={planningLocation.label}
+                locationTrips={locationTrips}
+                planningCopy={planningCopy}
+                searchQuery={searchQuery}
+                selectedTripId={selectedTripId}
+                showInlineFilters={false}
+                onSelectGroupTrip={handleOpenGroupTripDetail}
+                onSelectHiddenGem={handleOpenHiddenGemDetail}
+                onSelectTrip={handleSelectTrip}
+                onSelectActivity={handleOpenExperienceDetail}
+                scrollContainerStyle={styles.columnScroll}
+              />
+            </LargeScreenPanel>
+          ) : null}
           {selectedGroupCircleId ? (
             <LargeScreenPanel kind="detail">
-              <ExploreGroupTripDetailScreen
-                circleId={selectedGroupCircleId}
-                onClose={() => setSelectedGroupCircleId(null)}
-              />
+              <Suspense fallback={null}>
+                <ExploreGroupTripDetailScreen
+                  circleId={selectedGroupCircleId}
+                  onClose={() => setSelectedGroupCircleId(null)}
+                />
+              </Suspense>
             </LargeScreenPanel>
           ) : selectedHiddenGemSlug ? (
             <LargeScreenPanel kind="detail">
-              <HiddenGemDetailScreen
-                onClose={() => setSelectedHiddenGemSlug(null)}
-                slug={selectedHiddenGemSlug}
-              />
+              <Suspense fallback={null}>
+                <HiddenGemDetailScreen
+                  onClose={() => setSelectedHiddenGemSlug(null)}
+                  slug={selectedHiddenGemSlug}
+                />
+              </Suspense>
             </LargeScreenPanel>
           ) : selectedExperienceSlug ? (
             <LargeScreenPanel kind="detail">
-              <ExperienceDetailContent
-                hideHeader={false}
-                onClose={() => setSelectedExperienceSlug(null)}
-                slug={selectedExperienceSlug}
-              />
+              <Suspense fallback={null}>
+                <ExperienceDetailContent
+                  hideHeader={false}
+                  onClose={() => setSelectedExperienceSlug(null)}
+                  slug={selectedExperienceSlug}
+                />
+              </Suspense>
             </LargeScreenPanel>
           ) : selectedStaySlug ? (
             <LargeScreenPanel kind="detail">
-              <StayDetailScreen
-                onClose={() => setSelectedStaySlug(null)}
-                slug={selectedStaySlug}
-              />
+              <Suspense fallback={null}>
+                <StayDetailScreen
+                  onClose={() => setSelectedStaySlug(null)}
+                  slug={selectedStaySlug}
+                />
+              </Suspense>
             </LargeScreenPanel>
           ) : null}
         </LargeScreenWorkspace>
@@ -1623,16 +1647,16 @@ function toTrendingActivityCard(
 }
 
 function toHiddenGemDiscoveryItem(item: ExploreHiddenGem): ExploreDiscoveryItem {
-  const slug = getHiddenGemSlug(item.title);
+  const slug = getHiddenGemSlug(item.title, item.slug);
 
   return {
     kind: 'hiddenGem',
-    key: `hidden-gem-${slug}`,
+    key: `location-${slug}`,
     slug,
     card: {
-      badge: item.badge ?? 'Hidden gem',
+      badge: item.badge ?? 'Location',
       badgeTone: 'soft',
-      ctaLabel: item.primaryLabel ?? 'Open gem',
+      ctaLabel: item.primaryLabel ?? 'Open location',
       experienceSlug: slug,
       imageUri: item.imageUri,
       price: '',

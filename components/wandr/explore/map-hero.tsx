@@ -25,6 +25,7 @@ type ExploreMapHeroProps = {
   routeCoordinates?: readonly (readonly [number, number])[];
   showRoutes?: boolean;
   recenterToUserSignal?: number;
+  followUserLocation?: boolean;
   topInset?: number;
   onInteract?: () => void;
   onLocateMe?: () => void;
@@ -47,6 +48,7 @@ export function ExploreMapHero({
   routeCoordinates,
   showRoutes = true,
   recenterToUserSignal,
+  followUserLocation,
   topInset = designSystem.spacing.xxxl,
   onInteract,
   onLocateMe,
@@ -75,6 +77,7 @@ export function ExploreMapHero({
         routeCoordinates={routeCoordinates}
         zoomLevel={14}
         showRoutes={showRoutes}
+        followUserLocation={followUserLocation}
         persistKey={mapPersistKey}
         recenterToUserSignal={recenterToUserSignal}
         onInteract={onInteract}
@@ -89,7 +92,7 @@ export function ExploreMapHero({
             return;
           }
 
-          if (marker.itemKind === 'hiddenGem' && marker.experienceSlug) {
+          if ((marker.itemKind === 'location' || marker.itemKind === 'hiddenGem') && marker.experienceSlug) {
             router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: marker.experienceSlug } });
             return;
           }

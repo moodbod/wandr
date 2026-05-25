@@ -31,7 +31,7 @@ import { formatUsdConversion } from '@/lib/currency';
 import { useAuthSession } from '@/providers/auth-session';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
-import { ManagerDashboard } from '../manager/manager-dashboard';
+import { AdminContentDashboard } from '../manager/admin-content-dashboard';
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
 import { ProfileSettingsSidebar } from './profile-settings-sidebar';
@@ -153,7 +153,7 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
       <ThemedView style={styles.root}>
         <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
           {canUseManagerMode && managerSurface === 'manager' ? (
-            <ManagerDashboard travelerSlug={traveler?.slug} />
+            <AdminContentDashboard travelerSlug={traveler?.slug} />
           ) : (
             <LargeScreenPanel kind="main">
               {mainContent}
@@ -474,7 +474,7 @@ function navigateToPlace(router: ReturnType<typeof useRouter>, item: ProfilePlac
     return;
   }
 
-  if (item.kind === 'hiddenGem') {
+  if (item.kind === 'location' || item.kind === 'hiddenGem') {
     router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.slug } });
     return;
   }

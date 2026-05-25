@@ -1,4 +1,3 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Check, MagnifyingGlass, MapPin } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';

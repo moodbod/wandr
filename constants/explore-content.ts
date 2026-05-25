@@ -24,6 +24,8 @@ export type ExploreFeatureDetail = {
 };
 
 export type ExploreHiddenGem = {
+  slug?: string;
+  itemKind?: 'location' | 'hiddenGem';
   title: string;
   description: string;
   imageUri: string;
@@ -56,7 +58,7 @@ export type ExploreMapMarker = {
   id: string;
   coordinate: readonly [number, number];
   experienceSlug?: string;
-  itemKind?: 'experience' | 'stay' | 'hiddenGem';
+  itemKind?: 'location' | 'experience' | 'stay' | 'hiddenGem';
   imageUri?: string;
   label?: string;
   priceLabel?: string;
@@ -82,7 +84,7 @@ export type ExploreActivityCard = {
 
 export type ExploreExperience = {
   slug: string;
-  itemKind?: 'experience' | 'hiddenGem';
+  itemKind?: 'location' | 'experience' | 'stay' | 'hiddenGem';
   badge: string;
   badgeTone?: 'accent' | 'soft' | 'dark';
   ctaLabel: string;

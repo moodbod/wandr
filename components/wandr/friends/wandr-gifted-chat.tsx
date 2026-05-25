@@ -17,6 +17,8 @@ import type { MessageActionAnchor } from '@/components/wandr/friends/message-act
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
+
 type WandrMessageBase = {
   _id: string;
   body: string | null;
@@ -194,7 +196,7 @@ function MeasuredWandrBubble<TMessage extends WandrMessageBase>({
       onPanResponderRelease: () => {
         Animated.spring(swipeX, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
           speed: 24,
           bounciness: 6,
         }).start();
@@ -202,7 +204,7 @@ function MeasuredWandrBubble<TMessage extends WandrMessageBase>({
       onPanResponderTerminate: () => {
         Animated.spring(swipeX, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
           speed: 24,
           bounciness: 6,
         }).start();

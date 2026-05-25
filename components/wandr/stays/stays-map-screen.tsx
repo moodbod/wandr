@@ -39,7 +39,7 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
-import { getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
+import { getLiveCatalogRef, getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
 import { formatUsdPriceParts } from '@/lib/currency';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
@@ -49,6 +49,7 @@ import { StayDetailScreen } from './stay-detail-screen';
 
 const NEAR_ROUTE_RADIUS_KM = 90;
 const NEAR_ME_RADIUS_KM = 60;
+const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
 
 export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const router = useRouter();
@@ -66,6 +67,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     selectedTripId && traveler?.slug ? { travelerSlug: traveler.slug, tripId: selectedTripId } : 'skip'
   );
   const dbStays = useQuery(listAllStaysRef);
+  const liveCatalog = useQuery(getLiveCatalogRef);
   const currentLocation = useCurrentLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [discoveryMode, setDiscoveryMode] = useState<'route' | 'nearby'>('route');
@@ -180,8 +182,13 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       (stay, index, all) => all.findIndex((candidate) => candidate.id === stay.id) === index
     );
   }, [featuredStay, filteredStays]);
+  const catalogMarkers = useMemo(() => {
+    return (liveCatalog?.markers ?? []).filter((marker: any) =>
+      coordinateIsInPlanningLocation(marker.coordinate, planningLocation)
+    );
+  }, [liveCatalog?.markers, planningLocation]);
   const mapMarkers = useMemo(() => {
-    return mapStays.map((stay: any) => ({
+    const activeStayMarkers = mapStays.map((stay: any) => ({
       id: stay.id || stay._id,
       coordinate: stay.coordinate,
       experienceSlug: stay.slug,
@@ -191,7 +198,16 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       tone: (stay.id || stay._id) === featuredStayKey ? ('accent' as const) : ('dark' as const),
       status: (stay.id || stay._id) === featuredStayKey ? ('active' as const) : ('upcoming' as const),
     }));
-  }, [featuredStayKey, mapStays]);
+    const activeStaySlugs = new Set(activeStayMarkers.map((marker) => marker.experienceSlug));
+    const supplementalMarkers = catalogMarkers.filter((marker: any) => {
+      if (marker.itemKind === 'stay' && marker.experienceSlug && activeStaySlugs.has(marker.experienceSlug)) {
+        return false;
+      }
+      return true;
+    });
+
+    return [...activeStayMarkers, ...supplementalMarkers];
+  }, [catalogMarkers, featuredStayKey, mapStays]);
 
   const cardWidth = Math.min(windowWidth - 72, 316);
   const cardGap = 10;
@@ -248,9 +264,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const planningCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
   const centerCoordinate =
     featuredStay?.coordinate ??
-    (discoveryMode === 'nearby' && coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
-      ? currentLocation.coordinate
-      : tripCenterInPlanningLocation) ??
+    tripCenterInPlanningLocation ??
     planningCenterCoordinate ??
     null;
   const userCoordinate = coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
@@ -272,13 +286,31 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       centerCoordinate={centerCoordinate}
       userCoordinate={userCoordinate}
       markers={mapMarkers}
+      followUserLocation={discoveryMode === 'nearby' && Boolean(userCoordinate)}
       persistKey={isLargeScreen ? 'app-background' : undefined}
       routeCoordinates={locationRouteCoordinates}
       showRoutes={locationRouteCoordinates.length > 1}
       zoomLevel={12}
       onMarkerPress={(marker) => {
-        const stayIndex = filteredStays.findIndex((s: any) => (s.id || s._id) === marker.id);
-        handleSelectStayIndex(stayIndex);
+        if ((marker.itemKind === 'location' || marker.itemKind === 'hiddenGem') && marker.experienceSlug) {
+          router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: marker.experienceSlug } });
+          return;
+        }
+
+        if (marker.itemKind === 'experience' && marker.experienceSlug) {
+          router.push({ pathname: '/explore/[slug]', params: { slug: marker.experienceSlug } });
+          return;
+        }
+
+        const stayIndex = filteredStays.findIndex((s: any) => s.slug === marker.experienceSlug || (s.id || s._id) === marker.id);
+        if (stayIndex >= 0) {
+          handleSelectStayIndex(stayIndex);
+          return;
+        }
+
+        if (marker.itemKind === 'stay' && marker.experienceSlug) {
+          router.push({ pathname: '/stays/details', params: { slug: marker.experienceSlug } });
+        }
       }}
     />
   );
@@ -466,7 +498,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           scrollEventThrottle={16}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: true }
+            { useNativeDriver: USE_NATIVE_ANIMATED_DRIVER }
           )}
           onMomentumScrollEnd={handleSnap}
           contentContainerStyle={[

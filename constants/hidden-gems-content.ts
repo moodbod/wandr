@@ -23,8 +23,8 @@ export type HiddenGemDetailContent = {
   secondaryLabel: string;
 };
 
-export function getHiddenGemSlug(title: string) {
-  return title
+export function getHiddenGemSlug(title: string, explicitSlug?: string) {
+  return (explicitSlug ?? title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');

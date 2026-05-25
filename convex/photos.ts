@@ -14,7 +14,7 @@ export const generateUploadUrl = mutation({
 
 export const submitLocationPhoto = mutation({
   args: {
-    locationKind: v.union(v.literal('experience'), v.literal('stay')),
+    locationKind: v.union(v.literal('location'), v.literal('experience'), v.literal('stay')),
     locationSlug: v.string(),
     travelerSlug: v.string(),
     storageId: v.id('_storage'),
@@ -22,6 +22,26 @@ export const submitLocationPhoto = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    const location =
+      args.locationKind === 'location'
+        ? await ctx.db
+            .query('locations')
+            .withIndex('by_slug', (q) => q.eq('slug', args.locationSlug))
+            .unique()
+        : args.locationKind === 'experience'
+        ? await ctx.db
+            .query('experiences')
+            .withIndex('by_slug', (q) => q.eq('slug', args.locationSlug))
+            .unique()
+        : await ctx.db
+            .query('stays')
+            .withIndex('by_slug', (q) => q.eq('slug', args.locationSlug))
+            .unique();
+
+    if (!location) {
+      throw new Error('Location not found.');
+    }
+
     return await ctx.db.insert('photos', {
       locationKind: args.locationKind,
       locationSlug: args.locationSlug,
@@ -41,8 +61,7 @@ export const listManagedLocationPhotos = query({
     status: v.optional(v.union(v.literal('approved'), v.literal('pending'), v.literal('rejected'))),
   },
   handler: async (ctx, args) => {
-    const manager = await requireAdmin(ctx);
-    const managerSlug = manager.slug;
+    await requireAdmin(ctx);
     const status = args.status;
     const query = status
       ? ctx.db
@@ -55,7 +74,12 @@ export const listManagedLocationPhotos = query({
     const resolved = await Promise.all(
       photos.map(async (photo) => {
         const location =
-          photo.locationKind === 'experience'
+          photo.locationKind === 'location'
+            ? await ctx.db
+                .query('locations')
+                .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+                .unique()
+            : photo.locationKind === 'experience'
             ? await ctx.db
                 .query('experiences')
                 .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
@@ -65,7 +89,7 @@ export const listManagedLocationPhotos = query({
                 .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
                 .unique();
 
-        if (location?.managerSlug !== managerSlug) {
+        if (!location) {
           return null;
         }
 
@@ -108,6 +132,26 @@ export const updateLocationPhotoStatus = mutation({
       return false;
     }
 
+    const location =
+      photo.locationKind === 'location'
+        ? await ctx.db
+            .query('locations')
+            .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+            .unique()
+        : photo.locationKind === 'experience'
+        ? await ctx.db
+            .query('experiences')
+            .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+            .unique()
+        : await ctx.db
+            .query('stays')
+            .withIndex('by_slug', (q) => q.eq('slug', photo.locationSlug))
+            .unique();
+
+    if (!location) {
+      return false;
+    }
+
     await ctx.db.patch(args.photoId, {
       status: args.status,
       reviewedAt: Date.now(),
@@ -120,7 +164,7 @@ export const updateLocationPhotoStatus = mutation({
 
 export const listLocationPhotos = query({
   args: {
-    locationKind: v.union(v.literal('experience'), v.literal('stay')),
+    locationKind: v.union(v.literal('location'), v.literal('experience'), v.literal('stay')),
     locationSlug: v.string(),
   },
   handler: async (ctx, args) => {

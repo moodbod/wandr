@@ -49,9 +49,7 @@ export function TripNotificationCenter() {
   const router = useRouter();
   const traveler = useCurrentTraveler();
   const travelerSlug = traveler?.slug ?? '';
-  const trip = useQuery(getTripDashboardRef, {
-    travelerSlug,
-  });
+  const trip = useQuery(getTripDashboardRef, travelerSlug ? { travelerSlug } : 'skip');
   const recordArrival = useMutation(recordTripArrivalRef);
   const createTripNotification = useMutation(createTripNotificationRef);
   const registerDevicePushToken = useMutation(registerDevicePushTokenRef);

@@ -13,12 +13,13 @@ export function MapFrame({
   children,
   mapContainerStyle,
   shellStyle,
+  style,
   ...mapProps
 }: MapFrameProps) {
   return (
     <View style={[styles.shell, shellStyle]}>
       <View style={[styles.mapContainer, mapContainerStyle]}>
-        <MapPreview {...mapProps} style={{ flex: 1 }} />
+        <MapPreview {...mapProps} style={[{ flex: 1 }, style]} />
       </View>
       {children}
     </View>

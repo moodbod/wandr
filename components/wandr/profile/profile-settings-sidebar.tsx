@@ -2,7 +2,7 @@ import { type Href, useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, BellRinging, CurrencyDollar, LockSimple, PencilSimple, SignOut } from 'phosphor-react-native';
-import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import {
   PanGestureHandler,
   State,
@@ -18,6 +18,7 @@ import { getAppMetadata } from '@/lib/app-metadata';
 import { useAuthSession } from '@/providers/auth-session';
 
 const SIDEBAR_WIDTH = 360;
+const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
 type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designSystem.semantic];
 
 type ProfileSettingsSidebarProps = {
@@ -58,7 +59,7 @@ export function ProfileSettingsSidebar({
       toValue: isOpen ? 1 : 0,
       duration: isOpen ? 240 : 200,
       easing: isOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
     }).start(({ finished }) => {
       if (finished && !isOpen) {
         setIsRendered(false);
@@ -68,7 +69,7 @@ export function ProfileSettingsSidebar({
 
   const onGestureEvent = Animated.event<PanGestureHandlerGestureEvent>(
     [{ nativeEvent: { translationX: dragX } }],
-    { useNativeDriver: true }
+    { useNativeDriver: USE_NATIVE_ANIMATED_DRIVER }
   );
 
   const onGestureStateChange = ({ nativeEvent }: PanGestureHandlerStateChangeEvent) => {
@@ -88,7 +89,7 @@ export function ProfileSettingsSidebar({
       damping: 18,
       stiffness: 220,
       mass: 0.8,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
     }).start();
   };
 

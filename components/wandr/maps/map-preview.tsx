@@ -38,6 +38,7 @@ function MapPreviewComponent({
   zoomLevel = 14,
   showRoutes = true,
   recenterToUserSignal = 0,
+  followUserLocation = false,
   colorSchemeMode = 'system',
   markerVariant = 'default',
   onInteract,
@@ -47,9 +48,9 @@ function MapPreviewComponent({
 }: MapPreviewProps) {
   const mapRef = useRef<MapboxMapView | null>(null);
   const cameraRef = useRef<Camera | null>(null);
-  const hasSettledOnUserRef = useRef(false);
   const hasCenteredOnResolvedDataRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
+  const isFollowingUserRef = useRef(followUserLocation);
   const lastCameraTargetKeyRef = useRef<string | null>(null);
   const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
@@ -69,6 +70,8 @@ function MapPreviewComponent({
   const resolvedCenterCoordinate =
     centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
+  const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
+  const followZoomLevel = Math.max(zoomLevel, 17);
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -85,6 +88,17 @@ function MapPreviewComponent({
     () => stayMarkers.length === 1 && stayMarkers[0].status === 'active',
     [stayMarkers]
   );
+
+  useEffect(() => {
+    if (!followUserLocation) {
+      isFollowingUserRef.current = false;
+      return;
+    }
+
+    if (!hasUserInteractedRef.current) {
+      isFollowingUserRef.current = true;
+    }
+  }, [followUserLocation]);
 
   useEffect(() => {
     if (isWeb || !showRoutes || routeMarkerCoordinates.length === 0) {
@@ -167,6 +181,10 @@ function MapPreviewComponent({
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current) return;
 
+    if (followUserLocation && userCoordinate && isFollowingUserRef.current) {
+      return;
+    }
+
     const cameraTargetKey = getCameraTargetKey(mapCenterCoordinate, zoomLevel);
     if (cameraTargetKey === lastCameraTargetKeyRef.current) {
       return;
@@ -193,39 +211,45 @@ function MapPreviewComponent({
     if (resolvedCenterCoordinate) {
       hasCenteredOnResolvedDataRef.current = true;
     }
-  }, [MapboxGL, cameraPadding, centerCoordinate, isWeb, mapCenterCoordinate, resolvedCenterCoordinate, zoomLevel]);
+  }, [MapboxGL, cameraPadding, centerCoordinate, followUserLocation, isWeb, mapCenterCoordinate, resolvedCenterCoordinate, userCoordinate, zoomLevel]);
 
   useEffect(() => {
-    if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || hasSettledOnUserRef.current) return;
+    if (isWeb || !MapboxGL || !cameraRef.current || !followUserLocation || !userCoordinate || !isFollowingUserRef.current) return;
 
-    hasSettledOnUserRef.current = true;
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, 17);
+    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel);
+    if (cameraTargetKey === lastCameraTargetKeyRef.current) {
+      return;
+    }
+
+    hasUserInteractedRef.current = false;
+    lastCameraTargetKeyRef.current = cameraTargetKey;
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(userCoordinate),
       heading: userHeading ?? 0,
       padding: cameraPadding,
       pitch: 45,
-      zoomLevel: 17,
-      animationDuration: 1000,
+      zoomLevel: followZoomLevel,
+      animationDuration: 650,
       animationMode: 'easeTo',
     });
-  }, [MapboxGL, cameraPadding, isWeb, userCoordinate, userHeading]);
+  }, [MapboxGL, cameraPadding, followUserLocation, followZoomLevel, isWeb, userCoordinate, userHeading]);
 
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || recenterToUserSignal === 0) return;
 
+    isFollowingUserRef.current = true;
     hasUserInteractedRef.current = false;
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, 17);
+    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel);
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(userCoordinate),
       heading: userHeading ?? 0,
       padding: cameraPadding,
       pitch: 45,
-      zoomLevel: 17,
+      zoomLevel: followZoomLevel,
       animationDuration: 650,
       animationMode: 'easeTo',
     });
-  }, [MapboxGL, cameraPadding, isWeb, recenterToUserSignal, userCoordinate, userHeading]);
+  }, [MapboxGL, cameraPadding, followZoomLevel, isWeb, recenterToUserSignal, userCoordinate, userHeading]);
 
   useEffect(() => {
     if (!MapboxGL || !MAPBOX_ACCESS_TOKEN) return;
@@ -235,21 +259,21 @@ function MapPreviewComponent({
 
   if (isWeb) {
     if (!MAPBOX_ACCESS_TOKEN) {
-        return (
-          <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-            <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
-          </View>
-        );
+      return (
+        <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+          <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
+        </View>
+      );
     }
 
     const MapboxMap = MapboxGL?.MapView;
 
     if (!MapboxMap) {
-        return (
-          <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-            <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map preview is still loading...</ThemedText>
-          </View>
-        );
+      return (
+        <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
+          <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map preview is still loading...</ThemedText>
+        </View>
+      );
     }
 
     return (
@@ -258,26 +282,26 @@ function MapPreviewComponent({
           style={StyleSheet.absoluteFill}
           styleURL={styleURL ?? undefined}
         >
-           <MapboxGL.Camera
-              centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
-              padding={cameraPadding}
-              zoomLevel={zoomLevel}
-            />
-            <MapRouteOverlays 
-                upcomingRouteCoords={upcomingRouteCoords}
-                stayBranchCoords={stayBranchCoords}
-            />
-            {normalizedMarkers.map((marker) => {
-                return (
-                    <MapboxPlaceMarker
-                        isDark={isDark}
-                        marker={marker}
-                        key={marker.id}
-                        onPress={onMarkerPress}
-                        variant={markerVariant}
-                    />
-                );
-            })}
+          <MapboxGL.Camera
+            centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
+            padding={cameraPadding}
+            zoomLevel={zoomLevel}
+          />
+          <MapRouteOverlays
+            upcomingRouteCoords={upcomingRouteCoords}
+            stayBranchCoords={stayBranchCoords}
+          />
+          {normalizedMarkers.map((marker) => {
+            return (
+              <MapboxPlaceMarker
+                isDark={isDark}
+                marker={marker}
+                key={marker.id}
+                onPress={onMarkerPress}
+                variant={markerVariant}
+              />
+            );
+          })}
         </MapboxMap>
       </View>
     );
@@ -314,6 +338,7 @@ function MapPreviewComponent({
       style={[styles.mapRoot, style]}
       onTouchStart={() => {
         hasUserInteractedRef.current = true;
+        isFollowingUserRef.current = false;
         onInteract?.();
       }}>
       <MapboxGL.MapView
@@ -330,17 +355,20 @@ function MapPreviewComponent({
             onMapPress?.([Number(coordinate[0]), Number(coordinate[1])]);
           }
           hasUserInteractedRef.current = true;
+          isFollowingUserRef.current = false;
           onInteract?.();
         }}
         onCameraChanged={(state) => {
           if (state.gestures.isGestureActive) {
             hasUserInteractedRef.current = true;
+            isFollowingUserRef.current = false;
             onInteract?.();
           }
         }}
         onMapIdle={(state) => {
           if (state.gestures.isGestureActive) {
             hasUserInteractedRef.current = true;
+            isFollowingUserRef.current = false;
             onInteract?.();
           }
         }}
@@ -356,14 +384,10 @@ function MapPreviewComponent({
         <MapboxGL.Camera
           ref={cameraRef}
           defaultSettings={{
-            centerCoordinate: toMapboxPosition(mapCenterCoordinate),
+            centerCoordinate: toMapboxPosition(initialCenterCoordinate),
             padding: cameraPadding,
             zoomLevel,
           }}
-          centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
-          padding={cameraPadding}
-          zoomLevel={zoomLevel}
-          animationMode="none"
         />
         <MapboxGL.UserLocation visible={!userCoordinate} animated showsUserHeadingIndicator />
         {userCoordinate ? (

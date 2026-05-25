@@ -72,10 +72,18 @@ export const experiencesTable = defineTable({
   ),
   includes: v.array(v.string()),
   regionId: v.optional(v.id('regions')),
+  status: v.optional(v.union(v.literal('draft'), v.literal('live'), v.literal('archived'))),
+  createdByAdminSlug: v.optional(v.string()),
+  updatedByAdminSlug: v.optional(v.string()),
+  publishedAt: v.optional(v.number()),
+  archivedAt: v.optional(v.number()),
+  linkedLocationId: v.optional(v.id('locations')),
   // New flags for rendering on the explore pages
   isFeaturedHero: v.optional(v.boolean()),
   isFeaturedDetail: v.optional(v.boolean()),
   isActivityCard: v.optional(v.boolean()),
 })
   .index('by_slug', ['slug'])
-  .index('by_managerSlug', ['managerSlug']);
+  .index('by_managerSlug', ['managerSlug'])
+  .index('by_status', ['status'])
+  .index('by_status_and_planningLocationId', ['status', 'planningLocationId']);

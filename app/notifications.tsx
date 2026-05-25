@@ -19,6 +19,7 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   acceptFriendRequestRef,
+  acceptTripInviteRef,
   approveTripJoinRequestRef,
   listNotificationsRef,
   markNotificationsReadRef,
@@ -58,7 +59,7 @@ function getRequestStatus(notification: AppNotification) {
     return notification.actionStatus;
   }
 
-  if (notification.kind === 'trip_join_request' || isFriendRequestNotification(notification)) {
+  if (notification.kind === 'trip_invite' || notification.kind === 'trip_join_request' || isFriendRequestNotification(notification)) {
     return 'pending';
   }
 
@@ -101,6 +102,7 @@ export default function NotificationsScreen() {
   const travelerSlug = traveler?.slug;
   const notifications = useQuery(listNotificationsRef, travelerSlug ? { travelerSlug } : 'skip');
   const acceptFriendRequest = useMutation(acceptFriendRequestRef);
+  const acceptTripInvite = useMutation(acceptTripInviteRef);
   const approveTripJoinRequest = useMutation(approveTripJoinRequestRef);
   const markRead = useMutation(markNotificationsReadRef);
   const markViewed = useMutation(markNotificationsViewedRef);
@@ -177,6 +179,11 @@ export default function NotificationsScreen() {
     try {
       if (notification.kind === 'friend_invite') {
         await acceptFriendRequest({
+          travelerSlug,
+          notificationId: notification._id,
+        });
+      } else if (notification.kind === 'trip_invite') {
+        await acceptTripInvite({
           travelerSlug,
           notificationId: notification._id,
         });
@@ -338,7 +345,12 @@ function NotificationRow({
       : designSystem.colors.surface;
   const requestStatus =
     getRequestStatus(notification);
-  const requestLabel = notification.kind === 'friend_invite' ? 'friend request' : 'trip join request';
+  const requestLabel =
+    notification.kind === 'friend_invite'
+      ? 'friend request'
+      : notification.kind === 'trip_invite'
+        ? 'trip invite'
+        : 'trip join request';
   const isPendingRequest = requestStatus === 'pending';
   const showActorAvatar = Boolean(notification.actorSlug);
   const actorName = notification.actorName ?? notification.actorSlug ?? '';

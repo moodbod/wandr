@@ -11,7 +11,7 @@ function getRequestActionStatus(notification: Doc<'notices'>) {
     return notification.actionStatus;
   }
 
-  if (notification.kind === 'trip_join_request') {
+  if (notification.kind === 'trip_invite' || notification.kind === 'trip_join_request') {
     return 'pending';
   }
 
@@ -85,7 +85,7 @@ export const markNotificationsViewed = mutation({
     const unviewed = await ctx.db
       .query('notices')
       .withIndex('by_recipientSlug_and_viewedAt', (q) => q.eq('recipientSlug', travelerSlug))
-      .collect();
+      .take(100);
 
     for (const notification of unviewed) {
       if (notification.viewedAt) {
@@ -123,7 +123,7 @@ export const markNotificationsRead = mutation({
     const unread = await ctx.db
       .query('notices')
       .withIndex('by_recipientSlug_and_readAt', (q) => q.eq('recipientSlug', travelerSlug))
-      .collect();
+      .take(100);
 
     for (const notification of unread) {
       if (notification.readAt) {
@@ -224,7 +224,7 @@ export const listDevicePushTokensForTraveler = internalQuery({
     return await ctx.db
       .query('tokens')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
-      .collect();
+      .take(20);
   },
 });
 
@@ -244,7 +244,7 @@ export const sendIncomingCallPush = internalAction({
       return { sent: 0 };
     }
 
-    const messages: Array<Record<string, unknown>> = tokens.map((token) => ({
+    const messages: Record<string, unknown>[] = tokens.map((token) => ({
       to: token.expoPushToken,
       title: `${args.callerName} is calling`,
       body: `${args.circleName} ${args.mode === 'video' ? 'video call' : 'voice call'}`,
@@ -301,7 +301,7 @@ export const sendChatPush = internalAction({
       return { sent: 0 };
     }
 
-    const messages: Array<Record<string, unknown>> = tokens.map((token) => ({
+    const messages: Record<string, unknown>[] = tokens.map((token) => ({
       to: token.expoPushToken,
       title: args.title,
       body: args.body,

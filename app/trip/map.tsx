@@ -165,7 +165,7 @@ function TripMapScreenView({
         : [],
     [trip]
   );
-  const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? currentLocation ?? fallbackCenterCoordinate ?? null;
+  const centerCoordinate = trip?.centerCoordinate ?? markers[0]?.coordinate ?? fallbackCenterCoordinate ?? null;
 
   const handleMapInteract = () => {
     sheetRef?.current?.snapToIndex(0);
@@ -182,6 +182,7 @@ function TripMapScreenView({
               userHeading={currentHeading}
               locationLabel={trip?.dayTitle ?? fallbackLocationLabel}
               markers={markers}
+              followUserLocation={Boolean(currentLocation)}
               routeCoordinates={routeCoordinates}
               showRoutes={routeCoordinates.length > 1}
               topInset={insetsTop}

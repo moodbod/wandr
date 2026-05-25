@@ -99,7 +99,7 @@ type DashboardColors = (typeof designSystem.semantic)[keyof typeof designSystem.
 type ManagedLocationPhoto = {
   id: Id<'photos'>;
   imageUri: string;
-  locationKind: 'experience' | 'stay';
+  locationKind: 'location' | 'experience' | 'stay';
   locationSlug: string;
   travelerSlug: string;
   caption: string | null;

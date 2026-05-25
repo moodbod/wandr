@@ -15,6 +15,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { DirectChatMessage, FriendChatMessage } from '@/types/friends';
 
+const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
+
 function formatTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
@@ -161,7 +163,7 @@ function SpringPressable({
   const animateTo = (toValue: number) => {
     Animated.spring(scale, {
       toValue,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
       speed: 24,
       bounciness: 7,
     }).start();

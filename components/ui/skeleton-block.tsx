@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -7,6 +7,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 type SkeletonBlockProps = {
   style?: StyleProp<ViewStyle>;
 };
+
+const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
 
 export function SkeletonBlock({ style }: SkeletonBlockProps) {
   const opacity = useRef(new Animated.Value(0.45)).current;
@@ -18,12 +20,12 @@ export function SkeletonBlock({ style }: SkeletonBlockProps) {
         Animated.timing(opacity, {
           toValue: 0.9,
           duration: 900,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
         }),
         Animated.timing(opacity, {
           toValue: 0.45,
           duration: 900,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
         }),
       ])
     );

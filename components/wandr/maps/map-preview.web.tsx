@@ -16,7 +16,6 @@ import type { MapMarker, MapPreviewProps } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 const MAPBOX_STREET_STYLE_URL = 'mapbox://styles/mapbox/streets-v12';
-const MAPBOX_DARK_STYLE_URL = 'mapbox://styles/mapbox/dark-v11';
 const HIDDEN_MAPBOX_LAYER_KEYWORDS = ['poi', 'transit', 'airport', 'housenum', 'building', 'landmark'];
 const DEFAULT_MAP_CENTER: readonly [number, number] =
   getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
@@ -29,14 +28,37 @@ type RenderedMapMarker = {
 };
 type PersistentMapState = {
   currentMapStyleURL: string | null;
+  hasCenteredOnResolvedData: boolean;
+  hasUserInteracted: boolean;
   host: HTMLDivElement;
   hideTimer: number | null;
+  isFollowingUser: boolean;
   isReady: boolean;
+  lastCameraTargetKey: string | null;
   map: mapboxgl.Map | null;
-  markers: RenderedMapMarker[];
+  placeMarkers: RenderedMapMarker[];
+  userMarker: RenderedMapMarker | null;
 };
 
 const persistentMaps = new Map<string, PersistentMapState>();
+let mapboxModulePromise: Promise<MapboxModule> | null = null;
+
+function preloadMapboxModule() {
+  if (!MAPBOX_ACCESS_TOKEN || typeof window === 'undefined') {
+    return null;
+  }
+
+  if (!mapboxModulePromise) {
+    mapboxModulePromise = import('mapbox-gl').then((module) => {
+      module.default.accessToken = MAPBOX_ACCESS_TOKEN ?? '';
+      return module.default;
+    });
+  }
+
+  return mapboxModulePromise;
+}
+
+void preloadMapboxModule();
 
 function MapPreviewWebComponent({
   centerCoordinate,
@@ -51,6 +73,7 @@ function MapPreviewWebComponent({
   zoomLevel = 14,
   showRoutes = true,
   recenterToUserSignal = 0,
+  followUserLocation = false,
   colorSchemeMode = 'system',
   interactionEnabled = true,
   markerVariant = 'default',
@@ -62,11 +85,13 @@ function MapPreviewWebComponent({
 }: MapPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markerRefs = useRef<RenderedMapMarker[]>([]);
+  const placeMarkerRefs = useRef<RenderedMapMarker[]>([]);
+  const userMarkerRef = useRef<RenderedMapMarker | null>(null);
   const onInteractRef = useRef(onInteract);
   const onMapPressRef = useRef(onMapPress);
   const hasCenteredOnResolvedDataRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
+  const isFollowingUserRef = useRef(followUserLocation);
   const currentMapStyleURLRef = useRef<string | null>(null);
   const lastCameraTargetKeyRef = useRef<string | null>(null);
   const initialMapConfigRef = useRef<{
@@ -84,13 +109,15 @@ function MapPreviewWebComponent({
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
   const colorScheme = useColorScheme();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
-  const mapStyleURL = isDark ? MAPBOX_DARK_STYLE_URL : MAPBOX_STREET_STYLE_URL;
+  const mapStyleURL = MAPBOX_STREET_STYLE_URL;
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
+  const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
+  const followZoomLevel = Math.max(zoomLevel, 17);
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -117,21 +144,31 @@ function MapPreviewWebComponent({
   }, [onMapPress]);
 
   useEffect(() => {
+    if (!followUserLocation) {
+      isFollowingUserRef.current = false;
+      return;
+    }
+
+    if (!hasUserInteractedRef.current) {
+      isFollowingUserRef.current = true;
+    }
+  }, [followUserLocation]);
+
+  useEffect(() => {
     initialMapConfigRef.current = {
-      centerCoordinate: mapCenterCoordinate,
+      centerCoordinate: initialCenterCoordinate,
       mapStyleURL,
       zoomLevel,
     };
-  }, [mapCenterCoordinate, mapStyleURL, zoomLevel]);
+  }, [initialCenterCoordinate, mapStyleURL, zoomLevel]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadMapbox() {
-      const module = await import('mapbox-gl');
+      const module = await preloadMapboxModule();
       if (!cancelled) {
-        module.default.accessToken = MAPBOX_ACCESS_TOKEN ?? '';
-        setMapbox(() => module.default);
+        setMapbox(() => module);
       }
     }
 
@@ -152,6 +189,7 @@ function MapPreviewWebComponent({
       return;
     }
 
+    const isReusingPersistentMap = Boolean(persistentState?.map);
     const mapHost = persistentState?.host ?? document.createElement('div');
     if (persistentState) {
       attachPersistentMapHost(persistentState, containerRef.current);
@@ -180,11 +218,19 @@ function MapPreviewWebComponent({
 
     mapRef.current = map;
     if (persistentState) {
-      markerRefs.current = persistentState.markers;
+      hasCenteredOnResolvedDataRef.current = persistentState.hasCenteredOnResolvedData;
+      hasUserInteractedRef.current = persistentState.hasUserInteracted;
+      isFollowingUserRef.current = followUserLocation ? persistentState.isFollowingUser || !persistentState.hasUserInteracted : false;
+      placeMarkerRefs.current = persistentState.placeMarkers;
+      userMarkerRef.current = persistentState.userMarker;
+      lastCameraTargetKeyRef.current = isReusingPersistentMap
+        ? getCameraTargetKey(mapCenterCoordinate, zoomLevel)
+        : persistentState.lastCameraTargetKey;
     }
     currentMapStyleURLRef.current = persistentState?.currentMapStyleURL ?? initialConfig.mapStyleURL;
     const handleUserInteract = () => {
       hasUserInteractedRef.current = true;
+      isFollowingUserRef.current = false;
       onInteractRef.current?.();
     };
     const handleMapClick = (event: mapboxgl.MapMouseEvent) => {
@@ -193,6 +239,8 @@ function MapPreviewWebComponent({
     };
     map.on('dragstart', handleUserInteract);
     map.on('zoomstart', handleUserInteract);
+    map.on('rotatestart', handleUserInteract);
+    map.on('pitchstart', handleUserInteract);
     map.on('click', handleMapClick);
 
     let hasLoaded = Boolean(persistentState?.isReady) || map.loaded();
@@ -264,13 +312,20 @@ function MapPreviewWebComponent({
       resizeObserver.disconnect();
       map.off('dragstart', handleUserInteract);
       map.off('zoomstart', handleUserInteract);
+      map.off('rotatestart', handleUserInteract);
+      map.off('pitchstart', handleUserInteract);
       map.off('click', handleMapClick);
       map.off('load', handleMapLoad);
       map.off('styledata', handleStyleData);
       map.off('idle', handleIdle);
       if (persistentState) {
         persistentState.currentMapStyleURL = currentMapStyleURLRef.current;
-        persistentState.markers = markerRefs.current;
+        persistentState.hasCenteredOnResolvedData = hasCenteredOnResolvedDataRef.current;
+        persistentState.hasUserInteracted = hasUserInteractedRef.current;
+        persistentState.isFollowingUser = isFollowingUserRef.current;
+        persistentState.lastCameraTargetKey = lastCameraTargetKeyRef.current;
+        persistentState.placeMarkers = placeMarkerRefs.current;
+        persistentState.userMarker = userMarkerRef.current;
         persistentState.map = map;
         schedulePersistentMapHide(persistentState);
         mapRef.current = null;
@@ -278,14 +333,16 @@ function MapPreviewWebComponent({
         setIsMapReady(false);
         return;
       }
-      clearRenderedMarkers(markerRefs.current);
-      markerRefs.current = [];
+      clearRenderedMarkers(placeMarkerRefs.current);
+      clearRenderedMarker(userMarkerRef.current);
+      placeMarkerRefs.current = [];
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
       currentMapStyleURLRef.current = null;
       setIsMapReady(false);
     };
-  }, [cameraPadding, interactionEnabled, mapCenterCoordinate, mapbox, persistKey, zoomLevel]);
+  }, [cameraPadding, followUserLocation, interactionEnabled, mapCenterCoordinate, mapbox, persistKey, zoomLevel]);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -311,6 +368,10 @@ function MapPreviewWebComponent({
 
   useEffect(() => {
     if (!mapRef.current) {
+      return;
+    }
+
+    if (followUserLocation && userCoordinate && isFollowingUserRef.current) {
       return;
     }
 
@@ -342,14 +403,19 @@ function MapPreviewWebComponent({
     if (resolvedCenterCoordinate) {
       hasCenteredOnResolvedDataRef.current = true;
     }
-  }, [cameraPadding, centerCoordinate, mapCenterCoordinate, resolvedCenterCoordinate, zoomLevel]);
+  }, [cameraPadding, centerCoordinate, followUserLocation, mapCenterCoordinate, resolvedCenterCoordinate, userCoordinate, zoomLevel]);
 
   useEffect(() => {
-    if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
+    if (!followUserLocation || !mapRef.current || !userCoordinate || !isFollowingUserRef.current) {
       return;
     }
 
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, 17);
+    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel);
+    if (cameraTargetKey === lastCameraTargetKeyRef.current) {
+      return;
+    }
+
+    lastCameraTargetKeyRef.current = cameraTargetKey;
     hasUserInteractedRef.current = false;
     mapRef.current.resize();
     mapRef.current.easeTo({
@@ -358,9 +424,28 @@ function MapPreviewWebComponent({
       duration: 650,
       padding: cameraPadding,
       pitch: 0,
-      zoom: 17,
+      zoom: followZoomLevel,
     });
-  }, [cameraPadding, recenterToUserSignal, userCoordinate, userHeading]);
+  }, [cameraPadding, followUserLocation, followZoomLevel, userCoordinate, userHeading]);
+
+  useEffect(() => {
+    if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
+      return;
+    }
+
+    isFollowingUserRef.current = true;
+    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel);
+    hasUserInteractedRef.current = false;
+    mapRef.current.resize();
+    mapRef.current.easeTo({
+      bearing: userHeading ?? 0,
+      center: userCoordinate as [number, number],
+      duration: 650,
+      padding: cameraPadding,
+      pitch: 0,
+      zoom: followZoomLevel,
+    });
+  }, [cameraPadding, followZoomLevel, recenterToUserSignal, userCoordinate, userHeading]);
 
   useEffect(() => {
     if (!showRoutes || routeMarkerCoordinates.length === 0 || shouldHideMainRouteForStayFocus) {
@@ -429,8 +514,8 @@ function MapPreviewWebComponent({
       return;
     }
 
-    clearRenderedMarkers(markerRefs.current);
-    markerRefs.current = [];
+    clearRenderedMarkers(placeMarkerRefs.current);
+    placeMarkerRefs.current = [];
 
     normalizedMarkers.forEach((mapMarker) => {
       const element = createMarkerElement(mapMarker, isDark, markerVariant);
@@ -446,20 +531,43 @@ function MapPreviewWebComponent({
         onMarkerPress?.(mapMarker);
       });
 
-      markerRefs.current.push({ marker });
+      placeMarkerRefs.current.push({ marker });
     });
+  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress]);
 
-    if (userCoordinate) {
-      const { element, root } = createUserMarkerElement({
-        avatarPaletteKey: userAvatarPaletteKey,
-        avatarUri: userAvatarUri,
-        heading: userHeading,
-        name: userName,
-      });
-      const marker = new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current);
-      markerRefs.current.push({ marker, root });
+  useEffect(() => {
+    if (!mapbox || !mapRef.current || !isMapReady) {
+      return;
     }
-  }, [isDark, isMapReady, mapbox, markerVariant, normalizedMarkers, onMarkerPress, userAvatarPaletteKey, userAvatarUri, userCoordinate, userHeading, userName]);
+
+    if (!userCoordinate) {
+      clearRenderedMarker(userMarkerRef.current);
+      userMarkerRef.current = null;
+      return;
+    }
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.marker.setLngLat(userCoordinate as [number, number]);
+      userMarkerRef.current.root?.render(
+        <UserLocationPuck
+          avatarPaletteKey={userAvatarPaletteKey}
+          avatarUri={userAvatarUri}
+          heading={userHeading}
+          name={userName}
+        />
+      );
+      return;
+    }
+
+    const { element, root } = createUserMarkerElement({
+      avatarPaletteKey: userAvatarPaletteKey,
+      avatarUri: userAvatarUri,
+      heading: userHeading,
+      name: userName,
+    });
+    const marker = new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current);
+    userMarkerRef.current = { marker, root };
+  }, [isMapReady, mapbox, userAvatarPaletteKey, userAvatarUri, userCoordinate, userHeading, userName]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapReady) {
@@ -553,11 +661,16 @@ function getPersistentMapState(key: string) {
 
   const state: PersistentMapState = {
     currentMapStyleURL: null,
+    hasCenteredOnResolvedData: false,
+    hasUserInteracted: false,
     host: document.createElement('div'),
     hideTimer: null,
+    isFollowingUser: false,
     isReady: false,
+    lastCameraTargetKey: null,
     map: null,
-    markers: [],
+    placeMarkers: [],
+    userMarker: null,
   };
   persistentMaps.set(key, state);
 
@@ -754,6 +867,15 @@ function clearRenderedMarkers(markers: RenderedMapMarker[]) {
     scheduleMarkerRootUnmount(root);
     marker.remove();
   });
+}
+
+function clearRenderedMarker(marker?: RenderedMapMarker | null) {
+  if (!marker) {
+    return;
+  }
+
+  scheduleMarkerRootUnmount(marker.root);
+  marker.marker.remove();
 }
 
 function scheduleMarkerRootUnmount(root?: Root) {

@@ -104,7 +104,7 @@ export function TripTimelineSection({
           const secondaryTag = isStay ? stayNights : experience.durationLabel;
           const href = isStay
             ? ({ pathname: '/stays/details', params: { slug: item.experienceSlug } } as const)
-            : item.kind === 'hiddenGem'
+            : item.kind === 'location' || item.kind === 'hiddenGem'
               ? ({ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.experienceSlug } } as const)
               : ({ pathname: '/explore/[slug]', params: { slug: experience.slug } } as const);
 

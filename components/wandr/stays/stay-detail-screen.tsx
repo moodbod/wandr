@@ -156,8 +156,8 @@ export function StayDetailScreen({
   const trips = useQuery(listUserTripsRef, travelerSlug ? { travelerSlug } : 'skip');
   const selectedTripId = trips?.[0]?._id;
 
-  const stay = useQuery(getStayBySlugRef, { slug: slug ?? '' });
-  const availability = useQuery(getStayAvailabilityRef, { staySlug: slug ?? '' });
+  const stay = useQuery(getStayBySlugRef, slug ? { slug } : 'skip');
+  const availability = useQuery(getStayAvailabilityRef, slug ? { staySlug: slug } : 'skip');
   const existingStayBooking = useQuery(
     getTravelerStayBookingRef,
     slug && travelerSlug ? { staySlug: slug, travelerSlug } : 'skip'
@@ -166,7 +166,7 @@ export function StayDetailScreen({
     listLocationPhotosRef,
     slug ? { locationKind: 'stay', locationSlug: slug } : 'skip'
   );
-  const reviews = useQuery(listStayRatingsRef, { staySlug: slug ?? '' });
+  const reviews = useQuery(listStayRatingsRef, slug ? { staySlug: slug } : 'skip');
 
   const [isBooking, setIsBooking] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);

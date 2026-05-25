@@ -57,7 +57,7 @@ function ExpeditionRow({
           return;
         }
 
-        if (item.kind === 'hiddenGem') {
+        if (item.kind === 'location' || item.kind === 'hiddenGem') {
           router.push({ pathname: '/explore/hidden-gems/[slug]', params: { slug: item.slug } });
           return;
         }

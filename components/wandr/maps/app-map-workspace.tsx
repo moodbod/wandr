@@ -7,17 +7,16 @@ import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 export function AppMapWorkspace() {
   const currentLocation = useCurrentLocation();
   const traveler = useCurrentTraveler();
-  const centerCoordinate = currentLocation.coordinate ?? null;
 
   return (
     <View style={styles.root}>
       <MapPreview
-        centerCoordinate={centerCoordinate}
         userCoordinate={currentLocation.coordinate}
         userAvatarPaletteKey={traveler?.slug}
         userAvatarUri={traveler?.avatarUri}
         userName={traveler?.name}
         markers={[]}
+        followUserLocation={Boolean(currentLocation.coordinate)}
         persistKey="app-background"
         routeCoordinates={[]}
         showRoutes={false}
