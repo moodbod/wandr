@@ -1,5 +1,10 @@
 # Offline map packs
 
+The repo includes starter PWA packs for the supported planning regions. They are
+small app-owned coverage packs, so the mobile PWA can download something real and
+render app markers/routes offline without waiting for a full street-level tile
+pipeline.
+
 PWA map downloads expect one folder per planning region:
 
 ```text
@@ -25,3 +30,7 @@ public/offline-map-packs/regions/{regionId}/glyphs/*
 ```
 
 Use app-owned or properly licensed PMTiles/vector assets here. Do not bulk-cache Mapbox CDN tiles for redistribution.
+
+For full detailed offline basemaps, replace the starter `style.json` and
+`region.geojson` files with a style that points at your own licensed tile assets
+and list every required asset in `metadata.json`.

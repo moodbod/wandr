@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "south-africa",
+        "label": "South Africa / Cape Town"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [17.6, -34.9],
+            [20.2, -34.9],
+            [20.2, -32.6],
+            [17.6, -32.6],
+            [17.6, -34.9]
+          ]
+        ]
+      }
+    }
+  ]
+}

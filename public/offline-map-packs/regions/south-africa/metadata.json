@@ -1,0 +1,20 @@
+{
+  "id": "south-africa",
+  "label": "South Africa / Cape Town",
+  "version": "2026.05.v1",
+  "styleUrl": "/offline-map-packs/regions/south-africa/style.json",
+  "files": [
+    {
+      "kind": "metadata",
+      "url": "/offline-map-packs/regions/south-africa/metadata.json"
+    },
+    {
+      "kind": "style",
+      "url": "/offline-map-packs/regions/south-africa/style.json"
+    },
+    {
+      "kind": "asset",
+      "url": "/offline-map-packs/regions/south-africa/region.geojson"
+    }
+  ]
+}

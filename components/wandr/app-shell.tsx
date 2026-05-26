@@ -7,9 +7,8 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { AuthRouteGate } from '@/components/wandr/auth-route-gate';
 import { PwaCacheRegistrar } from '@/components/wandr/pwa-cache-registrar';
-import { WebIdlePreloader } from '@/components/wandr/web-idle-preloader';
 import { designSystem } from '@/constants/design-system';
-import { ActiveFriendCallProvider } from '@/hooks/use-active-friend-call';
+import { ActiveFriendCallProvider, useActiveFriendCall } from '@/hooks/use-active-friend-call';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useWebDocumentShell } from '@/hooks/use-web-document-shell';
 import { convexClient } from '@/lib/convex';
@@ -81,28 +80,45 @@ export function AppShell({
       </View>
 
       <AuthRouteGate />
-      <WebIdlePreloader isLargeScreen={isLargeScreen} isSignedIn={isSignedIn} />
-      {convexClient && isSignedIn ? (
-        <Suspense fallback={null}>
-          <TripNotificationCenter />
-        </Suspense>
-      ) : null}
+      <TripNotificationCenterGate enabled={Boolean(convexClient && isSignedIn)} />
       {convexClient && isSignedIn && canUseNativeCalls ? (
         <Suspense fallback={null}>
           <IncomingFriendCallCenter />
         </Suspense>
       ) : null}
-      {convexClient && isSignedIn && canUseCallOverlay ? (
-        <Suspense fallback={null}>
-          <ActiveFriendCallOverlay />
-        </Suspense>
-      ) : null}
+      <ActiveFriendCallOverlayGate enabled={Boolean(convexClient && isSignedIn && canUseCallOverlay)} />
       <PwaCacheRegistrar />
       <Suspense fallback={null}>
         <PwaInstallBanner />
       </Suspense>
       <StatusBar style="light" />
     </ActiveFriendCallProvider>
+  );
+}
+
+function TripNotificationCenterGate({ enabled }: { enabled: boolean }) {
+  if (!enabled || (Platform.OS === 'web' && process.env.NODE_ENV !== 'production')) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <TripNotificationCenter />
+    </Suspense>
+  );
+}
+
+function ActiveFriendCallOverlayGate({ enabled }: { enabled: boolean }) {
+  const { activeCallId } = useActiveFriendCall();
+
+  if (!enabled || !activeCallId) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <ActiveFriendCallOverlay />
+    </Suspense>
   );
 }
 

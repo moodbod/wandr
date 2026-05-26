@@ -1,0 +1,38 @@
+{
+  "version": 8,
+  "name": "Wandr Offline South Africa Cape Town",
+  "sources": {
+    "coverage": {
+      "type": "geojson",
+      "data": "/offline-map-packs/regions/south-africa/region.geojson"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#101411"
+      }
+    },
+    {
+      "id": "coverage-fill",
+      "type": "fill",
+      "source": "coverage",
+      "paint": {
+        "fill-color": "#263f35",
+        "fill-opacity": 0.78
+      }
+    },
+    {
+      "id": "coverage-outline",
+      "type": "line",
+      "source": "coverage",
+      "paint": {
+        "line-color": "#b9f96d",
+        "line-opacity": 0.95,
+        "line-width": 2
+      }
+    }
+  ]
+}
