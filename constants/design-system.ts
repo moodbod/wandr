@@ -1,12 +1,4 @@
-import { Dimensions, Platform } from 'react-native';
-
-const WEB_MOBILE_BREAKPOINT = 768;
-const webViewportWidth =
-  Platform.OS === 'web' && typeof window !== 'undefined'
-    ? window.visualViewport?.width ?? window.innerWidth
-    : Dimensions.get('window').width;
-const mobileWebScale = Platform.OS === 'web' && webViewportWidth < WEB_MOBILE_BREAKPOINT ? 0.9 : 1;
-const scaleToken = (value: number) => Math.round(value * mobileWebScale);
+const scaleToken = (value: number) => Math.round(value);
 
 export const designSystem = {
   colors: {
