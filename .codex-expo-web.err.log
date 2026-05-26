@@ -1,0 +1,3 @@
+$ bun run ensure:expo-types
+$ node ./scripts/ensure-expo-types.js
+$ EXPO_WEB_OUTPUT=single expo start --web --port "8082" --clear

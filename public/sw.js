@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wandr-pwa';
-const VERSION = 'v1';
+const VERSION = 'v2';
 const APP_CACHE = `${CACHE_PREFIX}-${VERSION}-app`;
 const STATIC_CACHE = `${CACHE_PREFIX}-${VERSION}-static`;
 const MAP_CACHE = `${CACHE_PREFIX}-${VERSION}-map`;
@@ -26,7 +26,11 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && !key.includes(VERSION)).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== APP_CACHE && key !== STATIC_CACHE && key !== MAP_CACHE)
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   );
@@ -57,6 +61,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (isSameOrigin(url) && isAppShellAsset(request, url)) {
+    event.respondWith(networkFirstStatic(request));
+    return;
+  }
+
   if (isSameOrigin(url) && isStaticAsset(request, url)) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE, 90));
     return;
@@ -82,6 +91,14 @@ function isStaticAsset(request, url) {
   );
 }
 
+function isAppShellAsset(request, url) {
+  return (
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    /\.(?:js|mjs|css)$/i.test(url.pathname)
+  );
+}
+
 function isMapboxAsset(url) {
   return url.hostname === 'api.mapbox.com' || url.hostname === 'tiles.mapbox.com';
 }
@@ -101,6 +118,21 @@ async function networkFirst(request) {
     return response;
   } catch {
     return (await cache.match(request)) || (await cache.match('/')) || Response.error();
+  }
+}
+
+async function networkFirstStatic(request) {
+  const cache = await caches.open(STATIC_CACHE);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      await cache.put(request, response.clone()).catch(() => undefined);
+      await trimCache(cache, 90);
+    }
+    return response;
+  } catch {
+    return (await cache.match(request)) || Response.error();
   }
 }
 

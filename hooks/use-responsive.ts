@@ -12,30 +12,64 @@ const WEB_HYDRATION_VIEWPORT = {
   width: 390,
 };
 
+function getBrowserViewport() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return null;
+  }
+
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+
+  if (viewportWidth > 0 && viewportHeight > 0) {
+    return {
+      height: viewportHeight,
+      width: viewportWidth,
+    };
+  }
+
+  if (window.innerWidth > 0 && window.innerHeight > 0) {
+    return {
+      height: window.innerHeight,
+      width: window.innerWidth,
+    };
+  }
+
+  return null;
+}
+
 export function useResponsive() {
   const { height, width } = useWindowDimensions();
-  const [canUseBrowserViewport, setCanUseBrowserViewport] = useState(Platform.OS !== 'web');
+  const [browserViewport, setBrowserViewport] = useState(() => getBrowserViewport());
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      setCanUseBrowserViewport(true);
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
     }
+
+    const updateViewport = () => {
+      setBrowserViewport(getBrowserViewport());
+    };
+
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
+
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
+    };
   }, []);
 
-  const shouldReadBrowserViewport =
-    Platform.OS === 'web' && canUseBrowserViewport && typeof window !== 'undefined';
   const viewportWidth =
-    shouldReadBrowserViewport
-      ? window.visualViewport?.width ?? window.innerWidth
-      : Platform.OS === 'web'
-        ? WEB_HYDRATION_VIEWPORT.width
-        : width;
+    Platform.OS === 'web'
+      ? browserViewport?.width ?? WEB_HYDRATION_VIEWPORT.width
+      : width;
   const viewportHeight =
-    shouldReadBrowserViewport
-      ? window.visualViewport?.height ?? window.innerHeight
-      : Platform.OS === 'web'
-        ? WEB_HYDRATION_VIEWPORT.height
-        : height;
+    Platform.OS === 'web'
+      ? browserViewport?.height ?? WEB_HYDRATION_VIEWPORT.height
+      : height;
   const shortestSide = Math.min(viewportWidth, viewportHeight);
 
   const isMobile = viewportWidth < BREAKPOINTS.TABLET || shortestSide < BREAKPOINTS.HANDSET_SHORT_SIDE;
