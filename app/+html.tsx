@@ -14,13 +14,12 @@ export default function RootHtml({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
-        <meta name="theme-color" content={designSystem.semantic.light.background} media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content={designSystem.semantic.dark.background} media="(prefers-color-scheme: dark)" />
-        <meta name="color-scheme" content="light dark" />
+        <meta name="theme-color" content={designSystem.semantic.dark.background} />
+        <meta name="color-scheme" content="dark" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Wandr" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <link rel="dns-prefetch" href="https://api.mapbox.com" />
         <link rel="dns-prefetch" href="https://events.mapbox.com" />
@@ -37,8 +36,8 @@ export default function RootHtml({ children }: PropsWithChildren) {
             __html: `
               html,
               body {
-                background: ${designSystem.semantic.light.background};
-                color-scheme: light dark;
+                background: ${designSystem.semantic.dark.background};
+                color-scheme: dark;
                 margin: 0;
                 overscroll-behavior: none;
                 touch-action: manipulation;
@@ -50,18 +49,11 @@ export default function RootHtml({ children }: PropsWithChildren) {
               }
 
               #root {
-                background: ${designSystem.semantic.light.background};
+                background: ${designSystem.semantic.dark.background};
                 min-height: 100vh;
                 min-height: 100dvh;
               }
 
-              @media (prefers-color-scheme: dark) {
-                html,
-                body,
-                #root {
-                  background: ${designSystem.semantic.dark.background};
-                }
-              }
             `,
           }}
         />

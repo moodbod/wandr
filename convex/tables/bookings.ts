@@ -7,12 +7,26 @@ export const bookingsTable = defineTable({
   contentSlug: v.optional(v.string()),
   travelerSlug: v.string(),
   tripId: v.optional(v.id('trips')),
+  reservationId: v.optional(v.id('reservations')),
   bookedAt: v.number(),
   status: v.optional(v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'))),
   bookingType: v.optional(v.union(v.literal('experience'), v.literal('stay'))),
+  requestKind: v.optional(
+    v.union(
+      v.literal('experienceRequest'),
+      v.literal('itineraryStop'),
+      v.literal('stayItineraryMirror')
+    )
+  ),
+  scheduledFor: v.optional(v.number()),
+  partySize: v.optional(v.number()),
+  travelerNote: v.optional(v.string()),
+  currencyCode: v.optional(v.string()),
+  priceSnapshot: v.optional(v.number()),
   checkIn: v.optional(v.number()),
   checkOut: v.optional(v.number()),
   totalPrice: v.optional(v.number()),
+  roomTypeId: v.optional(v.string()),
   stayBookingDetails: v.optional(
     v.object({
       guestCounts: v.object({
@@ -36,4 +50,6 @@ export const bookingsTable = defineTable({
   .index('by_status_and_bookedAt', ['status', 'bookedAt'])
   .index('by_travelerSlug_and_experienceSlug', ['travelerSlug', 'experienceSlug'])
   .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt'])
-  .index('by_tripId', ['tripId']);
+  .index('by_tripId', ['tripId'])
+  .index('by_tripId_and_requestKind', ['tripId', 'requestKind'])
+  .index('by_reservationId', ['reservationId']);

@@ -17,19 +17,23 @@ import type { DirectChatMessage, FriendChatMessage } from '@/types/friends';
 
 const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
 
+const messageTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+const callTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
 function formatTime(timestamp: number) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(timestamp));
+  return messageTimeFormatter.format(new Date(timestamp));
 }
 
 function formatCallTime(timestamp: number) {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(timestamp));
+  return callTimeFormatter.format(new Date(timestamp));
 }
 
 function formatReminder(minutes: number | null) {

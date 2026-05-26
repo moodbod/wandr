@@ -94,6 +94,7 @@ export type ExploreGroupTripDetail = {
   locationLabel: string;
   summary: string;
   isMember: boolean;
+  hasRequested: boolean;
   itinerary: {
     bookingId: string;
     experienceSlug: string;

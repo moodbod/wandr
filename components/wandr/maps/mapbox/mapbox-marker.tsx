@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -8,6 +8,10 @@ import { designSystem } from '@/constants/design-system';
 
 import { getMapboxModule } from './mapbox-module';
 import type { MapMarker, MapPreviewProps } from './types';
+
+const USER_MARKER_ANIMATION_MS = 1100;
+const USER_MARKER_MIN_ANIMATED_MOVE_METERS = 0.75;
+const USER_MARKER_MAX_ANIMATED_MOVE_METERS = 1000;
 
 type MapboxMarkerProps = {
   isDark: boolean;
@@ -153,13 +157,59 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
   name,
 }: MapboxUserMarkerProps) {
   const MapboxGL = getMapboxModule();
+  const [renderCoordinate, setRenderCoordinate] = useState(() => coordinate);
+  const renderCoordinateRef = useRef(coordinate);
+
+  useEffect(() => {
+    const startCoordinate = renderCoordinateRef.current;
+    const distanceMeters = getDistanceMeters(startCoordinate, coordinate);
+
+    if (distanceMeters < USER_MARKER_MIN_ANIMATED_MOVE_METERS) {
+      return undefined;
+    }
+
+    if (distanceMeters > USER_MARKER_MAX_ANIMATED_MOVE_METERS) {
+      renderCoordinateRef.current = coordinate;
+      setRenderCoordinate(coordinate);
+      return undefined;
+    }
+
+    let frameId = 0;
+    const startedAt = Date.now();
+    const [startLongitude, startLatitude] = startCoordinate;
+    const [targetLongitude, targetLatitude] = coordinate;
+
+    const tick = () => {
+      const progress = Math.min((Date.now() - startedAt) / USER_MARKER_ANIMATION_MS, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const nextCoordinate: readonly [number, number] = [
+        startLongitude + (targetLongitude - startLongitude) * easedProgress,
+        startLatitude + (targetLatitude - startLatitude) * easedProgress,
+      ];
+
+      renderCoordinateRef.current = nextCoordinate;
+      setRenderCoordinate(nextCoordinate);
+
+      if (progress < 1) {
+        frameId = requestAnimationFrame(tick);
+        return;
+      }
+
+      renderCoordinateRef.current = coordinate;
+      setRenderCoordinate(coordinate);
+    };
+
+    frameId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frameId);
+  }, [coordinate]);
 
   if (!MapboxGL) {
     return null;
   }
 
   return (
-    <MapboxGL.MarkerView coordinate={toMapboxPosition(coordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap style={styles.userMarkerView}>
+    <MapboxGL.MarkerView coordinate={toMapboxPosition(renderCoordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap style={styles.userMarkerView}>
       <UserLocationPuck avatarPaletteKey={avatarPaletteKey} avatarUri={avatarUri} heading={heading} name={name} />
     </MapboxGL.MarkerView>
   );
@@ -167,6 +217,23 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
 
 function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
   return [coordinate[0], coordinate[1]];
+}
+
+function getDistanceMeters(a: readonly [number, number], b: readonly [number, number]) {
+  const earthRadiusMeters = 6_371_000;
+  const lat1 = toRadians(a[1]);
+  const lat2 = toRadians(b[1]);
+  const deltaLat = toRadians(b[1] - a[1]);
+  const deltaLon = toRadians(b[0] - a[0]);
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function toRadians(degrees: number) {
+  return (degrees * Math.PI) / 180;
 }
 
 const styles = StyleSheet.create({

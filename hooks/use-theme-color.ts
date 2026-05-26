@@ -1,5 +1,5 @@
 /**
- * Learn more about light and dark modes:
+ * Learn more about app color schemes:
  * https://docs.expo.dev/guides/color-schemes/
  */
 
@@ -10,7 +10,7 @@ export function useThemeColor(
   props: { light?: string; dark?: string },
   colorName: keyof typeof Colors.light & keyof typeof Colors.dark
 ) {
-  const theme = useColorScheme() ?? 'light';
+  const theme = useColorScheme() ?? 'dark';
   const colorFromProps = props[theme];
 
   if (colorFromProps) {

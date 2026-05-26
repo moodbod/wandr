@@ -10,6 +10,7 @@ import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
 import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
 import { fetchRoutePath } from '@/lib/routing';
 
 import type { MapMarker, MapPreviewProps } from './mapbox/types';
@@ -109,13 +110,14 @@ function MapPreviewWebComponent({
   const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
   const colorScheme = useColorScheme();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
-  const mapStyleURL = MAPBOX_STREET_STYLE_URL;
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
+  const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
+  const mapStyleURL = offlineMapState.styleUrl ?? MAPBOX_STREET_STYLE_URL;
   const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
   const followZoomLevel = Math.max(zoomLevel, 17);
   const stayMarkers = useMemo(
@@ -620,6 +622,17 @@ function MapPreviewWebComponent({
           ref={containerRef}
           style={webMapStyle}
         />
+        {offlineMapState.isOffline ? (
+          <View pointerEvents="none" style={styles.offlineBanner}>
+            <ThemedText style={styles.offlineBannerText}>
+              {offlineMapState.styleUrl
+                ? `Offline map: ${offlineMapState.region?.label ?? 'downloaded area'}`
+                : offlineMapState.hasDownloadedRegion
+                  ? 'Offline map needs an update'
+                  : 'No downloaded map here'}
+            </ThemedText>
+          </View>
+        ) : null}
     </View>
   );
 }
@@ -1005,5 +1018,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
+  },
+  offlineBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+    alignItems: 'center',
+  },
+  offlineBannerText: {
+    overflow: 'hidden',
+    borderRadius: 999,
+    backgroundColor: designSystem.colors.darkGreen,
+    color: designSystem.colors.lime,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });

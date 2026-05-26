@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/ios/iOS-Dark-1024x1024@1x.png",
     "scheme": "wandr",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -80,7 +80,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#f9f9f6",
+          "backgroundColor": "#111217",
           "dark": {
             "backgroundColor": "#111217"
           }

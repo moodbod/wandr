@@ -19,6 +19,7 @@
     "web": "expo start --web",
     "build:web": "expo export -p web",
     "lint": "expo lint --no-cache",
+    "test:convex": "vitest run tests/convex",
     "typecheck": "tsc --noEmit",
     "convex:dev": "convex dev"
   },
@@ -98,10 +99,13 @@
     "wandr": "."
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/react": "~19.1.0",
+    "convex-test": "^0.0.53",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.7"
   },
   "private": true
 }

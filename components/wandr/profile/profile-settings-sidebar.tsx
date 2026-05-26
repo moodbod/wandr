@@ -1,7 +1,7 @@
 import { type Href, useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BellRinging, CurrencyDollar, LockSimple, PencilSimple, SignOut } from 'phosphor-react-native';
+import { ArrowRight, BellRinging, CurrencyDollar, LockSimple, MapTrifold, PencilSimple, SignOut } from 'phosphor-react-native';
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import {
   PanGestureHandler,
@@ -178,6 +178,12 @@ export function ProfileSettingsSidebar({
                 icon={<BellRinging color={colors.text} size={20} weight="regular" />}
                 onPress={() => navigateTo('/profile/notifications')}
                 title="Notifications"
+              />
+              <SidebarAction
+                colors={colors}
+                icon={<MapTrifold color={colors.text} size={20} weight="regular" />}
+                onPress={() => navigateTo('/profile/offline-maps' as Href)}
+                title="Downloaded maps"
               />
               <SidebarAction
                 colors={colors}

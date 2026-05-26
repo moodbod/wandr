@@ -3,6 +3,7 @@ const VERSION = 'v1';
 const APP_CACHE = `${CACHE_PREFIX}-${VERSION}-app`;
 const STATIC_CACHE = `${CACHE_PREFIX}-${VERSION}-static`;
 const MAP_CACHE = `${CACHE_PREFIX}-${VERSION}-map`;
+const OFFLINE_MAP_CACHE = 'wandr-offline-map-packs-v1';
 const PRECACHE_URLS = [
   '/',
   '/manifest.webmanifest',
@@ -52,6 +53,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (isSameOrigin(url) && isOfflineMapPackAsset(url)) {
+    event.respondWith(cacheFirstOfflineMapPack(request));
+    return;
+  }
+
   if (isSameOrigin(url) && isStaticAsset(request, url)) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE, 90));
     return;
@@ -79,6 +85,10 @@ function isStaticAsset(request, url) {
 
 function isMapboxAsset(url) {
   return url.hostname === 'api.mapbox.com' || url.hostname === 'tiles.mapbox.com';
+}
+
+function isOfflineMapPackAsset(url) {
+  return url.pathname.startsWith('/offline-map-packs/');
 }
 
 async function networkFirst(request) {
@@ -109,6 +119,59 @@ async function staleWhileRevalidate(request, cacheName, maxEntries) {
     .catch(() => undefined);
 
   return cached || (await fresh) || Response.error();
+}
+
+async function cacheFirstOfflineMapPack(request) {
+  const cache = await caches.open(OFFLINE_MAP_CACHE);
+  const cached = await cache.match(request.url);
+  const rangeHeader = request.headers.get('range');
+
+  if (cached) {
+    return rangeHeader ? createRangeResponse(cached, rangeHeader) : cached;
+  }
+
+  try {
+    const response = await fetch(request);
+    if (response.ok && response.status !== 206) {
+      await cache.put(request.url, response.clone()).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    return Response.error();
+  }
+}
+
+async function createRangeResponse(response, rangeHeader) {
+  const range = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader);
+  if (!range) {
+    return response;
+  }
+
+  const buffer = await response.arrayBuffer();
+  const size = buffer.byteLength;
+  const start = range[1] ? Number(range[1]) : 0;
+  const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= size) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        'Content-Range': `bytes */${size}`,
+      },
+    });
+  }
+
+  const body = buffer.slice(start, end + 1);
+  const headers = new Headers(response.headers);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Content-Length', String(body.byteLength));
+  headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+
+  return new Response(body, {
+    status: 206,
+    statusText: 'Partial Content',
+    headers,
+  });
 }
 
 async function trimCache(cache, maxEntries) {

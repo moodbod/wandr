@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { WandrHeader } from '@/components/wandr/header';
+import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { MapFrame } from '@/components/wandr/maps/map-frame';
 import type { MapMarker } from '@/components/wandr/maps/map-preview';
+import { OfflineMapHeaderButton } from '@/components/wandr/offline/offline-map-download-button';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { type PlanningLocation } from '@/constants/planning-countries';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import type { OfflineMapRegion } from '@/lib/offline-map-regions';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
@@ -31,6 +33,7 @@ type ExploreMapHeroProps = {
   onLocateMe?: () => void;
   onMarkerPress?: (marker: MapMarker) => void;
   onOpenLocationSheet?: () => void;
+  offlineRegion?: OfflineMapRegion | null;
   planningLocation?: PlanningLocation;
   showBackButton?: boolean;
   hideHeader?: boolean;
@@ -54,6 +57,7 @@ export function ExploreMapHero({
   onLocateMe,
   onMarkerPress,
   onOpenLocationSheet,
+  offlineRegion,
   planningLocation,
   showBackButton = false,
   hideHeader = false,
@@ -62,6 +66,17 @@ export function ExploreMapHero({
 }: ExploreMapHeroProps) {
   const router = useRouter();
   const traveler = useCurrentTraveler();
+  const trailingActions: HeaderAction[] = [];
+  if (offlineRegion) {
+    trailingActions.push({
+      kind: 'map',
+      accessibilityLabel: `Download ${offlineRegion.label}`,
+      render: <OfflineMapHeaderButton region={offlineRegion} />,
+    });
+  }
+  if (onLocateMe) {
+    trailingActions.push({ kind: 'locate', accessibilityLabel: 'Locate me', onPress: onLocateMe });
+  }
 
   return (
     <MapFrame
@@ -109,9 +124,7 @@ export function ExploreMapHero({
             leadingAction: showBackButton
               ? { kind: 'back', accessibilityLabel: 'Go back' }
               : undefined,
-            trailingActions: onLocateMe
-              ? [{ kind: 'locate' as const, accessibilityLabel: 'Locate me', onPress: onLocateMe }]
-              : undefined,
+            trailingActions: trailingActions.length > 0 ? trailingActions : undefined,
           }}
           leadingContent={
             planningLocation && onOpenLocationSheet ? (
