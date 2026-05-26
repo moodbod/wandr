@@ -1,0 +1,32 @@
+env: load .env.local
+env: export EXPO_PUBLIC_CONVEX_SITE_URL EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN VERCEL_OIDC_TOKEN CONVEX_DEPLOYMENT
+Starting project at C:\dev\wandr
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8082
+Logs for your project will appear below.
+Web .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web .\index.js ▓▓▓▓░░░░░░░░░░░░ 25.0% ( 86/271)
+Web .\index.js ▓▓▓▓░░░░░░░░░░░░ 25.0% (233/474)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 32.4% (303/586)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 32.4% (383/688)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 455/2260)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 532/2345)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 621/2454)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 769/2560)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 859/2651)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% ( 962/2753)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1039/2830)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1130/2921)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1219/3010)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1324/3116)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1427/3218)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1507/3299)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1587/3379)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1692/3483)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1795/3586)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1878/3669)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1930/3722)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (1979/3770)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (2067/3858)
+Web .\index.js ▓▓▓▓▓░░░░░░░░░░░ 36.9% (2148/3939)
