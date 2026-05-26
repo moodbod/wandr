@@ -7,7 +7,7 @@ export const invitesTable = defineTable({
   inviterSlug: v.string(),
   inviteeSlug: v.string(),
   createdAt: v.number(),
-  status: v.union(v.literal('invited'), v.literal('accepted')),
+  status: v.union(v.literal('invited'), v.literal('accepted'), v.literal('declined')),
 })
   .index('by_tripId', ['tripId'])
   .index('by_inviteeSlug_and_createdAt', ['inviteeSlug', 'createdAt'])

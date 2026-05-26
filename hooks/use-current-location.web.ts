@@ -10,6 +10,14 @@ type CurrentLocationState = {
   isLoading: boolean;
 };
 
+type StoredLocationPermission = 'granted' | 'denied';
+type StoredLocationPosition = {
+  accuracy: number | null;
+  coordinate: Coordinate;
+  heading: number | null;
+  savedAt: number;
+};
+
 const INITIAL_STATE: CurrentLocationState = {
   accuracy: null,
   coordinate: null,
@@ -18,17 +26,26 @@ const INITIAL_STATE: CurrentLocationState = {
   isLoading: false,
 };
 const subscribers = new Set<(state: CurrentLocationState) => void>();
+const LOCATION_PERMISSION_STORAGE_KEY = 'wandr.current-location.permission.v1';
+const LAST_POSITION_STORAGE_KEY = 'wandr.current-location.last-position.v1';
+const GEOLOCATION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 5_000,
+  timeout: 15_000,
+};
 const WATCH_STOP_DELAY_MS = 15_000;
 const POSITION_CLOSE_METERS = 1.5;
 
 let currentState = INITIAL_STATE;
 let isWatchStarting = false;
+let startPromise: Promise<void> | null = null;
 let watchId: number | null = null;
 let stopTimer: ReturnType<typeof setTimeout> | null = null;
 let lastHeading: number | null = null;
 let lastHeadingSetAt = 0;
 let removeOrientationPermissionRequest: (() => void) | null = null;
 let orientationListening = false;
+let storedLocationHydrated = false;
 
 export function useCurrentLocation() {
   const [state, setState] = useState<CurrentLocationState>(currentState);
@@ -62,10 +79,9 @@ function startLocationWatch() {
   }
 
   if (!navigator.geolocation) {
+    hydrateStoredLocationState();
     emitLocationState({
-      accuracy: null,
-      coordinate: null,
-      heading: null,
+      ...currentState,
       hasPermission: false,
       isLoading: false,
     });
@@ -78,46 +94,18 @@ function startLocationWatch() {
     isLoading: currentState.coordinate === null,
   });
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      applyGeolocationPosition(position);
-      isWatchStarting = false;
-    },
-    () => {
-      isWatchStarting = false;
+  startPromise = startWebLocationWatch()
+    .catch(() => {
       emitLocationState({
         ...currentState,
         hasPermission: false,
         isLoading: false,
       });
-    },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 5_000,
-      timeout: 15_000,
-    }
-  );
-
-  watchId = navigator.geolocation.watchPosition(
-    (position) => {
-      applyGeolocationPosition(position);
+    })
+    .finally(() => {
       isWatchStarting = false;
-    },
-    () => {
-      isWatchStarting = false;
-      emitLocationState({
-        ...currentState,
-        isLoading: false,
-      });
-    },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 5_000,
-      timeout: 15_000,
-    }
-  );
-
-  startOrientationWatch();
+      startPromise = null;
+    });
 }
 
 function scheduleStopLocationWatch() {
@@ -135,6 +123,7 @@ function scheduleStopLocationWatch() {
 }
 
 function stopLocationWatch() {
+  void startPromise;
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
@@ -159,6 +148,216 @@ function applyGeolocationPosition(position: GeolocationPosition) {
     hasPermission: true,
     isLoading: false,
   });
+  writeStoredLocationPosition({
+    accuracy,
+    coordinate,
+    heading,
+    savedAt: Date.now(),
+  });
+}
+
+async function startWebLocationWatch() {
+  hydrateStoredLocationState();
+
+  const browserPermission = await readBrowserGeolocationPermissionState();
+  const storedPermission = readStoredLocationPermission();
+
+  if (browserPermission === 'denied') {
+    writeStoredLocationPermission('denied');
+    emitLocationState({
+      ...currentState,
+      hasPermission: false,
+      isLoading: false,
+    });
+    return;
+  }
+
+  if (browserPermission === 'prompt' && storedPermission !== null) {
+    emitLocationState({
+      ...currentState,
+      hasPermission: false,
+      isLoading: false,
+    });
+    return;
+  }
+
+  if (browserPermission === null && storedPermission !== null) {
+    emitLocationState({
+      ...currentState,
+      hasPermission: false,
+      isLoading: false,
+    });
+    return;
+  }
+
+  if (browserPermission === 'granted') {
+    writeStoredLocationPermission('granted');
+    startPositionWatch();
+    await refreshCurrentPosition();
+    return;
+  }
+
+  await requestInitialPosition();
+}
+
+async function requestInitialPosition() {
+  try {
+    const position = await getCurrentBrowserPosition();
+    writeStoredLocationPermission('granted');
+    applyGeolocationPosition(position);
+
+    if (subscribers.size > 0) {
+      startPositionWatch();
+    }
+  } catch (error) {
+    handleGeolocationError(error);
+  }
+}
+
+async function refreshCurrentPosition() {
+  try {
+    const position = await getCurrentBrowserPosition();
+    applyGeolocationPosition(position);
+  } catch (error) {
+    handleGeolocationError(error);
+  }
+}
+
+function startPositionWatch() {
+  if (watchId !== null || subscribers.size === 0 || !navigator.geolocation) {
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+    (position) => {
+      applyGeolocationPosition(position);
+    },
+    (error) => {
+      handleGeolocationError(error);
+    },
+    GEOLOCATION_OPTIONS
+  );
+
+  startOrientationWatch();
+}
+
+function getCurrentBrowserPosition() {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, GEOLOCATION_OPTIONS);
+  });
+}
+
+function handleGeolocationError(error: unknown) {
+  const permissionDenied = isPermissionDeniedError(error);
+  if (permissionDenied) {
+    writeStoredLocationPermission('denied');
+  }
+
+  emitLocationState({
+    ...currentState,
+    hasPermission: permissionDenied ? false : currentState.hasPermission,
+    isLoading: false,
+  });
+}
+
+function isPermissionDeniedError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && Number(error.code) === 1;
+}
+
+function hydrateStoredLocationState() {
+  if (storedLocationHydrated) {
+    return;
+  }
+
+  storedLocationHydrated = true;
+  const storedPosition = readStoredLocationPosition();
+  if (!storedPosition) {
+    return;
+  }
+
+  emitLocationState({
+    accuracy: storedPosition.accuracy,
+    coordinate: storedPosition.coordinate,
+    heading: storedPosition.heading,
+    hasPermission: currentState.hasPermission,
+    isLoading: false,
+  });
+}
+
+async function readBrowserGeolocationPermissionState(): Promise<PermissionState | null> {
+  if (!navigator.permissions?.query) {
+    return null;
+  }
+
+  try {
+    const permission = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return permission.state;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredLocationPermission(): StoredLocationPermission | null {
+  const value = readStorageItem(LOCATION_PERMISSION_STORAGE_KEY);
+  return value === 'granted' || value === 'denied' ? value : null;
+}
+
+function writeStoredLocationPermission(permission: StoredLocationPermission) {
+  writeStorageItem(LOCATION_PERMISSION_STORAGE_KEY, permission);
+}
+
+function readStoredLocationPosition(): StoredLocationPosition | null {
+  const value = readStorageItem(LAST_POSITION_STORAGE_KEY);
+  if (!value) {
+    return null;
+  }
+
+  return parseStoredLocationPosition(value);
+}
+
+function writeStoredLocationPosition(position: StoredLocationPosition) {
+  writeStorageItem(LAST_POSITION_STORAGE_KEY, JSON.stringify(position));
+}
+
+function readStorageItem(key: string) {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageItem(key: string, value: string) {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    // Location still works without the local preference cache.
+  }
+}
+
+function parseStoredLocationPosition(value: string): StoredLocationPosition | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredLocationPosition>;
+    if (!Array.isArray(parsed.coordinate) || parsed.coordinate.length !== 2) {
+      return null;
+    }
+
+    const coordinate: Coordinate = [Number(parsed.coordinate[0]), Number(parsed.coordinate[1])];
+    if (!coordinateIsValid(coordinate)) {
+      return null;
+    }
+
+    return {
+      accuracy: typeof parsed.accuracy === 'number' && Number.isFinite(parsed.accuracy) ? parsed.accuracy : null,
+      coordinate,
+      heading: typeof parsed.heading === 'number' && Number.isFinite(parsed.heading) ? parsed.heading : null,
+      savedAt: typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function emitLocationState(nextState: CurrentLocationState) {

@@ -157,11 +157,14 @@ export default defineSchema({
   reservations: defineTable({
     staySlug: v.string(),
     travelerSlug: v.string(),
+    tripId: v.optional(v.id('trips')),
     checkIn: v.number(),
     checkOut: v.number(),
     status: v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled')),
     totalPrice: v.number(),
     bookedAt: v.number(),
+    roomTypeId: v.optional(v.string()),
+    roomCount: v.optional(v.number()),
     stayBookingDetails: v.optional(
       v.object({
         guestCounts: v.object({
@@ -182,7 +185,10 @@ export default defineSchema({
     ),
   })
     .index('by_staySlug', ['staySlug'])
+    .index('by_staySlug_and_status_and_checkIn', ['staySlug', 'status', 'checkIn'])
     .index('by_status_and_bookedAt', ['status', 'bookedAt'])
     .index('by_travelerSlug', ['travelerSlug'])
-    .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt']),
+    .index('by_travelerSlug_and_bookedAt', ['travelerSlug', 'bookedAt'])
+    .index('by_travelerSlug_and_staySlug_and_bookedAt', ['travelerSlug', 'staySlug', 'bookedAt'])
+    .index('by_tripId', ['tripId']),
 });

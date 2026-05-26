@@ -128,12 +128,30 @@ export const requestJoinExploreTripRef = makeFunctionReference<
 
 export const bookExperienceRef = makeFunctionReference<
   'mutation',
-  { experienceSlug: string; travelerSlug: string; tripId?: string },
+  {
+    experienceSlug: string;
+    travelerSlug: string;
+    tripId?: string;
+    scheduledFor?: number;
+    partySize?: number;
+    travelerNote?: string;
+    currencyCode?: string;
+    priceSnapshot?: number;
+  },
   string
 >('trip:addExperienceToTrip') as FunctionReference<
   'mutation',
   'public',
-  { experienceSlug: string; travelerSlug: string; tripId?: string },
+  {
+    experienceSlug: string;
+    travelerSlug: string;
+    tripId?: string;
+    scheduledFor?: number;
+    partySize?: number;
+    travelerNote?: string;
+    currencyCode?: string;
+    priceSnapshot?: number;
+  },
   string
 >;
 
@@ -426,12 +444,30 @@ export const createTripRef = makeFunctionReference<
 
 export const addExperienceToTripRef = makeFunctionReference<
   'mutation',
-  { experienceSlug: string; travelerSlug: string; tripId?: string },
+  {
+    experienceSlug: string;
+    travelerSlug: string;
+    tripId?: string;
+    scheduledFor?: number;
+    partySize?: number;
+    travelerNote?: string;
+    currencyCode?: string;
+    priceSnapshot?: number;
+  },
   string
 >('trip:addExperienceToTrip') as FunctionReference<
   'mutation',
   'public',
-  { experienceSlug: string; travelerSlug: string; tripId?: string },
+  {
+    experienceSlug: string;
+    travelerSlug: string;
+    tripId?: string;
+    scheduledFor?: number;
+    partySize?: number;
+    travelerNote?: string;
+    currencyCode?: string;
+    priceSnapshot?: number;
+  },
   string
 >;
 
@@ -1205,6 +1241,17 @@ export const acceptTripInviteRef = makeFunctionReference<
   { travelerSlug: string; notificationId: Id<'notices'> },
   boolean
 >('friends:acceptTripInvite') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; notificationId: Id<'notices'> },
+  boolean
+>;
+
+export const declineTripInviteRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; notificationId: Id<'notices'> },
+  boolean
+>('friends:declineTripInvite') as FunctionReference<
   'mutation',
   'public',
   { travelerSlug: string; notificationId: Id<'notices'> },

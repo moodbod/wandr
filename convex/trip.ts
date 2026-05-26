@@ -14,7 +14,14 @@ type TripItineraryItem = {
   contentSlug?: string;
   travelerSlug: string;
   tripId?: Id<'trips'>;
+  reservationId?: Id<'reservations'>;
   bookedAt: number;
+  requestKind?: 'experienceRequest' | 'itineraryStop' | 'stayItineraryMirror';
+  scheduledFor?: number;
+  partySize?: number;
+  travelerNote?: string;
+  currencyCode?: string;
+  priceSnapshot?: number;
   kind: 'location' | 'experience' | 'stay' | 'hiddenGem';
   experience: ExploreExperience;
   stay?: ReturnType<typeof normalizeStayForTrip> | null;
@@ -77,6 +84,58 @@ async function getResolvedTrip(ctx: QueryCtx, travelerSlug: string, tripId?: Id<
 
   const trip = await ctx.db.get(resolvedTripId);
   return trip?.travelerSlug === travelerSlug ? trip : null;
+}
+
+async function getCanonicalTripForItinerary(ctx: QueryCtx | MutationCtx, trip: Doc<'trips'>) {
+  if (!trip.circleId) {
+    return trip;
+  }
+
+  const circle = await ctx.db.get(trip.circleId);
+  const canonicalTripId = circle?.tripId ?? trip.sourceTripId;
+
+  if (!canonicalTripId || canonicalTripId === trip._id) {
+    return trip;
+  }
+
+  const canonicalTrip = await ctx.db.get(canonicalTripId);
+  return canonicalTrip?.circleId === trip.circleId ? canonicalTrip : trip;
+}
+
+function assertCanMutateTrip(trip: Doc<'trips'>, travelerSlug: string) {
+  if (trip.travelerSlug !== travelerSlug) {
+    throw new Error('Trip not found.');
+  }
+
+  if (trip.circleId && trip.groupRole === 'member') {
+    throw new Error('Only the group host can update this shared trip.');
+  }
+}
+
+function normalizePartySize(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return Math.min(99, Math.max(1, Math.round(value)));
+}
+
+function normalizeCurrencyCode(value?: string) {
+  const normalized = value?.trim().toUpperCase();
+  return normalized ? normalized.slice(0, 8) : undefined;
+}
+
+function normalizeRequestNote(value?: string) {
+  const normalized = value?.trim();
+  return normalized ? normalized.slice(0, 500) : undefined;
+}
+
+function normalizePriceSnapshot(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+
+  return Math.round(value * 100) / 100;
 }
 
 function isCoordinate(value: readonly number[] | undefined): value is readonly [number, number] {
@@ -484,12 +543,13 @@ async function getResolvedItinerary(
   travelerSlug: string,
   tripId?: Id<'trips'>
 ): Promise<TripItineraryItem[]> {
-  const trip = await getResolvedTrip(ctx, travelerSlug, tripId);
+  const viewerTrip = await getResolvedTrip(ctx, travelerSlug, tripId);
 
-  if (!trip) {
+  if (!viewerTrip) {
     return [];
   }
 
+  const trip = await getCanonicalTripForItinerary(ctx, viewerTrip);
   const bookings = await ctx.db
     .query('bookings')
     .withIndex('by_tripId', (q) => q.eq('tripId', trip._id))
@@ -502,7 +562,7 @@ async function getResolvedItinerary(
     ctx.db.query('stays').take(500),
     ctx.db
       .query('reservations')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', trip.travelerSlug))
       .take(100),
   ]);
 
@@ -513,6 +573,22 @@ async function getResolvedItinerary(
   if (bookings.length === 0) {
     return [];
   }
+
+  const reservationById = new Map(reservations.map((reservation) => [reservation._id, reservation]));
+  const getStayReservation = (booking: Doc<'bookings'>, staySlug: string) => {
+    if (booking.reservationId) {
+      return reservationById.get(booking.reservationId) ?? null;
+    }
+
+    return reservations
+      .filter(
+        (reservation) =>
+          reservation.staySlug === staySlug &&
+          reservation.status !== 'cancelled' &&
+          (!reservation.tripId || reservation.tripId === trip._id)
+      )
+      .sort((a, b) => b.bookedAt - a.bookedAt)[0] ?? null;
+  };
 
   const resolvedItinerary = bookings
     .map<TripItineraryItem | null>((booking) => {
@@ -552,9 +628,7 @@ async function getResolvedItinerary(
         if (!normalizedStay) {
           return null;
         }
-        const stayBooking = reservations
-          .filter((item) => item.staySlug === stay.slug)
-          .sort((a, b) => b.bookedAt - a.bookedAt)[0];
+        const stayBooking = getStayReservation(booking, stay.slug);
 
         return {
           ...booking,
@@ -619,9 +693,7 @@ async function getResolvedItinerary(
       if (!normalizedStay) {
         return null;
       }
-      const stayBooking = reservations
-        .filter((item) => item.staySlug === stay.slug)
-        .sort((a, b) => b.bookedAt - a.bookedAt)[0];
+      const stayBooking = getStayReservation(booking, stay.slug);
 
       return {
         ...booking,
@@ -868,11 +940,17 @@ export const listTravelerBookings = query({
     ]);
 
     const tripNameById = new Map(trips.map((trip) => [trip._id, trip.name]));
+    const tripById = new Map(trips.map((trip) => [trip._id, trip]));
 
     const experiences = await Promise.all(
       bookings.map(async (booking) => {
         const contentKind = booking.contentKind ?? 'experience';
         const contentSlug = booking.contentSlug ?? booking.experienceSlug;
+        const trip = booking.tripId ? tripById.get(booking.tripId) ?? null : null;
+
+        if (trip?.circleId && trip.groupRole === 'member') {
+          return null;
+        }
 
         if (contentKind === 'location') {
           const location = locations.find((item) => item.slug === contentSlug);
@@ -889,6 +967,12 @@ export const listTravelerBookings = query({
             statusLabel: 'planned',
             tripId: booking.tripId,
             tripName: booking.tripId ? tripNameById.get(booking.tripId) ?? null : null,
+            requestKind: booking.requestKind,
+            scheduledFor: booking.scheduledFor,
+            partySize: booking.partySize,
+            travelerNote: booking.travelerNote,
+            currencyCode: booking.currencyCode,
+            priceSnapshot: booking.priceSnapshot,
           };
         }
 
@@ -916,6 +1000,12 @@ export const listTravelerBookings = query({
           statusLabel: bookingStatus,
           tripId: booking.tripId,
           tripName: booking.tripId ? tripNameById.get(booking.tripId) ?? null : null,
+          requestKind: booking.requestKind,
+          scheduledFor: booking.scheduledFor,
+          partySize: booking.partySize,
+          travelerNote: booking.travelerNote,
+          currencyCode: booking.currencyCode,
+          priceSnapshot: booking.priceSnapshot,
         };
       })
     );
@@ -941,6 +1031,8 @@ export const listTravelerBookings = query({
           checkIn: booking.checkIn,
           checkOut: booking.checkOut,
           totalPrice: booking.totalPrice,
+          tripId: booking.tripId,
+          tripName: booking.tripId ? tripNameById.get(booking.tripId) ?? null : null,
           detailLabel: `${Math.max(1, Math.round((booking.checkOut - booking.checkIn) / 86_400_000))} night stay`,
         };
       })
@@ -990,6 +1082,16 @@ export const listManagedBookings = query({
         ]);
         const bookingStatus = booking.status ?? 'confirmed';
 
+        if (
+          booking.requestKind === 'itineraryStop' ||
+          booking.requestKind === 'stayItineraryMirror' ||
+          booking.contentKind === 'location' ||
+          booking.contentKind === 'stay' ||
+          (trip?.circleId && trip.groupRole === 'member')
+        ) {
+          return null;
+        }
+
         if (experience?.managerSlug !== managerSlug) {
           return null;
         }
@@ -1011,6 +1113,12 @@ export const listManagedBookings = query({
           checkIn: booking.checkIn,
           checkOut: booking.checkOut,
           totalPrice: booking.totalPrice,
+          requestKind: booking.requestKind ?? 'experienceRequest',
+          scheduledFor: booking.scheduledFor,
+          partySize: booking.partySize,
+          travelerNote: booking.travelerNote,
+          currencyCode: booking.currencyCode,
+          priceSnapshot: booking.priceSnapshot,
           detailLabel: trip?.name ? `Trip: ${trip.name}` : 'Experience request',
         };
       })
@@ -1018,10 +1126,13 @@ export const listManagedBookings = query({
 
     const stays = await Promise.all(
       reservations.map(async (booking) => {
-        const stay = await ctx.db
-          .query('stays')
-          .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
-          .unique();
+        const [stay, trip] = await Promise.all([
+          ctx.db
+            .query('stays')
+            .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
+            .unique(),
+          booking.tripId ? ctx.db.get(booking.tripId) : null,
+        ]);
 
         if (stay?.managerSlug !== managerSlug) {
           return null;
@@ -1039,6 +1150,8 @@ export const listManagedBookings = query({
           status: booking.status,
           statusLabel: booking.status,
           travelerSlug: booking.travelerSlug,
+          tripId: booking.tripId,
+          tripName: trip?.name ?? null,
           checkIn: booking.checkIn,
           checkOut: booking.checkOut,
           totalPrice: booking.totalPrice,
@@ -1102,7 +1215,28 @@ export const updateManagedBookingStatus = mutation({
       return false;
     }
 
+    if (args.status === 'confirmed') {
+      await assertStayCapacityAvailable(ctx, {
+        stay,
+        staySlug: booking.staySlug,
+        checkIn: booking.checkIn,
+        checkOut: booking.checkOut,
+        roomTypeId: booking.roomTypeId ?? booking.stayBookingDetails?.roomTypeId,
+        roomCount: getRequestedRoomCount(booking.stayBookingDetails),
+        excludeReservationId: booking._id,
+      });
+    }
+
     await ctx.db.patch(bookingId, { status: args.status });
+    const mirrorBookings = await ctx.db
+      .query('bookings')
+      .withIndex('by_reservationId', (q) => q.eq('reservationId', booking._id))
+      .take(20);
+
+    for (const mirrorBooking of mirrorBookings) {
+      await ctx.db.patch(mirrorBooking._id, { status: args.status });
+    }
+
     return true;
   },
 });
@@ -1270,6 +1404,11 @@ export const addExperienceToTrip = mutation({
     experienceSlug: v.string(),
     travelerSlug: v.string(),
     tripId: v.optional(v.id('trips')),
+    scheduledFor: v.optional(v.number()),
+    partySize: v.optional(v.number()),
+    travelerNote: v.optional(v.string()),
+    currencyCode: v.optional(v.string()),
+    priceSnapshot: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -1279,22 +1418,66 @@ export const addExperienceToTrip = mutation({
     }
 
     let resolvedTripId = args.tripId;
+    let resolvedTrip: Doc<'trips'> | null = null;
 
     if (resolvedTripId) {
-      const trip = await ctx.db.get(resolvedTripId);
-      if (!trip || trip.travelerSlug !== travelerSlug) {
+      resolvedTrip = await ctx.db.get(resolvedTripId);
+      if (!resolvedTrip) {
         throw new Error('Trip not found.');
       }
+      assertCanMutateTrip(resolvedTrip, travelerSlug);
     } else {
-      resolvedTripId =
-        (await getFallbackTripId(ctx, travelerSlug)) ??
-        (await ctx.db.insert('trips', {
+      const fallbackTripId = await getFallbackTripId(ctx, travelerSlug);
+      const fallbackTrip = fallbackTripId ? await ctx.db.get(fallbackTripId) : null;
+      if (fallbackTrip && !(fallbackTrip.circleId && fallbackTrip.groupRole === 'member')) {
+        resolvedTrip = fallbackTrip;
+        resolvedTripId = fallbackTrip._id;
+      } else {
+        resolvedTripId = await ctx.db.insert('trips', {
           name: 'My Trip',
           travelerSlug,
           createdAt: Date.now(),
           status: 'active',
-        }));
+        });
+      }
     }
+
+    if (!resolvedTripId) {
+      throw new Error('Trip not found.');
+    }
+
+    const requestKind = addableContent.kind === 'location' ? 'itineraryStop' : 'experienceRequest';
+    const scheduledFor =
+      typeof args.scheduledFor === 'number' && Number.isFinite(args.scheduledFor)
+        ? args.scheduledFor
+        : undefined;
+    const requestFields: {
+      contentKind: 'location' | 'experience';
+      contentSlug: string;
+      tripId: Id<'trips'>;
+      status: 'pending' | 'confirmed';
+      requestKind: 'experienceRequest' | 'itineraryStop';
+      scheduledFor?: number;
+      partySize?: number;
+      travelerNote?: string;
+      currencyCode?: string;
+      priceSnapshot?: number;
+    } = {
+      contentKind: addableContent.kind,
+      contentSlug: args.experienceSlug,
+      tripId: resolvedTripId,
+      status: addableContent.kind === 'location' ? ('confirmed' as const) : ('pending' as const),
+      requestKind,
+    };
+    const partySize = normalizePartySize(args.partySize);
+    const travelerNote = normalizeRequestNote(args.travelerNote);
+    const currencyCode = normalizeCurrencyCode(args.currencyCode);
+    const priceSnapshot = normalizePriceSnapshot(args.priceSnapshot);
+    if (scheduledFor !== undefined) requestFields.scheduledFor = scheduledFor;
+    if (partySize !== undefined) requestFields.partySize = partySize;
+    if (travelerNote !== undefined) requestFields.travelerNote = travelerNote;
+    if (currencyCode !== undefined) requestFields.currencyCode = currencyCode;
+    if (priceSnapshot !== undefined) requestFields.priceSnapshot = priceSnapshot;
 
     // Check if already in this trip
     const existing = await ctx.db
@@ -1305,16 +1488,16 @@ export const addExperienceToTrip = mutation({
       .take(20);
     
     const matching = existing.find(b => b.experienceSlug === args.experienceSlug && b.tripId === resolvedTripId);
-    if (matching) return matching._id;
+    if (matching) {
+      await ctx.db.patch(matching._id, requestFields);
+      return matching._id;
+    }
 
     return await ctx.db.insert('bookings', {
       experienceSlug: args.experienceSlug,
-      contentKind: addableContent.kind,
-      contentSlug: args.experienceSlug,
       travelerSlug,
-      tripId: resolvedTripId,
       bookedAt: Date.now(),
-      status: addableContent.kind === 'location' ? 'confirmed' : 'pending',
+      ...requestFields,
     });
   },
 });
@@ -1332,6 +1515,11 @@ export const removeExperienceFromTrip = mutation({
       return false;
     }
 
+    const trip = booking.tripId ? await ctx.db.get(booking.tripId) : null;
+    if (trip?.circleId && trip.groupRole === 'member') {
+      throw new Error('Only the group host can update this shared trip.');
+    }
+
     await ctx.db.delete(args.bookingId);
     return true;
   },
@@ -1347,6 +1535,10 @@ export const deleteTrip = mutation({
     const trip = await ctx.db.get(args.tripId);
 
     if (!trip || trip.travelerSlug !== travelerSlug) {
+      return false;
+    }
+
+    if (trip.circleId && trip.groupRole === 'member') {
       return false;
     }
 
@@ -1387,9 +1579,10 @@ export const bookStay = mutation({
 
     if (args.tripId) {
       const trip = await ctx.db.get(args.tripId);
-      if (!trip || trip.travelerSlug !== travelerSlug) {
+      if (!trip) {
         throw new Error('Trip not found.');
       }
+      assertCanMutateTrip(trip, travelerSlug);
     } else {
       resolvedTripId =
         (await getFallbackTripId(ctx, travelerSlug)) ??
@@ -1502,6 +1695,114 @@ export const submitExperienceRating = mutation({
   },
 });
 
+function getRequestedRoomCount(details?: Doc<'reservations'>['stayBookingDetails']) {
+  return Math.max(1, Math.round(details?.roomCount ?? 1));
+}
+
+async function findEditableStayReservation(
+  ctx: MutationCtx,
+  args: {
+    travelerSlug: string;
+    staySlug: string;
+    tripId: Id<'trips'>;
+  }
+) {
+  const reservations = await ctx.db
+    .query('reservations')
+    .withIndex('by_travelerSlug_and_staySlug_and_bookedAt', (q) =>
+      q.eq('travelerSlug', args.travelerSlug).eq('staySlug', args.staySlug)
+    )
+    .order('desc')
+    .take(20);
+
+  return (
+    reservations.find(
+      (reservation) =>
+        reservation.status !== 'cancelled' &&
+        (!reservation.tripId || reservation.tripId === args.tripId)
+    ) ?? null
+  );
+}
+
+async function assertStayCapacityAvailable(
+  ctx: MutationCtx,
+  args: {
+    stay: Doc<'stays'>;
+    staySlug: string;
+    checkIn: number;
+    checkOut: number;
+    roomTypeId?: string;
+    roomCount: number;
+    excludeReservationId?: Id<'reservations'>;
+  }
+) {
+  if (!args.roomTypeId) {
+    return;
+  }
+
+  const roomOption = args.stay.bookingProfile?.roomOptions.find((room) => room.id === args.roomTypeId);
+  if (!roomOption) {
+    throw new Error('Choose a valid room type.');
+  }
+
+  const overlapping = await ctx.db
+    .query('reservations')
+    .withIndex('by_staySlug_and_status_and_checkIn', (q) =>
+      q.eq('staySlug', args.staySlug).eq('status', 'confirmed').lt('checkIn', args.checkOut)
+    )
+    .take(200);
+
+  const reservedRooms = overlapping
+    .filter(
+      (reservation) =>
+        reservation._id !== args.excludeReservationId &&
+        reservation.checkOut > args.checkIn &&
+        (reservation.roomTypeId ?? reservation.stayBookingDetails?.roomTypeId) === args.roomTypeId
+    )
+    .reduce(
+      (total, reservation) =>
+        total + Math.max(1, reservation.roomCount ?? reservation.stayBookingDetails?.roomCount ?? 1),
+      0
+    );
+
+  if (reservedRooms + args.roomCount > roomOption.maxRooms) {
+    throw new Error('This room type is fully booked for those dates.');
+  }
+}
+
+async function findStayItineraryMirror(
+  ctx: MutationCtx,
+  args: {
+    reservationId: Id<'reservations'>;
+    tripId: Id<'trips'>;
+    travelerSlug: string;
+    staySlug: string;
+  }
+) {
+  const linkedMirrors = await ctx.db
+    .query('bookings')
+    .withIndex('by_reservationId', (q) => q.eq('reservationId', args.reservationId))
+    .take(1);
+
+  if (linkedMirrors[0]) {
+    return linkedMirrors[0];
+  }
+
+  const tripBookings = await ctx.db
+    .query('bookings')
+    .withIndex('by_tripId', (q) => q.eq('tripId', args.tripId))
+    .take(200);
+
+  return (
+    tripBookings.find(
+      (booking) =>
+        booking.travelerSlug === args.travelerSlug &&
+        (booking.contentKind === 'stay' || booking.bookingType === 'stay') &&
+        booking.experienceSlug === args.staySlug
+    ) ?? null
+  );
+}
+
 export const createStayBooking = mutation({
   args: {
     staySlug: v.string(),
@@ -1552,45 +1853,129 @@ export const createStayBooking = mutation({
 
     if (resolvedTripId) {
       const trip = await ctx.db.get(resolvedTripId);
-      if (!trip || trip.travelerSlug !== travelerSlug) {
+      if (!trip) {
         throw new Error('Trip not found.');
       }
+      assertCanMutateTrip(trip, travelerSlug);
     } else {
-      resolvedTripId =
-        (await getFallbackTripId(ctx, travelerSlug)) ??
-        (await ctx.db.insert('trips', {
+      const fallbackTripId = await getFallbackTripId(ctx, travelerSlug);
+      const fallbackTrip = fallbackTripId ? await ctx.db.get(fallbackTripId) : null;
+      if (fallbackTrip && !(fallbackTrip.circleId && fallbackTrip.groupRole === 'member')) {
+        resolvedTripId = fallbackTrip._id;
+      } else {
+        resolvedTripId = await ctx.db.insert('trips', {
           name: 'My Trip',
           travelerSlug,
           createdAt: Date.now(),
           status: 'active',
-        }));
+        });
+      }
     }
 
-    // 1. Create the official property booking
-    const bookingId = await ctx.db.insert('reservations', {
+    if (!resolvedTripId) {
+      throw new Error('Trip not found.');
+    }
+
+    const now = Date.now();
+    const roomTypeId = args.stayBookingDetails?.roomTypeId;
+    const roomCount = getRequestedRoomCount(args.stayBookingDetails);
+    const existingReservation = await findEditableStayReservation(ctx, {
+      travelerSlug,
+      staySlug: args.staySlug,
+      tripId: resolvedTripId,
+    });
+
+    await assertStayCapacityAvailable(ctx, {
+      stay,
+      staySlug: args.staySlug,
+      checkIn: args.checkIn,
+      checkOut: args.checkOut,
+      roomTypeId,
+      roomCount,
+      excludeReservationId: existingReservation?._id,
+    });
+
+    const reservationFields: {
+      staySlug: string;
+      travelerSlug: string;
+      tripId: Id<'trips'>;
+      checkIn: number;
+      checkOut: number;
+      totalPrice: number;
+      status: 'pending';
+      bookedAt: number;
+      roomTypeId?: string;
+      roomCount: number;
+      stayBookingDetails?: Doc<'reservations'>['stayBookingDetails'];
+    } = {
       staySlug: args.staySlug,
       travelerSlug,
+      tripId: resolvedTripId,
       checkIn: args.checkIn,
       checkOut: args.checkOut,
       totalPrice: args.totalPrice,
       status: 'pending',
-      bookedAt: Date.now(),
-      stayBookingDetails: args.stayBookingDetails,
-    });
+      bookedAt: now,
+      roomCount,
+    };
+    if (roomTypeId) reservationFields.roomTypeId = roomTypeId;
+    if (args.stayBookingDetails) reservationFields.stayBookingDetails = args.stayBookingDetails;
 
-    // 2. If a tripId is provided, also link it to the trip itinerary
-    // This allows the stay to appear on the trip map and branching routes
-    await ctx.db.insert('bookings', {
+    const reservationId =
+      existingReservation?._id ?? (await ctx.db.insert('reservations', reservationFields));
+
+    if (existingReservation) {
+      await ctx.db.patch(existingReservation._id, reservationFields);
+    }
+
+    const mirrorFields: {
+      experienceSlug: string;
+      contentKind: 'stay';
+      contentSlug: string;
+      travelerSlug: string;
+      tripId: Id<'trips'>;
+      reservationId: Id<'reservations'>;
+      bookedAt: number;
+      status: 'pending';
+      bookingType: 'stay';
+      requestKind: 'stayItineraryMirror';
+      checkIn: number;
+      checkOut: number;
+      totalPrice: number;
+      roomTypeId?: string;
+      stayBookingDetails?: Doc<'bookings'>['stayBookingDetails'];
+    } = {
       experienceSlug: args.staySlug,
       contentKind: 'stay',
       contentSlug: args.staySlug,
       travelerSlug,
       tripId: resolvedTripId,
-      bookedAt: Date.now(),
+      reservationId,
+      bookedAt: now,
       status: 'pending',
+      bookingType: 'stay',
+      requestKind: 'stayItineraryMirror',
+      checkIn: args.checkIn,
+      checkOut: args.checkOut,
+      totalPrice: args.totalPrice,
+    };
+    if (roomTypeId) mirrorFields.roomTypeId = roomTypeId;
+    if (args.stayBookingDetails) mirrorFields.stayBookingDetails = args.stayBookingDetails;
+
+    const existingMirror = await findStayItineraryMirror(ctx, {
+      reservationId,
+      tripId: resolvedTripId,
+      travelerSlug,
+      staySlug: args.staySlug,
     });
 
-    return bookingId;
+    if (existingMirror) {
+      await ctx.db.patch(existingMirror._id, mirrorFields);
+    } else {
+      await ctx.db.insert('bookings', mirrorFields);
+    }
+
+    return reservationId;
   },
 });
 
@@ -1761,10 +2146,13 @@ export const getTravelerStayBooking = query({
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
     const bookings = await ctx.db
       .query('reservations')
-      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-      .take(100);
+      .withIndex('by_travelerSlug_and_staySlug_and_bookedAt', (q) =>
+        q.eq('travelerSlug', travelerSlug).eq('staySlug', args.staySlug)
+      )
+      .order('desc')
+      .take(20);
 
-    return bookings.find((booking) => booking.staySlug === args.staySlug) ?? null;
+    return bookings.find((booking) => booking.status !== 'cancelled') ?? bookings[0] ?? null;
   },
 });
 
@@ -1836,8 +2224,9 @@ export const getStayAvailability = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query('reservations')
-      .withIndex('by_staySlug', (q) => q.eq('staySlug', args.staySlug))
-      .filter((q) => q.eq(q.field('status'), 'confirmed'))
+      .withIndex('by_staySlug_and_status_and_checkIn', (q) =>
+        q.eq('staySlug', args.staySlug).eq('status', 'confirmed')
+      )
       .take(100);
   },
 });

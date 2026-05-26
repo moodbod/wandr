@@ -808,9 +808,21 @@ async function buildRouteShare(ctx: QueryCtx | MutationCtx, travelerSlug: string
     };
   }
 
+  let itineraryTrip = activeTrip;
+  if (activeTrip.circleId) {
+    const circle = await ctx.db.get(activeTrip.circleId);
+    const canonicalTripId = circle?.tripId ?? activeTrip.sourceTripId;
+    if (canonicalTripId && canonicalTripId !== activeTrip._id) {
+      const canonicalTrip = await ctx.db.get(canonicalTripId);
+      if (canonicalTrip?.circleId === activeTrip.circleId) {
+        itineraryTrip = canonicalTrip;
+      }
+    }
+  }
+
   const bookings = await ctx.db
     .query('bookings')
-    .withIndex('by_tripId', (q) => q.eq('tripId', activeTrip._id))
+    .withIndex('by_tripId', (q) => q.eq('tripId', itineraryTrip._id))
     .take(200);
 
   const [experiences, stays] = await Promise.all([
@@ -862,7 +874,7 @@ async function buildRouteShare(ctx: QueryCtx | MutationCtx, travelerSlug: string
   const routeCenterCoordinate = routeMapMarkers[0]?.coordinate ?? null;
 
   return {
-    routeTitle: activeTrip.name.toLowerCase() === 'default' ? 'My Trip Route' : activeTrip.name,
+    routeTitle: itineraryTrip.name.toLowerCase() === 'default' ? 'My Trip Route' : itineraryTrip.name,
     routeSummary:
       previewStops.length > 0
         ? `Stops lined up for ${previewStops.join(', ')}.`
@@ -874,32 +886,6 @@ async function buildRouteShare(ctx: QueryCtx | MutationCtx, travelerSlug: string
     routeHeroImageUri,
     routeMapMarkers,
   };
-}
-
-async function cloneTripBookingsToTrip(
-  ctx: MutationCtx,
-  sourceTripId: Id<'trips'>,
-  targetTripId: Id<'trips'>,
-  travelerSlug: string
-) {
-  const sourceBookings = await ctx.db
-    .query('bookings')
-    .withIndex('by_tripId', (q) => q.eq('tripId', sourceTripId))
-    .take(200);
-
-  for (const booking of sourceBookings) {
-    await ctx.db.insert('bookings', {
-      experienceSlug: booking.experienceSlug,
-      travelerSlug,
-      tripId: targetTripId,
-      bookedAt: booking.bookedAt,
-      bookingType: booking.bookingType,
-      checkIn: booking.checkIn,
-      checkOut: booking.checkOut,
-      totalPrice: booking.totalPrice,
-      stayBookingDetails: booking.stayBookingDetails,
-    });
-  }
 }
 
 async function createGroupTripCopy(
@@ -920,6 +906,12 @@ async function createGroupTripCopy(
     .unique();
 
   if (existingTrip) {
+    await ctx.db.patch(existingTrip._id, {
+      name: args.name,
+      groupRole: args.role,
+      sourceTripId: args.sourceTripId,
+      status: 'active',
+    });
     return existingTrip._id;
   }
 
@@ -932,8 +924,6 @@ async function createGroupTripCopy(
     createdAt: Date.now(),
     status: 'active',
   });
-
-  await cloneTripBookingsToTrip(ctx, args.sourceTripId, tripId, args.travelerSlug);
   return tripId;
 }
 
@@ -1444,16 +1434,14 @@ export const createOpenFriendGroup = mutation({
     }
 
     if (sourceTrip) {
-      const hostGroupTripId = await createGroupTripCopy(ctx, {
-        travelerSlug: travelerSlug,
+      await ctx.db.patch(sourceTrip._id, {
         circleId,
-        name: trimmedName || `${sourceTrip.name} Group`,
-        role: 'host',
-        sourceTripId: sourceTrip._id,
+        groupRole: 'host',
+        visibility: 'public',
       });
 
       await ctx.db.patch(circleId, {
-        tripId: hostGroupTripId,
+        tripId: sourceTrip._id,
       });
     }
 
@@ -1942,7 +1930,7 @@ export const acceptTripInvite = mutation({
     }
 
     const invite = await ctx.db.get(notification.entityId as Id<'invites'>);
-    if (!invite || invite.inviteeSlug !== travelerSlug || invite.status === 'accepted') {
+    if (!invite || invite.inviteeSlug !== travelerSlug || invite.status !== 'invited') {
       return false;
     }
 
@@ -2018,6 +2006,58 @@ export const acceptTripInvite = mutation({
       href: `/friends/group/${circle._id}`,
       entityId: circle._id,
       entityLabel: circle.name,
+    });
+
+    return true;
+  },
+});
+
+export const declineTripInvite = mutation({
+  args: {
+    travelerSlug: v.string(),
+    notificationId: v.id('notices'),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    const notification = await ctx.db.get(args.notificationId);
+    if (
+      !notification ||
+      notification.recipientSlug !== travelerSlug ||
+      notification.kind !== 'trip_invite' ||
+      !notification.entityId ||
+      notification.actionStatus === 'approved' ||
+      notification.actionStatus === 'declined'
+    ) {
+      return false;
+    }
+
+    const invite = await ctx.db.get(notification.entityId as Id<'invites'>);
+    if (!invite || invite.inviteeSlug !== travelerSlug || invite.status !== 'invited') {
+      return false;
+    }
+
+    const now = Date.now();
+    const circleId = invite.circleId;
+    if (circleId) {
+      const membership = await ctx.db
+        .query('members')
+        .withIndex('by_circleId_and_travelerSlug', (q) =>
+          q.eq('circleId', circleId).eq('travelerSlug', travelerSlug)
+        )
+        .unique();
+
+      if (membership?.status === 'invited') {
+        await ctx.db.delete(membership._id);
+      }
+
+      await ctx.db.patch(circleId, { updatedAt: now });
+    }
+
+    await ctx.db.patch(invite._id, { status: 'declined' });
+    await ctx.db.patch(args.notificationId, {
+      actionStatus: 'declined',
+      readAt: notification.readAt ?? now,
+      viewedAt: notification.viewedAt ?? now,
     });
 
     return true;

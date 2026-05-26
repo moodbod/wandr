@@ -5,11 +5,11 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import FriendViewerProfileScreen from '@/app/friends/profile/[travelerSlug]';
-import FriendsDiscoverScreen from '@/app/friends/discover';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import FriendViewerProfileScreen from '@/components/wandr/friends/friend-viewer-profile-screen';
 import { FriendCircleBanner, FriendCircleBannerSkeleton } from '@/components/wandr/friends/friend-circle-banner';
+import FriendsDiscoverScreen from '@/components/wandr/friends/friends-discover-screen';
 import { FriendMatchCard, FriendMatchCardSkeleton } from '@/components/wandr/friends/friend-match-card';
 import { WandrHeader } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';

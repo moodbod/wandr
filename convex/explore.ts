@@ -573,7 +573,7 @@ async function buildJoinableTripCard(
   };
 }
 
-async function getExistingJoinRequest(ctx: MutationCtx, circle: CircleDoc, travelerSlug: string) {
+async function getExistingJoinRequest(ctx: QueryCtx | MutationCtx, circle: CircleDoc, travelerSlug: string) {
   const recentHostNotifications = await ctx.db
     .query('notices')
     .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', circle.createdBySlug))
@@ -838,13 +838,14 @@ export const getExploreGroupTripDetail = query({
       return null;
     }
 
-    const [trip, host, members, bookings, hiddenGemDocs, membership] = await Promise.all([
+    const [trip, host, members, bookings, hiddenGemDocs, membership, pendingRequest] = await Promise.all([
       ctx.db.get(circle.tripId),
       getPublicTravelerProfile(ctx, circle.createdBySlug),
       getActiveCircleMembers(ctx, circle._id),
       getCircleTripBookings(ctx, circle),
       ctx.db.query('gems').take(200),
       getCurrentCircleMembership(ctx, circle._id, args.travelerSlug),
+      args.travelerSlug ? getExistingJoinRequest(ctx, circle, args.travelerSlug) : Promise.resolve(null),
     ]);
 
     if (!trip) {
@@ -887,6 +888,7 @@ export const getExploreGroupTripDetail = query({
           ? `${circle.name} has ${itinerary.length} planned stop${itinerary.length === 1 ? '' : 's'} around ${circle.destinationLabel}.`
           : `${circle.name} is still building its itinerary around ${circle.destinationLabel}.`,
       isMember: Boolean(membership && membership.status === 'active'),
+      hasRequested: Boolean(pendingRequest),
       itinerary,
     };
   },

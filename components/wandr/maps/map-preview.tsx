@@ -1,11 +1,12 @@
 import type { Camera, MapView as MapboxMapView } from '@rnmapbox/maps';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
 import { fetchRoutePath } from '@/lib/routing';
 
 import { MapboxPlaceMarker, MapboxUserMarker } from './mapbox/mapbox-marker';
@@ -16,6 +17,8 @@ import type { MapMarker, MapPreviewProps } from './mapbox/types';
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 const DEFAULT_MAP_CENTER: readonly [number, number] =
   getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
+const FOLLOW_CAMERA_ANIMATION_MS = 1200;
+const RECENTER_CAMERA_ANIMATION_MS = 850;
 const HIDDEN_MAPBOX_SOURCE_LAYER_IDS = [
   'poi_label',
   'transit_stop_label',
@@ -60,7 +63,7 @@ function MapPreviewComponent({
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
   const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
-  const styleURL = MapboxGL
+  const defaultStyleURL = MapboxGL
     ? isDark
       ? MapboxGL.StyleURL.Dark
       : MapboxGL.StyleURL.Street
@@ -70,6 +73,8 @@ function MapPreviewComponent({
   const resolvedCenterCoordinate =
     centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
+  const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
+  const styleURL = offlineMapState.styleUrl ?? defaultStyleURL;
   const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
   const followZoomLevel = Math.max(zoomLevel, 17);
   const stayMarkers = useMemo(
@@ -88,6 +93,11 @@ function MapPreviewComponent({
     () => stayMarkers.length === 1 && stayMarkers[0].status === 'active',
     [stayMarkers]
   );
+  const handleUserInteract = useCallback(() => {
+    hasUserInteractedRef.current = true;
+    isFollowingUserRef.current = false;
+    onInteract?.();
+  }, [onInteract]);
 
   useEffect(() => {
     if (!followUserLocation) {
@@ -190,12 +200,7 @@ function MapPreviewComponent({
       return;
     }
 
-    if (
-      hasUserInteractedRef.current &&
-      !centerCoordinate &&
-      resolvedCenterCoordinate &&
-      hasCenteredOnResolvedDataRef.current
-    ) {
+    if (hasUserInteractedRef.current && !centerCoordinate) {
       return;
     }
 
@@ -227,11 +232,12 @@ function MapPreviewComponent({
       centerCoordinate: toMapboxPosition(userCoordinate),
       heading: userHeading ?? 0,
       padding: cameraPadding,
-      pitch: 45,
+      pitch: 0,
       zoomLevel: followZoomLevel,
-      animationDuration: 650,
-      animationMode: 'easeTo',
+      animationDuration: FOLLOW_CAMERA_ANIMATION_MS,
+      animationMode: 'linearTo',
     });
+    hasCenteredOnResolvedDataRef.current = true;
   }, [MapboxGL, cameraPadding, followUserLocation, followZoomLevel, isWeb, userCoordinate, userHeading]);
 
   useEffect(() => {
@@ -244,11 +250,12 @@ function MapPreviewComponent({
       centerCoordinate: toMapboxPosition(userCoordinate),
       heading: userHeading ?? 0,
       padding: cameraPadding,
-      pitch: 45,
+      pitch: 0,
       zoomLevel: followZoomLevel,
-      animationDuration: 650,
+      animationDuration: RECENTER_CAMERA_ANIMATION_MS,
       animationMode: 'easeTo',
     });
+    hasCenteredOnResolvedDataRef.current = true;
   }, [MapboxGL, cameraPadding, followZoomLevel, isWeb, recenterToUserSignal, userCoordinate, userHeading]);
 
   useEffect(() => {
@@ -336,11 +343,7 @@ function MapPreviewComponent({
   return (
     <View
       style={[styles.mapRoot, style]}
-      onTouchStart={() => {
-        hasUserInteractedRef.current = true;
-        isFollowingUserRef.current = false;
-        onInteract?.();
-      }}>
+      onTouchStart={handleUserInteract}>
       <MapboxGL.MapView
         key="map-preview"
         ref={mapRef}
@@ -354,22 +357,16 @@ function MapPreviewComponent({
           if (Array.isArray(coordinate) && coordinate.length >= 2) {
             onMapPress?.([Number(coordinate[0]), Number(coordinate[1])]);
           }
-          hasUserInteractedRef.current = true;
-          isFollowingUserRef.current = false;
-          onInteract?.();
+          handleUserInteract();
         }}
         onCameraChanged={(state) => {
           if (state.gestures.isGestureActive) {
-            hasUserInteractedRef.current = true;
-            isFollowingUserRef.current = false;
-            onInteract?.();
+            handleUserInteract();
           }
         }}
         onMapIdle={(state) => {
           if (state.gestures.isGestureActive) {
-            hasUserInteractedRef.current = true;
-            isFollowingUserRef.current = false;
-            onInteract?.();
+            handleUserInteract();
           }
         }}
         compassEnabled={false}
@@ -420,6 +417,17 @@ function MapPreviewComponent({
 
         <MapRouteOverlays upcomingRouteCoords={upcomingRouteCoords} stayBranchCoords={stayBranchCoords} />
       </MapboxGL.MapView>
+      {offlineMapState.isOffline ? (
+        <View pointerEvents="none" style={styles.offlineBanner}>
+          <ThemedText style={styles.offlineBannerText}>
+            {offlineMapState.styleUrl
+              ? `Offline map: ${offlineMapState.region?.label ?? 'downloaded area'}`
+              : offlineMapState.hasDownloadedRegion
+                ? 'Offline map needs an update'
+                : 'No downloaded map here'}
+          </ThemedText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -490,5 +498,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
+  },
+  offlineBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+    alignItems: 'center',
+  },
+  offlineBannerText: {
+    overflow: 'hidden',
+    borderRadius: 999,
+    backgroundColor: designSystem.colors.darkGreen,
+    color: designSystem.colors.lime,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });

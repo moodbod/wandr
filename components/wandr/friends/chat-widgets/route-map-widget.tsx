@@ -26,15 +26,15 @@ const GOOGLE_MAP_WITHOUT_POI_STYLE = JSON.stringify([
   { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
 ]);
 
+const routeWidgetTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZoneName: 'shortOffset',
+});
+
 function formatRouteWidgetTime(timestamp: number) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZoneName: 'shortOffset',
-  })
-    .format(new Date(timestamp))
-    .replace(',', '');
+  return routeWidgetTimeFormatter.format(new Date(timestamp)).replace(',', '');
 }
 
 export function RouteMapWidget({ routeCard, createdAt }: RouteMapWidgetProps) {

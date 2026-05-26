@@ -6,7 +6,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   View,
   useWindowDimensions,
   type NativeScrollEvent,
@@ -22,8 +21,10 @@ import { HeaderLocationSelector } from '@/components/wandr/header-location-selec
 import { GlassButton } from '@/components/ui/glass-button';
 import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
+import { OfflineMapHeaderButton } from '@/components/wandr/offline/offline-map-download-button';
 import { PlanningLocationSheet } from '@/components/wandr/planning-country-sheet';
 import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery-controls';
+import { styles } from '@/components/wandr/stays/stays-map-screen.styles';
 import { StaysRailCard } from '@/components/wandr/stays/stays-rail-card';
 import { designSystem } from '@/constants/design-system';
 import {
@@ -41,14 +42,18 @@ import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from 
 import { useResponsive } from '@/hooks/use-responsive';
 import { getLiveCatalogRef, getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
 import { formatUsdPriceParts } from '@/lib/currency';
+import { getOfflineMapRegionForPlanningLocation } from '@/lib/offline-map-regions';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
-import type { RankedStayProperty } from '@/types/stays';
+import {
+  filterStaysByDiscoveryMode,
+  getDistanceFromCurrent,
+  getDistanceFromRoute,
+  getStaySearchText,
+} from '@/components/wandr/stays/stays-map-model';
 
 import { StayDetailScreen } from './stay-detail-screen';
 
-const NEAR_ROUTE_RADIUS_KM = 90;
-const NEAR_ME_RADIUS_KM = 60;
 const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
 
 export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
@@ -78,6 +83,10 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const [selectedStaySlug, setSelectedStaySlug] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const offlineRegion = useMemo(
+    () => getOfflineMapRegionForPlanningLocation(planningLocation),
+    [planningLocation]
+  );
   useSyncPlanningLocationWithCurrentLocation(currentLocation.coordinate);
 
   const orderedTrips = useMemo(
@@ -332,19 +341,22 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       sortMode={sortMode}
       trailingSearchAccessory={
         isLargeScreen ? (
-          <GlassButton
-            accessibilityLabel="Reset map position"
-            height={52}
-            onPress={() => resetToStart()}
-            radius={designSystem.radii.pill}
-            width={52}
-          >
-            <NavigationArrow
-              color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
-              size={20}
-              weight="bold"
-            />
-          </GlassButton>
+          <View style={styles.desktopSearchActions}>
+            <OfflineMapHeaderButton region={offlineRegion} />
+            <GlassButton
+              accessibilityLabel="Reset map position"
+              height={52}
+              onPress={() => resetToStart()}
+              radius={designSystem.radii.pill}
+              width={52}
+            >
+              <NavigationArrow
+                color={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+                size={20}
+                weight="bold"
+              />
+            </GlassButton>
+          </View>
         ) : undefined
       }
       trips={locationTrips}
@@ -467,6 +479,15 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         config={{
           overlay: true,
           leadingAction: showBack ? { kind: 'back', accessibilityLabel: 'Go back' } : undefined,
+          trailingActions: offlineRegion
+            ? [
+                {
+                  kind: 'map',
+                  accessibilityLabel: `Download ${offlineRegion.label}`,
+                  render: <OfflineMapHeaderButton region={offlineRegion} />,
+                },
+              ]
+            : undefined,
         }}
         bottomContent={
           discoveryControls
@@ -596,237 +617,3 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     </ThemedView>
   );
 }
-
-function filterStaysByDiscoveryMode(
-  {
-    currentCoordinate,
-    discoveryMode,
-    routeCoordinates,
-    stays,
-  }: {
-    currentCoordinate?: readonly [number, number] | null;
-    discoveryMode: 'route' | 'nearby';
-    routeCoordinates: readonly (readonly [number, number])[];
-    stays: readonly RankedStayProperty[];
-  }
-) {
-  const radius = discoveryMode === 'nearby' ? NEAR_ME_RADIUS_KM : NEAR_ROUTE_RADIUS_KM;
-  const getDistance =
-    discoveryMode === 'nearby'
-      ? (stay: RankedStayProperty) => getDistanceFromCurrent(stay, currentCoordinate)
-      : (stay: RankedStayProperty) => getDistanceFromRoute(stay, routeCoordinates);
-  const hasUsableDistance = stays.some((stay) => Number.isFinite(getDistance(stay)));
-
-  if (!hasUsableDistance) {
-    return [];
-  }
-
-  const rankedByDistance = [...stays].sort((a, b) => {
-    return getDistance(a) - getDistance(b);
-  });
-
-  return rankedByDistance.filter((stay) => getDistance(stay) <= radius);
-}
-
-function getStaySearchText(stay: RankedStayProperty) {
-  return [
-    stay.name,
-    stay.locationLabel,
-    stay.town,
-    stay.region,
-    stay.countryLabel,
-    stay.stayStyle,
-    stay.routeVibe,
-    stay.sleepSignal,
-    stay.summary,
-    stay.bookingNote,
-    stay.idealFor.join(' '),
-    stay.amenities.join(' '),
-    stay.nearbyHighlights.join(' '),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-}
-
-function getDistanceFromCurrent(
-  stay: RankedStayProperty,
-  currentCoordinate?: readonly [number, number] | null
-) {
-  return currentCoordinate ? getDistanceInKm(stay.coordinate, currentCoordinate) : Number.POSITIVE_INFINITY;
-}
-
-function getDistanceFromRoute(
-  stay: RankedStayProperty,
-  routeCoordinates: readonly (readonly [number, number])[]
-) {
-  if (routeCoordinates.length === 0) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  if (routeCoordinates.length === 1) {
-    return getDistanceInKm(stay.coordinate, routeCoordinates[0]);
-  }
-
-  return routeCoordinates.slice(0, -1).reduce((bestDistance, start, index) => {
-    const end = routeCoordinates[index + 1];
-    return Math.min(bestDistance, getDistanceToRouteSegmentKm(stay.coordinate, start, end));
-  }, Number.POSITIVE_INFINITY);
-}
-
-function getDistanceToRouteSegmentKm(
-  coordinate: readonly [number, number],
-  start: readonly [number, number],
-  end: readonly [number, number]
-) {
-  const latitudeScale = 111.32;
-  const referenceLatitude = toRadians((coordinate[1] + start[1] + end[1]) / 3);
-  const longitudeScale = Math.max(Math.cos(referenceLatitude) * latitudeScale, 0.0001);
-  const point = toXY(coordinate, longitudeScale, latitudeScale);
-  const segmentStart = toXY(start, longitudeScale, latitudeScale);
-  const segmentEnd = toXY(end, longitudeScale, latitudeScale);
-  const segmentX = segmentEnd.x - segmentStart.x;
-  const segmentY = segmentEnd.y - segmentStart.y;
-  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
-
-  if (segmentLengthSquared === 0) {
-    return getDistanceInKm(coordinate, start);
-  }
-
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      ((point.x - segmentStart.x) * segmentX + (point.y - segmentStart.y) * segmentY) / segmentLengthSquared
-    )
-  );
-  const projection = {
-    x: segmentStart.x + t * segmentX,
-    y: segmentStart.y + t * segmentY,
-  };
-
-  return Math.hypot(point.x - projection.x, point.y - projection.y);
-}
-
-function toXY(coordinate: readonly [number, number], longitudeScale: number, latitudeScale: number) {
-  return {
-    x: coordinate[0] * longitudeScale,
-    y: coordinate[1] * latitudeScale,
-  };
-}
-
-function getDistanceInKm(from: readonly [number, number], to: readonly [number, number]) {
-  const earthRadiusKm = 6371;
-  const [fromLng, fromLat] = from;
-  const [toLng, toLat] = to;
-  const deltaLat = toRadians(toLat - fromLat);
-  const deltaLng = toRadians(toLng - fromLng);
-  const startLat = toRadians(fromLat);
-  const endLat = toRadians(toLat);
-  const a =
-    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function toRadians(value: number) {
-  return (value * Math.PI) / 180;
-}
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: designSystem.colors.mapSurface,
-  },
-  largeBody: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  mainColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    minWidth: 340,
-    borderRightWidth: 1,
-    zIndex: 10,
-  },
-  mainColumnTablet: {
-    width: 360,
-  },
-  mainColumnDesktop: {
-    width: 420,
-  },
-  mainColumnContent: {
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  stayList: {
-    gap: 0,
-  },
-  detailColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    borderRightWidth: 1,
-    zIndex: 11,
-  },
-  detailColumnTablet: {
-    width: 340,
-  },
-  detailColumnDesktop: {
-    width: 430,
-  },
-  mapColumn: {
-    flex: 1,
-    minWidth: 0,
-    position: 'relative',
-  },
-  mapControlsOverlay: {
-    position: 'absolute',
-    top: 24,
-    left: 24,
-    right: 24,
-    alignItems: 'center',
-  },
-  carouselWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 18,
-    height: 214,
-    overflow: 'visible',
-  },
-  carousel: {
-    flex: 1,
-    overflow: 'visible',
-  },
-  carouselContent: {
-    alignItems: 'flex-end',
-    overflow: 'visible',
-  },
-  cardShell: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'visible',
-  },
-  cardMotion: {
-    width: '100%',
-    overflow: 'visible',
-  },
-  cardInner: {
-    width: '100%',
-    overflow: 'visible',
-  },
-  emptyNotice: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderRadius: designSystem.radii.pill,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: designSystem.spacing.lg,
-  },
-  emptyNoticeText: {
-    ...designSystem.type.bodySmallStrong,
-  },
-});

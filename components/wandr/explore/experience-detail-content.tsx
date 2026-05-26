@@ -11,6 +11,11 @@ import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
+import {
+  ExperienceRequestFields,
+  getExperienceRequestScheduledFor,
+  parseExperiencePriceSnapshot,
+} from '@/components/wandr/explore/experience-request-fields';
 import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
@@ -95,6 +100,9 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [requestDayOffset, setRequestDayOffset] = useState(1);
+  const [requestPartySize, setRequestPartySize] = useState(2);
+  const [requestNote, setRequestNote] = useState('');
 
   const tripSheetRef = useRef<BottomSheet>(null);
 
@@ -189,6 +197,11 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
       experienceSlug: experience.slug,
       travelerSlug,
       tripId,
+      scheduledFor: getExperienceRequestScheduledFor(requestDayOffset),
+      partySize: requestPartySize,
+      travelerNote: requestNote,
+      currencyCode: 'USD',
+      priceSnapshot: parseExperiencePriceSnapshot(experience.price),
     });
     setOptimisticBookedSlug(experience.slug);
   };
@@ -260,6 +273,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
 
     setBookingAction(action);
     try {
+      tripSheetRef.current?.close();
       const tripId = await createTrip({
         name: tripTitle,
         travelerSlug,
@@ -444,13 +458,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             centerCoordinate={experience.coordinate ?? bookingMapCenter}
             loadingAction={bookingAction}
             markers={bookingMapMarkers}
-            onPrimaryPress={
-              hasExistingTrips
-                ? handleAddToTripPress
-                : () => {
-                    void handleStartJourney('primary');
-                  }
-            }
+            onPrimaryPress={handleAddToTripPress}
             onSecondaryPress={
               hasExistingTrips
                 ? () => {
@@ -458,7 +466,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
                   }
                 : undefined
             }
-            primaryLabel={hasExistingTrips ? (isAlreadyBooked ? 'Add another' : 'Add to trip') : 'Start journey'}
+            primaryLabel={hasExistingTrips ? (isAlreadyBooked ? 'Request another' : 'Request') : 'Start journey'}
             secondaryLabel={hasExistingTrips ? 'Start new journey' : undefined}
             variant={useWebActivityCardFrame ? 'webDetail' : 'default'}
           />
@@ -512,9 +520,29 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         snapPoints={['60%', '90%']}>
         <BottomSheetView style={styles.sheetContainer}>
           <View style={styles.sheetHeader}>
-            <ThemedText style={styles.sheetTitle}>Add to trip</ThemedText>
+            <ThemedText style={styles.sheetTitle}>Request experience</ThemedText>
           </View>
           <ScrollView contentContainerStyle={styles.sheetContent}>
+            <ExperienceRequestFields
+              dayOffset={requestDayOffset}
+              isDark={isDark}
+              note={requestNote}
+              onChangeDayOffset={setRequestDayOffset}
+              onChangeNote={setRequestNote}
+              onChangePartySize={setRequestPartySize}
+              partySize={requestPartySize}
+            />
+            {(trips?.length ?? 0) === 0 ? (
+              <Pressable
+                onPress={() => {
+                  void handleStartJourney('primary');
+                }}
+                style={[styles.tripRow, isDark && styles.tripRowDark]}
+              >
+                <ThemedText style={styles.tripName}>Start new journey</ThemedText>
+                <ThemedText style={styles.tripMeta}>Create trip</ThemedText>
+              </Pressable>
+            ) : null}
             {trips?.map((t) => (
               <Pressable
                 key={t._id}

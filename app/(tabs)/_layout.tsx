@@ -6,7 +6,6 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { designSystem } from '@/constants/design-system';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
 
 export const unstable_settings = {
@@ -14,13 +13,12 @@ export const unstable_settings = {
 };
 
 export default function TabLayout() {
-  const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { isLargeScreen } = useResponsive();
-  const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
-  const inactiveColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
-  const tabSurfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
-  const selectedTabTint = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteOverlayFaint;
+  const activeColor = designSystem.colors.lime;
+  const inactiveColor = designSystem.colors.darkTextSoft;
+  const tabSurfaceColor = designSystem.colors.darkGlassHeader;
+  const selectedTabTint = designSystem.colors.whiteOverlayBarely;
   const tabIconSize = 22;
   const getTabIcon = (
     name: React.ComponentProps<typeof MaterialCommunityIcons>['name']
@@ -79,8 +77,8 @@ export default function TabLayout() {
           borderTopWidth: 0,
           borderRadius: 32,
           borderWidth: 1,
-          backgroundColor: isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong,
-          borderColor: isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.whiteBorder,
+          backgroundColor: designSystem.colors.darkGlassStrong,
+          borderColor: designSystem.colors.darkSurfaceBorder,
           elevation: 16,
         },
       }}
@@ -141,11 +139,11 @@ export default function TabLayout() {
   return (
     <NativeTabs
       backgroundColor={tabSurfaceColor}
-      blurEffect={isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+      blurEffect="systemChromeMaterialDark"
       disableTransparentOnScrollEdge
       iconColor={inactiveColor}
       labelStyle={{ color: inactiveColor }}
-      shadowColor={isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft}
+      shadowColor={designSystem.colors.whiteOverlayBarely}
       tintColor={selectedTabTint}
     >
       <NativeTabs.Trigger name="index" hidden />

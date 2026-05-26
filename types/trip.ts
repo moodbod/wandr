@@ -11,7 +11,14 @@ export type TripItineraryItem = {
   contentSlug?: string;
   travelerSlug: string;
   tripId?: string;
+  reservationId?: string;
   bookedAt: number;
+  requestKind?: 'experienceRequest' | 'itineraryStop' | 'stayItineraryMirror';
+  scheduledFor?: number;
+  partySize?: number;
+  travelerNote?: string;
+  currencyCode?: string;
+  priceSnapshot?: number;
   kind: TripItemKind;
   experience: ExploreExperience;
   stay?: StayProperty | null;
@@ -84,6 +91,12 @@ export type TravelerBookingItem = {
   kind: TripItemKind;
   status: 'planned' | 'pending' | 'confirmed' | 'cancelled';
   statusLabel: string;
+  requestKind?: 'experienceRequest' | 'itineraryStop' | 'stayItineraryMirror';
+  scheduledFor?: number;
+  partySize?: number;
+  travelerNote?: string;
+  currencyCode?: string;
+  priceSnapshot?: number;
   tripId?: string;
   tripName?: string | null;
   checkIn?: number;

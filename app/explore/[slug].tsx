@@ -4,15 +4,21 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Plus } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
+import { ExperienceDetailLoadingScreen, SectionHeading } from '@/components/wandr/explore/experience-detail-route-primitives';
+import { styles } from '@/components/wandr/explore/experience-detail-route.styles';
+import {
+  ExperienceRequestFields,
+  getExperienceRequestScheduledFor,
+  parseExperiencePriceSnapshot,
+} from '@/components/wandr/explore/experience-request-fields';
 import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
@@ -91,6 +97,9 @@ function ConnectedExploreExperienceScreen() {
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [requestDayOffset, setRequestDayOffset] = useState(1);
+  const [requestPartySize, setRequestPartySize] = useState(2);
+  const [requestNote, setRequestNote] = useState('');
 
   const tripSheetRef = useRef<BottomSheet>(null);
 
@@ -181,6 +190,11 @@ function ConnectedExploreExperienceScreen() {
         experienceSlug: experience.slug,
         travelerSlug,
         tripId,
+        scheduledFor: getExperienceRequestScheduledFor(requestDayOffset),
+        partySize: requestPartySize,
+        travelerNote: requestNote,
+        currencyCode: 'USD',
+        priceSnapshot: parseExperiencePriceSnapshot(experience.price),
       });
       setOptimisticBookedSlug(experience.slug);
       return true;
@@ -236,6 +250,7 @@ function ConnectedExploreExperienceScreen() {
       ? `${experience.locationLabel.split(',')[0]?.trim() ?? experience.title} Trip`
       : `${experience.title} Trip`;
 
+    tripSheetRef.current?.close();
     const tripId = await createTrip({
       name: tripTitle,
       travelerSlug,
@@ -436,12 +451,21 @@ function ConnectedExploreExperienceScreen() {
 
     <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['50%']} enablePanDownToClose>
         <BottomSheetView style={styles.sheetContent}>
-          <ThemedText style={[styles.sheetTitle, isDark && styles.sheetTitleDark]}>Add to Trip</ThemedText>
+          <ThemedText style={[styles.sheetTitle, isDark && styles.sheetTitleDark]}>Request experience</ThemedText>
           <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
-            Choose which trip to add this experience to.
+            Pick a trip and send the details.
           </ThemedText>
 
           <ScrollView contentContainerStyle={styles.tripList}>
+            <ExperienceRequestFields
+              dayOffset={requestDayOffset}
+              isDark={isDark}
+              note={requestNote}
+              onChangeDayOffset={setRequestDayOffset}
+              onChangeNote={setRequestNote}
+              onChangePartySize={setRequestPartySize}
+              partySize={requestPartySize}
+            />
             {(joinableTrips?.length ?? 0) > 0 ? (
               <View style={styles.publicTripSection}>
                 <View style={styles.publicTripHeader}>
@@ -522,322 +546,3 @@ function ConnectedExploreExperienceScreen() {
     </ThemedView>
   );
 }
-
-function ExperienceDetailLoadingScreen({
-  insetsBottom,
-  insetsTop,
-  isDark,
-}: {
-  insetsBottom: number;
-  insetsTop: number;
-  isDark: boolean;
-}) {
-  return (
-    <ThemedView style={[styles.root, isDark && styles.rootDark]}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-          trailingActions: [{ kind: 'favorite', accessibilityLabel: 'Save experience' }],
-        }}
-      />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insetsTop + 72, paddingBottom: insetsBottom + designSystem.spacing.xxxl },
-        ]}>
-        <SkeletonBlock style={styles.detailHeroSkeleton} />
-        <View style={styles.paddedContent}>
-          <SkeletonBlock style={styles.detailBadgeSkeleton} />
-          <SkeletonBlock style={styles.detailTitleSkeleton} />
-          <SkeletonBlock style={styles.detailSubtitleSkeleton} />
-          <SkeletonBlock style={styles.detailBodySkeleton} />
-          <SkeletonBlock style={styles.detailPanelSkeleton} />
-        </View>
-      </ScrollView>
-    </ThemedView>
-  );
-}
-
-function SectionHeading({ title, subtitle, isDark }: { title: string; subtitle?: string; isDark: boolean }) {
-  return (
-    <View style={styles.sectionHeading}>
-      <ThemedText style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>{title}</ThemedText>
-      {subtitle ? (
-        <ThemedText style={[styles.sectionSubtitle, isDark && styles.sectionSubtitleDark]}>{subtitle}</ThemedText>
-      ) : null}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  rootDark: {
-    backgroundColor: designSystem.colors.darkBackground,
-  },
-  content: {
-    gap: designSystem.spacing.xxxl,
-  },
-  carouselContainer: {
-    width: '100%',
-  },
-  paddedContent: {
-    paddingHorizontal: designSystem.spacing.lg,
-    gap: designSystem.spacing.xxxl,
-  },
-  titleBlock: {
-    paddingTop: 12,
-    gap: 8,
-  },
-  titleStack: {
-    width: '100%',
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: designSystem.colors.lime,
-    borderRadius: designSystem.radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  badgeText: {
-    ...designSystem.type.eyebrow,
-    color: designSystem.colors.darkGreen,
-  },
-  title: {
-    ...designSystem.type.title,
-    fontSize: 32,
-    color: designSystem.colors.ink,
-    lineHeight: 36,
-  },
-  titleDark: {
-    color: designSystem.colors.darkText,
-  },
-  subtitle: {
-    ...designSystem.type.bodyStrong,
-    color: designSystem.colors.warmDark,
-  },
-  subtitleDark: {
-    color: designSystem.colors.darkMutedText,
-  },
-  subtitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    gap: 12,
-  },
-  socialProof: {
-    gap: 14,
-  },
-  socialProofCopy: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-  },
-  socialProofTitle: {
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-  socialProofText: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '600',
-    color: designSystem.colors.warmDark,
-  },
-  section: {
-    gap: 18,
-    marginTop: 14,
-  },
-  sectionHeading: {
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
-  sectionTitleDark: {
-    color: designSystem.colors.darkText,
-  },
-  sectionSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: designSystem.colors.warmDark,
-  },
-  sectionSubtitleDark: {
-    color: designSystem.colors.darkMutedText,
-  },
-  summary: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-    color: designSystem.colors.warmDark,
-  },
-  summaryDark: {
-    color: designSystem.colors.darkMutedText,
-  },
-  actions: {
-    gap: 16,
-    marginTop: 12,
-  },
-  sheetContent: {
-    flex: 1,
-    padding: 24,
-    gap: 16,
-  },
-  sheetTitle: {
-    ...designSystem.type.subtitle,
-    fontSize: 24,
-  },
-  sheetTitleDark: {
-    color: designSystem.colors.darkText,
-  },
-  sheetSubtitle: {
-    ...designSystem.type.body,
-    color: designSystem.colors.warmDark,
-    marginBottom: 8,
-  },
-  sheetSubtitleDark: {
-    color: designSystem.colors.darkMutedText,
-  },
-  tripList: {
-    gap: 12,
-  },
-  publicTripSection: {
-    gap: 12,
-    paddingBottom: 4,
-  },
-  publicTripHeader: {
-    gap: 4,
-  },
-  publicTripTitle: {
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
-  },
-  publicTripSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: designSystem.colors.warmDark,
-  },
-  publicTripOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: designSystem.colors.surface,
-    borderWidth: 1,
-    borderColor: designSystem.colors.border,
-  },
-  publicTripCopy: {
-    flex: 1,
-    gap: 8,
-  },
-  publicTripName: {
-    ...designSystem.type.bodyStrong,
-  },
-  publicTripMeta: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: designSystem.colors.warmDark,
-  },
-  publicTripJoinButton: {
-    minWidth: 82,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: designSystem.colors.lime,
-    paddingHorizontal: 14,
-  },
-  publicTripJoinButtonDisabled: {
-    opacity: 0.7,
-  },
-  publicTripJoinText: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '600',
-    color: designSystem.colors.darkGreen,
-  },
-  tripOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: designSystem.colors.surface,
-    borderWidth: 1,
-    borderColor: designSystem.colors.border,
-  },
-  tripOptionDefault: {
-    backgroundColor: designSystem.colors.lime,
-    borderColor: designSystem.colors.lime,
-  },
-  sheetOptionDark: {
-    backgroundColor: designSystem.colors.darkSurface,
-    borderColor: designSystem.colors.darkBorderSoft,
-  },
-  tripOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: designSystem.colors.whiteOverlayStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tripOptionImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  tripOptionImagePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: designSystem.colors.border,
-  },
-  tripOptionName: {
-    ...designSystem.type.bodyStrong,
-    flex: 1,
-  },
-  detailHeroSkeleton: {
-    alignSelf: 'center',
-    borderRadius: 34,
-    height: 500,
-    maxWidth: 344,
-    width: '88%',
-  },
-  detailBadgeSkeleton: {
-    width: 104,
-    height: 30,
-    borderRadius: 15,
-  },
-  detailTitleSkeleton: {
-    width: '86%',
-    height: 74,
-    borderRadius: 24,
-  },
-  detailSubtitleSkeleton: {
-    width: '62%',
-    height: 20,
-    borderRadius: 10,
-  },
-  detailBodySkeleton: {
-    width: '100%',
-    height: 92,
-    borderRadius: 24,
-  },
-  detailPanelSkeleton: {
-    width: '100%',
-    height: 156,
-    borderRadius: 28,
-  },
-});

@@ -314,11 +314,13 @@ function ReplyQuote({
   );
 }
 
+const chatTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
 function formatChatTime(timestamp: number) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(timestamp));
+  return chatTimeFormatter.format(new Date(timestamp));
 }
 
 const styles = StyleSheet.create({

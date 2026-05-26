@@ -1,3 +1,4 @@
+import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 
 type Coordinate = readonly [number, number];
@@ -12,6 +13,13 @@ type CurrentLocationState = {
 
 type ExpoLocationModule = typeof import('expo-location');
 type ExpoPosition = Awaited<ReturnType<ExpoLocationModule['getCurrentPositionAsync']>>;
+type StoredLocationPermission = 'granted' | 'denied';
+type StoredLocationPosition = {
+  accuracy: number | null;
+  coordinate: Coordinate;
+  heading: number | null;
+  savedAt: number;
+};
 
 const INITIAL_STATE: CurrentLocationState = {
   accuracy: null,
@@ -21,6 +29,8 @@ const INITIAL_STATE: CurrentLocationState = {
   isLoading: false,
 };
 const subscribers = new Set<(state: CurrentLocationState) => void>();
+const LOCATION_PERMISSION_STORAGE_KEY = 'wandr.current-location.permission.v1';
+const LAST_POSITION_STORAGE_KEY = 'wandr.current-location.last-position.v1';
 const WATCH_STOP_DELAY_MS = 15_000;
 const POSITION_CLOSE_METERS = 1.5;
 
@@ -29,6 +39,7 @@ let isWatchStarting = false;
 let startPromise: Promise<void> | null = null;
 let positionSubscription: { remove: () => void } | null = null;
 let headingSubscription: { remove: () => void } | null = null;
+let storedLocationHydrated = false;
 
 export function useCurrentLocation() {
   const [state, setState] = useState<CurrentLocationState>(currentState);
@@ -100,11 +111,27 @@ function scheduleStopLocationWatch() {
 
 async function startNativeLocationWatch() {
   const location = await import('expo-location');
+  await hydrateStoredLocationState();
+
+  const storedPermission = await readStoredLocationPermission();
   const existingPermission = await location.getForegroundPermissionsAsync();
-  const permission =
-    existingPermission.status !== 'granted'
-      ? await location.requestForegroundPermissionsAsync()
-      : existingPermission;
+  let permission = existingPermission;
+
+  if (existingPermission.status !== 'granted') {
+    if (storedPermission !== null) {
+      emitLocationState({
+        ...currentState,
+        hasPermission: false,
+        isLoading: false,
+      });
+      return;
+    }
+
+    permission = await location.requestForegroundPermissionsAsync();
+    await writeStoredLocationPermission(permission.status === 'granted' ? 'granted' : 'denied');
+  } else if (storedPermission !== 'granted') {
+    await writeStoredLocationPermission('granted');
+  }
 
   if (permission.status !== 'granted') {
     emitLocationState({
@@ -177,13 +204,101 @@ function applyPosition(position: ExpoPosition) {
     return;
   }
 
+  const accuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
   emitLocationState({
-    accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+    accuracy,
     coordinate,
     heading: currentState.heading,
     hasPermission: true,
     isLoading: false,
   });
+  void writeStoredLocationPosition({
+    accuracy,
+    coordinate,
+    heading: currentState.heading,
+    savedAt: Date.now(),
+  });
+}
+
+async function hydrateStoredLocationState() {
+  if (storedLocationHydrated) {
+    return;
+  }
+
+  storedLocationHydrated = true;
+  const storedPosition = await readStoredLocationPosition();
+  if (!storedPosition) {
+    return;
+  }
+
+  emitLocationState({
+    accuracy: storedPosition.accuracy,
+    coordinate: storedPosition.coordinate,
+    heading: storedPosition.heading,
+    hasPermission: currentState.hasPermission,
+    isLoading: false,
+  });
+}
+
+async function readStoredLocationPermission(): Promise<StoredLocationPermission | null> {
+  try {
+    const value = await SecureStore.getItemAsync(LOCATION_PERMISSION_STORAGE_KEY);
+    return value === 'granted' || value === 'denied' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeStoredLocationPermission(permission: StoredLocationPermission) {
+  try {
+    await SecureStore.setItemAsync(LOCATION_PERMISSION_STORAGE_KEY, permission);
+  } catch {
+    // Location still works without the local preference cache.
+  }
+}
+
+async function readStoredLocationPosition(): Promise<StoredLocationPosition | null> {
+  try {
+    const value = await SecureStore.getItemAsync(LAST_POSITION_STORAGE_KEY);
+    if (!value) {
+      return null;
+    }
+
+    return parseStoredLocationPosition(value);
+  } catch {
+    return null;
+  }
+}
+
+async function writeStoredLocationPosition(position: StoredLocationPosition) {
+  try {
+    await SecureStore.setItemAsync(LAST_POSITION_STORAGE_KEY, JSON.stringify(position));
+  } catch {
+    // A failed cache write should not interrupt live location updates.
+  }
+}
+
+function parseStoredLocationPosition(value: string): StoredLocationPosition | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredLocationPosition>;
+    if (!Array.isArray(parsed.coordinate) || parsed.coordinate.length !== 2) {
+      return null;
+    }
+
+    const coordinate: Coordinate = [Number(parsed.coordinate[0]), Number(parsed.coordinate[1])];
+    if (!coordinateIsValid(coordinate)) {
+      return null;
+    }
+
+    return {
+      accuracy: typeof parsed.accuracy === 'number' && Number.isFinite(parsed.accuracy) ? parsed.accuracy : null,
+      coordinate,
+      heading: typeof parsed.heading === 'number' && Number.isFinite(parsed.heading) ? parsed.heading : null,
+      savedAt: typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function emitLocationState(nextState: CurrentLocationState) {
