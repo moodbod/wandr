@@ -32,10 +32,10 @@ const defaultUserSettings = {
   preferredCurrency: 'USD',
   distanceUnit: 'km' as const,
   temperatureUnit: 'celsius' as const,
-  profileVisibility: 'friends' as const,
+  profileVisibility: 'public' as const,
   showSavedPlaces: true,
   showTripActivity: false,
-  locationSharing: 'tripOnly' as const,
+  locationSharing: 'off' as const,
   tripAlertsEnabled: true,
   messagesEnabled: true,
   bookingUpdatesEnabled: true,
@@ -215,6 +215,15 @@ export const updatePrivacySettings = mutation({
       showTripActivity: args.showTripActivity,
       locationSharing: args.locationSharing,
     });
+    if (args.locationSharing === 'off') {
+      const sharedLocation = await ctx.db
+        .query('sharedLocations')
+        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
+        .unique();
+      if (sharedLocation) {
+        await ctx.db.delete(sharedLocation._id);
+      }
+    }
     return true;
   },
 });

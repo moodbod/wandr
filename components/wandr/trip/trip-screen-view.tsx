@@ -15,6 +15,7 @@ import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-secti
 import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { usePlanningLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
+import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import type { TripDashboard, TripDashboardItem, TripListItem } from '@/types/trip';
@@ -127,6 +128,7 @@ export function TripScreenView({
   useSkeletons: boolean;
 }) {
   const { isLargeScreen } = useResponsive();
+  const sharedUserLocations = useVisibleSharedLocations();
   const [detailItem, setDetailItem] = useState<TripDashboardItem | null>(null);
   const items = trip.items;
   const mapMarkers = useMemo(() => buildTripMapMarkers(trip.items, 10), [trip.items]);
@@ -210,6 +212,7 @@ export function TripScreenView({
             <MapPreview
               centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? planningCenterCoordinate}
               markers={mapMarkers}
+              sharedUserLocations={sharedUserLocations}
               persistKey="app-background"
               routeCoordinates={routeCoordinates}
               showRoutes={routeCoordinates.length > 1}

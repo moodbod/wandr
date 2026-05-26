@@ -29,10 +29,12 @@ export default function PrivacyScreen() {
   const traveler = useCurrentTraveler();
   const settings = useCurrentUserSettings();
   const updatePrivacySettings = useMutation(updatePrivacySettingsRef);
-  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>('friends');
+  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>('public');
   const [showSavedPlaces, setShowSavedPlaces] = useState(true);
   const [showTripActivity, setShowTripActivity] = useState(false);
-  const [locationSharing, setLocationSharing] = useState<LocationSharing>('tripOnly');
+  const [locationSharing, setLocationSharing] = useState<LocationSharing>('off');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settings) {
@@ -60,6 +62,8 @@ export default function PrivacyScreen() {
       return;
     }
 
+    setIsSaving(true);
+    setErrorText(null);
     try {
       await updatePrivacySettings({
         travelerSlug: traveler.slug,
@@ -70,12 +74,18 @@ export default function PrivacyScreen() {
       });
     } catch (error) {
       console.error('Failed to update privacy settings', error);
+      setErrorText(error instanceof Error ? error.message : 'Could not save privacy settings.');
+    } finally {
+      setIsSaving(false);
     }
   };
+  const canEdit = Boolean(traveler?.slug && settings && !isSaving);
+  const bottomNote = errorText ?? (isSaving ? 'Saving...' : 'Changes save instantly.');
 
   return (
-    <ProfileSettingScreen title="Privacy" bottomNote="Changes apply to this traveler profile.">
+    <ProfileSettingScreen title="Privacy" bottomNote={bottomNote} description="Control who can find you and see your map location.">
       <SettingOptionGroup
+        disabled={!canEdit}
         label="Profile visibility"
         options={visibilityOptions}
         value={profileVisibility}
@@ -85,6 +95,8 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingSwitchRow
+        description="Let other travelers see places you have saved."
+        disabled={!canEdit}
         label="Show saved places"
         value={showSavedPlaces}
         onValueChange={(nextShowSavedPlaces) => {
@@ -93,6 +105,8 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingSwitchRow
+        description="Let other travelers see recent trip activity when supported."
+        disabled={!canEdit}
         label="Show trip activity"
         value={showTripActivity}
         onValueChange={(nextShowTripActivity) => {
@@ -101,6 +115,7 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingOptionGroup
+        disabled={!canEdit}
         label="Location sharing"
         options={locationOptions}
         value={locationSharing}

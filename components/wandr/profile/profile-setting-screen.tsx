@@ -17,7 +17,6 @@ type ProfileSettingScreenProps = {
 
 export function ProfileSettingScreen({ bottomNote, children, description, title }: ProfileSettingScreenProps) {
   const insets = useSafeAreaInsets();
-  void title;
 
   return (
     <ThemedView style={styles.root}>
@@ -32,11 +31,12 @@ export function ProfileSettingScreen({ bottomNote, children, description, title 
           },
         ]}
         showsVerticalScrollIndicator={false}>
-        {description ? (
-          <View style={styles.hero}>
+        <View style={styles.hero}>
+          <ThemedText style={styles.title}>{title}</ThemedText>
+          {description ? (
             <ThemedText style={styles.description}>{description}</ThemedText>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
 
         <View style={styles.section}>{children}</View>
         {bottomNote ? <ThemedText style={styles.bottomNote}>{bottomNote}</ThemedText> : null}
@@ -94,13 +94,14 @@ type SettingOption<T extends string> = {
 };
 
 type SettingOptionGroupProps<T extends string> = {
+  disabled?: boolean;
   label: string;
   onChange: (value: T) => void;
   options: readonly SettingOption<T>[];
   value: T;
 };
 
-export function SettingOptionGroup<T extends string>({ label, onChange, options, value }: SettingOptionGroupProps<T>) {
+export function SettingOptionGroup<T extends string>({ disabled = false, label, onChange, options, value }: SettingOptionGroupProps<T>) {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
 
@@ -114,7 +115,8 @@ export function SettingOptionGroup<T extends string>({ label, onChange, options,
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
+              accessibilityState={{ disabled, selected: isSelected }}
+              disabled={disabled}
               key={option.value}
               onPress={() => onChange(option.value)}
               style={[
@@ -123,6 +125,7 @@ export function SettingOptionGroup<T extends string>({ label, onChange, options,
                   backgroundColor: isSelected ? designSystem.colors.lime : colors.surfaceRaised,
                   borderColor: isSelected ? designSystem.colors.darkGreen : colors.borderSoft,
                 },
+                disabled ? styles.optionPillDisabled : null,
               ]}>
               <ThemedText style={[styles.optionLabel, isSelected && styles.optionLabelActive]}>
                 {option.label}
@@ -290,6 +293,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
+  },
+  optionPillDisabled: {
+    opacity: 0.58,
   },
   optionLabel: {
     fontSize: 13,

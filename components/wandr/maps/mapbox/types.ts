@@ -13,6 +13,15 @@ export type MapMarker = {
   status?: 'completed' | 'active' | 'upcoming';
 };
 
+export type SharedMapUserLocation = {
+  travelerSlug: string;
+  name: string;
+  avatarUri?: string | null;
+  baseLabel?: string | null;
+  coordinate: readonly [number, number];
+  updatedAt?: number;
+};
+
 export type MapPreviewProps = {
   centerCoordinate?: readonly [number, number] | null;
   userCoordinate?: readonly [number, number] | null;
@@ -27,6 +36,7 @@ export type MapPreviewProps = {
     paddingTop?: number;
   };
   markers?: readonly MapMarker[];
+  sharedUserLocations?: readonly SharedMapUserLocation[];
   routeCoordinates?: readonly (readonly [number, number])[];
   zoomLevel?: number;
   showRoutes?: boolean;

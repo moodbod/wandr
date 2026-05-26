@@ -26,6 +26,7 @@ import {
   listNotificationsRef,
   markNotificationsReadRef,
   markNotificationsViewedRef,
+  rejectFriendRequestRef,
 } from '@/lib/convex';
 import type { AppNotification } from '@/types/notifications';
 
@@ -44,6 +45,7 @@ export default function NotificationsScreen() {
   const declineTripJoinRequest = useMutation(declineTripJoinRequestRef);
   const markRead = useMutation(markNotificationsReadRef);
   const markViewed = useMutation(markNotificationsViewedRef);
+  const rejectFriendRequest = useMutation(rejectFriendRequestRef);
   const viewedRequestsRef = useRef(new Set<string>());
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
@@ -141,13 +143,22 @@ export default function NotificationsScreen() {
       return;
     }
 
-    if (notification.kind !== 'trip_invite' && notification.kind !== 'trip_join_request') {
+    if (
+      notification.kind !== 'friend_invite' &&
+      notification.kind !== 'trip_invite' &&
+      notification.kind !== 'trip_join_request'
+    ) {
       return;
     }
 
     setBusyRequestId(notification._id);
     try {
-      if (notification.kind === 'trip_invite') {
+      if (notification.kind === 'friend_invite') {
+        await rejectFriendRequest({
+          travelerSlug,
+          notificationId: notification._id,
+        });
+      } else if (notification.kind === 'trip_invite') {
         await declineTripInvite({
           travelerSlug,
           notificationId: notification._id,

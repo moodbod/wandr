@@ -36,7 +36,12 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
-import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
+import {
+  usePlanningLocation,
+  useSyncPlanningLocationWithAvailableLocations,
+  useSyncPlanningLocationWithCurrentLocation,
+} from '@/hooks/use-planning-location';
 import { useRetainedQueryValue } from '@/hooks/use-retained-query-value';
 import { useResponsive } from '@/hooks/use-responsive';
 import { getExploreJoinableTripCardsRef, getExplorePageContentRef, getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
@@ -78,7 +83,9 @@ export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
+  const currentLocationState = useCurrentLocation();
+  useSharedLocationPublishing(currentLocationState);
+  const { coordinate: currentLocation, heading: currentHeading } = currentLocationState;
 
   return (
     <ConnectedExploreScreen
@@ -166,6 +173,7 @@ function ConnectedExploreScreen({
           routeCoordinates={[]}
           showRoutes={false}
           topInset={mapTopInset}
+          mapTopBleed={isLargeScreen ? 0 : mapTopInset}
           onLocateMe={() => setLoadingMapRecenterSignal((current) => current + 1)}
           planningLocation={planningLocation}
           hideHeader={isLargeScreen}
@@ -304,7 +312,8 @@ function ExploreScreenView({
   const routeHiddenGemSlug = Array.isArray(params.hiddenGemSlug)
     ? params.hiddenGemSlug[0]
     : params.hiddenGemSlug;
-  useSyncPlanningLocationWithCurrentLocation(currentLocation);
+  useSyncPlanningLocationWithAvailableLocations(availablePlanningLocations);
+  useSyncPlanningLocationWithCurrentLocation(currentLocation, availablePlanningLocations);
   const planningCopy = useMemo(
     () => getPlanningLocationCopy(planningLocation.id, planningLocation.label),
     [planningLocation.id, planningLocation.label]
@@ -715,6 +724,7 @@ function ExploreScreenView({
         mapPersistKey={isLargeScreen ? 'app-background' : undefined}
         recenterToUserSignal={recenterToUserSignal}
         topInset={mapTopInset}
+        mapTopBleed={isLargeScreen ? 0 : mapTopInset}
         onInteract={handleMapInteract}
         onLocateMe={handleLocateMe}
         onMarkerPress={handlePressMapMarker}

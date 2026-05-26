@@ -1,9 +1,15 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { MapPreview } from '@/components/wandr/maps/map-preview';
+import type { MapPreviewProps } from '@/components/wandr/maps/mapbox/types';
 
-type MapFrameProps = ComponentProps<typeof MapPreview> & {
+const MapPreview = lazy(() =>
+  import('@/components/wandr/maps/map-preview').then((module) => ({
+    default: module.MapPreview,
+  }))
+);
+
+type MapFrameProps = MapPreviewProps & {
   children?: ReactNode;
   mapContainerStyle?: StyleProp<ViewStyle>;
   shellStyle?: StyleProp<ViewStyle>;
@@ -19,7 +25,9 @@ export function MapFrame({
   return (
     <View style={[styles.shell, shellStyle]}>
       <View style={[styles.mapContainer, mapContainerStyle]}>
-        <MapPreview {...mapProps} style={[{ flex: 1 }, style]} />
+        <Suspense fallback={<View style={styles.mapFallback} />}>
+          <MapPreview {...mapProps} style={[{ flex: 1 }, style]} />
+        </Suspense>
       </View>
       {children}
     </View>
@@ -35,5 +43,9 @@ const styles = StyleSheet.create({
   mapContainer: {
     ...StyleSheet.absoluteFillObject,
     display: 'flex',
+  },
+  mapFallback: {
+    flex: 1,
+    backgroundColor: '#172319',
   },
 });

@@ -25,7 +25,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import { useResponsive } from '@/hooks/use-responsive';
-import { createOpenFriendGroupRef, getFriendChatListRef, listUserTripsRef } from '@/lib/convex';
+import { createOpenFriendGroupRef, getFriendChatListRef, joinFriendCircleRef, listUserTripsRef } from '@/lib/convex';
 import type { FriendChatListItem, JoinableFriendGroup } from '@/types/friends';
 
 type ChatFilter = 'primary' | 'groups' | 'chats';
@@ -54,11 +54,13 @@ export default function FriendsChatListScreen() {
   const chatList = useQuery(getFriendChatListRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const createGroup = useMutation(createOpenFriendGroupRef);
+  const joinGroup = useMutation(joinFriendCircleRef);
   const sheetRef = useRef<BottomSheet>(null);
   const [groupName, setGroupName] = useState('');
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [selectedFriendSlugs, setSelectedFriendSlugs] = useState<string[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [joiningCircleId, setJoiningCircleId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('primary');
   const [searchQuery, setSearchQuery] = useState('');
   const [detail, setDetail] = useState<ChatDetail | null>(null);
@@ -140,6 +142,15 @@ export default function FriendsChatListScreen() {
     );
   };
 
+  const openGroup = (circleId: string) => {
+    if (isLargeScreen) {
+      setDetail({ kind: 'group', id: circleId });
+      return;
+    }
+
+    router.push(`/friends/group/${circleId}` as never);
+  };
+
   const handleSubmitCreateGroup = async () => {
     if (!traveler?.slug) {
       return;
@@ -158,14 +169,30 @@ export default function FriendsChatListScreen() {
         setSelectedTripId(null);
         setSelectedFriendSlugs([]);
         sheetRef.current?.close();
-        if (isLargeScreen) {
-          setDetail({ kind: 'group', id: String(circleId) });
-          return;
-        }
-        router.push(`/friends/group/${circleId}` as never);
+        openGroup(String(circleId));
       }
     } finally {
       setIsCreatingGroup(false);
+    }
+  };
+
+  const handleJoinOpenGroup = async (item: JoinableFriendGroup) => {
+    if (!traveler?.slug || joiningCircleId) {
+      return;
+    }
+
+    const circleId = String(item.id);
+    setJoiningCircleId(circleId);
+    try {
+      const joined = await joinGroup({
+        travelerSlug: traveler.slug,
+        circleId: item.id,
+      });
+      if (joined) {
+        openGroup(circleId);
+      }
+    } finally {
+      setJoiningCircleId(null);
     }
   };
 
@@ -176,7 +203,7 @@ export default function FriendsChatListScreen() {
 
     if (isLargeScreen) {
       if (groupId) {
-        setDetail({ kind: 'group', id: decodeURIComponent(groupId) });
+        openGroup(decodeURIComponent(groupId));
         return;
       }
 
@@ -284,7 +311,15 @@ export default function FriendsChatListScreen() {
             <ThemedText style={styles.sectionTitle}>Open groups</ThemedText>
             <View style={styles.rowList}>
               {filteredJoinableGroups.map((item: JoinableFriendGroup) => (
-                <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
+                <FriendChatListRow
+                  key={item.id}
+                  item={
+                    joiningCircleId === String(item.id)
+                      ? { ...item, preview: 'Joining group...' }
+                      : item
+                  }
+                  onPress={() => handleJoinOpenGroup(item)}
+                />
               ))}
             </View>
           </View>

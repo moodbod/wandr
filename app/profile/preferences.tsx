@@ -8,7 +8,12 @@ import {
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { updateExperiencePreferencesRef } from '@/lib/convex';
-import { getDefaultCurrencyForCountry, orderCurrenciesForCountry, type SupportedCurrencyCode } from '@/lib/currency';
+import {
+  getDefaultCurrencyForCountry,
+  isSupportedCurrencyCode,
+  orderCurrenciesForCountry,
+  type SupportedCurrencyCode,
+} from '@/lib/currency';
 
 type DistanceUnit = 'km' | 'mi';
 type TemperatureUnit = 'celsius' | 'fahrenheit';
@@ -31,6 +36,8 @@ export default function PreferencesScreen() {
   const [preferredCurrency, setPreferredCurrency] = useState<SupportedCurrencyCode>(defaultCurrency);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
   const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>('celsius');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const currencyOptions = useMemo(
     () =>
@@ -47,7 +54,7 @@ export default function PreferencesScreen() {
       return;
     }
 
-    setPreferredCurrency(settings.preferredCurrency as SupportedCurrencyCode);
+    setPreferredCurrency(isSupportedCurrencyCode(settings.preferredCurrency) ? settings.preferredCurrency : defaultCurrency);
     setDistanceUnit(settings.distanceUnit);
     setTemperatureUnit(settings.temperatureUnit);
   }, [defaultCurrency, settings]);
@@ -65,6 +72,8 @@ export default function PreferencesScreen() {
       return;
     }
 
+    setIsSaving(true);
+    setErrorText(null);
     try {
       await updateExperiencePreferences({
         travelerSlug: traveler.slug,
@@ -74,12 +83,18 @@ export default function PreferencesScreen() {
       });
     } catch (error) {
       console.error('Failed to update preferences', error);
+      setErrorText(error instanceof Error ? error.message : 'Could not save preferences.');
+    } finally {
+      setIsSaving(false);
     }
   };
+  const canEdit = Boolean(traveler?.slug && settings && !isSaving);
+  const bottomNote = errorText ?? (isSaving ? 'Saving...' : 'Changes save instantly.');
 
   return (
-    <ProfileSettingScreen title="Experience preferences" bottomNote="Prices update across stays, bookings, and profile totals.">
+    <ProfileSettingScreen title="Preferences" bottomNote={bottomNote} description="Set the units and currency used across Wandr.">
       <SettingOptionGroup
+        disabled={!canEdit}
         label="Currency"
         options={currencyOptions}
         value={preferredCurrency}
@@ -89,6 +104,7 @@ export default function PreferencesScreen() {
         }}
       />
       <SettingOptionGroup
+        disabled={!canEdit}
         label="Distance"
         options={distanceOptions}
         value={distanceUnit}
@@ -98,6 +114,7 @@ export default function PreferencesScreen() {
         }}
       />
       <SettingOptionGroup
+        disabled={!canEdit}
         label="Temperature"
         options={temperatureOptions}
         value={temperatureUnit}

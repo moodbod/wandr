@@ -12,7 +12,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <title>Wandr</title>
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
         />
         <meta name="theme-color" content={designSystem.semantic.dark.background} />
         <meta name="color-scheme" content="dark" />

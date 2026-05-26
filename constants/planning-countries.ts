@@ -400,6 +400,7 @@ export function buildPlanningLocationsFromDestinations(
     string,
     {
       base: PlanningLocation;
+      coordinateCount: number;
       count: number;
       latitudeTotal: number;
       longitudeTotal: number;
@@ -408,10 +409,6 @@ export function buildPlanningLocationsFromDestinations(
 
   destinations.forEach((destination) => {
     const coordinate = normalizePlanningLocationCoordinate(destination.coordinate);
-    if (!coordinate) {
-      return;
-    }
-
     const baseLocation =
       getPlanningLocationForCountry(destination) ??
       getPlanningLocationForCoordinate(coordinate);
@@ -425,27 +422,62 @@ export function buildPlanningLocationsFromDestinations(
 
     if (existing) {
       existing.count += 1;
-      existing.longitudeTotal += coordinate[0];
-      existing.latitudeTotal += coordinate[1];
+      if (coordinate) {
+        existing.coordinateCount += 1;
+        existing.longitudeTotal += coordinate[0];
+        existing.latitudeTotal += coordinate[1];
+      }
       return;
     }
 
     buckets.set(key, {
       base: baseLocation,
+      coordinateCount: coordinate ? 1 : 0,
       count: 1,
-      longitudeTotal: coordinate[0],
-      latitudeTotal: coordinate[1],
+      longitudeTotal: coordinate?.[0] ?? 0,
+      latitudeTotal: coordinate?.[1] ?? 0,
     });
   });
 
   return [...buckets.values()]
-    .map(({ base, count, latitudeTotal, longitudeTotal }) => ({
-      ...base,
-      centerCoordinate: [longitudeTotal / count, latitudeTotal / count] as const,
-      detail: count === 1 ? '1 place available' : `${count} places available`,
-      isSupported: true,
-    }))
+    .map(({ base, coordinateCount, count, latitudeTotal, longitudeTotal }) => {
+      const centerCoordinate =
+        coordinateCount > 0
+          ? ([longitudeTotal / coordinateCount, latitudeTotal / coordinateCount] as const)
+          : base.centerCoordinate;
+
+      return {
+        ...base,
+        ...(centerCoordinate ? { centerCoordinate } : {}),
+        detail: count === 1 ? '1 place available' : `${count} places available`,
+        isSupported: true,
+      };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export function getDataBackedPlanningLocation(
+  location: PlanningLocation | null | undefined,
+  availableLocations?: readonly PlanningLocation[]
+): PlanningLocation | null {
+  if (!location || !availableLocations) {
+    return null;
+  }
+
+  const normalizedCountryCode = location.countryCode?.trim().toUpperCase();
+
+  return (
+    availableLocations.find((availableLocation) => {
+      if (availableLocation.id === location.id) {
+        return true;
+      }
+
+      return Boolean(
+        normalizedCountryCode &&
+          availableLocation.countryCode?.trim().toUpperCase() === normalizedCountryCode
+      );
+    }) ?? null
+  );
 }
 
 export function getPlanningLocationCenterCoordinate(

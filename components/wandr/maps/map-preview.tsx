@@ -12,7 +12,7 @@ import { fetchRoutePath } from '@/lib/routing';
 import { MapboxPlaceMarker, MapboxUserMarker } from './mapbox/mapbox-marker';
 import { getMapboxModule } from './mapbox/mapbox-module';
 import { MapRouteOverlays } from './mapbox/mapbox-routes';
-import type { MapMarker, MapPreviewProps } from './mapbox/types';
+import type { MapMarker, MapPreviewProps, SharedMapUserLocation } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 const DEFAULT_MAP_CENTER: readonly [number, number] =
@@ -31,10 +31,7 @@ const HIDDEN_MAPBOX_SOURCE_LAYER_IDS = [
 function MapPreviewComponent({
   centerCoordinate,
   userCoordinate = null,
-  userAvatarPaletteKey,
-  userAvatarUri,
   userHeading = null,
-  userName,
   viewportPadding,
   markers = [],
   routeCoordinates,
@@ -44,6 +41,7 @@ function MapPreviewComponent({
   followUserLocation = false,
   colorSchemeMode = 'system',
   markerVariant = 'default',
+  sharedUserLocations = [],
   onInteract,
   onMapPress,
   onMarkerPress,
@@ -70,13 +68,19 @@ function MapPreviewComponent({
     : null;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
+  const normalizedSharedUserLocations = useMemo(
+    () => normalizeSharedUserLocations(sharedUserLocations),
+    [sharedUserLocations]
+  );
   const resolvedCenterCoordinate =
-    centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
+    centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? normalizedSharedUserLocations[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
   const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
   const styleURL = offlineMapState.styleUrl ?? defaultStyleURL;
   const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
   const followZoomLevel = Math.max(zoomLevel, 17);
+  const normalizedUserHeading = normalizeHeading(userHeading);
+  const followCameraBearing = normalizedUserHeading ?? 0;
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -221,7 +225,7 @@ function MapPreviewComponent({
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !followUserLocation || !userCoordinate || !isFollowingUserRef.current) return;
 
-    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel);
+    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
     if (cameraTargetKey === lastCameraTargetKeyRef.current) {
       return;
     }
@@ -230,7 +234,7 @@ function MapPreviewComponent({
     lastCameraTargetKeyRef.current = cameraTargetKey;
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(userCoordinate),
-      heading: userHeading ?? 0,
+      heading: followCameraBearing,
       padding: cameraPadding,
       pitch: 0,
       zoomLevel: followZoomLevel,
@@ -238,17 +242,17 @@ function MapPreviewComponent({
       animationMode: 'linearTo',
     });
     hasCenteredOnResolvedDataRef.current = true;
-  }, [MapboxGL, cameraPadding, followUserLocation, followZoomLevel, isWeb, userCoordinate, userHeading]);
+  }, [MapboxGL, cameraPadding, followCameraBearing, followUserLocation, followZoomLevel, isWeb, normalizedUserHeading, userCoordinate]);
 
   useEffect(() => {
     if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || recenterToUserSignal === 0) return;
 
     isFollowingUserRef.current = true;
     hasUserInteractedRef.current = false;
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel);
+    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
     cameraRef.current.setCamera({
       centerCoordinate: toMapboxPosition(userCoordinate),
-      heading: userHeading ?? 0,
+      heading: followCameraBearing,
       padding: cameraPadding,
       pitch: 0,
       zoomLevel: followZoomLevel,
@@ -256,7 +260,7 @@ function MapPreviewComponent({
       animationMode: 'easeTo',
     });
     hasCenteredOnResolvedDataRef.current = true;
-  }, [MapboxGL, cameraPadding, followZoomLevel, isWeb, recenterToUserSignal, userCoordinate, userHeading]);
+  }, [MapboxGL, cameraPadding, followCameraBearing, followZoomLevel, isWeb, normalizedUserHeading, recenterToUserSignal, userCoordinate]);
 
   useEffect(() => {
     if (!MapboxGL || !MAPBOX_ACCESS_TOKEN) return;
@@ -309,6 +313,15 @@ function MapPreviewComponent({
               />
             );
           })}
+          {normalizedSharedUserLocations.map((location) => (
+            <MapboxUserMarker
+              key={`shared-user-${location.travelerSlug}`}
+              avatarPaletteKey={location.travelerSlug}
+              avatarUri={location.avatarUri}
+              coordinate={location.coordinate}
+              name={location.name}
+            />
+          ))}
         </MapboxMap>
       </View>
     );
@@ -382,20 +395,28 @@ function MapPreviewComponent({
           ref={cameraRef}
           defaultSettings={{
             centerCoordinate: toMapboxPosition(initialCenterCoordinate),
+            heading: followUserLocation ? followCameraBearing : 0,
             padding: cameraPadding,
             zoomLevel,
           }}
         />
-        <MapboxGL.UserLocation visible={!userCoordinate} animated showsUserHeadingIndicator />
         {userCoordinate ? (
-          <MapboxUserMarker
-            avatarPaletteKey={userAvatarPaletteKey}
-            avatarUri={userAvatarUri}
-            coordinate={userCoordinate}
-            heading={userHeading}
-            name={userName}
+          <MapboxGL.CustomLocationProvider
+            coordinate={toMapboxPosition(userCoordinate)}
+            heading={normalizedUserHeading ?? undefined}
           />
         ) : null}
+        <MapboxGL.LocationPuck
+          visible
+          puckBearing="heading"
+          puckBearingEnabled={normalizedUserHeading !== null || !userCoordinate}
+          scale={1}
+          pulsing={{
+            color: designSystem.colors.lime,
+            isEnabled: true,
+            radius: 24,
+          }}
+        />
 
         {normalizedMarkers.map((marker) => {
           return (
@@ -414,6 +435,15 @@ function MapPreviewComponent({
             />
           );
         })}
+        {normalizedSharedUserLocations.map((location) => (
+          <MapboxUserMarker
+            key={`shared-user-${location.travelerSlug}`}
+            avatarPaletteKey={location.travelerSlug}
+            avatarUri={location.avatarUri}
+            coordinate={location.coordinate}
+            name={location.name}
+          />
+        ))}
 
         <MapRouteOverlays upcomingRouteCoords={upcomingRouteCoords} stayBranchCoords={stayBranchCoords} />
       </MapboxGL.MapView>
@@ -433,7 +463,7 @@ function MapPreviewComponent({
 }
 
 export const MapPreview = memo(MapPreviewComponent);
-export type { MapMarker, MapPreviewProps };
+export type { MapMarker, MapPreviewProps, SharedMapUserLocation };
 
 function hideNativeBaseMapDetails(map: MapboxMapView | null) {
   if (!map) return;
@@ -466,6 +496,24 @@ function normalizeMarkers(markers: readonly MapMarker[]) {
   });
 }
 
+function normalizeSharedUserLocations(locations: readonly SharedMapUserLocation[]) {
+  const seen = new Set<string>();
+
+  return locations.filter((location) => {
+    const [longitude, latitude] = location.coordinate;
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      return false;
+    }
+
+    if (seen.has(location.travelerSlug)) {
+      return false;
+    }
+
+    seen.add(location.travelerSlug);
+    return true;
+  });
+}
+
 function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
   return [coordinate[0], coordinate[1]];
 }
@@ -479,8 +527,17 @@ function normalizeCameraPadding(viewportPadding: MapPreviewProps['viewportPaddin
   };
 }
 
-function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number) {
-  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}`;
+function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number, heading?: number | null) {
+  const headingKey = typeof heading === 'number' && Number.isFinite(heading) ? `:${heading.toFixed(0)}` : '';
+  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}${headingKey}`;
+}
+
+function normalizeHeading(heading?: number | null) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+    return null;
+  }
+
+  return ((heading % 360) + 360) % 360;
 }
 
 const styles = StyleSheet.create({

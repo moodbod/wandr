@@ -237,6 +237,18 @@ export type UserSettings = {
   updatedAt: number | null;
 };
 
+export type SharedUserLocation = {
+  travelerSlug: string;
+  name: string;
+  avatarUri: string | null;
+  baseLabel: string;
+  coordinate: readonly [number, number];
+  accuracy: number | null;
+  updatedAt: number;
+  locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+  profileVisibility: 'friends' | 'public' | 'private';
+};
+
 export const getUserSettingsRef = makeFunctionReference<
   'query',
   { travelerSlug?: string },
@@ -246,6 +258,39 @@ export const getUserSettingsRef = makeFunctionReference<
   'public',
   { travelerSlug?: string },
   UserSettings | null
+>;
+
+export const publishSharedLocationRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; coordinate: number[]; accuracy?: number },
+  { published: boolean }
+>('sharedLocations:publishSharedLocation') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; coordinate: number[]; accuracy?: number },
+  { published: boolean }
+>;
+
+export const clearSharedLocationRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string },
+  boolean
+>('sharedLocations:clearSharedLocation') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string },
+  boolean
+>;
+
+export const listVisibleSharedLocationsRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  SharedUserLocation[]
+>('sharedLocations:listVisibleSharedLocations') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  SharedUserLocation[]
 >;
 
 export const generateAvatarUploadUrlRef = makeFunctionReference<'mutation', Record<string, never>, string>(
@@ -916,6 +961,17 @@ export const actOnFriendCandidateRef = makeFunctionReference<
   'public',
   { travelerSlug: string; candidateSlug: string; action: 'invited' | 'passed' | 'friended' },
   any
+>;
+
+export const joinFriendCircleRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; circleId: Id<'circles'> },
+  boolean
+>('friends:joinFriendCircle') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; circleId: Id<'circles'> },
+  boolean
 >;
 
 export const renameFriendCircleRef = makeFunctionReference<

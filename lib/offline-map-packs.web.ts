@@ -16,6 +16,18 @@ type WebPackFile = {
   url: string;
 };
 
+type WebMapStyle = {
+  sources?: Record<
+    string,
+    {
+      data?: string;
+      tiles?: string[];
+      type?: string;
+      url?: string;
+    }
+  >;
+};
+
 type WebPackManifest = {
   files?: WebPackFile[];
   id: string;
@@ -34,14 +46,19 @@ type StoredWebPack = {
 
 async function listPacks(): Promise<OfflineMapPackRecord[]> {
   const records = await readAllStoredPacks();
-  return records.map((record) => ({
-    bytesDownloaded: record.bytesDownloaded,
-    localStyleUrl: record.localStyleUrl,
-    progress: 100,
-    region: record.region,
-    status: record.region.version === record.manifest.version ? 'downloaded' : 'stale',
-    updatedAt: record.updatedAt,
-  }));
+  return records.map((record) => {
+    const readinessError = getManifestReadinessError(record.manifest, record.manifest.files ?? [], record.region);
+
+    return {
+      bytesDownloaded: record.bytesDownloaded,
+      error: readinessError ?? undefined,
+      localStyleUrl: readinessError ? undefined : record.localStyleUrl,
+      progress: readinessError ? 0 : 100,
+      region: record.region,
+      status: readinessError ? 'error' : record.region.version === record.manifest.version ? 'downloaded' : 'stale',
+      updatedAt: record.updatedAt,
+    };
+  });
 }
 
 async function downloadPack(
@@ -64,14 +81,24 @@ async function downloadPack(
 
   const manifest = (await manifestResponse.json()) as WebPackManifest;
   const files = normalizeManifestFiles(manifest, region);
+  const readinessError = getManifestReadinessError(manifest, files, region);
+  if (readinessError) {
+    throw new Error(readinessError);
+  }
+
   const cache = await caches.open(CACHE_NAME);
   let completedBytes = 0;
+  let styleJson: WebMapStyle | null = null;
 
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     const response = await fetch(file.url, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Missing offline map asset: ${file.url}`);
+    }
+
+    if (file.kind === 'style') {
+      styleJson = await response.clone().json().catch(() => null);
     }
 
     const clonedResponse = response.clone();
@@ -82,6 +109,11 @@ async function downloadPack(
       progress: Math.round(((index + 1) / files.length) * 100),
       status: 'downloading',
     });
+  }
+
+  const styleReadinessError = getStyleReadinessError(styleJson, region);
+  if (styleReadinessError) {
+    throw new Error(styleReadinessError);
   }
 
   const storedPack: StoredWebPack = {
@@ -123,6 +155,10 @@ async function getLocalStyleUrlForRegion(region: OfflineMapRegion) {
     return null;
   }
 
+  if (getManifestReadinessError(pack.manifest, pack.manifest.files ?? [], pack.region)) {
+    return null;
+  }
+
   return pack.localStyleUrl;
 }
 
@@ -134,14 +170,75 @@ function normalizeManifestFiles(manifest: WebPackManifest, region: OfflineMapReg
     files.unshift({ kind: 'style', url: styleUrl });
   }
 
-  return files.map((file) => ({
-    ...file,
-    url: normalizeUrl(file.url),
-  }));
+  return files.map((file) => {
+    const url = normalizeUrl(file.url);
+    if (!isSameOriginUrl(url)) {
+      throw new Error(`Offline map asset must be app-owned: ${file.url}`);
+    }
+
+    return {
+      ...file,
+      url,
+    };
+  });
 }
 
 function normalizeUrl(url: string) {
   return new URL(url, window.location.origin).toString();
+}
+
+function getManifestReadinessError(manifest: WebPackManifest, files: WebPackFile[], region: OfflineMapRegion) {
+  const styleUrl = manifest.styleUrl || region.webPack?.styleUrl;
+  if (!styleUrl) {
+    return `Offline map pack for ${region.label} is missing a local style file.`;
+  }
+
+  const normalizedStyleUrl = normalizeUrl(styleUrl);
+  if (!isSameOriginUrl(normalizedStyleUrl)) {
+    return `Offline map pack for ${region.label} must use an app-owned style file.`;
+  }
+
+  const hasStyleFile = files.some((file) => file.kind === 'style' && file.url === normalizedStyleUrl);
+  if (!hasStyleFile) {
+    return `Offline map pack for ${region.label} must list its style file in metadata.json.`;
+  }
+
+  const hasTileAssets = files.some((file) => file.kind === 'tile');
+  if (!hasTileAssets) {
+    return `Offline map pack for ${region.label} does not include tile assets yet. Publish local vector or raster tiles before downloading.`;
+  }
+
+  return null;
+}
+
+function getStyleReadinessError(style: WebMapStyle | null, region: OfflineMapRegion) {
+  if (!style) {
+    return `Offline map pack for ${region.label} has an invalid style file.`;
+  }
+
+  const sources = Object.values(style.sources ?? {});
+  if (sources.length === 0) {
+    return `Offline map pack for ${region.label} has no map sources.`;
+  }
+
+  for (const source of sources) {
+    const sourceUrls = [source.url, source.data, ...(source.tiles ?? [])].filter((url): url is string => Boolean(url));
+    for (const sourceUrl of sourceUrls) {
+      if (sourceUrl.startsWith('pmtiles://')) {
+        return `Offline map pack for ${region.label} uses PMTiles, but the PWA map reader is not installed yet.`;
+      }
+
+      if (!isSameOriginUrl(normalizeUrl(sourceUrl))) {
+        return `Offline map pack for ${region.label} still points at remote map assets.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+function isSameOriginUrl(url: string) {
+  return new URL(url, window.location.origin).origin === window.location.origin;
 }
 
 async function openDatabase() {
