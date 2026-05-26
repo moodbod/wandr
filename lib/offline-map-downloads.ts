@@ -9,7 +9,7 @@ import {
   downloadOfflineMapPack,
   getLocalOfflineMapStyleUrl,
   listOfflineMapPacks,
-} from '@/lib/offline-map-packs';
+} from '@/lib/offline-map-pack-adapter';
 import type { OfflineMapPackProgress, OfflineMapPackRecord } from '@/lib/offline-map-types';
 
 type Listener = (records: OfflineMapPackRecord[]) => void;

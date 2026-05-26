@@ -15,7 +15,7 @@ export default function OfflineMapsSettingsScreen() {
   return (
     <ProfileSettingScreen
       title="Downloaded maps"
-      bottomNote="PWA map packs need published web tile packs. Native downloads use the Mapbox offline SDK in a development or production build."
+      bottomNote="PWA downloads save the published region pack on this device. Native downloads use the Mapbox offline SDK in a development or production build."
     >
       <View style={styles.list}>
         {records.map((record) => {

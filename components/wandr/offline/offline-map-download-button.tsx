@@ -1,12 +1,12 @@
 import { MapTrifold } from 'phosphor-react-native';
-import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassButton } from '@/components/ui/glass-button';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useOfflineMapDownloads } from '@/hooks/use-offline-map-downloads';
-import type { OfflineMapRegion } from '@/lib/offline-map-regions';
+import { getOfflineMapWebPackRegion, type OfflineMapRegion } from '@/lib/offline-map-regions';
 
 type OfflineMapDownloadButtonProps = {
   compact?: boolean;
@@ -17,7 +17,8 @@ type OfflineMapDownloadButtonProps = {
 export function OfflineMapHeaderButton({ region }: { region: OfflineMapRegion | null }) {
   const isDark = useColorScheme() === 'dark';
   const { download, getRecord } = useOfflineMapDownloads();
-  const record = region ? getRecord(region.id) : null;
+  const actionRegion = getDownloadableRegion(region);
+  const record = actionRegion ? getRecord(actionRegion.id) : null;
   const isDownloading = record?.status === 'downloading';
   const isDownloaded = record?.status === 'downloaded' || record?.status === 'stale';
   const color = isDownloaded
@@ -26,11 +27,15 @@ export function OfflineMapHeaderButton({ region }: { region: OfflineMapRegion | 
       ? designSystem.colors.darkText
       : designSystem.colors.ink;
 
+  if (!actionRegion) {
+    return null;
+  }
+
   return (
     <GlassButton
-      accessibilityLabel={isDownloaded ? `${region?.label ?? 'Map'} downloaded` : `Download ${region?.label ?? 'map'}`}
+      accessibilityLabel={isDownloaded ? `${actionRegion.label} downloaded` : `Download ${actionRegion.label}`}
       height={48}
-      onPress={region && !isDownloading && !isDownloaded ? () => void download(region) : undefined}
+      onPress={!isDownloading && !isDownloaded ? () => void download(actionRegion) : undefined}
       width={48}
     >
       {isDownloading ? (
@@ -48,9 +53,11 @@ export function OfflineMapHeaderButton({ region }: { region: OfflineMapRegion | 
 export function OfflineMapDownloadButton({ compact = false, region, style }: OfflineMapDownloadButtonProps) {
   const isDark = useColorScheme() === 'dark';
   const { download, getRecord, remove } = useOfflineMapDownloads();
-  const record = region ? getRecord(region.id) : null;
+  const actionRegion = getDownloadableRegion(region);
+  const record = actionRegion ? getRecord(actionRegion.id) : null;
   const isDownloading = record?.status === 'downloading';
   const isDownloaded = record?.status === 'downloaded' || record?.status === 'stale';
+  const isUnavailable = !actionRegion;
   const progressLabel = isDownloading ? `${Math.round(record?.progress ?? 0)}%` : null;
 
   if (!region) {
@@ -61,11 +68,14 @@ export function OfflineMapDownloadButton({ compact = false, region, style }: Off
     return <OfflineMapHeaderButton region={region} />;
   }
 
+  const actionLabel = actionRegion?.label ?? region.label;
+  const actionSizeLabel = actionRegion?.estimatedSizeLabel ?? region.estimatedSizeLabel;
+
   return (
     <Pressable
       accessibilityRole="button"
-      disabled={isDownloading}
-      onPress={isDownloaded ? () => void remove(region.id) : () => void download(region)}
+      disabled={isDownloading || isUnavailable}
+      onPress={isDownloaded && actionRegion ? () => void remove(actionRegion.id) : actionRegion ? () => void download(actionRegion) : undefined}
       style={[
         styles.rowButton,
         {
@@ -87,14 +97,30 @@ export function OfflineMapDownloadButton({ compact = false, region, style }: Off
         )}
       </View>
       <View style={styles.copy}>
-        <ThemedText style={styles.title}>{isDownloaded ? `${region.label} downloaded` : `Download ${region.label}`}</ThemedText>
+        <ThemedText style={styles.title}>
+          {isUnavailable
+            ? `${region.label} unavailable`
+            : isDownloaded
+              ? `${actionLabel} downloaded`
+              : `Download ${actionLabel}`}
+        </ThemedText>
         <ThemedText style={[styles.meta, { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText }]}>
-          {progressLabel ?? (isDownloaded ? 'Tap to remove' : `${region.estimatedSizeLabel} offline map`)}
+          {isUnavailable
+            ? 'No PWA pack for this area'
+            : progressLabel ?? (isDownloaded ? 'Tap to remove' : `${actionSizeLabel} offline map`)}
         </ThemedText>
         {record?.error ? <ThemedText style={styles.error}>{record.error}</ThemedText> : null}
       </View>
     </Pressable>
   );
+}
+
+function getDownloadableRegion(region: OfflineMapRegion | null) {
+  if (Platform.OS !== 'web') {
+    return region;
+  }
+
+  return getOfflineMapWebPackRegion(region);
 }
 
 const styles = StyleSheet.create({

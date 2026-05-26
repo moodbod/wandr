@@ -65,7 +65,7 @@ function presentBrowserNotification({
   return new window.Notification(title, {
     body,
     data: serializeNotificationPayload(payload),
-    icon: '/wandr-favicon.png',
+    icon: '/wandr-icon.png',
     tag: getNotificationTag(payload),
   });
 }

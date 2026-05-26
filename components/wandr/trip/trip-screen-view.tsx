@@ -7,7 +7,6 @@ import { ExperienceDetailContent } from '@/components/wandr/explore/experience-d
 import { WandrHeader, type HeaderAction } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
-import { OfflineMapHeaderButton } from '@/components/wandr/offline/offline-map-download-button';
 import { StayDetailScreen } from '@/components/wandr/stays/stay-detail-screen';
 import { TripGroupPanel } from '@/components/wandr/trip/trip-group-panel';
 import { styles } from '@/components/wandr/trip/trip-screen.styles';
@@ -17,7 +16,6 @@ import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countr
 import { usePlanningLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
-import { createTripOfflineMapRegion } from '@/lib/offline-map-regions';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import type { TripDashboard, TripDashboardItem, TripListItem } from '@/types/trip';
 
@@ -133,27 +131,8 @@ export function TripScreenView({
   const items = trip.items;
   const mapMarkers = useMemo(() => buildTripMapMarkers(trip.items, 10), [trip.items]);
   const routeCoordinates = useMemo(() => buildTripRouteCoordinates(trip, { onlyRemaining: false }), [trip]);
-  const offlineRegion = useMemo(
-    () =>
-      createTripOfflineMapRegion({
-        centerCoordinate: trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? planningCenterCoordinate,
-        coordinates: routeCoordinates.length > 0 ? routeCoordinates : mapMarkers.map((marker) => marker.coordinate),
-        tripId: trip.tripId,
-        tripName: trip.tripName,
-      }),
-    [mapMarkers, planningCenterCoordinate, routeCoordinates, trip]
-  );
   const canEditTrip = !trip.isGroupTrip || Boolean(trip.group?.isHost);
   const trailingActions: HeaderAction[] = [
-    ...(offlineRegion
-      ? [
-          {
-            kind: 'map',
-            accessibilityLabel: `Download ${offlineRegion.label}`,
-            render: <OfflineMapHeaderButton region={offlineRegion} />,
-          } satisfies HeaderAction,
-        ]
-      : []),
     ...(canEditTrip
       ? [
           {
@@ -237,7 +216,6 @@ export function TripScreenView({
               zoomLevel={12}
             />
           }
-          mapControls={offlineRegion ? <OfflineMapHeaderButton region={offlineRegion} /> : undefined}
         >
           <LargeScreenPanel kind="main" style={isDark ? styles.largePanelDark : null}>
             {mainContent}

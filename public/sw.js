@@ -8,7 +8,6 @@ const PRECACHE_URLS = [
   '/',
   '/manifest.webmanifest',
   '/wandr-apple-touch-icon.png',
-  '/wandr-favicon.png',
   '/wandr-icon.png',
 ];
 

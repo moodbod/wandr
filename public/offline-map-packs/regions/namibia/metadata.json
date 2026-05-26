@@ -1,0 +1,20 @@
+{
+  "id": "namibia",
+  "label": "Namibia",
+  "version": "2026.05.v1",
+  "styleUrl": "/offline-map-packs/regions/namibia/style.json",
+  "files": [
+    {
+      "kind": "metadata",
+      "url": "/offline-map-packs/regions/namibia/metadata.json"
+    },
+    {
+      "kind": "style",
+      "url": "/offline-map-packs/regions/namibia/style.json"
+    },
+    {
+      "kind": "asset",
+      "url": "/offline-map-packs/regions/namibia/region.geojson"
+    }
+  ]
+}

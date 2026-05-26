@@ -72,7 +72,7 @@ export function TripNotificationCenter() {
       if (granted && typeof window !== 'undefined' && 'Notification' in window) {
         new window.Notification('Wandr notifications are on', {
           body: 'Trip reminders can now show in this browser while Wandr is open.',
-          icon: '/wandr-favicon.png',
+          icon: '/wandr-icon.png',
           tag: 'wandr-notifications-enabled',
         });
       }

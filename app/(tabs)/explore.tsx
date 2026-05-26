@@ -21,7 +21,6 @@ import { ExploreContent, ExploreLoadedSheet } from '@/components/wandr/explore/e
 import { styles } from '@/components/wandr/explore/explore-screen.styles';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
-import { OfflineMapDownloadButton } from '@/components/wandr/offline/offline-map-download-button';
 import { designSystem } from '@/constants/design-system';
 import type {
   ExploreExperience,
@@ -55,7 +54,6 @@ import {
   TRENDING_PLACE_LIMIT,
 } from '@/lib/explore-screen-model';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
-import { getOfflineMapRegionForPlanningLocation } from '@/lib/offline-map-regions';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import type { ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
 import type { TripDashboard, TripListItem } from '@/types/trip';
@@ -130,10 +128,6 @@ function ConnectedExploreScreen({
   const joinableTripCards = useRetainedQueryValue(joinableTripCardsQuery) ?? EMPTY_JOINABLE_TRIP_CARDS;
   const [loadingMapRecenterSignal, setLoadingMapRecenterSignal] = useState(0);
   const { planningLocation } = usePlanningLocation();
-  const offlineRegion = useMemo(
-    () => getOfflineMapRegionForPlanningLocation(planningLocation),
-    [planningLocation]
-  );
   const animatedIndex = useSharedValue(0);
 
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -173,7 +167,6 @@ function ConnectedExploreScreen({
           showRoutes={false}
           topInset={mapTopInset}
           onLocateMe={() => setLoadingMapRecenterSignal((current) => current + 1)}
-          offlineRegion={offlineRegion}
           planningLocation={planningLocation}
           hideHeader={isLargeScreen}
           shellStyle={StyleSheet.absoluteFill}
@@ -293,10 +286,6 @@ function ExploreScreenView({
   const [activeDiscoveryRegion, setActiveDiscoveryRegion] = useState('');
   const [activeDiscoveryIntent, setActiveDiscoveryIntent] = useState('all');
   const { openPlanningLocationSheet, planningLocation } = usePlanningLocation();
-  const offlineRegion = useMemo(
-    () => getOfflineMapRegionForPlanningLocation(planningLocation),
-    [planningLocation]
-  );
   const content = pageContent.home;
   const availablePlanningLocations = useMemo(
     () =>
@@ -730,7 +719,6 @@ function ExploreScreenView({
         onLocateMe={handleLocateMe}
         onMarkerPress={handlePressMapMarker}
         onOpenLocationSheet={handleOpenLocationSheet}
-        offlineRegion={offlineRegion}
         planningLocation={planningLocation}
         hideHeader={isLargeScreen}
         shellStyle={StyleSheet.absoluteFill}
@@ -775,9 +763,6 @@ function ExploreScreenView({
       >
         <NavigationArrow color={designSystem.colors.darkTextWarm} size={28} weight="fill" />
       </Pressable>
-      <View style={[styles.desktopMapLocateFloating, styles.desktopMapDownloadFloating]}>
-        <OfflineMapDownloadButton compact region={offlineRegion} />
-      </View>
     </View>
   );
 

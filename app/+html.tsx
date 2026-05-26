@@ -28,7 +28,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <link rel="preconnect" href="https://events.mapbox.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://tiles.mapbox.com" crossOrigin="anonymous" />
         <link rel="manifest" href="/manifest.webmanifest" />
-        <link rel="icon" href="/wandr-favicon.png" />
+        <link rel="icon" type="image/png" href="/wandr-icon.png" />
         <link rel="apple-touch-icon" href="/wandr-apple-touch-icon.png" />
         <ScrollViewStyleReset />
         <style

@@ -74,6 +74,21 @@ export function getOfflineMapRegionForPlanningLocation(location: PlanningLocatio
   return offlineMapRegions.find((region) => region.id === location.id) ?? null;
 }
 
+export function getOfflineMapWebPackRegion(region: OfflineMapRegion | null | undefined) {
+  if (!region) {
+    return null;
+  }
+
+  if (region.webPack) {
+    return region;
+  }
+
+  return findOfflineMapRegionForCoordinate(
+    region.centerCoordinate,
+    offlineMapRegions.filter((candidate) => candidate.webPack)
+  );
+}
+
 export function createTripOfflineMapRegion({
   centerCoordinate,
   coordinates,

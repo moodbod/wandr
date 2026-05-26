@@ -67,8 +67,8 @@
   ],
   "icons": [
     {
-      "src": "/wandr-favicon.png",
-      "sizes": "48x48",
+      "src": "/wandr-icon.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     },
     {

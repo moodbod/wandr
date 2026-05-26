@@ -25,7 +25,8 @@ type MapboxModule = typeof mapboxgl;
 type MapboxStyleLayer = mapboxgl.Layer & { 'source-layer'?: string };
 type RenderedMapMarker = {
   marker: mapboxgl.Marker;
-  root?: Root;
+  root?: Root | null;
+  rootUnmountTimer?: number | null;
 };
 type PersistentMapState = {
   currentMapStyleURL: string | null;
@@ -549,8 +550,11 @@ function MapPreviewWebComponent({
     }
 
     if (userMarkerRef.current) {
-      userMarkerRef.current.marker.setLngLat(userCoordinate as [number, number]);
-      userMarkerRef.current.root?.render(
+      const renderedMarker = userMarkerRef.current;
+      cancelMarkerRootUnmount(renderedMarker);
+      renderedMarker.marker.setLngLat(userCoordinate as [number, number]);
+      renderedMarker.root ??= createRoot(renderedMarker.marker.getElement());
+      renderedMarker.root.render(
         <UserLocationPuck
           avatarPaletteKey={userAvatarPaletteKey}
           avatarUri={userAvatarUri}
@@ -876,8 +880,9 @@ function createUserMarkerElement({
 }
 
 function clearRenderedMarkers(markers: RenderedMapMarker[]) {
-  markers.forEach(({ marker, root }) => {
-    scheduleMarkerRootUnmount(root);
+  markers.forEach((renderedMarker) => {
+    scheduleMarkerRootUnmount(renderedMarker);
+    const { marker } = renderedMarker;
     marker.remove();
   });
 }
@@ -887,17 +892,30 @@ function clearRenderedMarker(marker?: RenderedMapMarker | null) {
     return;
   }
 
-  scheduleMarkerRootUnmount(marker.root);
+  scheduleMarkerRootUnmount(marker);
   marker.marker.remove();
 }
 
-function scheduleMarkerRootUnmount(root?: Root) {
-  if (!root) {
+function cancelMarkerRootUnmount(marker: RenderedMapMarker) {
+  if (marker.rootUnmountTimer === undefined || marker.rootUnmountTimer === null) {
     return;
   }
 
-  window.setTimeout(() => {
-    root.unmount();
+  window.clearTimeout(marker.rootUnmountTimer);
+  marker.rootUnmountTimer = null;
+}
+
+function scheduleMarkerRootUnmount(marker: RenderedMapMarker) {
+  if (!marker.root) {
+    return;
+  }
+
+  cancelMarkerRootUnmount(marker);
+  marker.rootUnmountTimer = window.setTimeout(() => {
+    const root = marker.root;
+    marker.root = null;
+    marker.rootUnmountTimer = null;
+    root?.unmount();
   }, 0);
 }
 

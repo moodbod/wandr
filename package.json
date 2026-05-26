@@ -16,7 +16,7 @@
     "ios": "expo run:ios",
     "ios:dev": "expo run:ios",
     "preweb": "bun run ensure:expo-types",
-    "web": "expo start --web",
+    "web": "EXPO_WEB_OUTPUT=single expo start --web",
     "build:web": "expo export -p web",
     "lint": "expo lint --no-cache",
     "test:convex": "vitest run tests/convex",
