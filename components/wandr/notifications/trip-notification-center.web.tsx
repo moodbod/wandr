@@ -29,8 +29,8 @@ function wasRecentlyDismissed() {
 
 export function TripNotificationCenter() {
   const isDark = useColorScheme() === 'dark';
-  const [permission, setPermission] = useState<BrowserNotificationPermission>(() => getBrowserNotificationPermission());
-  const [isDismissed, setIsDismissed] = useState(() => wasRecentlyDismissed());
+  const [permission, setPermission] = useState<BrowserNotificationPermission>('unsupported');
+  const [isDismissed, setIsDismissed] = useState(true);
   const [isRequesting, setIsRequesting] = useState(false);
 
   useEffect(() => {
@@ -43,6 +43,7 @@ export function TripNotificationCenter() {
       setIsDismissed(wasRecentlyDismissed());
     };
 
+    refreshPermission();
     document.addEventListener('visibilitychange', refreshPermission);
 
     return () => {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 
 export const BREAKPOINTS = {
@@ -6,16 +7,35 @@ export const BREAKPOINTS = {
   DESKTOP: 1024,
 };
 
+const WEB_HYDRATION_VIEWPORT = {
+  height: 844,
+  width: 390,
+};
+
 export function useResponsive() {
   const { height, width } = useWindowDimensions();
+  const [canUseBrowserViewport, setCanUseBrowserViewport] = useState(Platform.OS !== 'web');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      setCanUseBrowserViewport(true);
+    }
+  }, []);
+
+  const shouldReadBrowserViewport =
+    Platform.OS === 'web' && canUseBrowserViewport && typeof window !== 'undefined';
   const viewportWidth =
-    Platform.OS === 'web' && typeof window !== 'undefined'
+    shouldReadBrowserViewport
       ? window.visualViewport?.width ?? window.innerWidth
-      : width;
+      : Platform.OS === 'web'
+        ? WEB_HYDRATION_VIEWPORT.width
+        : width;
   const viewportHeight =
-    Platform.OS === 'web' && typeof window !== 'undefined'
+    shouldReadBrowserViewport
       ? window.visualViewport?.height ?? window.innerHeight
-      : height;
+      : Platform.OS === 'web'
+        ? WEB_HYDRATION_VIEWPORT.height
+        : height;
   const shortestSide = Math.min(viewportWidth, viewportHeight);
 
   const isMobile = viewportWidth < BREAKPOINTS.TABLET || shortestSide < BREAKPOINTS.HANDSET_SHORT_SIDE;
