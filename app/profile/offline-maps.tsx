@@ -15,7 +15,7 @@ export default function OfflineMapsSettingsScreen() {
   return (
     <ProfileSettingScreen
       title="Downloaded maps"
-      bottomNote="PWA downloads save the published region pack on this device. Native downloads use the Mapbox offline SDK in a development or production build."
+      bottomNote="PWA downloads require a published tile pack. Native downloads use the Mapbox offline SDK in a development or production build."
     >
       <View style={styles.list}>
         {records.map((record) => {
@@ -117,7 +117,7 @@ function getStatusLabel(record: OfflineMapPackRecord) {
   }
 
   if (record.status === 'error') {
-    return 'Download failed';
+    return record.error ?? 'Download failed';
   }
 
   return `${record.region.estimatedSizeLabel} offline map`;

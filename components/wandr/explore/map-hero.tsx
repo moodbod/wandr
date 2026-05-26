@@ -9,6 +9,7 @@ import { designSystem } from '@/constants/design-system';
 import type { ExploreMapMarker } from '@/constants/explore-content';
 import { type PlanningLocation } from '@/constants/planning-countries';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
 
 type ExploreMapHeroProps = {
   locationLabel: string;
@@ -35,6 +36,7 @@ type ExploreMapHeroProps = {
   showBackButton?: boolean;
   hideHeader?: boolean;
   mapPersistKey?: string;
+  mapTopBleed?: number;
   shellStyle?: StyleProp<ViewStyle>;
 };
 
@@ -58,18 +60,23 @@ export function ExploreMapHero({
   showBackButton = false,
   hideHeader = false,
   mapPersistKey,
+  mapTopBleed = 0,
   shellStyle,
 }: ExploreMapHeroProps) {
   const router = useRouter();
   const traveler = useCurrentTraveler();
+  const sharedUserLocations = useVisibleSharedLocations();
   const trailingActions: HeaderAction[] = [];
+  const hasTopBleed = mapTopBleed > 0;
+  const topBleedStyle = hasTopBleed ? { top: -mapTopBleed } : null;
   if (onLocateMe) {
     trailingActions.push({ kind: 'locate', accessibilityLabel: 'Locate me', onPress: onLocateMe });
   }
 
   return (
     <MapFrame
-      shellStyle={[styles.shell, shellStyle]}
+      mapContainerStyle={topBleedStyle}
+      shellStyle={[styles.shell, shellStyle, hasTopBleed ? styles.bleedShell : null]}
         centerCoordinate={centerCoordinate}
         userCoordinate={userCoordinate}
         userAvatarPaletteKey={traveler?.slug}
@@ -78,6 +85,7 @@ export function ExploreMapHero({
         userName={traveler?.name}
         viewportPadding={viewportPadding}
         markers={markers}
+        sharedUserLocations={sharedUserLocations}
         routeCoordinates={routeCoordinates}
         zoomLevel={14}
         showRoutes={showRoutes}
@@ -134,6 +142,9 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
     backgroundColor: designSystem.colors.mapFallback,
+  },
+  bleedShell: {
+    overflow: 'visible',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

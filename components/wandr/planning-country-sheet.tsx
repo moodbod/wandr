@@ -10,7 +10,6 @@ import { GlassInput } from '@/components/ui/glass-input';
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import {
   allPlanningCountryOptions,
-  defaultPlanningLocationPickerOptions,
   getPlanningLocationForCoordinate,
   otherCountriesPlanningLocationOption,
   type PlanningLocation,
@@ -51,18 +50,21 @@ export function PlanningLocationSheet({
   const currentPillTextColor = selectedAccentColor;
   const snapPoints = useMemo(() => ['48%', '70%'], []);
   const normalizedQuery = query.trim().toLowerCase();
+  const dataBackedLocations = useMemo(
+    () => (availableLocations ?? []).map((location) => ({ ...location, isSupported: true })),
+    [availableLocations]
+  );
   const availabilityByCountryCode = useMemo(() => {
     const locations = new Map<string, PlanningLocation>();
 
-    availableLocations?.forEach((location) => {
+    dataBackedLocations.forEach((location) => {
       if (location.countryCode) {
         locations.set(location.countryCode.toUpperCase(), location);
       }
     });
 
     return locations;
-  }, [availableLocations]);
-  const hasDataBackedAvailability = availableLocations !== undefined;
+  }, [dataBackedLocations]);
   const countryOptions = useMemo(() => {
     const mergedOptions = allPlanningCountryOptions.map((location) => {
       const availableLocation = location.countryCode
@@ -77,19 +79,17 @@ export function PlanningLocationSheet({
         };
       }
 
-      return hasDataBackedAvailability
-        ? {
-            ...location,
-            isSupported: false,
-          }
-        : location;
+      return {
+        ...location,
+        isSupported: false,
+      };
     });
     const knownCountryCodes = new Set(
       allPlanningCountryOptions
         .map((location) => location.countryCode?.toUpperCase())
         .filter((countryCode): countryCode is string => Boolean(countryCode))
     );
-    const extraAvailableLocations = (availableLocations ?? []).filter(
+    const extraAvailableLocations = dataBackedLocations.filter(
       (location) => !location.countryCode || !knownCountryCodes.has(location.countryCode.toUpperCase())
     );
 
@@ -103,7 +103,7 @@ export function PlanningLocationSheet({
 
       return a.label.localeCompare(b.label);
     });
-  }, [availabilityByCountryCode, availableLocations, hasDataBackedAvailability]);
+  }, [availabilityByCountryCode, dataBackedLocations]);
   const searchOptions = useMemo(() => {
     if (!normalizedQuery) {
       return countryOptions;
@@ -117,11 +117,9 @@ export function PlanningLocationSheet({
     );
   }, [countryOptions, normalizedQuery]);
   const defaultOptions =
-    hasDataBackedAvailability
-      ? availableLocations && availableLocations.length > 0
-        ? [...availableLocations, otherCountriesPlanningLocationOption]
-        : [otherCountriesPlanningLocationOption]
-      : defaultPlanningLocationPickerOptions;
+    dataBackedLocations.length > 0
+      ? [...dataBackedLocations, otherCountriesPlanningLocationOption]
+      : [otherCountriesPlanningLocationOption];
   const options = isSearchExpanded ? searchOptions : defaultOptions;
 
   useEffect(() => {

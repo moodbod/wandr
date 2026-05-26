@@ -32,7 +32,16 @@ const subscribers = new Set<(state: CurrentLocationState) => void>();
 const LOCATION_PERMISSION_STORAGE_KEY = 'wandr.current-location.permission.v1';
 const LAST_POSITION_STORAGE_KEY = 'wandr.current-location.last-position.v1';
 const WATCH_STOP_DELAY_MS = 15_000;
-const POSITION_CLOSE_METERS = 1.5;
+const POSITION_CLOSE_METERS = 0.75;
+const DEVICE_HEADING_STALE_MS = 5_000;
+const TRACKING_DISTANCE_INTERVAL_METERS = 1;
+const TRACKING_TIME_INTERVAL_MS = 500;
+const MAX_USABLE_ACCURACY_METERS = 80;
+const LARGE_JUMP_DISTANCE_METERS = 300;
+const LARGE_JUMP_STALE_MS = 15_000;
+const OUTLIER_SPEED_METERS_PER_SECOND = 55;
+const STATIONARY_SPEED_METERS_PER_SECOND = 0.75;
+const STATIONARY_JITTER_METERS = 2.5;
 
 let currentState = INITIAL_STATE;
 let isWatchStarting = false;
@@ -40,6 +49,9 @@ let startPromise: Promise<void> | null = null;
 let positionSubscription: { remove: () => void } | null = null;
 let headingSubscription: { remove: () => void } | null = null;
 let storedLocationHydrated = false;
+let lastDeviceHeadingAt = 0;
+let lastAcceptedPositionAt = 0;
+let smoothedCoordinate: Coordinate | null = null;
 
 export function useCurrentLocation() {
   const [state, setState] = useState<CurrentLocationState>(currentState);
@@ -152,34 +164,46 @@ async function startNativeLocationWatch() {
 
   positionSubscription = await location.watchPositionAsync(
     {
-      accuracy: location.Accuracy.High,
-      distanceInterval: 5,
-      timeInterval: 2_000,
+      accuracy: location.Accuracy.BestForNavigation,
+      distanceInterval: TRACKING_DISTANCE_INTERVAL_METERS,
+      timeInterval: TRACKING_TIME_INTERVAL_MS,
     },
     (positionUpdate) => {
       applyPosition(positionUpdate);
     }
   );
 
-  headingSubscription = await location.watchHeadingAsync((headingUpdate) => {
-    const nextHeading =
-      typeof headingUpdate.trueHeading === 'number' && headingUpdate.trueHeading >= 0
-        ? headingUpdate.trueHeading
-        : headingUpdate.magHeading;
+  try {
+    headingSubscription = await location.watchHeadingAsync((headingUpdate) => {
+      const nextHeading = resolveCompassHeading(headingUpdate);
 
-    if (!Number.isFinite(nextHeading)) {
-      return;
-    }
+      if (nextHeading === null) {
+        return;
+      }
 
-    emitLocationState({
-      ...currentState,
-      heading: nextHeading,
+      lastDeviceHeadingAt = Date.now();
+      emitLocationState({
+        ...currentState,
+        heading: nextHeading,
+      });
+
+      if (currentState.coordinate) {
+        void writeStoredLocationPosition({
+          accuracy: currentState.accuracy,
+          coordinate: currentState.coordinate,
+          heading: nextHeading,
+          savedAt: Date.now(),
+        });
+      }
     });
-  });
+  } catch {
+    // GPS course from watchPositionAsync still gives direction while moving.
+    headingSubscription = null;
+  }
 
   try {
     const position = await location.getCurrentPositionAsync({
-      accuracy: location.Accuracy.High,
+      accuracy: location.Accuracy.BestForNavigation,
     });
     applyPosition(position);
   } catch {
@@ -205,17 +229,23 @@ function applyPosition(position: ExpoPosition) {
   }
 
   const accuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
+  const trackedCoordinate = resolveTrackedCoordinate(coordinate, accuracy, position.coords.speed, Date.now());
+  if (!trackedCoordinate) {
+    return;
+  }
+
+  const heading = resolvePositionHeading(position.coords);
   emitLocationState({
     accuracy,
-    coordinate,
-    heading: currentState.heading,
+    coordinate: trackedCoordinate,
+    heading,
     hasPermission: true,
     isLoading: false,
   });
   void writeStoredLocationPosition({
     accuracy,
-    coordinate,
-    heading: currentState.heading,
+    coordinate: trackedCoordinate,
+    heading,
     savedAt: Date.now(),
   });
 }
@@ -293,7 +323,7 @@ function parseStoredLocationPosition(value: string): StoredLocationPosition | nu
     return {
       accuracy: typeof parsed.accuracy === 'number' && Number.isFinite(parsed.accuracy) ? parsed.accuracy : null,
       coordinate,
-      heading: typeof parsed.heading === 'number' && Number.isFinite(parsed.heading) ? parsed.heading : null,
+      heading: normalizeHeading(parsed.heading),
       savedAt: typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : Date.now(),
     };
   } catch {
@@ -327,9 +357,122 @@ function statesAreEquivalent(previous: CurrentLocationState, next: CurrentLocati
     previous.hasPermission === next.hasPermission &&
     previous.isLoading === next.isLoading &&
     nullableNumbersAreClose(previous.accuracy, next.accuracy, 1) &&
-    nullableNumbersAreClose(previous.heading, next.heading, 1) &&
+    headingsAreClose(previous.heading, next.heading, 1) &&
     coordinatesAreClose(previous.coordinate, next.coordinate, POSITION_CLOSE_METERS)
   );
+}
+
+function resolveCompassHeading(headingUpdate: { trueHeading: number; magHeading: number }) {
+  return normalizeHeading(headingUpdate.trueHeading) ?? normalizeHeading(headingUpdate.magHeading);
+}
+
+function resolvePositionHeading(coords: ExpoPosition['coords']) {
+  if (hasRecentDeviceHeading()) {
+    return currentState.heading;
+  }
+
+  return resolveGpsHeading(coords) ?? currentState.heading;
+}
+
+function resolveGpsHeading(coords: ExpoPosition['coords']) {
+  const heading = normalizeHeading(coords.heading);
+  if (heading === null) {
+    return null;
+  }
+
+  const speed = normalizeSpeed(coords.speed);
+  if (speed !== null && speed < 0.75) {
+    return null;
+  }
+
+  return heading;
+}
+
+function hasRecentDeviceHeading() {
+  return lastDeviceHeadingAt > 0 && Date.now() - lastDeviceHeadingAt < DEVICE_HEADING_STALE_MS;
+}
+
+function resolveTrackedCoordinate(
+  rawCoordinate: Coordinate,
+  accuracy: number | null,
+  speed: number | null,
+  observedAt: number
+) {
+  if (!smoothedCoordinate) {
+    smoothedCoordinate = rawCoordinate;
+    lastAcceptedPositionAt = observedAt;
+    return rawCoordinate;
+  }
+
+  if (accuracy !== null && accuracy > MAX_USABLE_ACCURACY_METERS) {
+    return null;
+  }
+
+  const speedMetersPerSecond = normalizeSpeed(speed);
+  const elapsedMs = lastAcceptedPositionAt > 0 ? observedAt - lastAcceptedPositionAt : TRACKING_TIME_INTERVAL_MS;
+  const elapsedSeconds = Math.max(elapsedMs / 1000, TRACKING_TIME_INTERVAL_MS / 1000);
+  const distanceMeters = getDistanceMeters(smoothedCoordinate, rawCoordinate);
+  const jitterRadius = getStationaryJitterRadius(accuracy);
+
+  if (
+    speedMetersPerSecond !== null &&
+    speedMetersPerSecond < STATIONARY_SPEED_METERS_PER_SECOND &&
+    distanceMeters <= jitterRadius
+  ) {
+    return null;
+  }
+
+  const isStale = elapsedMs > LARGE_JUMP_STALE_MS;
+  if (isStale || distanceMeters > LARGE_JUMP_DISTANCE_METERS) {
+    smoothedCoordinate = rawCoordinate;
+    lastAcceptedPositionAt = observedAt;
+    return rawCoordinate;
+  }
+
+  const inferredSpeedMetersPerSecond = distanceMeters / elapsedSeconds;
+  const maxPlausibleJumpMeters = Math.max((accuracy ?? 20) * 3, 45);
+  if (
+    inferredSpeedMetersPerSecond > OUTLIER_SPEED_METERS_PER_SECOND &&
+    distanceMeters > maxPlausibleJumpMeters
+  ) {
+    return null;
+  }
+
+  const smoothingAlpha = getTrackingSmoothingAlpha(distanceMeters, speedMetersPerSecond, accuracy);
+  smoothedCoordinate = interpolateCoordinate(smoothedCoordinate, rawCoordinate, smoothingAlpha);
+  lastAcceptedPositionAt = observedAt;
+  return smoothedCoordinate;
+}
+
+function getStationaryJitterRadius(accuracy: number | null) {
+  return Math.max(STATIONARY_JITTER_METERS, (accuracy ?? 0) * 0.2);
+}
+
+function getTrackingSmoothingAlpha(distanceMeters: number, speedMetersPerSecond: number | null, accuracy: number | null) {
+  if (distanceMeters > 40 || (speedMetersPerSecond !== null && speedMetersPerSecond >= 6)) {
+    return 0.72;
+  }
+
+  if (distanceMeters > 12 || (speedMetersPerSecond !== null && speedMetersPerSecond >= 1.2)) {
+    return 0.58;
+  }
+
+  if (accuracy !== null && accuracy <= 10) {
+    return 0.5;
+  }
+
+  return 0.35;
+}
+
+function interpolateCoordinate(from: Coordinate, to: Coordinate, progress: number): Coordinate {
+  return [
+    from[0] + (to[0] - from[0]) * progress,
+    from[1] + (to[1] - from[1]) * progress,
+  ];
+}
+
+function normalizeSpeed(speed: number | null) {
+  return typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed : null;
 }
 
 function coordinatesAreClose(a: Coordinate | null, b: Coordinate | null, meters: number) {
@@ -346,6 +489,34 @@ function nullableNumbersAreClose(a: number | null, b: number | null, tolerance: 
   }
 
   return Math.abs(a - b) <= tolerance;
+}
+
+function headingsAreClose(a: number | null, b: number | null, tolerance: number) {
+  if (a === null || b === null) {
+    return a === b;
+  }
+
+  return getHeadingDelta(a, b) <= tolerance;
+}
+
+function normalizeHeading(heading: number | null | undefined) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+    return null;
+  }
+
+  return ((heading % 360) + 360) % 360;
+}
+
+function getHeadingDelta(a: number, b: number) {
+  const normalizedA = normalizeHeading(a);
+  const normalizedB = normalizeHeading(b);
+
+  if (normalizedA === null || normalizedB === null) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const delta = Math.abs(normalizedA - normalizedB);
+  return Math.min(delta, 360 - delta);
 }
 
 function getDistanceMeters(a: Coordinate, b: Coordinate) {

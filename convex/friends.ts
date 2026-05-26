@@ -9,7 +9,9 @@ import { assertCurrentTravelerSlug } from './authHelpers';
 type FriendCircleDoc = Doc<'circles'>;
 type FriendMemberDoc = Doc<'members'>;
 type FriendDirectThreadDoc = Doc<'threads'>;
+type ProfileVisibility = NonNullable<Doc<'users'>['profileVisibility']>;
 const INCOMING_CALL_WINDOW_MS = 90_000;
+const DEFAULT_PROFILE_VISIBILITY: ProfileVisibility = 'public';
 
 type PhoneContactMatch = {
   travelerSlug: string;
@@ -509,6 +511,32 @@ function computeMatchScore(current: PublicTravelerProfile, candidate: PublicTrav
   };
 }
 
+function getProfileVisibility(profile: PublicTravelerProfile | null | undefined): ProfileVisibility {
+  const visibility = profile?.user.profileVisibility;
+  return visibility === 'public' || visibility === 'friends' || visibility === 'private'
+    ? visibility
+    : DEFAULT_PROFILE_VISIBILITY;
+}
+
+function canDiscoverTravelerProfile(profile: PublicTravelerProfile, isConnected: boolean) {
+  const visibility = getProfileVisibility(profile);
+  if (visibility === 'public') {
+    return true;
+  }
+  if (visibility === 'friends') {
+    return isConnected;
+  }
+  return false;
+}
+
+function canViewTravelerProfile(viewerSlug: string, profile: PublicTravelerProfile, isConnected: boolean) {
+  if (viewerSlug === profile.travelerSlug) {
+    return true;
+  }
+
+  return canDiscoverTravelerProfile(profile, isConnected);
+}
+
 async function buildMemberView(
   ctx: QueryCtx | MutationCtx,
   membership: FriendMemberDoc
@@ -733,8 +761,12 @@ async function buildCandidates(
     )
   ).filter((profile): profile is PublicTravelerProfile => profile !== null);
 
+  const visibleProfiles = allProfiles.filter((profile) =>
+    canDiscoverTravelerProfile(profile, connectionSet.has(profile.travelerSlug))
+  );
+
   const candidates = await Promise.all(
-    allProfiles
+    visibleProfiles
       .map(async (candidate) => {
         const match = computeMatchScore(currentProfile, candidate);
         const action = actionMap.get(candidate.travelerSlug);
@@ -1055,6 +1087,10 @@ export const getFriendViewerProfile = query({
       return null;
     }
 
+    if (!viewedFriendProfile || !canViewTravelerProfile(travelerSlug, viewedFriendProfile, Boolean(connection))) {
+      return null;
+    }
+
     const match = viewerProfile && viewedFriendProfile ? computeMatchScore(viewerProfile, viewedFriendProfile) : null;
     const relationshipState =
       travelerSlug === args.profileSlug
@@ -1311,14 +1347,20 @@ export const matchFriendContacts = query({
         continue;
       }
 
-      const profile = await getTravelerProfile(ctx, user.slug as string);
+      const candidateSlug = user.slug as string;
+      const profile = await getTravelerProfile(ctx, candidateSlug);
+      const isFriend = friendSet.has(candidateSlug);
+      if (!profile || !canDiscoverTravelerProfile(profile, isFriend)) {
+        continue;
+      }
+
       matched.push({
-        travelerSlug: user.slug as string,
+        travelerSlug: candidateSlug,
         name: user.name ?? 'Traveler',
         avatarUri: profile?.avatarUri ?? null,
         baseLabel: profile?.regionName ?? user.countryLabel ?? 'Unknown',
         phoneNumber,
-        isFriend: friendSet.has(user.slug as string),
+        isFriend,
       });
       unmatched.delete(phoneNumber);
     }
@@ -2311,8 +2353,11 @@ export const actOnFriendCandidate = mutation({
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const actor = await getAppUser(ctx, travelerSlug);
-    const candidate = await getAppUser(ctx, args.candidateSlug);
+    const [actor, candidate, candidateProfile] = await Promise.all([
+      getAppUser(ctx, travelerSlug),
+      getAppUser(ctx, args.candidateSlug),
+      getFriendProfile(ctx, args.candidateSlug),
+    ]);
 
     const matchAction = await ctx.db
       .query('matches')
@@ -2373,6 +2418,13 @@ export const actOnFriendCandidate = mutation({
           viewedAt: reversePendingRequest.viewedAt ?? Date.now(),
         });
       } else if (candidate && actor) {
+        if (!candidateProfile || !canDiscoverTravelerProfile(candidateProfile, false)) {
+          return {
+            ok: false,
+            action: args.action,
+          };
+        }
+
         const existingRequest = await ctx.db
           .query('notices')
           .withIndex('by_recipientSlug_and_createdAt', (q) => q.eq('recipientSlug', candidate.slug as string))
@@ -2415,6 +2467,22 @@ export const actOnFriendCandidate = mutation({
         });
       }
     } else {
+      if (args.action === 'invited') {
+        const connection = await ctx.db
+          .query('connections')
+          .withIndex('by_travelerSlug_and_friendSlug', (q) =>
+            q.eq('travelerSlug', travelerSlug).eq('friendSlug', args.candidateSlug)
+          )
+          .unique();
+
+        if (!connection) {
+          return {
+            ok: false,
+            action: args.action,
+          };
+        }
+      }
+
       if (matchAction) {
         await ctx.db.patch(matchAction._id, {
           state: args.action,

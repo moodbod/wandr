@@ -144,7 +144,7 @@ async function makeFriends(t: TestBackend, firstSlug: string, secondSlug: string
 async function latestNotification(
   t: TestBackend,
   recipientSlug: string,
-  kind: 'trip_invite' | 'trip_join_request'
+  kind: 'friend_invite' | 'trip_invite' | 'trip_join_request'
 ) {
   return await t.run(async (ctx) => {
     const notices = await ctx.db
@@ -157,6 +157,210 @@ async function latestNotification(
 }
 
 describe('trip planning foundation', () => {
+  it('respects friend profile privacy in discovery and profile reads', async () => {
+    const t = createTest();
+    const viewer = await seedUser(t, 'viewer');
+    const publicTraveler = await seedUser(t, 'public-traveler');
+    const friendsOnlyTraveler = await seedUser(t, 'friends-only');
+    const privateTraveler = await seedUser(t, 'private-traveler');
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(publicTraveler.userId, { profileVisibility: 'public' });
+      await ctx.db.patch(friendsOnlyTraveler.userId, { profileVisibility: 'friends' });
+      await ctx.db.patch(privateTraveler.userId, { profileVisibility: 'private' });
+    });
+
+    const initialDiscovery = await viewer.client.query(api.friends.getFriendDiscovery, {
+      travelerSlug: 'viewer',
+    });
+    expect(initialDiscovery.candidates.map((candidate) => candidate.travelerSlug)).toContain('public-traveler');
+    expect(initialDiscovery.candidates.map((candidate) => candidate.travelerSlug)).not.toContain('friends-only');
+    expect(initialDiscovery.candidates.map((candidate) => candidate.travelerSlug)).not.toContain('private-traveler');
+
+    const blockedProfile = await viewer.client.query(api.friends.getFriendViewerProfile, {
+      travelerSlug: 'viewer',
+      profileSlug: 'friends-only',
+    });
+    expect(blockedProfile).toBeNull();
+
+    await makeFriends(t, 'viewer', 'friends-only');
+
+    const connectedDiscovery = await viewer.client.query(api.friends.getFriendDiscovery, {
+      travelerSlug: 'viewer',
+    });
+    expect(connectedDiscovery.candidates.map((candidate) => candidate.travelerSlug)).toContain('friends-only');
+
+    const connectedProfile = await viewer.client.query(api.friends.getFriendViewerProfile, {
+      travelerSlug: 'viewer',
+      profileSlug: 'friends-only',
+    });
+    expect(connectedProfile?.relationship.state).toBe('friend');
+
+    const blockedRequest = await viewer.client.mutation(api.friends.actOnFriendCandidate, {
+      travelerSlug: 'viewer',
+      candidateSlug: 'private-traveler',
+      action: 'friended',
+    });
+    expect(blockedRequest.ok).toBe(false);
+    expect(await latestNotification(t, 'private-traveler', 'friend_invite')).toBeNull();
+
+    const privateProfile = await viewer.client.query(api.friends.getFriendViewerProfile, {
+      travelerSlug: 'viewer',
+      profileSlug: 'private-traveler',
+    });
+    expect(privateProfile).toBeNull();
+  });
+
+  it('shares map locations only when location sharing and profile privacy allow it', async () => {
+    const t = createTest();
+    const viewer = await seedUser(t, 'map-viewer');
+    const publicTraveler = await seedUser(t, 'public-map');
+    const friendsOnlyTraveler = await seedUser(t, 'friends-map');
+    const privateTraveler = await seedUser(t, 'private-map');
+    const tripOnlyTraveler = await seedUser(t, 'trip-map');
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(publicTraveler.userId, {
+        profileVisibility: 'public',
+        locationSharing: 'whileUsing',
+      });
+      await ctx.db.patch(friendsOnlyTraveler.userId, {
+        profileVisibility: 'friends',
+        locationSharing: 'whileUsing',
+      });
+      await ctx.db.patch(privateTraveler.userId, {
+        profileVisibility: 'private',
+        locationSharing: 'whileUsing',
+      });
+      await ctx.db.patch(tripOnlyTraveler.userId, {
+        profileVisibility: 'public',
+        locationSharing: 'tripOnly',
+      });
+    });
+
+    await publicTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'public-map',
+      coordinate: [17.08, -22.56],
+    });
+    await friendsOnlyTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'friends-map',
+      coordinate: [17.09, -22.57],
+    });
+    await privateTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'private-map',
+      coordinate: [17.1, -22.58],
+    });
+    await tripOnlyTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'trip-map',
+      coordinate: [17.11, -22.59],
+    });
+
+    const publicOnlyLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(publicOnlyLocations.map((location) => location.travelerSlug)).toContain('public-map');
+    expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('friends-map');
+    expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('private-map');
+    expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('trip-map');
+
+    await makeFriends(t, 'map-viewer', 'friends-map');
+
+    const friendsVisibleLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(friendsVisibleLocations.map((location) => location.travelerSlug)).toContain('friends-map');
+
+    await t.run(async (ctx) => {
+      const circleId = await ctx.db.insert('circles', {
+        slug: 'trip-map-circle',
+        name: 'Trip map circle',
+        destinationLabel: 'Namibia',
+        heroLabel: 'Namibia',
+        status: 'active',
+        visibility: 'private',
+        createdBySlug: 'map-viewer',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert('members', {
+        circleId,
+        travelerSlug: 'map-viewer',
+        role: 'host',
+        status: 'active',
+        joinedAt: Date.now(),
+      });
+      await ctx.db.insert('members', {
+        circleId,
+        travelerSlug: 'trip-map',
+        role: 'member',
+        status: 'active',
+        joinedAt: Date.now(),
+      });
+    });
+
+    const tripVisibleLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(tripVisibleLocations.map((location) => location.travelerSlug)).toContain('trip-map');
+
+    await publicTraveler.client.mutation(api.profile.updatePrivacySettings, {
+      travelerSlug: 'public-map',
+      profileVisibility: 'public',
+      showSavedPlaces: true,
+      showTripActivity: false,
+      locationSharing: 'off',
+    });
+
+    const afterOffLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(afterOffLocations.map((location) => location.travelerSlug)).not.toContain('public-map');
+  });
+
+  it('declines friend requests and joins open friend groups', async () => {
+    const t = createTest();
+    const host = await seedUser(t, 'host');
+    const member = await seedUser(t, 'member');
+    const requester = await seedUser(t, 'requester');
+
+    await requester.client.mutation(api.friends.actOnFriendCandidate, {
+      travelerSlug: 'requester',
+      candidateSlug: 'member',
+      action: 'friended',
+    });
+
+    const friendInvite = await latestNotification(t, 'member', 'friend_invite');
+    expect(friendInvite).not.toBeNull();
+
+    await member.client.mutation(api.friends.rejectFriendRequest, {
+      travelerSlug: 'member',
+      notificationId: friendInvite!._id,
+    });
+
+    const declinedFriendInvite = await t.run((ctx) => ctx.db.get(friendInvite!._id));
+    expect(declinedFriendInvite?.actionStatus).toBe('declined');
+
+    const circleId = await host.client.mutation(api.friends.createOpenFriendGroup, {
+      travelerSlug: 'host',
+      name: 'Open friends',
+    });
+    const chatListBeforeJoin = await member.client.query(api.friends.getFriendChatList, {
+      travelerSlug: 'member',
+    });
+    expect(chatListBeforeJoin.joinableGroups.map((group) => group.id)).toContain(circleId);
+
+    await member.client.mutation(api.friends.joinFriendCircle, {
+      travelerSlug: 'member',
+      circleId: circleId!,
+    });
+
+    const groupChat = await member.client.query(api.friends.getFriendChat, {
+      travelerSlug: 'member',
+      circleId: circleId!,
+    });
+    expect(groupChat?.members.map((groupMember) => groupMember.travelerSlug)).toContain('member');
+  });
+
   it('accepts group invites as linked member trips without cloned bookings and reads host updates', async () => {
     const t = createTest();
     const host = await seedUser(t, 'host');

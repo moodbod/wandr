@@ -13,7 +13,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
 import { fetchRoutePath } from '@/lib/routing';
 
-import type { MapMarker, MapPreviewProps } from './mapbox/types';
+import type { MapMarker, MapPreviewProps, SharedMapUserLocation } from './mapbox/types';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
 const MAPBOX_STREET_STYLE_URL = 'mapbox://styles/mapbox/streets-v12';
@@ -39,6 +39,7 @@ type PersistentMapState = {
   lastCameraTargetKey: string | null;
   map: mapboxgl.Map | null;
   placeMarkers: RenderedMapMarker[];
+  sharedUserMarkers: RenderedMapMarker[];
   userMarker: RenderedMapMarker | null;
 };
 
@@ -80,6 +81,7 @@ function MapPreviewWebComponent({
   interactionEnabled = true,
   markerVariant = 'default',
   persistKey,
+  sharedUserLocations = [],
   onInteract,
   onMapPress,
   onMarkerPress,
@@ -88,6 +90,7 @@ function MapPreviewWebComponent({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const placeMarkerRefs = useRef<RenderedMapMarker[]>([]);
+  const sharedUserMarkerRefs = useRef<RenderedMapMarker[]>([]);
   const userMarkerRef = useRef<RenderedMapMarker | null>(null);
   const onInteractRef = useRef(onInteract);
   const onMapPressRef = useRef(onMapPress);
@@ -115,7 +118,12 @@ function MapPreviewWebComponent({
   const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
   const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
-  const resolvedCenterCoordinate = centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? null;
+  const normalizedSharedUserLocations = useMemo(
+    () => normalizeSharedUserLocations(sharedUserLocations),
+    [sharedUserLocations]
+  );
+  const resolvedCenterCoordinate =
+    centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? normalizedSharedUserLocations[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
   const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
   const mapStyleURL = offlineMapState.styleUrl ?? MAPBOX_STREET_STYLE_URL;
@@ -225,6 +233,7 @@ function MapPreviewWebComponent({
       hasUserInteractedRef.current = persistentState.hasUserInteracted;
       isFollowingUserRef.current = followUserLocation ? persistentState.isFollowingUser || !persistentState.hasUserInteracted : false;
       placeMarkerRefs.current = persistentState.placeMarkers;
+      sharedUserMarkerRefs.current = persistentState.sharedUserMarkers;
       userMarkerRef.current = persistentState.userMarker;
       lastCameraTargetKeyRef.current = isReusingPersistentMap
         ? getCameraTargetKey(mapCenterCoordinate, zoomLevel)
@@ -328,6 +337,7 @@ function MapPreviewWebComponent({
         persistentState.isFollowingUser = isFollowingUserRef.current;
         persistentState.lastCameraTargetKey = lastCameraTargetKeyRef.current;
         persistentState.placeMarkers = placeMarkerRefs.current;
+        persistentState.sharedUserMarkers = sharedUserMarkerRefs.current;
         persistentState.userMarker = userMarkerRef.current;
         persistentState.map = map;
         schedulePersistentMapHide(persistentState);
@@ -337,8 +347,10 @@ function MapPreviewWebComponent({
         return;
       }
       clearRenderedMarkers(placeMarkerRefs.current);
+      clearRenderedMarkers(sharedUserMarkerRefs.current);
       clearRenderedMarker(userMarkerRef.current);
       placeMarkerRefs.current = [];
+      sharedUserMarkerRefs.current = [];
       userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
@@ -576,6 +588,29 @@ function MapPreviewWebComponent({
   }, [isMapReady, mapbox, userAvatarPaletteKey, userAvatarUri, userCoordinate, userHeading, userName]);
 
   useEffect(() => {
+    if (!mapbox || !mapRef.current || !isMapReady) {
+      return;
+    }
+
+    clearRenderedMarkers(sharedUserMarkerRefs.current);
+    sharedUserMarkerRefs.current = [];
+
+    normalizedSharedUserLocations.forEach((location) => {
+      const { element, root } = createUserMarkerElement({
+        avatarPaletteKey: location.travelerSlug,
+        avatarUri: location.avatarUri,
+        heading: null,
+        name: location.name,
+      });
+      const marker = new mapbox.Marker({ element })
+        .setLngLat(location.coordinate as [number, number])
+        .addTo(mapRef.current!);
+
+      sharedUserMarkerRefs.current.push({ marker, root });
+    });
+  }, [isMapReady, mapbox, normalizedSharedUserLocations]);
+
+  useEffect(() => {
     if (!mapRef.current || !isMapReady) {
       return;
     }
@@ -642,7 +677,7 @@ function MapPreviewWebComponent({
 }
 
 export const MapPreview = memo(MapPreviewWebComponent);
-export type { MapMarker, MapPreviewProps };
+export type { MapMarker, MapPreviewProps, SharedMapUserLocation };
 
 function hideWebBaseMapDetails(map: mapboxgl.Map) {
   if (!map.isStyleLoaded()) {
@@ -687,6 +722,7 @@ function getPersistentMapState(key: string) {
     lastCameraTargetKey: null,
     map: null,
     placeMarkers: [],
+    sharedUserMarkers: [],
     userMarker: null,
   };
   persistentMaps.set(key, state);
@@ -780,6 +816,24 @@ function normalizeMarkers(markers: readonly MapMarker[]) {
     }
 
     seen.add(dedupeKey);
+    return true;
+  });
+}
+
+function normalizeSharedUserLocations(locations: readonly SharedMapUserLocation[]) {
+  const seen = new Set<string>();
+
+  return locations.filter((location) => {
+    const [longitude, latitude] = location.coordinate;
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      return false;
+    }
+
+    if (seen.has(location.travelerSlug)) {
+      return false;
+    }
+
+    seen.add(location.travelerSlug);
     return true;
   });
 }

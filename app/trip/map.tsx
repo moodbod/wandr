@@ -19,6 +19,7 @@ import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
+import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
@@ -44,7 +45,9 @@ function ConnectedTripMapScreen() {
   );
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
-  const { coordinate: currentLocation, heading: currentHeading } = useCurrentLocation();
+  const currentLocationState = useCurrentLocation();
+  useSharedLocationPublishing(currentLocationState);
+  const { coordinate: currentLocation, heading: currentHeading } = currentLocationState;
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
   const { planningLocation } = usePlanningLocation();
   const orderedTrips = useMemo(

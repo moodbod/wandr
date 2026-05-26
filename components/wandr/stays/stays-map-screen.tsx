@@ -21,7 +21,6 @@ import { HeaderLocationSelector } from '@/components/wandr/header-location-selec
 import { GlassButton } from '@/components/ui/glass-button';
 import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
-import { OfflineMapHeaderButton } from '@/components/wandr/offline/offline-map-download-button';
 import { PlanningLocationSheet } from '@/components/wandr/planning-country-sheet';
 import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery-controls';
 import { styles } from '@/components/wandr/stays/stays-map-screen.styles';
@@ -38,11 +37,16 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
-import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
+import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
+import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
+import {
+  usePlanningLocation,
+  useSyncPlanningLocationWithAvailableLocations,
+  useSyncPlanningLocationWithCurrentLocation,
+} from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
 import { getLiveCatalogRef, getTripDashboardRef, listAllStaysRef, listUserTripsRef } from '@/lib/convex';
 import { formatUsdPriceParts } from '@/lib/currency';
-import { getOfflineMapRegionForPlanningLocation } from '@/lib/offline-map-regions';
 import { buildTripRouteCoordinates } from '@/lib/trip-route';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import {
@@ -74,6 +78,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const dbStays = useQuery(listAllStaysRef);
   const liveCatalog = useQuery(getLiveCatalogRef);
   const currentLocation = useCurrentLocation();
+  const sharedUserLocations = useVisibleSharedLocations();
+  useSharedLocationPublishing(currentLocation);
   const [searchQuery, setSearchQuery] = useState('');
   const [discoveryMode, setDiscoveryMode] = useState<'route' | 'nearby'>('route');
   const [locationSheetVisible, setLocationSheetVisible] = useState(false);
@@ -83,11 +89,6 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const [selectedStaySlug, setSelectedStaySlug] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  const offlineRegion = useMemo(
-    () => getOfflineMapRegionForPlanningLocation(planningLocation),
-    [planningLocation]
-  );
-  useSyncPlanningLocationWithCurrentLocation(currentLocation.coordinate);
 
   const orderedTrips = useMemo(
     () => orderTripsByPlanningCountry(trips ?? [], planningLocation),
@@ -126,6 +127,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     () => buildPlanningLocationsFromDestinations(rankedStays),
     [rankedStays]
   );
+  useSyncPlanningLocationWithAvailableLocations(availablePlanningLocations);
+  useSyncPlanningLocationWithCurrentLocation(currentLocation.coordinate, availablePlanningLocations);
   const routeCoordinates = useMemo(() => {
     return buildTripRouteCoordinates(trip, { onlyRemaining: false });
   }, [trip]);
@@ -295,6 +298,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       centerCoordinate={centerCoordinate}
       userCoordinate={userCoordinate}
       markers={mapMarkers}
+      sharedUserLocations={sharedUserLocations}
       followUserLocation={discoveryMode === 'nearby' && Boolean(userCoordinate)}
       persistKey={isLargeScreen ? 'app-background' : undefined}
       routeCoordinates={locationRouteCoordinates}
@@ -342,7 +346,6 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       trailingSearchAccessory={
         isLargeScreen ? (
           <View style={styles.desktopSearchActions}>
-            <OfflineMapHeaderButton region={offlineRegion} />
             <GlassButton
               accessibilityLabel="Reset map position"
               height={52}
@@ -479,15 +482,6 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         config={{
           overlay: true,
           leadingAction: showBack ? { kind: 'back', accessibilityLabel: 'Go back' } : undefined,
-          trailingActions: offlineRegion
-            ? [
-                {
-                  kind: 'map',
-                  accessibilityLabel: `Download ${offlineRegion.label}`,
-                  render: <OfflineMapHeaderButton region={offlineRegion} />,
-                },
-              ]
-            : undefined,
         }}
         bottomContent={
           discoveryControls

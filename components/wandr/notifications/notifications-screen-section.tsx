@@ -101,7 +101,10 @@ function NotificationRow({
         ? 'trip invite'
         : 'trip join request';
   const isPendingRequest = requestStatus === 'pending';
-  const canDeclineRequest = notification.kind === 'trip_invite' || notification.kind === 'trip_join_request';
+  const canDeclineRequest =
+    notification.kind === 'friend_invite' ||
+    notification.kind === 'trip_invite' ||
+    notification.kind === 'trip_join_request';
   const showActorAvatar = Boolean(notification.actorSlug);
   const actorName = notification.actorName ?? notification.actorSlug ?? '';
   const actorBaseLabel = notification.actorBaseLabel;

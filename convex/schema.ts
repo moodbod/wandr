@@ -22,6 +22,7 @@ import { regionsTable } from './tables/regions';
 import { staysTable } from './tables/stays';
 import { invitesTable } from './tables/invites';
 import { tripsTable } from './tables/trips';
+import { sharedLocationsTable } from './tables/sharedLocations';
 
 const { users: _authUsersTable, ...authTablesWithoutUsers } = authTables;
 
@@ -124,6 +125,7 @@ export default defineSchema({
   matches: matchesTable,
   connections: connectionsTable,
   calls: callsTable,
+  sharedLocations: sharedLocationsTable,
 
   bookings: bookingsTable,
   likes: likesTable,
