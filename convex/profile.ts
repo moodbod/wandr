@@ -216,12 +216,16 @@ export const updatePrivacySettings = mutation({
       locationSharing: args.locationSharing,
     });
     if (args.locationSharing === 'off') {
-      const sharedLocation = await ctx.db
-        .query('sharedLocations')
-        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
-        .unique();
-      if (sharedLocation) {
-        await ctx.db.delete(sharedLocation._id);
+      try {
+        const sharedLocation = await ctx.db
+          .query('sharedLocations')
+          .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', travelerSlug))
+          .unique();
+        if (sharedLocation) {
+          await ctx.db.delete(sharedLocation._id);
+        }
+      } catch {
+        // Privacy settings should still save if the live-location table is unavailable during deploy.
       }
     }
     return true;

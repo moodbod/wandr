@@ -129,6 +129,38 @@ export default defineSchema({
 
   bookings: bookingsTable,
   likes: likesTable,
+  adminAuditEvents: defineTable({
+    actorUserId: v.id('users'),
+    actorSlug: v.string(),
+    actorName: v.optional(v.string()),
+    action: v.union(
+      v.literal('role.update'),
+      v.literal('content.create'),
+      v.literal('content.update'),
+      v.literal('content.status'),
+      v.literal('content.migrate'),
+      v.literal('request.status'),
+      v.literal('photo.status')
+    ),
+    targetKind: v.union(
+      v.literal('user'),
+      v.literal('location'),
+      v.literal('experience'),
+      v.literal('stay'),
+      v.literal('booking'),
+      v.literal('reservation'),
+      v.literal('photo'),
+      v.literal('catalog')
+    ),
+    targetId: v.string(),
+    targetLabel: v.optional(v.string()),
+    summary: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_createdAt', ['createdAt'])
+    .index('by_actorSlug_and_createdAt', ['actorSlug', 'createdAt'])
+    .index('by_targetKind_and_createdAt', ['targetKind', 'createdAt'])
+    .index('by_action_and_createdAt', ['action', 'createdAt']),
   photos: defineTable({
     locationKind: v.union(v.literal('location'), v.literal('experience'), v.literal('stay')),
     locationSlug: v.string(),

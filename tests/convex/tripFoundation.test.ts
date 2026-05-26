@@ -317,6 +317,26 @@ describe('trip planning foundation', () => {
     expect(afterOffLocations.map((location) => location.travelerSlug)).not.toContain('public-map');
   });
 
+  it('fails closed for shared map locations when viewer auth is missing or stale', async () => {
+    const t = createTest();
+    await seedUser(t, 'map-viewer');
+    await seedUser(t, 'other-viewer');
+
+    const unauthenticatedLocations = await t.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(unauthenticatedLocations).toEqual([]);
+
+    const otherViewer = t.withIdentity({
+      subject: 'other-viewer-session',
+      tokenIdentifier: 'test|other-viewer',
+    });
+    const staleSessionLocations = await otherViewer.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(staleSessionLocations).toEqual([]);
+  });
+
   it('declines friend requests and joins open friend groups', async () => {
     const t = createTest();
     const host = await seedUser(t, 'host');

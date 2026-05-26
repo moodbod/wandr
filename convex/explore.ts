@@ -2,6 +2,7 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
+import { recordAdminAuditEvent } from './adminAudit';
 import { getPublicTravelerProfile } from './appProfiles';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 import { getLiveCatalogPayload } from './catalog';
@@ -758,6 +759,14 @@ export const createManagedExperience = mutation({
       status: 'draft',
       createdByAdminSlug: manager.slug,
       updatedByAdminSlug: manager.slug,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: manager,
+      action: 'content.create',
+      targetKind: 'experience',
+      targetId: slug,
+      targetLabel: args.title,
+      summary: 'Created experience draft.',
     });
     return { slug };
   },
