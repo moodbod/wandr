@@ -101,6 +101,18 @@ async function hasSharedActiveCircle(ctx: QueryCtx, viewerCircleIds: Set<string>
   return memberships.some((membership) => viewerCircleIds.has(membership.circleId));
 }
 
+async function listFreshSharedLocations(ctx: QueryCtx, now: number) {
+  try {
+    return await ctx.db
+      .query('sharedLocations')
+      .withIndex('by_expiresAt', (q) => q.gte('expiresAt', now))
+      .order('desc')
+      .take(MAX_VISIBLE_LOCATIONS);
+  } catch {
+    return [];
+  }
+}
+
 function canViewSharedLocation({
   hasSharedCircle,
   isConnected,
@@ -221,14 +233,16 @@ export const listVisibleSharedLocations = query({
     travelerSlug: v.string(),
   },
   handler: async (ctx, args) => {
-    const viewerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    let viewerSlug: string;
+    try {
+      viewerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+    } catch {
+      return [];
+    }
+
     const now = Date.now();
     const [locations, friendSlugs, viewerCircleIds] = await Promise.all([
-      ctx.db
-        .query('sharedLocations')
-        .withIndex('by_expiresAt', (q) => q.gte('expiresAt', now))
-        .order('desc')
-        .take(MAX_VISIBLE_LOCATIONS),
+      listFreshSharedLocations(ctx, now),
       getFriendConnectionSet(ctx, viewerSlug),
       getActiveCircleIdSet(ctx, viewerSlug),
     ]);
@@ -240,33 +254,37 @@ export const listVisibleSharedLocations = query({
         continue;
       }
 
-      const profile = await getPublicTravelerProfile(ctx, location.travelerSlug);
-      if (!profile) {
+      try {
+        const profile = await getPublicTravelerProfile(ctx, location.travelerSlug);
+        if (!profile) {
+          continue;
+        }
+
+        const isSelf = profile.travelerSlug === viewerSlug;
+        const locationSharing = getLocationSharing(profile.user);
+        const profileVisibility = getProfileVisibility(profile.user);
+        const isConnected = friendSlugs.has(profile.travelerSlug);
+        const hasSharedCircle =
+          locationSharing === 'tripOnly' && !isSelf
+            ? await hasSharedActiveCircle(ctx, viewerCircleIds, profile.travelerSlug)
+            : false;
+
+        if (
+          !canViewSharedLocation({
+            hasSharedCircle,
+            isConnected,
+            isSelf,
+            locationSharing,
+            profileVisibility,
+          })
+        ) {
+          continue;
+        }
+
+        visibleLocations.push(buildSharedLocationView(profile, location, coordinate, locationSharing, profileVisibility));
+      } catch {
         continue;
       }
-
-      const isSelf = profile.travelerSlug === viewerSlug;
-      const locationSharing = getLocationSharing(profile.user);
-      const profileVisibility = getProfileVisibility(profile.user);
-      const isConnected = friendSlugs.has(profile.travelerSlug);
-      const hasSharedCircle =
-        locationSharing === 'tripOnly' && !isSelf
-          ? await hasSharedActiveCircle(ctx, viewerCircleIds, profile.travelerSlug)
-          : false;
-
-      if (
-        !canViewSharedLocation({
-          hasSharedCircle,
-          isConnected,
-          isSelf,
-          locationSharing,
-          profileVisibility,
-        })
-      ) {
-        continue;
-      }
-
-      visibleLocations.push(buildSharedLocationView(profile, location, coordinate, locationSharing, profileVisibility));
     }
 
     return visibleLocations;

@@ -1,0 +1,1104 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useMutation, useQuery } from 'convex/react';
+import { Image as ExpoImage } from 'expo-image';
+import { useRouter } from 'expo-router';
+import type React from 'react';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import type { Id } from '@/convex/_generated/dataModel';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { SegmentedTabs } from '@/components/ui/segmented-tabs';
+import { AdminContentDashboard } from '@/components/wandr/manager/admin-content-dashboard';
+import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
+import {
+  type AdminRequestSource,
+  type AdminRequestStatusFilter,
+  type AdminRoleFilter,
+  adminGetOverviewRef,
+  adminListAuditEventsRef,
+  adminListRequestsRef,
+  adminListUsersRef,
+  adminUpdateRequestStatusRef,
+  adminUpdateUserRoleRef,
+  listManagedLocationPhotosRef,
+  updateLocationPhotoStatusRef,
+} from '@/lib/convex';
+import { useAuthSession } from '@/providers/auth-session';
+
+type AdminSection = 'overview' | 'content' | 'requests' | 'moderation' | 'users' | 'audit';
+type PhotoStatusFilter = 'approved' | 'pending' | 'rejected' | 'all';
+
+const sectionOptions: readonly { icon: keyof typeof MaterialCommunityIcons.glyphMap; key: AdminSection; label: string }[] = [
+  { key: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
+  { key: 'content', label: 'Content', icon: 'map-marker-multiple-outline' },
+  { key: 'requests', label: 'Requests', icon: 'calendar-check-outline' },
+  { key: 'moderation', label: 'Photos', icon: 'image-check-outline' },
+  { key: 'users', label: 'Users', icon: 'account-cog-outline' },
+  { key: 'audit', label: 'Audit', icon: 'history' },
+] as const;
+
+const requestFilters = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'all', label: 'All' },
+] as const;
+
+const photoFilters = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'all', label: 'All' },
+] as const;
+
+const roleFilters = [
+  { key: 'all', label: 'All' },
+  { key: 'admin', label: 'Admins' },
+  { key: 'traveler', label: 'Travelers' },
+] as const;
+
+export function AdminDashboardScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
+  const { isLargeScreen } = useResponsive();
+  const { isLoading, session } = useAuthSession();
+  const [activeSection, setActiveSection] = useState<AdminSection>('overview');
+  const isAdmin = session?.role === 'admin';
+
+  if (isLoading) {
+    return (
+      <ThemedView style={[styles.centerState, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={designSystem.colors.lime} />
+      </ThemedView>
+    );
+  }
+
+  if (!session) {
+    return (
+      <AdminAccessState
+        body="Sign in to continue."
+        ctaLabel="Back to Explore"
+        onPress={() => router.replace('/explore')}
+        title="Admin access"
+      />
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AdminAccessState
+        body="This account does not have admin access."
+        ctaLabel="Back to Profile"
+        onPress={() => router.replace('/profile')}
+        title="No admin access"
+      />
+    );
+  }
+
+  return (
+    <ThemedView style={[styles.root, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.shell,
+          isLargeScreen ? styles.shellLarge : styles.shellCompact,
+          {
+            paddingBottom: Math.max(insets.bottom, 14),
+            paddingLeft: isLargeScreen ? 92 : 14,
+            paddingRight: 14,
+            paddingTop: Math.max(insets.top, 14),
+          },
+        ]}
+      >
+        {isLargeScreen ? (
+          <AdminSideNav activeSection={activeSection} onChange={setActiveSection} />
+        ) : (
+          <SegmentedTabs
+            options={sectionOptions}
+            value={activeSection}
+            onChange={setActiveSection}
+            contentContainerStyle={styles.mobileTabs}
+            tabStyle={styles.mobileTab}
+          />
+        )}
+        <View style={[styles.mainPanel, { backgroundColor: designSystem.colors.background, borderColor: designSystem.colors.borderSoft }]}>
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <ThemedText style={styles.title}>Admin</ThemedText>
+              <ThemedText style={styles.subtitle}>{getSectionSubtitle(activeSection)}</ThemedText>
+            </View>
+          </View>
+          <View style={styles.sectionFrame}>
+            {activeSection === 'overview' ? <OverviewSection onSelectSection={setActiveSection} /> : null}
+            {activeSection === 'content' ? <AdminContentDashboard inPanel={false} travelerSlug={session.travelerSlug} /> : null}
+            {activeSection === 'requests' ? <RequestsSection /> : null}
+            {activeSection === 'moderation' ? <ModerationSection travelerSlug={session.travelerSlug} /> : null}
+            {activeSection === 'users' ? <UsersSection currentUserSlug={session.travelerSlug} /> : null}
+            {activeSection === 'audit' ? <AuditSection /> : null}
+          </View>
+        </View>
+      </View>
+    </ThemedView>
+  );
+}
+
+function AdminAccessState({
+  body,
+  ctaLabel,
+  onPress,
+  title,
+}: {
+  body: string;
+  ctaLabel: string;
+  onPress: () => void;
+  title: string;
+}) {
+  return (
+    <ThemedView style={styles.centerState}>
+      <View style={[styles.accessPanel, { backgroundColor: designSystem.colors.surfaceRaised, borderColor: designSystem.colors.borderSoft }]}>
+        <MaterialCommunityIcons name="shield-lock-outline" size={28} color={designSystem.colors.fern} />
+        <ThemedText style={styles.accessTitle}>{title}</ThemedText>
+        <ThemedText style={styles.accessBody}>{body}</ThemedText>
+        <Pressable accessibilityRole="button" onPress={onPress} style={styles.primaryButton}>
+          <ThemedText style={styles.primaryButtonText}>{ctaLabel}</ThemedText>
+        </Pressable>
+      </View>
+    </ThemedView>
+  );
+}
+
+function AdminSideNav({
+  activeSection,
+  onChange,
+}: {
+  activeSection: AdminSection;
+  onChange: (section: AdminSection) => void;
+}) {
+  const isDark = useColorScheme() === 'dark';
+  const activeBackground = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.limeMist;
+  const surfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surface;
+  const borderColor = isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft;
+
+  return (
+    <View style={[styles.sideNav, { backgroundColor: surfaceColor, borderColor }]}>
+      {sectionOptions.map((item) => {
+        const isActive = item.key === activeSection;
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: isActive }}
+            key={item.key}
+            onPress={() => onChange(item.key)}
+            style={[styles.sideNavItem, isActive && { backgroundColor: activeBackground }]}
+          >
+            <MaterialCommunityIcons
+              name={item.icon}
+              size={20}
+              color={isActive ? designSystem.colors.fern : designSystem.colors.mutedText}
+            />
+            <ThemedText style={[styles.sideNavText, isActive && styles.sideNavTextActive]}>{item.label}</ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function OverviewSection({ onSelectSection }: { onSelectSection: (section: AdminSection) => void }) {
+  const overview = useQuery(adminGetOverviewRef, {});
+  const metrics = useMemo(() => buildOverviewMetrics(overview), [overview]);
+
+  if (overview === undefined) {
+    return <LoadingRows />;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.metricGrid}>
+        {metrics.map((metric) => (
+          <MetricTile key={metric.label} {...metric} />
+        ))}
+      </View>
+      <View style={styles.overviewGrid}>
+        <OverviewAction
+          count={overview.requests.pending}
+          icon="calendar-clock"
+          label="Pending requests"
+          onPress={() => onSelectSection('requests')}
+        />
+        <OverviewAction
+          count={overview.photos.pending}
+          icon="image-multiple-outline"
+          label="Photos to review"
+          onPress={() => onSelectSection('moderation')}
+        />
+        <OverviewAction
+          count={overview.users.admins}
+          icon="account-key-outline"
+          label="Admins"
+          onPress={() => onSelectSection('users')}
+        />
+      </View>
+      <SectionBlock title="Platform data">
+        <PlatformDataGrid overview={overview} />
+      </SectionBlock>
+      <SectionBlock title="Recent admin activity">
+        <AuditRows rows={overview.recentEvents ?? []} />
+      </SectionBlock>
+    </ScrollView>
+  );
+}
+
+function RequestsSection() {
+  const [statusFilter, setStatusFilter] = useState<AdminRequestStatusFilter>('pending');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const requests = useQuery(adminListRequestsRef, { limit: 80, status: statusFilter });
+  const updateRequest = useMutation(adminUpdateRequestStatusRef);
+
+  async function updateStatus(request: any, status: 'confirmed' | 'cancelled') {
+    setBusyId(request._id);
+    try {
+      await updateRequest({
+        requestId: request._id as Id<'bookings'> | Id<'reservations'>,
+        source: request.source as AdminRequestSource,
+        status,
+      });
+    } catch (error) {
+      Alert.alert('Request update failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <SegmentedTabs options={requestFilters} value={statusFilter} onChange={setStatusFilter} />
+      {requests === undefined ? (
+        <LoadingRows />
+      ) : requests.page.length === 0 ? (
+        <EmptyState label="No requests in this queue." />
+      ) : (
+        <View style={styles.rowList}>
+          {requests.page.map((request: any) => (
+            <RequestRow
+              busy={busyId === request._id}
+              key={`${request.source}-${request._id}`}
+              request={request}
+              onCancel={() => updateStatus(request, 'cancelled')}
+              onConfirm={() => updateStatus(request, 'confirmed')}
+            />
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function ModerationSection({ travelerSlug }: { travelerSlug: string }) {
+  const [statusFilter, setStatusFilter] = useState<PhotoStatusFilter>('pending');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const photos = useQuery(
+    listManagedLocationPhotosRef,
+    statusFilter === 'all' ? { managerSlug: travelerSlug } : { managerSlug: travelerSlug, status: statusFilter }
+  );
+  const updatePhoto = useMutation(updateLocationPhotoStatusRef);
+
+  async function updateStatus(photoId: Id<'photos'>, status: 'approved' | 'rejected') {
+    setBusyId(photoId);
+    try {
+      await updatePhoto({ photoId, status });
+    } catch (error) {
+      Alert.alert('Photo update failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <SegmentedTabs options={photoFilters} value={statusFilter} onChange={setStatusFilter} />
+      {photos === undefined ? (
+        <LoadingRows />
+      ) : photos.length === 0 ? (
+        <EmptyState label="No photos in this queue." />
+      ) : (
+        <View style={styles.photoGrid}>
+          {photos.map((photo: any) => (
+            <PhotoCard
+              busy={busyId === photo.id}
+              key={photo.id}
+              photo={photo}
+              onApprove={() => updateStatus(photo.id, 'approved')}
+              onReject={() => updateStatus(photo.id, 'rejected')}
+            />
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function UsersSection({ currentUserSlug }: { currentUserSlug: string }) {
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<AdminRoleFilter>('all');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const users = useQuery(adminListUsersRef, { limit: 80, role: roleFilter, search });
+  const updateUserRole = useMutation(adminUpdateUserRoleRef);
+
+  async function changeRole(user: any) {
+    const nextRole = user.role === 'admin' ? 'traveler' : 'admin';
+    setBusyId(user.userId);
+    try {
+      await updateUserRole({ userId: user.userId, role: nextRole });
+    } catch (error) {
+      Alert.alert('Role update failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.toolbar}>
+        <TextInput
+          accessibilityLabel="Search users"
+          onChangeText={setSearch}
+          placeholder="Search users"
+          placeholderTextColor={designSystem.colors.mutedText}
+          style={styles.searchInput}
+          value={search}
+        />
+      </View>
+      <SegmentedTabs options={roleFilters} value={roleFilter} onChange={setRoleFilter} />
+      {users === undefined ? (
+        <LoadingRows />
+      ) : users.page.length === 0 ? (
+        <EmptyState label="No users found." />
+      ) : (
+        <View style={styles.rowList}>
+          {users.page.map((user: any) => (
+            <UserRow
+              busy={busyId === user.userId}
+              currentUserSlug={currentUserSlug}
+              key={user.userId}
+              user={user}
+              onChangeRole={() => changeRole(user)}
+            />
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function AuditSection() {
+  const events = useQuery(adminListAuditEventsRef, { limit: 80 });
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {events === undefined ? (
+        <LoadingRows />
+      ) : events.page.length === 0 ? (
+        <EmptyState label="No audit events yet." />
+      ) : (
+        <AuditRows rows={events.page} />
+      )}
+    </ScrollView>
+  );
+}
+
+function MetricTile({ icon, label, value }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; value: number | string }) {
+  return (
+    <View style={styles.metricTile}>
+      <MaterialCommunityIcons name={icon} size={20} color={designSystem.colors.fern} />
+      <ThemedText style={styles.metricValue}>{typeof value === 'number' ? formatCount(value) : value}</ThemedText>
+      <ThemedText style={styles.metricLabel}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function PlatformDataGrid({ overview }: { overview: any }) {
+  const rows = [
+    { label: 'Active trips', value: overview.platform?.trips?.active ?? 0 },
+    { label: 'Completed trips', value: overview.platform?.trips?.completed ?? 0 },
+    { label: 'Group trips', value: overview.platform?.trips?.group ?? 0 },
+    { label: 'Trip stops', value: overview.platform?.itinerary?.totalStops ?? 0 },
+    { label: 'Stay reservations', value: overview.platform?.itinerary?.stayReservations ?? 0 },
+    { label: 'Visited stops', value: overview.platform?.engagement?.visits ?? 0 },
+    { label: 'Travelers with visits', value: overview.platform?.engagement?.visitedTravelers ?? 0 },
+    { label: 'Groups', value: overview.platform?.engagement?.circles ?? 0 },
+    { label: 'Messages', value: overview.platform?.engagement?.messages ?? 0 },
+    { label: 'Notifications', value: overview.platform?.engagement?.notices ?? 0 },
+    { label: 'Unread notifications', value: overview.platform?.engagement?.unreadNotices ?? 0 },
+    { label: 'Content records', value: overview.platform?.content?.all ?? 0 },
+  ];
+
+  return (
+    <View style={styles.platformGrid}>
+      {rows.map((row) => (
+        <View key={row.label} style={styles.platformCell}>
+          <ThemedText style={styles.platformValue}>{formatCount(row.value)}</ThemedText>
+          <ThemedText style={styles.platformLabel}>{row.label}</ThemedText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function OverviewAction({
+  count,
+  icon,
+  label,
+  onPress,
+}: {
+  count: number;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.overviewAction}>
+      <MaterialCommunityIcons name={icon} size={22} color={designSystem.colors.fern} />
+      <View style={styles.flexText}>
+        <ThemedText style={styles.overviewActionLabel}>{label}</ThemedText>
+        <ThemedText style={styles.overviewActionMeta}>{formatCount(count)}</ThemedText>
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={20} color={designSystem.colors.mutedText} />
+    </Pressable>
+  );
+}
+
+function RequestRow({
+  busy,
+  onCancel,
+  onConfirm,
+  request,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  request: any;
+}) {
+  return (
+    <View style={styles.dataRow}>
+      <View style={styles.flexText}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{request.title}</ThemedText>
+          <StatusPill status={request.status} />
+        </View>
+        <ThemedText numberOfLines={2} style={styles.rowMeta}>
+          {request.travelerSlug} - {request.detailLabel}
+        </ThemedText>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>
+          {formatDate(request.scheduledFor ?? request.checkIn ?? request.bookedAt)}
+        </ThemedText>
+      </View>
+      <View style={styles.rowActions}>
+        <IconAction
+          disabled={busy || request.status === 'confirmed'}
+          icon="check"
+          label="Confirm"
+          onPress={onConfirm}
+          variant="primary"
+        />
+        <IconAction
+          disabled={busy || request.status === 'cancelled'}
+          icon="close"
+          label="Cancel"
+          onPress={onCancel}
+        />
+      </View>
+    </View>
+  );
+}
+
+function PhotoCard({
+  busy,
+  onApprove,
+  onReject,
+  photo,
+}: {
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  photo: any;
+}) {
+  return (
+    <View style={styles.photoCard}>
+      <ExpoImage contentFit="cover" source={{ uri: photo.imageUri }} style={styles.photoImage} />
+      <View style={styles.photoBody}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{photo.locationSlug}</ThemedText>
+          <StatusPill status={photo.status} />
+        </View>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>{photo.travelerSlug}</ThemedText>
+        <View style={styles.rowActions}>
+          <IconAction disabled={busy || photo.status === 'approved'} icon="check" label="Approve" onPress={onApprove} variant="primary" />
+          <IconAction disabled={busy || photo.status === 'rejected'} icon="close" label="Reject" onPress={onReject} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function UserRow({
+  busy,
+  currentUserSlug,
+  onChangeRole,
+  user,
+}: {
+  busy: boolean;
+  currentUserSlug: string;
+  onChangeRole: () => void;
+  user: any;
+}) {
+  const isSelf = user.slug === currentUserSlug;
+
+  return (
+    <View style={styles.dataRow}>
+      <View style={styles.flexText}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{user.name}</ThemedText>
+          <StatusPill status={user.role} />
+        </View>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>{user.email ?? user.slug ?? 'No email'}</ThemedText>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>
+          {user.onboardingCompleted ? 'Onboarded' : 'Needs onboarding'} - {formatDate(user.createdAt)}
+        </ThemedText>
+      </View>
+      <IconAction
+        disabled={busy || isSelf}
+        icon={user.role === 'admin' ? 'account-arrow-down-outline' : 'account-arrow-up-outline'}
+        label={user.role === 'admin' ? 'Demote' : 'Promote'}
+        onPress={onChangeRole}
+      />
+    </View>
+  );
+}
+
+function AuditRows({ rows }: { rows: any[] }) {
+  if (rows.length === 0) {
+    return <EmptyState label="No recent activity." />;
+  }
+
+  return (
+    <View style={styles.rowList}>
+      {rows.map((event) => (
+        <View key={event._id} style={styles.auditRow}>
+          <MaterialCommunityIcons name="history" size={18} color={designSystem.colors.fern} />
+          <View style={styles.flexText}>
+            <ThemedText style={styles.rowTitle}>{event.summary}</ThemedText>
+            <ThemedText style={styles.rowMeta}>
+              {event.actorSlug} - {event.action} - {formatDate(event.createdAt)}
+            </ThemedText>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SectionBlock({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <View style={styles.sectionBlock}>
+      <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
+      {children}
+    </View>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === 'admin' || status === 'confirmed' || status === 'approved' || status === 'live'
+      ? styles.statusPositive
+      : status === 'pending' || status === 'draft'
+        ? styles.statusPending
+        : styles.statusMuted;
+
+  return (
+    <View style={[styles.statusPill, tone]}>
+      <ThemedText style={styles.statusText}>{status}</ThemedText>
+    </View>
+  );
+}
+
+function IconAction({
+  disabled,
+  icon,
+  label,
+  onPress,
+  variant = 'secondary',
+}: {
+  disabled?: boolean;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary';
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.iconAction, variant === 'primary' && styles.iconActionPrimary, disabled && styles.actionDisabled]}
+    >
+      <MaterialCommunityIcons name={icon} size={17} color={designSystem.colors.darkGreen} />
+      <ThemedText style={styles.iconActionText}>{label}</ThemedText>
+    </Pressable>
+  );
+}
+
+function LoadingRows() {
+  return (
+    <View style={styles.loadingRows}>
+      <ActivityIndicator color={designSystem.colors.lime} />
+    </View>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <ThemedText style={styles.emptyText}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function buildOverviewMetrics(overview: any) {
+  if (!overview) {
+    return [];
+  }
+
+  return [
+    { label: 'Users', value: overview.users.total, icon: 'account-group-outline' as const },
+    { label: 'Admins', value: overview.users.admins, icon: 'shield-account-outline' as const },
+    { label: 'Trips', value: overview.platform?.trips?.total ?? 0, icon: 'map-outline' as const },
+    { label: 'Distance covered', value: `${formatDistance(overview.platform?.distance?.coveredKm ?? 0)} km`, icon: 'map-marker-distance' as const },
+    { label: 'Planned distance', value: `${formatDistance(overview.platform?.distance?.plannedKm ?? 0)} km`, icon: 'routes' as const },
+    { label: 'Visits', value: overview.platform?.engagement?.visits ?? 0, icon: 'map-marker-check-outline' as const },
+    { label: 'Live content', value: overview.content.locations.live + overview.content.experiences.live + overview.content.stays.live, icon: 'earth' as const },
+    { label: 'Drafts', value: overview.content.locations.draft + overview.content.experiences.draft + overview.content.stays.draft, icon: 'file-document-edit-outline' as const },
+    { label: 'Pending requests', value: overview.requests.pending, icon: 'calendar-clock' as const },
+    { label: 'Pending photos', value: overview.photos.pending, icon: 'image-multiple-outline' as const },
+    { label: 'Messages', value: overview.platform?.engagement?.messages ?? 0, icon: 'message-text-outline' as const },
+    { label: 'Groups', value: overview.platform?.engagement?.circles ?? 0, icon: 'account-multiple-outline' as const },
+  ];
+}
+
+function getSectionSubtitle(section: AdminSection) {
+  if (section === 'overview') return 'Live operations, queues, and platform health.';
+  if (section === 'content') return 'Create, edit, publish, and archive travel content.';
+  if (section === 'requests') return 'Confirm or cancel experience and stay requests.';
+  if (section === 'moderation') return 'Approve or reject traveler photos.';
+  if (section === 'users') return 'Search users and manage admin roles.';
+  return 'Review recent admin actions.';
+}
+
+function formatCount(value: number) {
+  return Intl.NumberFormat(undefined, { notation: value >= 1000 ? 'compact' : 'standard' }).format(value);
+}
+
+function formatDistance(value: number) {
+  if (value >= 1000) {
+    return Intl.NumberFormat(undefined, { maximumFractionDigits: 1, notation: 'compact' }).format(value);
+  }
+
+  return Intl.NumberFormat(undefined, { maximumFractionDigits: value >= 10 ? 0 : 1 }).format(value);
+}
+
+function formatDate(value?: number | null) {
+  if (!value) {
+    return 'No date';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  shell: {
+    flex: 1,
+    gap: 12,
+  },
+  shellLarge: {
+    flexDirection: 'row',
+  },
+  shellCompact: {
+    flexDirection: 'column',
+  },
+  sideNav: {
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 6,
+    padding: 8,
+    width: 176,
+  },
+  sideNavItem: {
+    alignItems: 'center',
+    borderRadius: 16,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  sideNavText: {
+    color: designSystem.colors.mutedText,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sideNavTextActive: {
+    color: designSystem.colors.fern,
+  },
+  mobileTabs: {
+    paddingRight: 16,
+  },
+  mobileTab: {
+    minWidth: 108,
+  },
+  mainPanel: {
+    borderRadius: 26,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  header: {
+    alignItems: 'flex-start',
+    borderBottomColor: designSystem.colors.borderSoft,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 14,
+    padding: 18,
+  },
+  headerText: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  title: {
+    color: designSystem.colors.ink,
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 32,
+  },
+  subtitle: {
+    color: designSystem.colors.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sectionFrame: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    gap: 16,
+    padding: 18,
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metricTile: {
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    gap: 8,
+    minWidth: 150,
+    padding: 14,
+  },
+  metricValue: {
+    color: designSystem.colors.ink,
+    fontSize: 24,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  metricLabel: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 15,
+  },
+  overviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  overviewAction: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexGrow: 1,
+    gap: 10,
+    minHeight: 70,
+    minWidth: 220,
+    padding: 12,
+  },
+  overviewActionLabel: {
+    color: designSystem.colors.ink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  overviewActionMeta: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sectionBlock: {
+    gap: 10,
+  },
+  sectionTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 19,
+  },
+  platformGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  platformCell: {
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 150,
+    padding: 12,
+  },
+  platformValue: {
+    color: designSystem.colors.ink,
+    fontSize: 18,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  platformLabel: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  rowList: {
+    gap: 10,
+  },
+  dataRow: {
+    alignItems: 'flex-start',
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  auditRow: {
+    alignItems: 'flex-start',
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 12,
+  },
+  rowTitleLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  rowTitle: {
+    color: designSystem.colors.ink,
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  rowMeta: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  rowActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  flexText: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusPositive: {
+    backgroundColor: designSystem.colors.lime,
+  },
+  statusPending: {
+    backgroundColor: designSystem.colors.creamMuted,
+  },
+  statusMuted: {
+    backgroundColor: designSystem.colors.borderSoft,
+  },
+  statusText: {
+    color: designSystem.colors.darkGreen,
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 12,
+    textTransform: 'capitalize',
+  },
+  iconAction: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.white,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 5,
+    minHeight: 34,
+    paddingHorizontal: 10,
+  },
+  iconActionPrimary: {
+    backgroundColor: designSystem.colors.lime,
+    borderColor: designSystem.colors.lime,
+  },
+  iconActionText: {
+    color: designSystem.colors.darkGreen,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  actionDisabled: {
+    opacity: 0.45,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  photoCard: {
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    maxWidth: 360,
+    minWidth: 260,
+    overflow: 'hidden',
+  },
+  photoImage: {
+    aspectRatio: 16 / 10,
+    backgroundColor: designSystem.colors.mapFallback,
+    width: '100%',
+  },
+  photoBody: {
+    gap: 8,
+    padding: 12,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  searchInput: {
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: designSystem.colors.ink,
+    flex: 1,
+    fontSize: 14,
+    minHeight: 44,
+    minWidth: 180,
+    paddingHorizontal: 12,
+  },
+  loadingRows: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 160,
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.surface,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 140,
+    padding: 20,
+  },
+  emptyText: {
+    color: designSystem.colors.mutedText,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  centerState: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  accessPanel: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    maxWidth: 360,
+    padding: 22,
+    width: '100%',
+  },
+  accessTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  accessBody: {
+    color: designSystem.colors.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.lime,
+    borderRadius: 999,
+    minHeight: 40,
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingHorizontal: 16,
+  },
+  primaryButtonText: {
+    color: designSystem.colors.darkGreen,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+});

@@ -1,7 +1,7 @@
 import { useMutation } from 'convex/react';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Bed, Camera, MapTrifold, Trash } from 'phosphor-react-native';
+import { Bed, Camera, MapTrifold, ShieldCheck, Trash } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { type Country } from 'react-native-country-picker-modal';
@@ -224,6 +224,18 @@ export default function EditProfileScreen() {
       <SettingTextInput label="Home city or base" value={homeCity} onChangeText={setHomeCity} placeholder="Home city" />
       <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
       <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
+      {isAdmin ? (
+        <View style={styles.managerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open admin dashboard"
+            onPress={() => router.push('/admin' as Href)}
+            style={styles.managerActionButton}>
+            <ShieldCheck color={designSystem.colors.darkGreen} size={18} weight="bold" />
+            <ThemedText style={styles.managerActionText}>Admin dashboard</ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
       {isAdmin ? (
         <SettingSwitchRow
           disabled={managerModeIsLoading}

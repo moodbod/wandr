@@ -3,6 +3,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
 import type { ExploreExperience, ExploreHiddenGem } from '../constants/explore-content';
+import { recordAdminAuditEvent } from './adminAudit';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 import { getPublicTravelerProfile } from './appProfiles';
 
@@ -1196,6 +1197,14 @@ export const updateManagedBookingStatus = mutation({
       }
 
       await ctx.db.patch(bookingId, { status: args.status });
+      await recordAdminAuditEvent(ctx, {
+        actor: manager,
+        action: 'request.status',
+        targetKind: 'booking',
+        targetId: bookingId,
+        targetLabel: booking.contentSlug ?? booking.experienceSlug,
+        summary: `Marked experience request ${args.status}.`,
+      });
       return true;
     }
 
@@ -1236,6 +1245,15 @@ export const updateManagedBookingStatus = mutation({
     for (const mirrorBooking of mirrorBookings) {
       await ctx.db.patch(mirrorBooking._id, { status: args.status });
     }
+
+    await recordAdminAuditEvent(ctx, {
+      actor: manager,
+      action: 'request.status',
+      targetKind: 'reservation',
+      targetId: bookingId,
+      targetLabel: booking.staySlug,
+      summary: `Marked stay request ${args.status}.`,
+    });
 
     return true;
   },
@@ -2119,6 +2137,14 @@ export const createManagedStay = mutation({
       status: 'draft',
       createdByAdminSlug: manager.slug,
       updatedByAdminSlug: manager.slug,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: manager,
+      action: 'content.create',
+      targetKind: 'stay',
+      targetId: slug,
+      targetLabel: args.name,
+      summary: 'Created stay draft.',
     });
 
     return { roomId: args.bookingProfile.defaultRoomOptionId, slug };

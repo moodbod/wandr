@@ -42,6 +42,7 @@ export async function requireAdmin(ctx: AuthCtx) {
   }
 
   return {
+    userId: authRecord.authUserId,
     slug: user.slug,
     name: user.name ?? authRecord.name,
     countryCode: user.countryCode ?? '',

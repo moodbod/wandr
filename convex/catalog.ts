@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
+import { recordAdminAuditEvent } from './adminAudit';
 import { requireAdmin } from './authHelpers';
 
 const contentStatusValidator = v.union(v.literal('draft'), v.literal('live'), v.literal('archived'));
@@ -420,6 +421,14 @@ export const upsertManagedLocation = mutation({
         archivedAt: status === 'archived' ? now : undefined,
         updatedAt: now,
       });
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'content.update',
+        targetKind: 'location',
+        targetId: args.locationId,
+        targetLabel: args.title,
+        summary: `Updated location as ${status}.`,
+      });
 
       return { locationId: args.locationId, slug };
     }
@@ -451,6 +460,14 @@ export const upsertManagedLocation = mutation({
       sourceKind: 'admin',
       createdAt: now,
       updatedAt: now,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'content.create',
+      targetKind: 'location',
+      targetId: locationId,
+      targetLabel: args.title,
+      summary: `Created location as ${status}.`,
     });
 
     return { locationId, slug };
@@ -534,12 +551,28 @@ export const upsertManagedExperience = mutation({
         publishedAt: status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
         archivedAt: status === 'archived' ? now : undefined,
       });
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'content.update',
+        targetKind: 'experience',
+        targetId: args.experienceId,
+        targetLabel: args.title,
+        summary: `Updated experience as ${status}.`,
+      });
       return { experienceId: args.experienceId, slug };
     }
 
     const experienceId = await ctx.db.insert('experiences', {
       ...payload,
       createdByAdminSlug: admin.slug,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'content.create',
+      targetKind: 'experience',
+      targetId: experienceId,
+      targetLabel: args.title,
+      summary: `Created experience as ${status}.`,
     });
 
     return { experienceId, slug };
@@ -624,12 +657,28 @@ export const upsertManagedStay = mutation({
         publishedAt: status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
         archivedAt: status === 'archived' ? now : undefined,
       });
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'content.update',
+        targetKind: 'stay',
+        targetId: args.stayId,
+        targetLabel: args.name,
+        summary: `Updated stay as ${status}.`,
+      });
       return { roomId: args.bookingProfile.defaultRoomOptionId, stayId: args.stayId, slug };
     }
 
     const stayId = await ctx.db.insert('stays', {
       ...payload,
       createdByAdminSlug: admin.slug,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'content.create',
+      targetKind: 'stay',
+      targetId: stayId,
+      targetLabel: args.name,
+      summary: `Created stay as ${status}.`,
     });
 
     return { roomId: args.bookingProfile.defaultRoomOptionId, stayId, slug };
@@ -660,6 +709,14 @@ export const updateManagedContentStatus = mutation({
         throw new ConvexError('Location not found');
       }
       await ctx.db.patch(id, { ...patch, publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt });
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'content.status',
+        targetKind: 'location',
+        targetId: id,
+        targetLabel: existing.title,
+        summary: `Changed location status to ${args.status}.`,
+      });
       return true;
     }
 
@@ -675,6 +732,14 @@ export const updateManagedContentStatus = mutation({
         publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
         archivedAt: args.status === 'archived' ? now : undefined,
       });
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'content.status',
+        targetKind: 'experience',
+        targetId: id,
+        targetLabel: existing.title,
+        summary: `Changed experience status to ${args.status}.`,
+      });
       return true;
     }
 
@@ -688,6 +753,14 @@ export const updateManagedContentStatus = mutation({
       updatedByAdminSlug: admin.slug,
       publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
       archivedAt: args.status === 'archived' ? now : undefined,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'content.status',
+      targetKind: 'stay',
+      targetId: id,
+      targetLabel: existing.name,
+      summary: `Changed stay status to ${args.status}.`,
     });
     return true;
   },
@@ -821,6 +894,15 @@ export const migrateLegacyContentAsLive = mutation({
       });
       staysUpdated += 1;
     }
+
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'content.migrate',
+      targetKind: 'catalog',
+      targetId: 'legacy-content',
+      targetLabel: 'Legacy content',
+      summary: `Migrated ${locationsCreated} locations, ${experiencesUpdated} experiences, and ${staysUpdated} stays.`,
+    });
 
     return { locationsCreated, experiencesUpdated, staysUpdated };
   },

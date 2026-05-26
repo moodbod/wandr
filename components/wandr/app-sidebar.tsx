@@ -80,6 +80,26 @@ export function AppSidebar() {
       </View>
 
       <View style={styles.bottomStack}>
+        {isAdmin ? (
+          <View style={[styles.managerSection, { backgroundColor: surfaceColor, borderColor }]}>
+            <Pressable
+              accessibilityLabel="Admin dashboard"
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeHref === '/admin' }}
+              onPress={() => {
+                setSurface('profile');
+                router.push('/admin' as Href);
+              }}
+              style={[styles.navItem, activeHref === '/admin' && { backgroundColor: activeBackground }]}
+            >
+              <MaterialCommunityIcons
+                name={activeHref === '/admin' ? 'shield-account' : 'shield-account-outline'}
+                size={22}
+                color={activeHref === '/admin' ? activeColor : inactiveColor}
+              />
+            </Pressable>
+          </View>
+        ) : null}
         {canUseManagerMode ? (
           <View style={[styles.managerSection, { backgroundColor: surfaceColor, borderColor }]}>
             <Pressable
@@ -150,6 +170,13 @@ function getActiveNavHref(pathname: string) {
   const normalizedPathname = pathname.startsWith('/(tabs)')
     ? pathname.replace('/(tabs)', '')
     : pathname;
+
+  if (
+    normalizedPathname === '/admin' ||
+    normalizedPathname.startsWith('/admin/')
+  ) {
+    return '/admin';
+  }
 
   if (
     normalizedPathname === '/friends/chat' ||

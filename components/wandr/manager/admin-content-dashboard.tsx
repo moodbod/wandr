@@ -10,6 +10,7 @@ import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { LargeScreenPanel } from '@/components/wandr/large-screen-workspace';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
   type ContentStatus,
   type CuratedContentKind,
@@ -21,7 +22,7 @@ import {
   upsertManagedStayRef,
 } from '@/lib/convex';
 
-type AdminTab = 'locations' | 'experiences' | 'stays' | 'requests';
+type AdminTab = 'locations' | 'experiences' | 'stays';
 type StatusFilter = ContentStatus | 'all';
 
 type LocationForm = {
@@ -96,7 +97,6 @@ const tabs = [
   { key: 'locations', label: 'Locations' },
   { key: 'experiences', label: 'Experiences' },
   { key: 'stays', label: 'Stays' },
-  { key: 'requests', label: 'Requests' },
 ] as const;
 
 const statusFilters = [
@@ -174,9 +174,16 @@ const defaultStayForm = (): StayForm => ({
   linkedLocationSlug: '',
 });
 
-export function AdminContentDashboard({ travelerSlug: _travelerSlug }: { travelerSlug?: string | null }) {
+export function AdminContentDashboard({
+  inPanel = true,
+  travelerSlug: _travelerSlug,
+}: {
+  inPanel?: boolean;
+  travelerSlug?: string | null;
+}) {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
+  const { isLargeScreen } = useResponsive();
   const [activeTab, setActiveTab] = useState<AdminTab>('locations');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Partial<Record<AdminTab, string>>>({});
@@ -344,8 +351,7 @@ export function AdminContentDashboard({ travelerSlug: _travelerSlug }: { travele
     });
   };
 
-  return (
-    <LargeScreenPanel kind="main">
+  const content = (
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -369,41 +375,36 @@ export function AdminContentDashboard({ travelerSlug: _travelerSlug }: { travele
           tabStyle={styles.tab}
         />
 
-        {activeTab !== 'requests' ? (
-          <View style={styles.toolbar}>
-            <View style={styles.statusFilters}>
-              {statusFilters.map((filter) => (
-                <Pressable
-                  key={filter.key}
-                  onPress={() => setStatusFilter(filter.key)}
-                  style={[
-                    styles.statusFilter,
-                    {
-                      borderColor: statusFilter === filter.key ? designSystem.colors.lime : colors.borderSoft,
-                      backgroundColor: statusFilter === filter.key ? designSystem.colors.lime : colors.surface,
-                    },
-                  ]}
-                >
-                  <ThemedText style={styles.statusFilterText}>{filter.label}</ThemedText>
-                </Pressable>
-              ))}
-            </View>
-            <ActionButton
-              icon={<Plus color={designSystem.colors.darkGreen} size={14} weight="bold" />}
-              label="New"
-              onPress={handleNew}
-              variant="secondary"
-            />
+        <View style={styles.toolbar}>
+          <View style={styles.statusFilters}>
+            {statusFilters.map((filter) => (
+              <Pressable
+                key={filter.key}
+                onPress={() => setStatusFilter(filter.key)}
+                style={[
+                  styles.statusFilter,
+                  {
+                    borderColor: statusFilter === filter.key ? designSystem.colors.lime : colors.borderSoft,
+                    backgroundColor: statusFilter === filter.key ? designSystem.colors.lime : colors.surface,
+                  },
+                ]}
+              >
+                <ThemedText style={styles.statusFilterText}>{filter.label}</ThemedText>
+              </Pressable>
+            ))}
           </View>
-        ) : null}
+          <ActionButton
+            icon={<Plus color={designSystem.colors.darkGreen} size={14} weight="bold" />}
+            label="New"
+            onPress={handleNew}
+            variant="secondary"
+          />
+        </View>
 
         {busyLabel ? <ThemedText style={styles.busyText}>{busyLabel}</ThemedText> : null}
 
-        {activeTab === 'requests' ? (
-          <RequestsPanel bookings={catalog?.requests?.bookings ?? []} reservations={catalog?.requests?.reservations ?? []} />
-        ) : (
-          <View style={styles.workspace}>
-            <View style={[styles.listPane, { borderColor: colors.borderSoft }]}>
+        <View style={[styles.workspace, !isLargeScreen && styles.workspaceCompact]}>
+            <View style={[styles.listPane, !isLargeScreen && styles.listPaneCompact, { borderColor: colors.borderSoft }]}>
               <ThemedText style={styles.paneTitle}>{getTabLabel(activeTab)}</ThemedText>
               {records.length === 0 ? (
                 <ThemedText style={styles.emptyText}>No records here yet.</ThemedText>
@@ -421,7 +422,7 @@ export function AdminContentDashboard({ travelerSlug: _travelerSlug }: { travele
               )}
             </View>
 
-            <View style={[styles.editorPane, { borderColor: colors.borderSoft }]}>
+            <View style={[styles.editorPane, !isLargeScreen && styles.editorPaneCompact, { borderColor: colors.borderSoft }]}>
               <View style={styles.editorHeader}>
                 <View>
                   <ThemedText style={styles.paneTitle}>{selectedId ? 'Edit record' : 'New draft'}</ThemedText>
@@ -459,11 +460,15 @@ export function AdminContentDashboard({ travelerSlug: _travelerSlug }: { travele
                 <StayEditor form={stayForm} onChange={setStayForm} />
               )}
             </View>
-          </View>
-        )}
+        </View>
       </ScrollView>
-    </LargeScreenPanel>
   );
+
+  if (!inPanel) {
+    return <View style={styles.embeddedRoot}>{content}</View>;
+  }
+
+  return <LargeScreenPanel kind="main">{content}</LargeScreenPanel>;
 }
 
 function LocationEditor({ form, onChange }: { form: LocationForm; onChange: (form: LocationForm) => void }) {
@@ -540,38 +545,6 @@ function StayEditor({ form, onChange }: { form: StayForm; onChange: (form: StayF
       <Field label="Country code" value={form.countryCode} onChangeText={(countryCode) => onChange({ ...form, countryCode })} />
       <Field label="Country label" value={form.countryLabel} onChangeText={(countryLabel) => onChange({ ...form, countryLabel })} />
       <Field label="Planning location" value={form.planningLocationId} onChangeText={(planningLocationId) => onChange({ ...form, planningLocationId })} />
-    </View>
-  );
-}
-
-function RequestsPanel({ bookings, reservations }: { bookings: any[]; reservations: any[] }) {
-  return (
-    <View style={styles.requestsPane}>
-      <RequestGroup title="Stay requests" rows={reservations} slugKey="staySlug" />
-      <RequestGroup title="Experience requests" rows={bookings.filter((booking) => booking.contentKind !== 'location' && booking.contentKind !== 'stay')} slugKey="experienceSlug" />
-    </View>
-  );
-}
-
-function RequestGroup({ rows, slugKey, title }: { rows: any[]; slugKey: string; title: string }) {
-  return (
-    <View style={styles.requestGroup}>
-      <View style={styles.requestHeader}>
-        <ThemedText style={styles.paneTitle}>{title}</ThemedText>
-        <ThemedText style={styles.requestCount}>{rows.length}</ThemedText>
-      </View>
-      {rows.length === 0 ? (
-        <ThemedText style={styles.emptyText}>No requests.</ThemedText>
-      ) : (
-        rows.slice(0, 40).map((row) => (
-          <View key={row._id} style={styles.requestRow}>
-            <View style={styles.recordText}>
-              <ThemedText numberOfLines={1} style={styles.recordTitle}>{row[slugKey] ?? row.contentSlug ?? row.experienceSlug}</ThemedText>
-              <ThemedText numberOfLines={1} style={styles.recordMeta}>{row.travelerSlug} - {row.status ?? 'pending'}</ThemedText>
-            </View>
-          </View>
-        ))
-      )}
     </View>
   );
 }
@@ -928,6 +901,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
   },
+  embeddedRoot: {
+    flex: 1,
+    minHeight: 0,
+  },
   header: {
     alignItems: 'flex-start',
     flexDirection: 'row',
@@ -987,12 +964,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
   },
+  workspaceCompact: {
+    flexDirection: 'column',
+  },
   listPane: {
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
     padding: 12,
     width: 320,
+  },
+  listPaneCompact: {
+    width: '100%',
   },
   editorPane: {
     borderRadius: 8,
@@ -1001,6 +984,9 @@ const styles = StyleSheet.create({
     gap: 18,
     minWidth: 0,
     padding: 14,
+  },
+  editorPaneCompact: {
+    width: '100%',
   },
   paneTitle: {
     color: designSystem.colors.ink,
@@ -1146,31 +1132,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 12,
     textTransform: 'capitalize',
-  },
-  requestsPane: {
-    gap: 14,
-  },
-  requestGroup: {
-    borderColor: designSystem.colors.borderSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 10,
-    padding: 12,
-  },
-  requestHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  requestCount: {
-    color: designSystem.colors.mutedText,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  requestRow: {
-    borderColor: designSystem.colors.borderSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
   },
 });

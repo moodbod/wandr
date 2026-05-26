@@ -9,6 +9,11 @@ import type { TripDashboard, TripItineraryItem } from '@/types/trip';
 
 export type ContentStatus = 'draft' | 'live' | 'archived';
 export type CuratedContentKind = 'location' | 'experience' | 'stay';
+export type AdminUserRole = 'traveler' | 'admin';
+export type AdminRoleFilter = AdminUserRole | 'all';
+export type AdminRequestStatus = 'pending' | 'confirmed' | 'cancelled';
+export type AdminRequestStatusFilter = AdminRequestStatus | 'all';
+export type AdminRequestSource = 'experienceBooking' | 'stayBooking';
 
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const hasConvexUrl = Boolean(convexUrl);
@@ -1291,6 +1296,60 @@ export const migrateLegacyContentAsLiveRef = makeFunctionReference<
   { limit?: number },
   { locationsCreated: number; experiencesUpdated: number; staysUpdated: number }
 >;
+
+export const adminGetOverviewRef = makeFunctionReference<'query', Record<string, never>, any>(
+  'admin:getOverview'
+) as FunctionReference<'query', 'public', Record<string, never>, any>;
+
+export const adminListUsersRef = makeFunctionReference<
+  'query',
+  { cursor?: number; limit?: number; role?: AdminRoleFilter; search?: string },
+  any
+>('admin:listUsers') as FunctionReference<
+  'query',
+  'public',
+  { cursor?: number; limit?: number; role?: AdminRoleFilter; search?: string },
+  any
+>;
+
+export const adminUpdateUserRoleRef = makeFunctionReference<
+  'mutation',
+  { role: AdminUserRole; userId: Id<'users'> },
+  any
+>('admin:updateUserRole') as FunctionReference<
+  'mutation',
+  'public',
+  { role: AdminUserRole; userId: Id<'users'> },
+  any
+>;
+
+export const adminListRequestsRef = makeFunctionReference<
+  'query',
+  { cursor?: number; limit?: number; status?: AdminRequestStatusFilter },
+  any
+>('admin:listRequests') as FunctionReference<
+  'query',
+  'public',
+  { cursor?: number; limit?: number; status?: AdminRequestStatusFilter },
+  any
+>;
+
+export const adminUpdateRequestStatusRef = makeFunctionReference<
+  'mutation',
+  { requestId: Id<'bookings'> | Id<'reservations'>; source: AdminRequestSource; status: 'confirmed' | 'cancelled' },
+  boolean
+>('admin:updateRequestStatus') as FunctionReference<
+  'mutation',
+  'public',
+  { requestId: Id<'bookings'> | Id<'reservations'>; source: AdminRequestSource; status: 'confirmed' | 'cancelled' },
+  boolean
+>;
+
+export const adminListAuditEventsRef = makeFunctionReference<
+  'query',
+  { cursor?: number; limit?: number },
+  any
+>('admin:listAuditEvents') as FunctionReference<'query', 'public', { cursor?: number; limit?: number }, any>;
 
 export const acceptTripInviteRef = makeFunctionReference<
   'mutation',

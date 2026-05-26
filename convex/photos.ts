@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
+import { recordAdminAuditEvent } from './adminAudit';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 import { requireCurrentAuthRecord } from './authIdentity';
 
@@ -156,6 +157,14 @@ export const updateLocationPhotoStatus = mutation({
       status: args.status,
       reviewedAt: Date.now(),
       reviewedBy: reviewer.slug,
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: reviewer,
+      action: 'photo.status',
+      targetKind: 'photo',
+      targetId: args.photoId,
+      targetLabel: photo.locationSlug,
+      summary: `Marked photo ${args.status}.`,
     });
 
     return true;
