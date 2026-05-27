@@ -241,6 +241,8 @@ describe('trip planning foundation', () => {
     await publicTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
       travelerSlug: 'public-map',
       coordinate: [17.08, -22.56],
+      heading: 182,
+      speed: 7.5,
     });
     await friendsOnlyTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
       travelerSlug: 'friends-map',
@@ -255,10 +257,28 @@ describe('trip planning foundation', () => {
       coordinate: [17.11, -22.59],
     });
 
+    const optedOutLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'map-viewer',
+    });
+    expect(optedOutLocations.map((location) => location.travelerSlug)).not.toContain('public-map');
+
+    await viewer.client.mutation(api.profile.updatePrivacySettings, {
+      travelerSlug: 'map-viewer',
+      profileVisibility: 'public',
+      showSavedPlaces: true,
+      showTripActivity: false,
+      locationSharing: 'off',
+      showOtherUsersLiveLocation: true,
+    });
+
     const publicOnlyLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
       travelerSlug: 'map-viewer',
     });
     expect(publicOnlyLocations.map((location) => location.travelerSlug)).toContain('public-map');
+    expect(publicOnlyLocations.find((location) => location.travelerSlug === 'public-map')).toMatchObject({
+      heading: 182,
+      speed: 7.5,
+    });
     expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('friends-map');
     expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('private-map');
     expect(publicOnlyLocations.map((location) => location.travelerSlug)).not.toContain('trip-map');
@@ -309,12 +329,61 @@ describe('trip planning foundation', () => {
       showSavedPlaces: true,
       showTripActivity: false,
       locationSharing: 'off',
+      showOtherUsersLiveLocation: true,
     });
 
     const afterOffLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
       travelerSlug: 'map-viewer',
     });
     expect(afterOffLocations.map((location) => location.travelerSlug)).not.toContain('public-map');
+  });
+
+  it('does not return the viewer as another shared map user and drops expired pucks', async () => {
+    const t = createTest();
+    const viewer = await seedUser(t, 'live-viewer');
+    const otherTraveler = await seedUser(t, 'live-other');
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(viewer.userId, {
+        profileVisibility: 'public',
+        locationSharing: 'whileUsing',
+        showOtherUsersLiveLocation: true,
+      });
+      await ctx.db.patch(otherTraveler.userId, {
+        profileVisibility: 'public',
+        locationSharing: 'whileUsing',
+      });
+    });
+
+    await viewer.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'live-viewer',
+      coordinate: [17.08, -22.56],
+    });
+    await otherTraveler.client.mutation(api.sharedLocations.publishSharedLocation, {
+      travelerSlug: 'live-other',
+      coordinate: [17.09, -22.57],
+    });
+
+    const visibleLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'live-viewer',
+    });
+    expect(visibleLocations.map((location) => location.travelerSlug)).toContain('live-other');
+    expect(visibleLocations.map((location) => location.travelerSlug)).not.toContain('live-viewer');
+
+    await t.run(async (ctx) => {
+      const sharedLocation = await ctx.db
+        .query('sharedLocations')
+        .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', 'live-other'))
+        .unique();
+      if (sharedLocation) {
+        await ctx.db.patch(sharedLocation._id, { expiresAt: Date.now() - 1 });
+      }
+    });
+
+    const afterExpiryLocations = await viewer.client.query(api.sharedLocations.listVisibleSharedLocations, {
+      travelerSlug: 'live-viewer',
+    });
+    expect(afterExpiryLocations.map((location) => location.travelerSlug)).not.toContain('live-other');
   });
 
   it('fails closed for shared map locations when viewer auth is missing or stale', async () => {

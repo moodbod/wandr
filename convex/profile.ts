@@ -36,6 +36,7 @@ const defaultUserSettings = {
   showSavedPlaces: true,
   showTripActivity: false,
   locationSharing: 'off' as const,
+  showOtherUsersLiveLocation: false,
   tripAlertsEnabled: true,
   messagesEnabled: true,
   bookingUpdatesEnabled: true,
@@ -50,6 +51,7 @@ type UserSettingsPatch = Partial<{
   showSavedPlaces: boolean;
   showTripActivity: boolean;
   locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+  showOtherUsersLiveLocation: boolean;
   tripAlertsEnabled: boolean;
   messagesEnabled: boolean;
   bookingUpdatesEnabled: boolean;
@@ -80,6 +82,7 @@ function resolveSettingsFromUser(user: Doc<'users'>, travelerSlug: string) {
     showSavedPlaces: user.showSavedPlaces ?? defaultUserSettings.showSavedPlaces,
     showTripActivity: user.showTripActivity ?? defaultUserSettings.showTripActivity,
     locationSharing: user.locationSharing ?? defaultUserSettings.locationSharing,
+    showOtherUsersLiveLocation: user.showOtherUsersLiveLocation ?? defaultUserSettings.showOtherUsersLiveLocation,
     tripAlertsEnabled: user.tripAlertsEnabled ?? defaultUserSettings.tripAlertsEnabled,
     messagesEnabled: user.messagesEnabled ?? defaultUserSettings.messagesEnabled,
     bookingUpdatesEnabled: user.bookingUpdatesEnabled ?? defaultUserSettings.bookingUpdatesEnabled,
@@ -206,15 +209,20 @@ export const updatePrivacySettings = mutation({
     showSavedPlaces: v.boolean(),
     showTripActivity: v.boolean(),
     locationSharing: v.union(v.literal('off'), v.literal('whileUsing'), v.literal('tripOnly')),
+    showOtherUsersLiveLocation: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    await patchUserSettings(ctx, travelerSlug, {
+    const privacyPatch: UserSettingsPatch = {
       profileVisibility: args.profileVisibility,
       showSavedPlaces: args.showSavedPlaces,
       showTripActivity: args.showTripActivity,
       locationSharing: args.locationSharing,
-    });
+    };
+    if (typeof args.showOtherUsersLiveLocation === 'boolean') {
+      privacyPatch.showOtherUsersLiveLocation = args.showOtherUsersLiveLocation;
+    }
+    await patchUserSettings(ctx, travelerSlug, privacyPatch);
     if (args.locationSharing === 'off') {
       try {
         const sharedLocation = await ctx.db

@@ -3,22 +3,26 @@ import { StyleSheet, View } from 'react-native';
 import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
 
 export function AppMapWorkspace() {
   const currentLocation = useCurrentLocation();
   const traveler = useCurrentTraveler();
   const sharedUserLocations = useVisibleSharedLocations();
-  useSharedLocationPublishing(currentLocation);
 
   return (
     <View style={styles.root}>
       <MapPreview
         userCoordinate={currentLocation.coordinate}
+        userAccuracy={currentLocation.accuracy}
         userAvatarPaletteKey={traveler?.slug}
         userAvatarUri={traveler?.avatarUri}
+        userHeading={currentLocation.heading}
+        userIsStale={currentLocation.isStale}
         userName={traveler?.name}
+        userPuckVariant="navigation"
+        userSpeed={currentLocation.speed}
+        userUpdatedAt={currentLocation.updatedAt}
         markers={[]}
         sharedUserLocations={sharedUserLocations}
         followUserLocation={Boolean(currentLocation.coordinate)}

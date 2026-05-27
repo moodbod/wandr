@@ -74,6 +74,7 @@ export default defineSchema({
     showSavedPlaces: v.optional(v.boolean()),
     showTripActivity: v.optional(v.boolean()),
     locationSharing: v.optional(v.union(v.literal('off'), v.literal('whileUsing'), v.literal('tripOnly'))),
+    showOtherUsersLiveLocation: v.optional(v.boolean()),
     tripAlertsEnabled: v.optional(v.boolean()),
     messagesEnabled: v.optional(v.boolean()),
     bookingUpdatesEnabled: v.optional(v.boolean()),

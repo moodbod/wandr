@@ -15,7 +15,11 @@ type ExploreMapHeroProps = {
   locationLabel: string;
   centerCoordinate: readonly [number, number];
   userCoordinate?: readonly [number, number] | null;
+  userAccuracy?: number | null;
   userHeading?: number | null;
+  userIsStale?: boolean;
+  userSpeed?: number | null;
+  userUpdatedAt?: number | null;
   viewportPadding?: {
     paddingBottom?: number;
     paddingLeft?: number;
@@ -44,7 +48,11 @@ export function ExploreMapHero({
   locationLabel,
   centerCoordinate,
   userCoordinate = null,
+  userAccuracy = null,
   userHeading = null,
+  userIsStale = false,
+  userSpeed = null,
+  userUpdatedAt = null,
   viewportPadding,
   markers,
   routeCoordinates,
@@ -79,10 +87,15 @@ export function ExploreMapHero({
       shellStyle={[styles.shell, shellStyle, hasTopBleed ? styles.bleedShell : null]}
         centerCoordinate={centerCoordinate}
         userCoordinate={userCoordinate}
+        userAccuracy={userAccuracy}
         userAvatarPaletteKey={traveler?.slug}
         userAvatarUri={traveler?.avatarUri}
         userHeading={userHeading}
+        userIsStale={userIsStale}
         userName={traveler?.name}
+        userPuckVariant="navigation"
+        userSpeed={userSpeed}
+        userUpdatedAt={userUpdatedAt}
         viewportPadding={viewportPadding}
         markers={markers}
         sharedUserLocations={sharedUserLocations}

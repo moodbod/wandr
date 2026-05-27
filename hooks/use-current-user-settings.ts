@@ -20,3 +20,7 @@ export function useCurrentUserSettings() {
 export function useCurrentLocationSharingSetting() {
   return useCurrentUserSettingsQuery()?.locationSharing;
 }
+
+export function useShowOtherUsersLiveLocationSetting() {
+  return useCurrentUserSettingsQuery()?.showOtherUsersLiveLocation === true;
+}

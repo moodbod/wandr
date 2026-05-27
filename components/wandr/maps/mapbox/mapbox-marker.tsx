@@ -142,19 +142,25 @@ export const MapboxPlaceMarker = memo(function MapboxPlaceMarker({
 });
 
 type MapboxUserMarkerProps = {
+  accuracy?: number | null;
   avatarPaletteKey?: string | null;
   avatarUri?: string | null;
   coordinate: readonly [number, number];
   heading?: number | null;
   name?: string | null;
+  speed?: number | null;
+  variant?: 'navigation' | 'avatar';
 };
 
 export const MapboxUserMarker = memo(function MapboxUserMarker({
+  accuracy,
   avatarPaletteKey,
   avatarUri,
   coordinate,
   heading,
   name,
+  speed,
+  variant = 'avatar',
 }: MapboxUserMarkerProps) {
   const MapboxGL = getMapboxModule();
   const [renderCoordinate, setRenderCoordinate] = useState(() => coordinate);
@@ -210,7 +216,15 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
 
   return (
     <MapboxGL.MarkerView coordinate={toMapboxPosition(renderCoordinate)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap style={styles.userMarkerView}>
-      <UserLocationPuck avatarPaletteKey={avatarPaletteKey} avatarUri={avatarUri} heading={heading} name={name} />
+      <UserLocationPuck
+        accuracy={accuracy}
+        avatarPaletteKey={avatarPaletteKey}
+        avatarUri={avatarUri}
+        heading={heading}
+        name={name}
+        speed={speed}
+        variant={variant}
+      />
     </MapboxGL.MarkerView>
   );
 });

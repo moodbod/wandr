@@ -235,6 +235,7 @@ export type UserSettings = {
   showSavedPlaces: boolean;
   showTripActivity: boolean;
   locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+  showOtherUsersLiveLocation: boolean;
   tripAlertsEnabled: boolean;
   messagesEnabled: boolean;
   bookingUpdatesEnabled: boolean;
@@ -249,7 +250,10 @@ export type SharedUserLocation = {
   baseLabel: string;
   coordinate: readonly [number, number];
   accuracy: number | null;
+  heading: number | null;
+  speed: number | null;
   updatedAt: number;
+  expiresAt: number;
   locationSharing: 'off' | 'whileUsing' | 'tripOnly';
   profileVisibility: 'friends' | 'public' | 'private';
 };
@@ -267,12 +271,12 @@ export const getUserSettingsRef = makeFunctionReference<
 
 export const publishSharedLocationRef = makeFunctionReference<
   'mutation',
-  { travelerSlug: string; coordinate: number[]; accuracy?: number },
+  { travelerSlug: string; coordinate: number[]; accuracy?: number; heading?: number; speed?: number },
   { published: boolean }
 >('sharedLocations:publishSharedLocation') as FunctionReference<
   'mutation',
   'public',
-  { travelerSlug: string; coordinate: number[]; accuracy?: number },
+  { travelerSlug: string; coordinate: number[]; accuracy?: number; heading?: number; speed?: number },
   { published: boolean }
 >;
 
@@ -360,6 +364,7 @@ export const updatePrivacySettingsRef = makeFunctionReference<
     showSavedPlaces: boolean;
     showTripActivity: boolean;
     locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+    showOtherUsersLiveLocation: boolean;
   },
   boolean
 >('profile:updatePrivacySettings') as FunctionReference<
@@ -371,6 +376,7 @@ export const updatePrivacySettingsRef = makeFunctionReference<
     showSavedPlaces: boolean;
     showTripActivity: boolean;
     locationSharing: 'off' | 'whileUsing' | 'tripOnly';
+    showOtherUsersLiveLocation: boolean;
   },
   boolean
 >;

@@ -5,6 +5,8 @@ export const sharedLocationsTable = defineTable({
   travelerSlug: v.string(),
   coordinate: v.array(v.number()),
   accuracy: v.optional(v.number()),
+  heading: v.optional(v.number()),
+  speed: v.optional(v.number()),
   updatedAt: v.number(),
   expiresAt: v.number(),
 })

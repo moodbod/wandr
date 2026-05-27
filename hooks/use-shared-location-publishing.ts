@@ -9,6 +9,9 @@ type CurrentLocationSnapshot = {
   accuracy: number | null;
   coordinate: readonly [number, number] | null;
   hasPermission: boolean;
+  heading?: number | null;
+  isStale?: boolean;
+  speed?: number | null;
 };
 type LocationSharingSetting = 'off' | 'whileUsing' | 'tripOnly';
 
@@ -23,6 +26,7 @@ const lastSyncByTraveler = new Map<
   }
 >();
 const clearedTravelers = new Set<string>();
+const unavailableClearedTravelers = new Set<string>();
 
 export function useSharedLocationPublishing(location: CurrentLocationSnapshot) {
   const currentLocationSharing = useCurrentLocationSharingSetting();
@@ -47,6 +51,7 @@ export function useSharedLocationPublishingForSetting(
     if (locationSharing === 'off') {
       if (!clearedTravelers.has(travelerSlug)) {
         clearedTravelers.add(travelerSlug);
+        unavailableClearedTravelers.delete(travelerSlug);
         lastSyncByTraveler.delete(travelerSlug);
         void clearSharedLocation({ travelerSlug }).catch((error) => {
           clearedTravelers.delete(travelerSlug);
@@ -57,10 +62,19 @@ export function useSharedLocationPublishingForSetting(
     }
 
     clearedTravelers.delete(travelerSlug);
-    if (!location.hasPermission || !location.coordinate || !coordinateIsValid(location.coordinate)) {
+    if (!location.hasPermission || location.isStale || !location.coordinate || !coordinateIsValid(location.coordinate)) {
+      if (!unavailableClearedTravelers.has(travelerSlug)) {
+        unavailableClearedTravelers.add(travelerSlug);
+        lastSyncByTraveler.delete(travelerSlug);
+        void clearSharedLocation({ travelerSlug }).catch((error) => {
+          unavailableClearedTravelers.delete(travelerSlug);
+          console.error('Failed to clear unavailable shared location', error);
+        });
+      }
       return;
     }
 
+    unavailableClearedTravelers.delete(travelerSlug);
     const now = Date.now();
     const lastSync = lastSyncByTraveler.get(travelerSlug);
     if (
@@ -81,6 +95,8 @@ export function useSharedLocationPublishingForSetting(
       travelerSlug,
       coordinate,
       accuracy: location.accuracy ?? undefined,
+      heading: normalizeHeading(location.heading) ?? undefined,
+      speed: normalizeSpeed(location.speed) ?? undefined,
     }).catch((error) => {
       lastSyncByTraveler.delete(travelerSlug);
       console.error('Failed to publish shared location', error);
@@ -90,6 +106,9 @@ export function useSharedLocationPublishingForSetting(
     location.accuracy,
     location.coordinate,
     location.hasPermission,
+    location.heading,
+    location.isStale,
+    location.speed,
     locationSharing,
     publishSharedLocation,
     travelerSlug,
@@ -106,6 +125,18 @@ function coordinateIsValid(coordinate: readonly [number, number]) {
     latitude >= -90 &&
     latitude <= 90
   );
+}
+
+function normalizeHeading(heading: number | null | undefined) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+    return null;
+  }
+
+  return ((heading % 360) + 360) % 360;
+}
+
+function normalizeSpeed(speed: number | null | undefined) {
+  return typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed : null;
 }
 
 function getDistanceMeters(a: readonly [number, number], b: readonly [number, number]) {

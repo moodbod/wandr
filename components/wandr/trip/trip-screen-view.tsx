@@ -13,6 +13,7 @@ import { styles } from '@/components/wandr/trip/trip-screen.styles';
 import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
+import type { CurrentLocationState } from '@/hooks/use-current-location';
 import { usePlanningLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
@@ -92,6 +93,7 @@ export function TripLoadingScreen({
 }
 
 export function TripScreenView({
+  currentLocation,
   insetsBottom,
   insetsTop,
   isDark,
@@ -109,6 +111,7 @@ export function TripScreenView({
   removingItemId,
   useSkeletons,
 }: {
+  currentLocation?: CurrentLocationState;
   insetsBottom: number;
   insetsTop: number;
   isDark: boolean;
@@ -211,6 +214,13 @@ export function TripScreenView({
           mapContent={
             <MapPreview
               centerCoordinate={trip.centerCoordinate ?? mapMarkers[0]?.coordinate ?? planningCenterCoordinate}
+              userCoordinate={currentLocation?.coordinate ?? null}
+              userAccuracy={currentLocation?.accuracy ?? null}
+              userHeading={currentLocation?.heading ?? null}
+              userIsStale={currentLocation?.isStale ?? true}
+              userPuckVariant="navigation"
+              userSpeed={currentLocation?.speed ?? null}
+              userUpdatedAt={currentLocation?.updatedAt ?? null}
               markers={mapMarkers}
               sharedUserLocations={sharedUserLocations}
               persistKey="app-background"

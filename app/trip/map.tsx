@@ -15,11 +15,14 @@ import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { TripTimelineSection } from '@/components/wandr/trip/trip-timeline-section';
 import { designSystem } from '@/constants/design-system';
 import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
-import { useCurrentLocation } from '@/hooks/use-current-location';
+import {
+  startNavigationLocationTracking,
+  stopNavigationLocationTracking,
+  useCurrentLocation,
+} from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
-import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import { getTripDashboardRef, listUserTripsRef } from '@/lib/convex';
 import { buildTripMapMarkers } from '@/lib/explore-map-markers';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
@@ -46,8 +49,14 @@ function ConnectedTripMapScreen() {
   const [lastResolvedTrip, setLastResolvedTrip] = useState<TripDashboard | null>(null);
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const currentLocationState = useCurrentLocation();
-  useSharedLocationPublishing(currentLocationState);
-  const { coordinate: currentLocation, heading: currentHeading } = currentLocationState;
+  const {
+    accuracy: currentAccuracy,
+    coordinate: currentLocation,
+    heading: currentHeading,
+    isStale: currentIsStale,
+    speed: currentSpeed,
+    updatedAt: currentUpdatedAt,
+  } = currentLocationState;
   useSyncPlanningLocationWithCurrentLocation(currentLocation);
   const { planningLocation } = usePlanningLocation();
   const orderedTrips = useMemo(
@@ -65,6 +74,27 @@ function ConnectedTripMapScreen() {
       params: routeTripId ? { tripId: routeTripId } : undefined,
     });
   }, [isLargeScreen, routeTripId, router]);
+
+  useEffect(() => {
+    if (isLargeScreen) {
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    void startNavigationLocationTracking().catch((error) => {
+      if (isMounted) {
+        console.error('Failed to start navigation location tracking', error);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      void stopNavigationLocationTracking().catch((error) => {
+        console.error('Failed to stop navigation location tracking', error);
+      });
+    };
+  }, [isLargeScreen]);
 
   const trip = useQuery(
     getTripDashboardRef,
@@ -108,8 +138,12 @@ function ConnectedTripMapScreen() {
   return (
     <TripMapScreenView
       animatedIndex={animatedIndex}
+      currentAccuracy={currentAccuracy}
       currentHeading={currentHeading}
+      currentIsStale={currentIsStale}
       currentLocation={currentLocation}
+      currentSpeed={currentSpeed}
+      currentUpdatedAt={currentUpdatedAt}
       headerAnimatedStyle={headerAnimatedStyle}
       insetsTop={insets.top}
       sheetRef={sheetRef}
@@ -127,8 +161,12 @@ function ConnectedTripMapScreen() {
 
 function TripMapScreenView({
   animatedIndex,
+  currentAccuracy,
   currentHeading,
+  currentIsStale,
   currentLocation,
+  currentSpeed,
+  currentUpdatedAt,
   fallbackCenterCoordinate,
   fallbackLocationLabel,
   headerAnimatedStyle,
@@ -142,8 +180,12 @@ function TripMapScreenView({
   useSkeletons,
 }: {
   animatedIndex?: ReturnType<typeof useSharedValue<number>>;
+  currentAccuracy?: number | null;
   currentHeading?: number | null;
+  currentIsStale?: boolean;
   currentLocation?: readonly [number, number] | null;
+  currentSpeed?: number | null;
+  currentUpdatedAt?: number | null;
   fallbackCenterCoordinate?: readonly [number, number] | null;
   fallbackLocationLabel: string;
   headerAnimatedStyle?: object;
@@ -182,7 +224,11 @@ function TripMapScreenView({
             <ExploreMapHero
               centerCoordinate={centerCoordinate}
               userCoordinate={currentLocation}
+              userAccuracy={currentAccuracy}
               userHeading={currentHeading}
+              userIsStale={currentIsStale}
+              userSpeed={currentSpeed}
+              userUpdatedAt={currentUpdatedAt}
               locationLabel={trip?.dayTitle ?? fallbackLocationLabel}
               markers={markers}
               followUserLocation={Boolean(currentLocation)}
