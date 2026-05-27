@@ -349,10 +349,6 @@ function ProvidersSection() {
   const [providerType, setProviderType] = useState<ProviderType>('both');
   const [providerStatus, setProviderStatus] = useState<ProviderStatusFilter>('all');
   const [submissionFilter, setSubmissionFilter] = useState<ProviderReviewStatusFilter>('submitted');
-  const [businessName, setBusinessName] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [directPaymentNotes, setDirectPaymentNotes] = useState('Guests can pay cash or arrange bank transfer directly.');
   const [reviewNote, setReviewNote] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const users = useQuery(adminListUsersRef, { limit: 24, role: 'all', search: inviteSearch });
@@ -363,22 +359,12 @@ function ProvidersSection() {
   const reviewProviderListing = useMutation(adminReviewProviderListingRef);
 
   async function inviteUser(user: any) {
-    const resolvedBusinessName = businessName.trim() || user.name || user.slug || 'Provider business';
     setBusyId(user.userId);
     try {
       await inviteProvider({
         userId: user.userId as Id<'users'>,
-        businessName: resolvedBusinessName,
         providerType,
-        contactEmail: contactEmail.trim() || undefined,
-        contactPhone: contactPhone.trim() || undefined,
-        contactName: user.name,
-        acceptedPaymentModes: ['cash'],
-        directPaymentNotes: directPaymentNotes.trim() || undefined,
       });
-      setBusinessName('');
-      setContactEmail('');
-      setContactPhone('');
     } catch (error) {
       Alert.alert('Invite failed', error instanceof Error ? error.message : 'Try again.');
     } finally {
@@ -426,16 +412,6 @@ function ProvidersSection() {
           <SegmentedTabs options={providerTypeOptions} value={providerType} onChange={setProviderType} />
           <View style={styles.formGrid}>
             <LabeledInput label="User search" onChangeText={setInviteSearch} placeholder="Name, email, or slug" value={inviteSearch} />
-            <LabeledInput label="Business name" onChangeText={setBusinessName} placeholder="Fallbacks to user name" value={businessName} />
-            <LabeledInput label="Contact email" onChangeText={setContactEmail} placeholder="Optional" value={contactEmail} />
-            <LabeledInput label="Phone" onChangeText={setContactPhone} placeholder="Optional" value={contactPhone} />
-            <LabeledInput
-              label="Cash/direct-pay note"
-              multiline
-              onChangeText={setDirectPaymentNotes}
-              placeholder="How guests pay outside Wandr"
-              value={directPaymentNotes}
-            />
           </View>
           {users === undefined ? (
             <LoadingRows />
@@ -863,9 +839,9 @@ function ProviderBusinessRow({
       </View>
       <View style={styles.rowActions}>
         <IconAction
-          disabled={busy || provider.status === 'active'}
-          icon="check-circle-outline"
-          label="Activate"
+          disabled={busy || provider.status === 'active' || provider.status === 'invited'}
+          icon={provider.status === 'invited' ? 'clock-outline' : 'check-circle-outline'}
+          label={provider.status === 'invited' ? 'Waiting' : 'Activate'}
           onPress={onActivate}
           variant="primary"
         />

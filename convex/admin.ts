@@ -21,8 +21,6 @@ const providerReviewStatusFilterValidator = v.union(
   v.literal('rejected'),
   v.literal('all')
 );
-const paymentModeValidator = v.union(v.literal('cash'), v.literal('platform'));
-
 type UserRole = 'traveler' | 'serviceProvider' | 'admin';
 type RequestStatus = 'pending' | 'confirmed' | 'cancelled';
 type PaymentMode = 'cash' | 'platform';
@@ -612,13 +610,7 @@ export const updateUserRole = mutation({
 export const inviteServiceProvider = mutation({
   args: {
     userId: v.id('users'),
-    businessName: v.string(),
     providerType: providerTypeValidator,
-    contactEmail: v.optional(v.string()),
-    contactPhone: v.optional(v.string()),
-    contactName: v.optional(v.string()),
-    acceptedPaymentModes: v.optional(v.array(paymentModeValidator)),
-    directPaymentNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
@@ -629,31 +621,29 @@ export const inviteServiceProvider = mutation({
     if (!user.slug) {
       throw new ConvexError('User must finish onboarding before provider access.');
     }
-
-    const now = Date.now();
-    const businessName = args.businessName.trim();
-    if (businessName.length < 2) {
-      throw new ConvexError('Business name is required.');
+    if (getUserRole(user) === 'admin') {
+      throw new ConvexError('Admin accounts cannot be invited as providers.');
     }
 
+    const now = Date.now();
     const existing = await ctx.db
       .query('businessProfiles')
       .withIndex('by_ownerSlug', (q) => q.eq('ownerSlug', user.slug!))
       .unique();
-    const paymentModes = normalizePaymentModes(args.acceptedPaymentModes);
+    const businessName = existing?.businessName ?? `${user.name ?? user.slug} business`;
     const payload = {
       businessName,
       providerType: args.providerType,
-      contactEmail: optionalText(args.contactEmail) ?? user.email,
-      contactPhone: optionalText(args.contactPhone),
-      contactName: optionalText(args.contactName) ?? user.name,
-      status: 'active' as const,
-      acceptedPaymentModes: paymentModes,
-      directPaymentNotes: optionalText(args.directPaymentNotes),
+      contactEmail: existing?.contactEmail ?? user.email,
+      contactPhone: existing?.contactPhone,
+      contactName: existing?.contactName ?? user.name,
+      status: existing?.status ?? ('invited' as const),
+      acceptedPaymentModes: existing?.acceptedPaymentModes ?? normalizePaymentModes(),
+      directPaymentNotes: existing?.directPaymentNotes,
       subscriptionStatus: existing?.subscriptionStatus ?? ('none' as const),
       invitedByAdminSlug: existing?.invitedByAdminSlug ?? admin.slug,
       invitedAt: existing?.invitedAt ?? now,
-      suspendedAt: undefined,
+      suspendedAt: existing?.suspendedAt,
       updatedAt: now,
     };
 
@@ -669,9 +659,7 @@ export const inviteServiceProvider = mutation({
       await ctx.db.patch(existing._id, payload);
     }
 
-    if (getUserRole(user) !== 'admin') {
-      await ctx.db.patch(args.userId, { role: 'serviceProvider' });
-    }
+    await ctx.db.patch(args.userId, { role: 'serviceProvider' });
 
     await recordAdminAuditEvent(ctx, {
       actor: admin,
@@ -679,7 +667,7 @@ export const inviteServiceProvider = mutation({
       targetKind: 'businessProfile',
       targetId: businessProfileId,
       targetLabel: businessName,
-      summary: `Invited ${user.slug} as a ${args.providerType} provider.`,
+      summary: `Invited ${user.slug} to finish ${args.providerType} provider setup.`,
     });
 
     const profile = await ctx.db.get(businessProfileId);
@@ -734,6 +722,9 @@ export const updateServiceProviderStatus = mutation({
     const profile = await ctx.db.get(args.businessProfileId);
     if (!profile) {
       throw new ConvexError('Provider profile not found.');
+    }
+    if (args.status === 'active' && profile.status === 'invited') {
+      throw new ConvexError('Provider must finish business setup first.');
     }
 
     await ctx.db.patch(args.businessProfileId, {

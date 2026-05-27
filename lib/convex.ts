@@ -1425,13 +1425,7 @@ export const adminInviteServiceProviderRef = makeFunctionReference<
   'mutation',
   {
     userId: Id<'users'>;
-    businessName: string;
     providerType: ProviderType;
-    contactEmail?: string;
-    contactPhone?: string;
-    contactName?: string;
-    acceptedPaymentModes?: ('cash' | 'platform')[];
-    directPaymentNotes?: string;
   },
   any
 >('admin:inviteServiceProvider') as FunctionReference<
@@ -1439,13 +1433,7 @@ export const adminInviteServiceProviderRef = makeFunctionReference<
   'public',
   {
     userId: Id<'users'>;
-    businessName: string;
     providerType: ProviderType;
-    contactEmail?: string;
-    contactPhone?: string;
-    contactName?: string;
-    acceptedPaymentModes?: ('cash' | 'platform')[];
-    directPaymentNotes?: string;
   },
   any
 >;
@@ -1507,6 +1495,31 @@ export const adminReviewProviderListingRef = makeFunctionReference<
 export const providerGetMyBusinessProfileRef = makeFunctionReference<'query', Record<string, never>, any>(
   'provider:getMyBusinessProfile'
 ) as FunctionReference<'query', 'public', Record<string, never>, any>;
+
+export const providerCompleteMyBusinessSetupRef = makeFunctionReference<
+  'mutation',
+  {
+    acceptedPaymentModes?: ('cash' | 'platform')[];
+    businessName: string;
+    contactEmail?: string;
+    contactName?: string;
+    contactPhone?: string;
+    directPaymentNotes?: string;
+  },
+  any
+>('provider:completeMyBusinessSetup') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    acceptedPaymentModes?: ('cash' | 'platform')[];
+    businessName: string;
+    contactEmail?: string;
+    contactName?: string;
+    contactPhone?: string;
+    directPaymentNotes?: string;
+  },
+  any
+>;
 
 export const providerListMyListingsRef = makeFunctionReference<'query', Record<string, never>, any>(
   'provider:listMyListings'

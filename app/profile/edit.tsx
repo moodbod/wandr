@@ -36,7 +36,7 @@ export default function EditProfileScreen() {
   const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
   const isAdmin = session?.role === 'admin';
-  const canManageBusiness = session?.role === 'serviceProvider' || session?.role === 'admin';
+  const canManageBusiness = session?.role === 'serviceProvider';
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
   const [name, setName] = useState('');

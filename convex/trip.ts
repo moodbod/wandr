@@ -148,7 +148,50 @@ function isCoordinate(value: readonly number[] | undefined): value is readonly [
   );
 }
 
-function normalizeStayForTrip(stay: Doc<'stays'>) {
+async function resolveStoredImageUrl(ctx: QueryCtx | MutationCtx, storageId?: Id<'_storage'>) {
+  return storageId ? await ctx.storage.getUrl(storageId) : null;
+}
+
+async function resolveStoredGalleryImages(ctx: QueryCtx | MutationCtx, storageIds?: Id<'_storage'>[]) {
+  if (!storageIds?.length) {
+    return [];
+  }
+  const urls = await Promise.all(storageIds.map((storageId) => ctx.storage.getUrl(storageId)));
+  return urls.filter((url): url is string => Boolean(url));
+}
+
+function mergeGalleryImages(imageUri: string, galleryImages?: readonly string[], storageGalleryImages: readonly string[] = []) {
+  const seen = new Set<string>();
+  return [imageUri, ...storageGalleryImages, ...(galleryImages ?? [])]
+    .map((uri) => uri.trim())
+    .filter((uri) => {
+      if (!uri || seen.has(uri)) {
+        return false;
+      }
+      seen.add(uri);
+      return true;
+    });
+}
+
+async function resolveExperienceDisplayImages(ctx: QueryCtx | MutationCtx, experience: Doc<'experiences'>) {
+  const imageUri = (await resolveStoredImageUrl(ctx, experience.imageStorageId)) ?? experience.imageUri;
+  const storageGallery = await resolveStoredGalleryImages(ctx, experience.galleryStorageIds);
+  return {
+    imageUri,
+    galleryImages: mergeGalleryImages(imageUri, experience.galleryImages, storageGallery),
+  };
+}
+
+async function resolveStayDisplayImages(ctx: QueryCtx | MutationCtx, stay: Doc<'stays'>) {
+  const imageUri = (await resolveStoredImageUrl(ctx, stay.imageStorageId)) ?? stay.imageUri;
+  const storageGallery = await resolveStoredGalleryImages(ctx, stay.galleryStorageIds);
+  return {
+    imageUri,
+    galleryImages: mergeGalleryImages(imageUri, stay.galleryImages, storageGallery),
+  };
+}
+
+function normalizeStayForTrip(stay: Doc<'stays'>, images?: { galleryImages: string[]; imageUri: string }) {
   if (!isCoordinate(stay.coordinate)) {
     return null;
   }
@@ -157,6 +200,8 @@ function normalizeStayForTrip(stay: Doc<'stays'>) {
     ...stay,
     id: stay.slug,
     coordinate: stay.coordinate,
+    imageUri: images?.imageUri ?? stay.imageUri,
+    galleryImages: images?.galleryImages ?? stay.galleryImages,
     priceLabel: `$${stay.pricePerNight}`,
   };
 }
@@ -595,8 +640,8 @@ async function getResolvedItinerary(
       .sort((a, b) => b.bookedAt - a.bookedAt)[0] ?? null;
   };
 
-  const resolvedItinerary = bookings
-    .map<TripItineraryItem | null>((booking) => {
+  const resolvedItinerary = (
+    await Promise.all(bookings.map(async (booking): Promise<TripItineraryItem | null> => {
       const contentSlug = booking.contentSlug ?? booking.experienceSlug;
       const contentKind = booking.contentKind;
 
@@ -629,7 +674,7 @@ async function getResolvedItinerary(
           return null;
         }
 
-        const normalizedStay = normalizeStayForTrip(stay);
+        const normalizedStay = normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay));
         if (!normalizedStay) {
           return null;
         }
@@ -650,10 +695,11 @@ async function getResolvedItinerary(
       const experience = allExperiences.find((item) => item.slug === contentSlug && item.itemKind !== 'hiddenGem');
 
       if (experience) {
+        const experienceImages = await resolveExperienceDisplayImages(ctx, experience);
         return {
           ...booking,
           kind: 'experience',
-          experience: experience as ExploreExperience,
+          experience: { ...experience, ...experienceImages } as ExploreExperience,
         };
       }
 
@@ -694,7 +740,7 @@ async function getResolvedItinerary(
         return null;
       }
 
-      const normalizedStay = normalizeStayForTrip(stay);
+      const normalizedStay = normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay));
       if (!normalizedStay) {
         return null;
       }
@@ -710,8 +756,8 @@ async function getResolvedItinerary(
         totalPrice: stayBooking?.totalPrice,
         stayBookingDetails: stayBooking?.stayBookingDetails,
       };
-    })
-    .filter((item): item is TripItineraryItem => item !== null);
+    }))
+  ).filter((item): item is TripItineraryItem => item !== null);
 
   return getOrderedRouteStops(resolvedItinerary);
 }
@@ -904,13 +950,14 @@ export const listTravelerHistory = query({
           .query('experiences')
           .withIndex('by_slug', (q) => q.eq('slug', visit.experienceSlug))
           .unique();
+        const experienceImages = experience ? await resolveExperienceDisplayImages(ctx, experience) : null;
 
         return {
           _id: visit._id,
           slug: visit.experienceSlug,
           title: experience?.title ?? visit.experienceSlug,
           subtitle: experience?.locationLabel ?? experience?.subtitle ?? 'Visited place',
-          imageUri: experience?.imageUri ?? null,
+          imageUri: experienceImages?.imageUri ?? experience?.imageUri ?? null,
           createdAt: visit.arrivedAt,
           kind: 'experience' as const,
           tripId: visit.tripId,
@@ -989,6 +1036,7 @@ export const listTravelerBookings = query({
           .query('experiences')
           .withIndex('by_slug', (q) => q.eq('slug', contentSlug))
           .unique();
+        const experienceImages = experience ? await resolveExperienceDisplayImages(ctx, experience) : null;
 
         const bookingStatus = booking.status ?? 'confirmed';
 
@@ -998,7 +1046,7 @@ export const listTravelerBookings = query({
           slug: contentSlug,
           title: experience?.title ?? contentSlug,
           subtitle: experience?.locationLabel ?? experience?.subtitle ?? 'Experience booking',
-          imageUri: experience?.imageUri ?? null,
+          imageUri: experienceImages?.imageUri ?? experience?.imageUri ?? null,
           bookedAt: booking.bookedAt,
           kind: 'experience' as const,
           status: bookingStatus,
@@ -1021,6 +1069,7 @@ export const listTravelerBookings = query({
           .query('stays')
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
           .unique();
+        const stayImages = stay ? await resolveStayDisplayImages(ctx, stay) : null;
 
         return {
           _id: booking._id,
@@ -1028,7 +1077,7 @@ export const listTravelerBookings = query({
           slug: booking.staySlug,
           title: stay?.name ?? booking.staySlug,
           subtitle: stay?.locationLabel ?? 'Stay booking',
-          imageUri: stay?.imageUri ?? null,
+          imageUri: stayImages?.imageUri ?? stay?.imageUri ?? null,
           bookedAt: booking.bookedAt,
           kind: 'stay' as const,
           status: booking.status,
@@ -2035,13 +2084,20 @@ export const listAllStays = query({
   args: {},
   handler: async (ctx) => {
     const stays = await ctx.db.query('stays').take(200);
-    return stays
-      .filter((stay) => isLiveContent(stay.status) && isPublicProviderContent(stay))
-      .map((stay) => ({
-        ...stay,
+    const publicStays = stays.filter((stay) => isLiveContent(stay.status) && isPublicProviderContent(stay));
+    return await Promise.all(
+      publicStays.map(async (stay) => {
+        const images = await resolveStayDisplayImages(ctx, stay);
+        const { imageStorageId: _imageStorageId, galleryStorageIds: _galleryStorageIds, ...publicStay } = stay;
+        return {
+        ...publicStay,
         id: stay.slug,
+        imageUri: images.imageUri,
+        galleryImages: images.galleryImages,
         priceLabel: `$${stay.pricePerNight}`,
-      }));
+        };
+      })
+    );
   },
 });
 
@@ -2055,11 +2111,14 @@ export const listManagedStays = query({
       .withIndex('by_managerSlug', (q) => q.eq('managerSlug', managerSlug))
       .take(100);
 
-    return stays.map((stay) => ({
-      ...stay,
-      id: stay.slug,
-      priceLabel: `$${stay.pricePerNight}`,
-    }));
+    return await Promise.all(
+      stays.map(async (stay) => ({
+        ...stay,
+        ...(await resolveStayDisplayImages(ctx, stay)),
+        id: stay.slug,
+        priceLabel: `$${stay.pricePerNight}`,
+      }))
+    );
   },
 });
 
@@ -2193,9 +2252,19 @@ export const getStayBySlug = query({
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
       .unique();
 
-    return stay && isLiveContent(stay.status) && isPublicProviderContent(stay)
-      ? { ...stay, id: stay.slug, priceLabel: `$${stay.pricePerNight}` }
-      : null;
+    if (!stay || !isLiveContent(stay.status) || !isPublicProviderContent(stay)) {
+      return null;
+    }
+
+    const images = await resolveStayDisplayImages(ctx, stay);
+    const { imageStorageId: _imageStorageId, galleryStorageIds: _galleryStorageIds, ...publicStay } = stay;
+    return {
+      ...publicStay,
+      id: stay.slug,
+      imageUri: images.imageUri,
+      galleryImages: images.galleryImages,
+      priceLabel: `$${stay.pricePerNight}`,
+    };
   },
 });
 
