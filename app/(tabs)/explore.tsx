@@ -22,10 +22,7 @@ import { styles } from '@/components/wandr/explore/explore-screen.styles';
 import { HeaderLocationSelector } from '@/components/wandr/header-location-selector';
 import { LargeScreenPanel, LargeScreenWorkspace, largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { designSystem } from '@/constants/design-system';
-import type {
-  ExploreExperience,
-  ExploreMapMarker,
-} from '@/constants/explore-content';
+import type { ExploreMapMarker } from '@/constants/explore-content';
 import {
   buildPlanningLocationsFromDestinations,
   coordinateIsInPlanningLocation,
@@ -340,22 +337,8 @@ function ExploreScreenView({
   );
   const exploreMarkers = useMemo<ExploreMapMarker[]>(
     () =>
-      pageContent.experiences
-        .filter(
-          (experience): experience is ExploreExperience & { coordinate: readonly [number, number] } =>
-            Boolean(experience.coordinate)
-        )
-        .map((experience, index) => ({
-          id: experience.slug,
-          coordinate: experience.coordinate,
-          experienceSlug: experience.slug,
-          imageUri: experience.imageUri,
-          itemKind: experience.itemKind ?? 'experience',
-          label: experience.title,
-          popularityScore: experience.travelerMomentum?.visitorCount ?? 0,
-          tone: index % 2 === 0 ? 'accent' : 'dark',
-        })),
-    [pageContent.experiences]
+      pageContent.home.hero.markers.filter((marker) => marker.itemKind !== 'stay'),
+    [pageContent.home.hero.markers]
   );
   const experienceBySlug = useMemo(() => {
     return new Map(pageContent.experiences.map((experience) => [experience.slug, experience]));
