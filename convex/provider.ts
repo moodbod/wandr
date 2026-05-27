@@ -11,6 +11,7 @@ const requestSourceValidator = v.union(v.literal('experienceBooking'), v.literal
 const paymentModeValidator = v.union(v.literal('cash'), v.literal('platform'));
 const coordinateValidator = v.array(v.number());
 const galleryValidator = v.array(v.string());
+const galleryStorageIdsValidator = v.array(v.id('_storage'));
 const stayStyleValidator = v.union(v.literal('design'), v.literal('lodge'), v.literal('roadside'), v.literal('wellness'));
 const routeVibeValidator = v.union(
   v.literal('city reset'),
@@ -46,6 +47,9 @@ const stayBookingProfileValidator = v.object({
 });
 
 type PaymentMode = 'cash' | 'platform';
+const MAX_PROVIDER_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PROVIDER_GALLERY_IMAGES = 6;
+
 function optionalText(value?: string) {
   const trimmed = value?.trim() ?? '';
   return trimmed.length > 0 ? trimmed : undefined;
@@ -62,6 +66,113 @@ function requireText(value: string, label: string) {
 function normalizePaymentModes(value?: PaymentMode[]) {
   const modes = value?.length ? value : ['cash' as const];
   return Array.from(new Set(modes));
+}
+
+function normalizeGalleryStorageIds(storageIds?: Id<'_storage'>[]) {
+  const unique = Array.from(new Set(storageIds ?? []));
+  if (unique.length > MAX_PROVIDER_GALLERY_IMAGES) {
+    throw new ConvexError(`Gallery can include up to ${MAX_PROVIDER_GALLERY_IMAGES} images.`);
+  }
+  return unique;
+}
+
+async function resolveStorageImageUrl(
+  ctx: QueryCtx | MutationCtx,
+  storageId: Id<'_storage'> | undefined,
+  label: string,
+  shouldValidate = false
+) {
+  if (!storageId) {
+    return null;
+  }
+
+  if (shouldValidate) {
+    const metadata = await ctx.db.system.get('_storage', storageId);
+    if (!metadata) {
+      throw new ConvexError(`${label} upload is unavailable.`);
+    }
+    if (metadata.contentType && !metadata.contentType.startsWith('image/')) {
+      throw new ConvexError(`${label} must be an image file.`);
+    }
+    if (metadata.size > MAX_PROVIDER_IMAGE_BYTES) {
+      throw new ConvexError(`${label} must be 8 MB or smaller.`);
+    }
+  }
+
+  const imageUrl = await ctx.storage.getUrl(storageId);
+  if (!imageUrl && shouldValidate) {
+    throw new ConvexError(`${label} upload is unavailable.`);
+  }
+  return imageUrl;
+}
+
+async function resolveGalleryStorageUrls(
+  ctx: QueryCtx | MutationCtx,
+  storageIds: Id<'_storage'>[] | undefined,
+  shouldValidate = false
+) {
+  const normalizedIds = normalizeGalleryStorageIds(storageIds);
+  const urls = await Promise.all(
+    normalizedIds.map((storageId, index) =>
+      resolveStorageImageUrl(ctx, storageId, `Gallery image ${index + 1}`, shouldValidate)
+    )
+  );
+  return urls.filter((url): url is string => Boolean(url));
+}
+
+function normalizeGalleryImages(imageUri: string, galleryImages?: readonly string[], galleryUrls?: readonly string[]) {
+  const seen = new Set<string>();
+  return [imageUri, ...(galleryUrls ?? []), ...(galleryImages ?? [])]
+    .map((uri) => uri.trim())
+    .filter((uri) => {
+      if (!uri || seen.has(uri)) {
+        return false;
+      }
+      seen.add(uri);
+      return true;
+    })
+    .slice(0, MAX_PROVIDER_GALLERY_IMAGES + 1);
+}
+
+async function resolveProviderImagesForWrite(
+  ctx: MutationCtx,
+  args: {
+    galleryImages?: string[];
+    galleryStorageIds?: Id<'_storage'>[];
+    imageStorageId?: Id<'_storage'>;
+    imageUri?: string;
+  }
+) {
+  const imageUri = (await resolveStorageImageUrl(ctx, args.imageStorageId, 'Cover image', true)) ?? optionalText(args.imageUri) ?? '';
+  const galleryUrls = await resolveGalleryStorageUrls(ctx, args.galleryStorageIds, true);
+  const galleryImages = normalizeGalleryImages(imageUri, args.galleryImages, galleryUrls);
+
+  return {
+    imageStorageId: args.imageStorageId,
+    imageUri,
+    galleryStorageIds: normalizeGalleryStorageIds(args.galleryStorageIds),
+    galleryImages,
+  };
+}
+
+async function resolveExperienceForRead(ctx: QueryCtx | MutationCtx, experience: Doc<'experiences'>) {
+  const storedCover = await resolveStorageImageUrl(ctx, experience.imageStorageId, 'Cover image');
+  const imageUri = storedCover ?? experience.imageUri;
+  const galleryUrls = await resolveGalleryStorageUrls(ctx, experience.galleryStorageIds);
+  return {
+    imageUri,
+    galleryImages: normalizeGalleryImages(imageUri, experience.galleryImages, galleryUrls),
+  };
+}
+
+async function resolveStayForRead(ctx: QueryCtx | MutationCtx, stay: Doc<'stays'>) {
+  const storedCover = await resolveStorageImageUrl(ctx, stay.imageStorageId, 'Cover image');
+  const imageUri = storedCover ?? stay.imageUri;
+  const galleryUrls = await resolveGalleryStorageUrls(ctx, stay.galleryStorageIds);
+  return {
+    imageUri,
+    galleryImages: normalizeGalleryImages(imageUri, stay.galleryImages, galleryUrls),
+  };
 }
 
 function slugify(value: string) {
@@ -108,7 +219,7 @@ async function requireProviderBusiness(ctx: QueryCtx | MutationCtx) {
   const { authRecord, user } = await requireCurrentAuthUser(ctx);
   const role = getAuthUserRole(user as AuthUserProfile);
 
-  if (role !== 'serviceProvider' && role !== 'admin') {
+  if (role !== 'serviceProvider') {
     throw new ConvexError('Service provider access required.');
   }
 
@@ -123,6 +234,10 @@ async function requireProviderBusiness(ctx: QueryCtx | MutationCtx) {
 
   if (!business) {
     throw new ConvexError('Provider invite required.');
+  }
+
+  if (business.status === 'invited') {
+    throw new ConvexError('Provider setup required.');
   }
 
   if (business.status !== 'active') {
@@ -215,10 +330,22 @@ function toBusinessProfileRow(profile: Doc<'businessProfiles'>) {
     acceptedPaymentModes: profile.acceptedPaymentModes,
     directPaymentNotes: profile.directPaymentNotes ?? null,
     subscriptionStatus: profile.subscriptionStatus ?? 'none',
+    updatedAt: profile.updatedAt,
   };
 }
 
-function toExperienceListingRow(experience: Doc<'experiences'>) {
+function extractProviderCapacity(label?: string) {
+  const value = Number(String(label ?? '').replace(/[^0-9]/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function extractProviderPrice(value?: string) {
+  const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function toExperienceListingRow(ctx: QueryCtx | MutationCtx, experience: Doc<'experiences'>) {
+  const images = await resolveExperienceForRead(ctx, experience);
   return {
     _id: experience._id,
     kind: 'experience' as const,
@@ -227,13 +354,37 @@ function toExperienceListingRow(experience: Doc<'experiences'>) {
     status: experience.status ?? ('draft' as const),
     reviewStatus: experience.reviewStatus ?? ('draft' as const),
     price: experience.price,
+    priceUsd: extractProviderPrice(experience.price),
     locationLabel: experience.locationLabel ?? experience.subtitle,
+    subtitle: experience.subtitle,
+    description: experience.description,
+    category: experience.category ?? 'Guided tour',
+    durationLabel: experience.durationLabel ?? '',
+    groupCapacity: extractProviderCapacity(experience.groupSizeLabel),
+    town: experience.geography?.town ?? '',
+    region: experience.geography?.region ?? '',
+    countryCode: experience.countryCode ?? '',
+    countryLabel: experience.countryLabel ?? '',
+    planningLocationId: experience.planningLocationId ?? '',
+    coordinate: experience.coordinate ?? [],
+    imageStorageId: experience.imageStorageId ?? null,
+    imageUri: images.imageUri,
+    galleryStorageIds: experience.galleryStorageIds ?? [],
+    galleryImages: images.galleryImages,
+    availabilityLabel: experience.booking?.availabilityLabel ?? '',
+    confirmMode: experience.booking?.confirmMode ?? '',
+    includes: experience.includes,
+    acceptedPaymentModes: experience.acceptedPaymentModes ?? ['cash'],
+    directPaymentNotes: experience.directPaymentNotes ?? null,
+    cancellationPolicy: experience.cancellationPolicy ?? null,
+    contactNote: experience.contactNote ?? null,
     submittedAt: experience.submittedAt ?? null,
     rejectionNote: experience.rejectionNote ?? null,
   };
 }
 
-function toStayListingRow(stay: Doc<'stays'>) {
+async function toStayListingRow(ctx: QueryCtx | MutationCtx, stay: Doc<'stays'>) {
+  const images = await resolveStayForRead(ctx, stay);
   return {
     _id: stay._id,
     kind: 'stay' as const,
@@ -242,10 +393,74 @@ function toStayListingRow(stay: Doc<'stays'>) {
     status: stay.status ?? ('draft' as const),
     reviewStatus: stay.reviewStatus ?? ('draft' as const),
     price: `${stay.currencyCode} ${stay.pricePerNight}`,
+    priceUsd: stay.pricePerNight,
     locationLabel: stay.locationLabel,
+    name: stay.name,
+    summary: stay.summary,
+    town: stay.town,
+    region: stay.region,
+    countryCode: stay.countryCode ?? '',
+    countryLabel: stay.countryLabel ?? '',
+    planningLocationId: stay.planningLocationId ?? '',
+    coordinate: stay.coordinate,
+    imageStorageId: stay.imageStorageId ?? null,
+    imageUri: images.imageUri,
+    galleryStorageIds: stay.galleryStorageIds ?? [],
+    galleryImages: images.galleryImages,
+    currencyCode: stay.currencyCode,
+    bookingNote: stay.bookingNote,
+    stayStyle: stay.stayStyle,
+    routeVibe: stay.routeVibe,
+    sleepSignal: stay.sleepSignal,
+    idealFor: stay.idealFor,
+    amenities: stay.amenities,
+    nearbyHighlights: stay.nearbyHighlights,
+    bookingProfile: stay.bookingProfile ?? null,
+    acceptedPaymentModes: stay.acceptedPaymentModes ?? ['cash'],
+    directPaymentNotes: stay.directPaymentNotes ?? null,
+    cancellationPolicy: stay.cancellationPolicy ?? null,
+    contactNote: stay.contactNote ?? null,
     submittedAt: stay.submittedAt ?? null,
     rejectionNote: stay.rejectionNote ?? null,
   };
+}
+
+async function assertExperienceReadyForReview(ctx: MutationCtx, experience: Doc<'experiences'>) {
+  const images = await resolveExperienceForRead(ctx, experience);
+  if (!optionalText(experience.title)) {
+    throw new ConvexError('Title is required before submitting.');
+  }
+  if (!optionalText(experience.locationLabel)) {
+    throw new ConvexError('Location is required before submitting.');
+  }
+  if (!experience.coordinate || experience.coordinate.length < 2) {
+    throw new ConvexError('Coordinates are required before submitting.');
+  }
+  if (!optionalText(experience.price) || !optionalText(experience.groupSizeLabel)) {
+    throw new ConvexError('Price and group size are required before submitting.');
+  }
+  if (!optionalText(images.imageUri)) {
+    throw new ConvexError('Upload a cover image before submitting.');
+  }
+}
+
+async function assertStayReadyForReview(ctx: MutationCtx, stay: Doc<'stays'>) {
+  const images = await resolveStayForRead(ctx, stay);
+  if (!optionalText(stay.name)) {
+    throw new ConvexError('Property name is required before submitting.');
+  }
+  if (!optionalText(stay.locationLabel) || !optionalText(stay.town) || !optionalText(stay.region)) {
+    throw new ConvexError('Location is required before submitting.');
+  }
+  if (!stay.coordinate || stay.coordinate.length < 2) {
+    throw new ConvexError('Coordinates are required before submitting.');
+  }
+  if (!Number.isFinite(stay.pricePerNight)) {
+    throw new ConvexError('Nightly price is required before submitting.');
+  }
+  if (!optionalText(images.imageUri)) {
+    throw new ConvexError('Upload a cover image before submitting.');
+  }
 }
 
 export const getMyBusinessProfile = query({
@@ -253,7 +468,7 @@ export const getMyBusinessProfile = query({
   handler: async (ctx) => {
     const { user } = await requireCurrentAuthUser(ctx);
     const role = getAuthUserRole(user as AuthUserProfile);
-    if ((role !== 'serviceProvider' && role !== 'admin') || !user.slug) {
+    if (role !== 'serviceProvider' || !user.slug) {
       return null;
     }
 
@@ -263,6 +478,60 @@ export const getMyBusinessProfile = query({
       .unique();
 
     return business ? toBusinessProfileRow(business) : null;
+  },
+});
+
+export const completeMyBusinessSetup = mutation({
+  args: {
+    acceptedPaymentModes: v.optional(v.array(paymentModeValidator)),
+    businessName: v.string(),
+    contactEmail: v.optional(v.string()),
+    contactName: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    directPaymentNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireCurrentAuthUser(ctx);
+    const role = getAuthUserRole(user as AuthUserProfile);
+    if (role !== 'serviceProvider') {
+      throw new ConvexError('Service provider access required.');
+    }
+
+    if (!user.slug) {
+      throw new ConvexError('Provider profile incomplete.');
+    }
+
+    const business = await ctx.db
+      .query('businessProfiles')
+      .withIndex('by_ownerSlug', (q) => q.eq('ownerSlug', user.slug!))
+      .unique();
+
+    if (!business) {
+      throw new ConvexError('Provider invite required.');
+    }
+
+    if (business.status === 'suspended') {
+      throw new ConvexError('Provider account is suspended.');
+    }
+
+    await ctx.db.patch(business._id, {
+      acceptedPaymentModes: normalizePaymentModes(args.acceptedPaymentModes),
+      businessName: requireText(args.businessName, 'Business name'),
+      contactEmail: optionalText(args.contactEmail) ?? user.email,
+      contactName: optionalText(args.contactName) ?? user.name,
+      contactPhone: optionalText(args.contactPhone),
+      directPaymentNotes: optionalText(args.directPaymentNotes),
+      status: 'active',
+      suspendedAt: undefined,
+      updatedAt: Date.now(),
+    });
+
+    const updated = await ctx.db.get(business._id);
+    if (!updated) {
+      throw new ConvexError('Provider profile not found.');
+    }
+
+    return toBusinessProfileRow(updated);
   },
 });
 
@@ -277,8 +546,8 @@ export const listMyListings = query({
 
     return {
       business: toBusinessProfileRow(business),
-      experiences: experiences.map(toExperienceListingRow),
-      stays: stays.map(toStayListingRow),
+      experiences: await Promise.all(experiences.map((experience) => toExperienceListingRow(ctx, experience))),
+      stays: await Promise.all(stays.map((stay) => toStayListingRow(ctx, stay))),
     };
   },
 });
@@ -295,10 +564,10 @@ export const upsertMyExperienceDraft = mutation({
   args: {
     experienceId: v.optional(v.id('experiences')),
     title: v.string(),
-    subtitle: v.string(),
-    description: v.string(),
-    category: v.string(),
-    durationLabel: v.string(),
+    subtitle: v.optional(v.string()),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    durationLabel: v.optional(v.string()),
     groupCapacity: v.number(),
     priceUsd: v.number(),
     locationLabel: v.string(),
@@ -308,11 +577,13 @@ export const upsertMyExperienceDraft = mutation({
     countryLabel: v.optional(v.string()),
     planningLocationId: v.optional(v.string()),
     coordinate: coordinateValidator,
-    imageUri: v.string(),
-    galleryImages: galleryValidator,
-    availabilityLabel: v.string(),
-    confirmMode: v.string(),
-    includes: v.array(v.string()),
+    imageStorageId: v.optional(v.id('_storage')),
+    imageUri: v.optional(v.string()),
+    galleryImages: v.optional(galleryValidator),
+    galleryStorageIds: v.optional(galleryStorageIdsValidator),
+    availabilityLabel: v.optional(v.string()),
+    confirmMode: v.optional(v.string()),
+    includes: v.optional(v.array(v.string())),
     acceptedPaymentModes: v.optional(v.array(paymentModeValidator)),
     directPaymentNotes: v.optional(v.string()),
     cancellationPolicy: v.optional(v.string()),
@@ -324,6 +595,7 @@ export const upsertMyExperienceDraft = mutation({
 
     const title = requireText(args.title, 'Title');
     const slug = await createUniqueExperienceSlug(ctx, title, args.experienceId);
+    const images = await resolveProviderImagesForWrite(ctx, args);
     const payload = {
       slug,
       managerSlug: provider.slug,
@@ -335,10 +607,10 @@ export const upsertMyExperienceDraft = mutation({
       badge: 'Experience',
       ctaLabel: 'Request',
       title,
-      subtitle: requireText(args.subtitle, 'Subtitle'),
-      description: requireText(args.description, 'Description'),
-      category: requireText(args.category, 'Category'),
-      durationLabel: requireText(args.durationLabel, 'Duration'),
+      subtitle: optionalText(args.subtitle) ?? 'Provider experience',
+      description: optionalText(args.description) ?? '',
+      category: optionalText(args.category) ?? 'Experience',
+      durationLabel: optionalText(args.durationLabel) ?? 'Flexible',
       groupSizeLabel: `Up to ${Math.max(1, Math.round(args.groupCapacity))} guests`,
       price: `$${Math.max(0, args.priceUsd)}`,
       priceSuffix: 'per person',
@@ -348,15 +620,17 @@ export const upsertMyExperienceDraft = mutation({
       coordinate: args.coordinate,
       geography: { region: requireText(args.region, 'Region'), town: optionalText(args.town) },
       locationLabel: requireText(args.locationLabel, 'Location label'),
-      imageUri: requireText(args.imageUri, 'Main image'),
-      galleryImages: args.galleryImages.length ? args.galleryImages : [args.imageUri],
+      imageStorageId: images.imageStorageId,
+      imageUri: images.imageUri,
+      galleryStorageIds: images.galleryStorageIds,
+      galleryImages: images.galleryImages,
       booking: {
-        availabilityLabel: requireText(args.availabilityLabel, 'Availability'),
-        confirmMode: requireText(args.confirmMode, 'Confirmation'),
+        availabilityLabel: optionalText(args.availabilityLabel) ?? 'Request availability',
+        confirmMode: optionalText(args.confirmMode) ?? 'Provider confirms within 24 hours',
         addToTripLabel: 'Add to trip',
         continueWithoutTripLabel: 'Continue',
       },
-      includes: args.includes,
+      includes: args.includes ?? [],
       acceptedPaymentModes: normalizePaymentModes(args.acceptedPaymentModes),
       directPaymentNotes: optionalText(args.directPaymentNotes),
       cancellationPolicy: optionalText(args.cancellationPolicy),
@@ -391,6 +665,7 @@ export const submitMyExperienceForReview = mutation({
       throw new ConvexError('Experience not found.');
     }
 
+    await assertExperienceReadyForReview(ctx, experience);
     await ctx.db.patch(args.experienceId, {
       reviewStatus: 'submitted',
       status: 'draft',
@@ -412,19 +687,21 @@ export const upsertMyStayDraft = mutation({
     countryCode: v.optional(v.string()),
     countryLabel: v.optional(v.string()),
     planningLocationId: v.optional(v.string()),
-    summary: v.string(),
+    summary: v.optional(v.string()),
     coordinate: coordinateValidator,
-    imageUri: v.string(),
-    galleryImages: galleryValidator,
+    imageStorageId: v.optional(v.id('_storage')),
+    imageUri: v.optional(v.string()),
+    galleryImages: v.optional(galleryValidator),
+    galleryStorageIds: v.optional(galleryStorageIdsValidator),
     priceUsd: v.number(),
     currencyCode: v.string(),
-    bookingNote: v.string(),
+    bookingNote: v.optional(v.string()),
     stayStyle: stayStyleValidator,
     routeVibe: routeVibeValidator,
-    sleepSignal: v.string(),
-    idealFor: v.array(v.string()),
-    amenities: v.array(v.string()),
-    nearbyHighlights: v.array(v.string()),
+    sleepSignal: v.optional(v.string()),
+    idealFor: v.optional(v.array(v.string())),
+    amenities: v.optional(v.array(v.string())),
+    nearbyHighlights: v.optional(v.array(v.string())),
     bookingProfile: stayBookingProfileValidator,
     acceptedPaymentModes: v.optional(v.array(paymentModeValidator)),
     directPaymentNotes: v.optional(v.string()),
@@ -437,6 +714,7 @@ export const upsertMyStayDraft = mutation({
 
     const name = requireText(args.name, 'Property name');
     const slug = await createUniqueStaySlug(ctx, name, args.stayId);
+    const images = await resolveProviderImagesForWrite(ctx, args);
     const payload = {
       slug,
       managerSlug: provider.slug,
@@ -452,21 +730,23 @@ export const upsertMyStayDraft = mutation({
       countryLabel: optionalText(args.countryLabel),
       planningLocationId: optionalText(args.planningLocationId),
       coordinate: args.coordinate,
-      imageUri: requireText(args.imageUri, 'Main image'),
-      galleryImages: args.galleryImages.length ? args.galleryImages : [args.imageUri],
+      imageStorageId: images.imageStorageId,
+      imageUri: images.imageUri,
+      galleryStorageIds: images.galleryStorageIds,
+      galleryImages: images.galleryImages,
       pricePerNight: Math.max(0, args.priceUsd),
       currencyCode: requireText(args.currencyCode, 'Currency'),
       rating: 0,
       reviewCount: 0,
       stayStyle: args.stayStyle,
       routeVibe: args.routeVibe,
-      sleepSignal: requireText(args.sleepSignal, 'Sleep signal'),
-      summary: requireText(args.summary, 'Summary'),
-      idealFor: args.idealFor,
-      amenities: args.amenities,
-      nearbyHighlights: args.nearbyHighlights,
+      sleepSignal: optionalText(args.sleepSignal) ?? 'Curated stay',
+      summary: optionalText(args.summary) ?? '',
+      idealFor: args.idealFor ?? [],
+      amenities: args.amenities ?? [],
+      nearbyHighlights: args.nearbyHighlights ?? [],
       bookingProfile: args.bookingProfile,
-      bookingNote: requireText(args.bookingNote, 'Booking note'),
+      bookingNote: optionalText(args.bookingNote) ?? 'Request to reserve this stay.',
       acceptedPaymentModes: normalizePaymentModes(args.acceptedPaymentModes),
       directPaymentNotes: optionalText(args.directPaymentNotes),
       cancellationPolicy: optionalText(args.cancellationPolicy),
@@ -501,6 +781,7 @@ export const submitMyStayForReview = mutation({
       throw new ConvexError('Stay not found.');
     }
 
+    await assertStayReadyForReview(ctx, stay);
     await ctx.db.patch(args.stayId, {
       reviewStatus: 'submitted',
       status: 'draft',

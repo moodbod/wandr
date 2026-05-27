@@ -140,6 +140,49 @@ describe('admin dashboard APIs', () => {
     });
   });
 
+  it('creates pending provider invites for users to complete', async () => {
+    const t = createTest();
+    const admin = await seedUser(t, 'admin', 'admin');
+    const otherAdmin = await seedUser(t, 'other-admin', 'admin');
+    const traveler = await seedUser(t, 'traveler');
+
+    await expect(
+      admin.client.mutation(api.admin.inviteServiceProvider, {
+        userId: otherAdmin.userId,
+        providerType: 'both',
+      })
+    ).rejects.toThrow(/Admin accounts/);
+
+    const invited = await admin.client.mutation(api.admin.inviteServiceProvider, {
+      userId: traveler.userId,
+      providerType: 'stays',
+    });
+
+    expect(invited).toMatchObject({
+      status: 'invited',
+      providerType: 'stays',
+    });
+
+    const session = await traveler.client.query(api.authSession.getCurrentSession, {});
+    expect(session?.role).toBe('serviceProvider');
+
+    await expect(
+      admin.client.mutation(api.admin.updateServiceProviderStatus, {
+        businessProfileId: invited._id as Id<'businessProfiles'>,
+        status: 'active',
+      })
+    ).rejects.toThrow(/finish business setup/);
+
+    const profile = await traveler.client.query(api.provider.getMyBusinessProfile, {});
+    expect(profile).toMatchObject({ status: 'invited', providerType: 'stays' });
+
+    const completed = await traveler.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Traveler Stays',
+      acceptedPaymentModes: ['cash'],
+    });
+    expect(completed).toMatchObject({ businessName: 'Traveler Stays', status: 'active' });
+  });
+
   it('lists and updates platform experience requests', async () => {
     const t = createTest();
     const admin = await seedUser(t, 'admin', 'admin');

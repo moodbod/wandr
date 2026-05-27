@@ -18,6 +18,7 @@ export const experiencesTable = defineTable({
   title: v.string(),
   subtitle: v.string(),
   description: v.string(),
+  imageStorageId: v.optional(v.id('_storage')),
   imageUri: v.string(),
   price: v.string(),
   priceSuffix: v.string(),
@@ -61,6 +62,7 @@ export const experiencesTable = defineTable({
   primaryLabel: v.optional(v.string()),
   secondaryLabel: v.optional(v.string()),
   galleryImages: v.optional(v.array(v.string())),
+  galleryStorageIds: v.optional(v.array(v.id('_storage'))),
   travelerMomentum: v.optional(
     v.object({
       countryCode: v.string(),

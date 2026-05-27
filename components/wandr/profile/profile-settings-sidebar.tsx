@@ -185,7 +185,7 @@ export function ProfileSettingsSidebar({
                 onPress={() => navigateTo('/profile/offline-maps' as Href)}
                 title="Downloaded maps"
               />
-              {session?.role === 'serviceProvider' || session?.role === 'admin' ? (
+              {session?.role === 'serviceProvider' ? (
                 <SidebarAction
                   colors={colors}
                   icon={<Storefront color={colors.text} size={20} weight="regular" />}

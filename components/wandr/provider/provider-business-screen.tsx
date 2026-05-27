@@ -1,7 +1,9 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
+import { Image as ExpoImage } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { Id } from '@/convex/_generated/dataModel';
@@ -11,6 +13,8 @@ import { ProfileSettingScreen, SettingActionButton } from '@/components/wandr/pr
 import { designSystem } from '@/constants/design-system';
 import {
   providerArchiveMyListingRef,
+  providerCompleteMyBusinessSetupRef,
+  providerGenerateImageUploadUrlRef,
   providerGetMyBusinessProfileRef,
   providerListMyListingsRef,
   providerListMyRequestsRef,
@@ -22,14 +26,74 @@ import {
 } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
-type ProviderTab = 'overview' | 'experience' | 'stay' | 'requests';
+type ProviderTab = 'overview' | 'listings' | 'requests';
+type ListingKind = 'experience' | 'stay';
 type StayStyle = 'design' | 'lodge' | 'roadside' | 'wellness';
 type RouteVibe = 'city reset' | 'coast base' | 'wildlife stop' | 'desert night';
 
+type ExperienceFormState = {
+  availabilityLabel: string;
+  cancellationPolicy: string;
+  category: string;
+  confirmMode: string;
+  contactNote: string;
+  coordinate: string;
+  countryCode: string;
+  countryLabel: string;
+  description: string;
+  directPaymentNotes: string;
+  durationLabel: string;
+  galleryImages: string[];
+  galleryPreviewUris: string[];
+  galleryStorageIds: Id<'_storage'>[];
+  groupCapacity: string;
+  imageStorageId?: Id<'_storage'>;
+  imageUri: string;
+  includes: string;
+  locationLabel: string;
+  priceUsd: string;
+  region: string;
+  subtitle: string;
+  title: string;
+  town: string;
+};
+
+type StayFormState = {
+  amenities: string;
+  arrivalLabel: string;
+  bedLabel: string;
+  bookingNote: string;
+  cancellationPolicy: string;
+  contactNote: string;
+  coordinate: string;
+  countryCode: string;
+  countryLabel: string;
+  currencyCode: string;
+  directPaymentNotes: string;
+  galleryImages: string[];
+  galleryPreviewUris: string[];
+  galleryStorageIds: Id<'_storage'>[];
+  idealFor: string;
+  imageStorageId?: Id<'_storage'>;
+  imageUri: string;
+  locationLabel: string;
+  maxAdults: string;
+  maxChildren: string;
+  maxRooms: string;
+  name: string;
+  nearbyHighlights: string;
+  priceUsd: string;
+  region: string;
+  roomDetail: string;
+  roomLabel: string;
+  sleepSignal: string;
+  summary: string;
+  town: string;
+};
+
 const tabOptions: readonly { key: ProviderTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
-  { key: 'experience', label: 'Experience' },
-  { key: 'stay', label: 'Stay' },
+  { key: 'listings', label: 'Listings' },
   { key: 'requests', label: 'Requests' },
 ] as const;
 
@@ -47,58 +111,75 @@ const routeVibeOptions: readonly { key: RouteVibe; label: string }[] = [
   { key: 'desert night', label: 'Desert' },
 ] as const;
 
-const defaultExperienceForm = {
-  title: '',
-  subtitle: '',
-  description: '',
+const DEFAULT_COORDINATE = '17.0832, -22.5597';
+const MAX_GALLERY_IMAGES = 6;
+
+const defaultExperienceForm = (): ExperienceFormState => ({
+  availabilityLabel: 'Provider confirms within 24 hours',
+  cancellationPolicy: '',
   category: 'Guided tour',
-  durationLabel: '',
-  groupCapacity: '8',
-  priceUsd: '',
-  locationLabel: '',
-  town: '',
-  region: '',
+  confirmMode: 'Provider confirms within 24 hours',
+  contactNote: '',
+  coordinate: DEFAULT_COORDINATE,
   countryCode: 'NA',
   countryLabel: 'Namibia',
-  coordinate: '',
-  imageUri: '',
-  galleryImages: '',
-  availabilityLabel: '',
-  confirmMode: 'Provider confirms within 24 hours',
-  includes: '',
+  description: '',
   directPaymentNotes: 'Cash on arrival or direct transfer with the provider.',
+  durationLabel: '',
+  galleryImages: [],
+  galleryPreviewUris: [],
+  galleryStorageIds: [],
+  groupCapacity: '8',
+  imageStorageId: undefined,
+  imageUri: '',
+  includes: '',
+  locationLabel: '',
+  priceUsd: '',
+  region: '',
+  subtitle: '',
+  title: '',
+  town: '',
+});
+
+const defaultStayForm = (): StayFormState => ({
+  amenities: '',
+  arrivalLabel: '15:00 - 20:00',
+  bedLabel: 'Queen bed',
+  bookingNote: '',
   cancellationPolicy: '',
   contactNote: '',
-};
-
-const defaultStayForm = {
-  name: '',
-  summary: '',
-  locationLabel: '',
-  town: '',
-  region: '',
+  coordinate: DEFAULT_COORDINATE,
   countryCode: 'NA',
   countryLabel: 'Namibia',
-  coordinate: '',
-  imageUri: '',
-  galleryImages: '',
-  priceUsd: '',
   currencyCode: 'USD',
-  bookingNote: '',
-  sleepSignal: '',
+  directPaymentNotes: 'Cash on arrival or direct transfer with the property.',
+  galleryImages: [],
+  galleryPreviewUris: [],
+  galleryStorageIds: [],
   idealFor: '',
-  amenities: '',
-  nearbyHighlights: '',
-  roomLabel: 'Standard room',
-  roomDetail: '',
+  imageStorageId: undefined,
+  imageUri: '',
+  locationLabel: '',
   maxAdults: '2',
   maxChildren: '1',
   maxRooms: '4',
-  bedLabel: 'Queen bed',
-  arrivalLabel: '15:00 - 20:00',
-  directPaymentNotes: 'Cash on arrival or direct transfer with the property.',
-  cancellationPolicy: '',
-  contactNote: '',
+  name: '',
+  nearbyHighlights: '',
+  priceUsd: '',
+  region: '',
+  roomDetail: '',
+  roomLabel: 'Standard room',
+  sleepSignal: '',
+  summary: '',
+  town: '',
+});
+
+const defaultBusinessSetupForm = {
+  businessName: '',
+  contactEmail: '',
+  contactName: '',
+  contactPhone: '',
+  directPaymentNotes: 'Guests can pay cash or arrange bank transfer directly.',
 };
 
 function splitList(value: string) {
@@ -125,27 +206,48 @@ function parseCoordinate(value: string) {
   return [lng, lat];
 }
 
-function galleryFrom(imageUri: string, galleryImages: string) {
-  const gallery = splitList(galleryImages);
-  return gallery.length ? gallery : imageUri.trim() ? [imageUri.trim()] : [];
+function formatCoordinate(value?: readonly number[]) {
+  return value && value.length >= 2 ? `${value[0]}, ${value[1]}` : DEFAULT_COORDINATE;
+}
+
+function getAllowedKinds(providerType: string | undefined): ListingKind[] {
+  if (providerType === 'experiences') return ['experience'];
+  if (providerType === 'stays') return ['stay'];
+  return ['experience', 'stay'];
+}
+
+function getListingKindOptions(providerType: string | undefined) {
+  return getAllowedKinds(providerType).map((kind) => ({
+    key: kind,
+    label: kind === 'experience' ? 'Experience' : 'Stay',
+  }));
+}
+
+function getGalleryPreviews(form: { galleryImages: string[]; galleryPreviewUris: string[] }) {
+  return Array.from(new Set([...form.galleryPreviewUris, ...form.galleryImages])).slice(0, MAX_GALLERY_IMAGES);
 }
 
 export function ProviderBusinessScreen() {
   const { isLoading, session } = useAuthSession();
   const [activeTab, setActiveTab] = useState<ProviderTab>('overview');
+  const [listingKind, setListingKind] = useState<ListingKind>('experience');
   const [experienceId, setExperienceId] = useState<Id<'experiences'> | undefined>();
   const [stayId, setStayId] = useState<Id<'stays'> | undefined>();
-  const [experienceForm, setExperienceForm] = useState(defaultExperienceForm);
-  const [stayForm, setStayForm] = useState(defaultStayForm);
+  const [experienceForm, setExperienceForm] = useState<ExperienceFormState>(() => defaultExperienceForm());
+  const [stayForm, setStayForm] = useState<StayFormState>(() => defaultStayForm());
+  const [businessSetupForm, setBusinessSetupForm] = useState(defaultBusinessSetupForm);
   const [stayStyle, setStayStyle] = useState<StayStyle>('lodge');
   const [routeVibe, setRouteVibe] = useState<RouteVibe>('wildlife stop');
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const loadedBusinessSetupKeyRef = useRef<string | null>(null);
 
-  const canOpenBusiness = session?.role === 'serviceProvider' || session?.role === 'admin';
+  const canOpenBusiness = session?.role === 'serviceProvider';
   const profile = useQuery(providerGetMyBusinessProfileRef, canOpenBusiness ? {} : 'skip');
   const canLoadProviderData = Boolean(profile && profile.status === 'active');
   const listings = useQuery(providerListMyListingsRef, canLoadProviderData ? {} : 'skip');
   const requests = useQuery(providerListMyRequestsRef, canLoadProviderData ? { status: 'all' } : 'skip');
+  const completeBusinessSetup = useMutation(providerCompleteMyBusinessSetupRef);
+  const generateUploadUrl = useMutation(providerGenerateImageUploadUrlRef);
   const upsertExperience = useMutation(providerUpsertMyExperienceDraftRef);
   const submitExperience = useMutation(providerSubmitMyExperienceForReviewRef);
   const upsertStay = useMutation(providerUpsertMyStayDraftRef);
@@ -153,24 +255,152 @@ export function ProviderBusinessScreen() {
   const updateRequestStatus = useMutation(providerUpdateMyRequestStatusRef);
   const archiveListing = useMutation(providerArchiveMyListingRef);
 
-  function updateExperienceField(field: keyof typeof defaultExperienceForm, value: string) {
+  const allowedKinds = useMemo(() => getAllowedKinds(profile?.providerType), [profile?.providerType]);
+  const listingKindOptions = useMemo(() => getListingKindOptions(profile?.providerType), [profile?.providerType]);
+
+  useEffect(() => {
+    if (!allowedKinds.includes(listingKind)) {
+      setListingKind(allowedKinds[0] ?? 'experience');
+    }
+  }, [allowedKinds, listingKind]);
+
+  useEffect(() => {
+    if (!profile) {
+      loadedBusinessSetupKeyRef.current = null;
+      return;
+    }
+
+    const setupKey = `${profile._id}:${profile.updatedAt ?? profile.status}`;
+    if (loadedBusinessSetupKeyRef.current === setupKey) {
+      return;
+    }
+    loadedBusinessSetupKeyRef.current = setupKey;
+
+    setBusinessSetupForm({
+      businessName: profile.businessName ?? '',
+      contactEmail: profile.contactEmail ?? session?.email ?? '',
+      contactName: profile.contactName ?? session?.name ?? '',
+      contactPhone: profile.contactPhone ?? '',
+      directPaymentNotes: profile.directPaymentNotes ?? defaultBusinessSetupForm.directPaymentNotes,
+    });
+  }, [profile, session?.email, session?.name]);
+
+  function updateBusinessSetupField(field: keyof typeof defaultBusinessSetupForm, value: string) {
+    setBusinessSetupForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateExperienceField<Key extends keyof ExperienceFormState>(field: Key, value: ExperienceFormState[Key]) {
     setExperienceForm((current) => ({ ...current, [field]: value }));
   }
 
-  function updateStayField(field: keyof typeof defaultStayForm, value: string) {
+  function updateStayField<Key extends keyof StayFormState>(field: Key, value: StayFormState[Key]) {
     setStayForm((current) => ({ ...current, [field]: value }));
   }
 
+  async function uploadPickedAsset(asset: ImagePicker.ImagePickerAsset) {
+    const uploadUrl = await generateUploadUrl({});
+    const response = await fetch(asset.uri);
+    const blob = await response.blob();
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': asset.mimeType ?? blob.type ?? 'image/jpeg' },
+      body: blob,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('The image could not be uploaded.');
+    }
+
+    const { storageId } = (await uploadResponse.json()) as { storageId: Id<'_storage'> };
+    return storageId;
+  }
+
+  async function pickListingImages(target: 'experienceCover' | 'experienceGallery' | 'stayCover' | 'stayGallery') {
+    const isGallery = target.endsWith('Gallery');
+    setBusyAction(`upload:${target}`);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        throw new Error('Allow photo access to upload images.');
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: isGallery,
+        exif: false,
+        mediaTypes: ['images'],
+        quality: 0.88,
+        selectionLimit: isGallery ? MAX_GALLERY_IMAGES : 1,
+      });
+
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+
+      const assets = isGallery ? result.assets.slice(0, MAX_GALLERY_IMAGES) : result.assets.slice(0, 1);
+      const storageIds = await Promise.all(assets.map(uploadPickedAsset));
+      const previewUris = assets.map((asset) => asset.uri);
+
+      if (target === 'experienceCover') {
+        setExperienceForm((current) => ({ ...current, imageStorageId: storageIds[0], imageUri: previewUris[0] ?? current.imageUri }));
+      }
+      if (target === 'stayCover') {
+        setStayForm((current) => ({ ...current, imageStorageId: storageIds[0], imageUri: previewUris[0] ?? current.imageUri }));
+      }
+      if (target === 'experienceGallery') {
+        setExperienceForm((current) => ({
+          ...current,
+          galleryPreviewUris: [...current.galleryPreviewUris, ...previewUris].slice(0, MAX_GALLERY_IMAGES),
+          galleryStorageIds: [...current.galleryStorageIds, ...storageIds].slice(0, MAX_GALLERY_IMAGES),
+        }));
+      }
+      if (target === 'stayGallery') {
+        setStayForm((current) => ({
+          ...current,
+          galleryPreviewUris: [...current.galleryPreviewUris, ...previewUris].slice(0, MAX_GALLERY_IMAGES),
+          galleryStorageIds: [...current.galleryStorageIds, ...storageIds].slice(0, MAX_GALLERY_IMAGES),
+        }));
+      }
+    } catch (error) {
+      Alert.alert('Upload failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function finishBusinessSetup() {
+    setBusyAction('completeBusinessSetup');
+    try {
+      await completeBusinessSetup({
+        acceptedPaymentModes: ['cash'],
+        businessName: businessSetupForm.businessName,
+        contactEmail: businessSetupForm.contactEmail || undefined,
+        contactName: businessSetupForm.contactName || undefined,
+        contactPhone: businessSetupForm.contactPhone || undefined,
+        directPaymentNotes: businessSetupForm.directPaymentNotes || undefined,
+      });
+      Alert.alert('Saved', 'Business setup is complete.');
+    } catch (error) {
+      Alert.alert('Could not save', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function saveExperience(shouldSubmit: boolean) {
+    if (shouldSubmit && !experienceForm.imageStorageId && !experienceForm.imageUri.trim()) {
+      Alert.alert('Cover image needed', 'Upload a cover image before submitting.');
+      return;
+    }
+
     setBusyAction(shouldSubmit ? 'submitExperience' : 'saveExperience');
     try {
       const saved = await upsertExperience({
         experienceId,
         title: experienceForm.title,
-        subtitle: experienceForm.subtitle,
-        description: experienceForm.description,
-        category: experienceForm.category,
-        durationLabel: experienceForm.durationLabel,
+        subtitle: experienceForm.subtitle || undefined,
+        description: experienceForm.description || undefined,
+        category: experienceForm.category || undefined,
+        durationLabel: experienceForm.durationLabel || undefined,
         groupCapacity: parsePositiveNumber(experienceForm.groupCapacity, 1),
         priceUsd: parsePositiveNumber(experienceForm.priceUsd),
         locationLabel: experienceForm.locationLabel,
@@ -179,10 +409,12 @@ export function ProviderBusinessScreen() {
         countryCode: experienceForm.countryCode || undefined,
         countryLabel: experienceForm.countryLabel || undefined,
         coordinate: parseCoordinate(experienceForm.coordinate),
-        imageUri: experienceForm.imageUri,
-        galleryImages: galleryFrom(experienceForm.imageUri, experienceForm.galleryImages),
-        availabilityLabel: experienceForm.availabilityLabel,
-        confirmMode: experienceForm.confirmMode,
+        imageStorageId: experienceForm.imageStorageId,
+        imageUri: experienceForm.imageStorageId ? undefined : experienceForm.imageUri || undefined,
+        galleryImages: experienceForm.galleryImages,
+        galleryStorageIds: experienceForm.galleryStorageIds,
+        availabilityLabel: experienceForm.availabilityLabel || undefined,
+        confirmMode: experienceForm.confirmMode || undefined,
         includes: splitList(experienceForm.includes),
         acceptedPaymentModes: ['cash'],
         directPaymentNotes: experienceForm.directPaymentNotes || undefined,
@@ -202,6 +434,11 @@ export function ProviderBusinessScreen() {
   }
 
   async function saveStay(shouldSubmit: boolean) {
+    if (shouldSubmit && !stayForm.imageStorageId && !stayForm.imageUri.trim()) {
+      Alert.alert('Cover image needed', 'Upload a cover image before submitting.');
+      return;
+    }
+
     setBusyAction(shouldSubmit ? 'submitStay' : 'saveStay');
     try {
       const roomOptionId = 'standard-room';
@@ -214,16 +451,18 @@ export function ProviderBusinessScreen() {
         region: stayForm.region,
         countryCode: stayForm.countryCode || undefined,
         countryLabel: stayForm.countryLabel || undefined,
-        summary: stayForm.summary,
+        summary: stayForm.summary || undefined,
         coordinate: parseCoordinate(stayForm.coordinate),
-        imageUri: stayForm.imageUri,
-        galleryImages: galleryFrom(stayForm.imageUri, stayForm.galleryImages),
+        imageStorageId: stayForm.imageStorageId,
+        imageUri: stayForm.imageStorageId ? undefined : stayForm.imageUri || undefined,
+        galleryImages: stayForm.galleryImages,
+        galleryStorageIds: stayForm.galleryStorageIds,
         priceUsd: parsePositiveNumber(stayForm.priceUsd),
         currencyCode: stayForm.currencyCode || 'USD',
-        bookingNote: stayForm.bookingNote,
+        bookingNote: stayForm.bookingNote || undefined,
         stayStyle,
         routeVibe,
-        sleepSignal: stayForm.sleepSignal,
+        sleepSignal: stayForm.sleepSignal || undefined,
         idealFor: splitList(stayForm.idealFor),
         amenities: splitList(stayForm.amenities),
         nearbyHighlights: splitList(stayForm.nearbyHighlights),
@@ -232,7 +471,7 @@ export function ProviderBusinessScreen() {
             {
               id: roomOptionId,
               label: stayForm.roomLabel || 'Standard room',
-              detail: stayForm.roomDetail || stayForm.summary,
+              detail: stayForm.roomDetail || stayForm.summary || 'Room',
               maxAdults: Math.max(1, Math.round(parsePositiveNumber(stayForm.maxAdults, 2))),
               maxChildren: Math.round(parsePositiveNumber(stayForm.maxChildren, 0)),
               maxRooms: Math.max(1, Math.round(parsePositiveNumber(stayForm.maxRooms, 1))),
@@ -275,7 +514,7 @@ export function ProviderBusinessScreen() {
     }
   }
 
-  async function archive(kind: 'experience' | 'stay', id: Id<'experiences'> | Id<'stays'>) {
+  async function archive(kind: ListingKind, id: Id<'experiences'> | Id<'stays'>) {
     setBusyAction(id);
     try {
       await archiveListing({ kind, id });
@@ -284,6 +523,92 @@ export function ProviderBusinessScreen() {
     } finally {
       setBusyAction(null);
     }
+  }
+
+  function resetListingForm(kind: ListingKind) {
+    if (kind === 'experience') {
+      setExperienceId(undefined);
+      setExperienceForm(defaultExperienceForm());
+    } else {
+      setStayId(undefined);
+      setStayForm(defaultStayForm());
+      setStayStyle('lodge');
+      setRouteVibe('wildlife stop');
+    }
+    setListingKind(kind);
+  }
+
+  function editListing(listing: any) {
+    setListingKind(listing.kind);
+    setActiveTab('listings');
+    if (listing.kind === 'experience') {
+      setExperienceId(listing._id as Id<'experiences'>);
+      setExperienceForm({
+        availabilityLabel: listing.availabilityLabel ?? '',
+        cancellationPolicy: listing.cancellationPolicy ?? '',
+        category: listing.category ?? 'Guided tour',
+        confirmMode: listing.confirmMode ?? defaultExperienceForm().confirmMode,
+        contactNote: listing.contactNote ?? '',
+        coordinate: formatCoordinate(listing.coordinate),
+        countryCode: listing.countryCode ?? 'NA',
+        countryLabel: listing.countryLabel ?? 'Namibia',
+        description: listing.description ?? '',
+        directPaymentNotes: listing.directPaymentNotes ?? defaultExperienceForm().directPaymentNotes,
+        durationLabel: listing.durationLabel ?? '',
+        galleryImages: listing.galleryStorageIds?.length ? [] : listing.galleryImages ?? [],
+        galleryPreviewUris: listing.galleryImages ?? [],
+        galleryStorageIds: listing.galleryStorageIds ?? [],
+        groupCapacity: String(listing.groupCapacity ?? 8),
+        imageStorageId: listing.imageStorageId ?? undefined,
+        imageUri: listing.imageUri ?? '',
+        includes: (listing.includes ?? []).join('\n'),
+        locationLabel: listing.locationLabel ?? '',
+        priceUsd: String(listing.priceUsd ?? ''),
+        region: listing.region ?? '',
+        subtitle: listing.subtitle ?? '',
+        title: listing.title ?? '',
+        town: listing.town ?? '',
+      });
+      return;
+    }
+
+    const room = listing.bookingProfile?.roomOptions?.[0];
+    const arrival = listing.bookingProfile?.arrivalOptions?.[0];
+    setStayId(listing._id as Id<'stays'>);
+    setStayStyle(listing.stayStyle ?? 'lodge');
+    setRouteVibe(listing.routeVibe ?? 'wildlife stop');
+    setStayForm({
+      amenities: (listing.amenities ?? []).join('\n'),
+      arrivalLabel: arrival?.label ?? '15:00 - 20:00',
+      bedLabel: room?.bedOptions?.[0]?.label ?? 'Queen bed',
+      bookingNote: listing.bookingNote ?? '',
+      cancellationPolicy: listing.cancellationPolicy ?? '',
+      contactNote: listing.contactNote ?? '',
+      coordinate: formatCoordinate(listing.coordinate),
+      countryCode: listing.countryCode ?? 'NA',
+      countryLabel: listing.countryLabel ?? 'Namibia',
+      currencyCode: listing.currencyCode ?? 'USD',
+      directPaymentNotes: listing.directPaymentNotes ?? defaultStayForm().directPaymentNotes,
+      galleryImages: listing.galleryStorageIds?.length ? [] : listing.galleryImages ?? [],
+      galleryPreviewUris: listing.galleryImages ?? [],
+      galleryStorageIds: listing.galleryStorageIds ?? [],
+      idealFor: (listing.idealFor ?? []).join('\n'),
+      imageStorageId: listing.imageStorageId ?? undefined,
+      imageUri: listing.imageUri ?? '',
+      locationLabel: listing.locationLabel ?? '',
+      maxAdults: String(room?.maxAdults ?? 2),
+      maxChildren: String(room?.maxChildren ?? 1),
+      maxRooms: String(room?.maxRooms ?? 4),
+      name: listing.name ?? listing.title ?? '',
+      nearbyHighlights: (listing.nearbyHighlights ?? []).join('\n'),
+      priceUsd: String(listing.priceUsd ?? ''),
+      region: listing.region ?? '',
+      roomDetail: room?.detail ?? '',
+      roomLabel: room?.label ?? 'Standard room',
+      sleepSignal: listing.sleepSignal ?? '',
+      summary: listing.summary ?? '',
+      town: listing.town ?? '',
+    });
   }
 
   if (isLoading) {
@@ -310,18 +635,22 @@ export function ProviderBusinessScreen() {
     );
   }
 
-  const disabledForSuspension = profile.status !== 'active';
+  const setupPending = profile.status === 'invited';
+  const suspended = profile.status === 'suspended';
 
   return (
     <ProfileSettingScreen title="My business">
       <View style={styles.stack}>
         <BusinessHeader profile={profile} />
-        {disabledForSuspension ? (
-          <PanelState
-            icon={profile.status === 'invited' ? 'clock-outline' : 'pause-circle-outline'}
-            title={profile.status === 'invited' ? 'Invite pending' : 'Business suspended'}
-            body="Contact an admin before editing listings."
+        {setupPending ? (
+          <BusinessSetupForm
+            busy={busyAction === 'completeBusinessSetup'}
+            form={businessSetupForm}
+            onFieldChange={updateBusinessSetupField}
+            onSubmit={finishBusinessSetup}
           />
+        ) : suspended ? (
+          <PanelState icon="pause-circle-outline" title="Business suspended" body="Contact an admin before editing listings." />
         ) : (
           <>
             <SegmentedTabs options={tabOptions} value={activeTab} onChange={setActiveTab} />
@@ -329,32 +658,35 @@ export function ProviderBusinessScreen() {
               <OverviewTab
                 busyAction={busyAction}
                 listings={listings}
-                onArchiveExperience={(id) => archive('experience', id)}
-                onArchiveStay={(id) => archive('stay', id)}
+                onArchive={archive}
+                onEdit={editListing}
                 profile={profile}
                 requests={requests}
               />
             ) : null}
-            {activeTab === 'experience' ? (
-              <ExperienceForm
+            {activeTab === 'listings' ? (
+              <ListingsTab
                 busyAction={busyAction}
-                form={experienceForm}
-                onFieldChange={updateExperienceField}
-                onSave={() => saveExperience(false)}
-                onSubmit={() => saveExperience(true)}
-              />
-            ) : null}
-            {activeTab === 'stay' ? (
-              <StayForm
-                busyAction={busyAction}
-                form={stayForm}
-                onFieldChange={updateStayField}
-                onSave={() => saveStay(false)}
-                onSubmit={() => saveStay(true)}
-                onStayStyleChange={setStayStyle}
-                onRouteVibeChange={setRouteVibe}
+                experienceForm={experienceForm}
+                experienceId={experienceId}
+                listingKind={listingKind}
+                listingKindOptions={listingKindOptions}
+                listings={listings}
+                onArchive={archive}
+                onEdit={editListing}
+                onExperienceFieldChange={updateExperienceField}
+                onKindChange={setListingKind}
+                onNew={resetListingForm}
+                onPickImage={pickListingImages}
+                onSaveExperience={saveExperience}
+                onSaveStay={saveStay}
+                onStayFieldChange={updateStayField}
                 routeVibe={routeVibe}
+                stayForm={stayForm}
+                stayId={stayId}
                 stayStyle={stayStyle}
+                onRouteVibeChange={setRouteVibe}
+                onStayStyleChange={setStayStyle}
               />
             ) : null}
             {activeTab === 'requests' ? (
@@ -398,18 +730,45 @@ function BusinessHeader({ profile }: { profile: any }) {
   );
 }
 
+function BusinessSetupForm({
+  busy,
+  form,
+  onFieldChange,
+  onSubmit,
+}: {
+  busy: boolean;
+  form: typeof defaultBusinessSetupForm;
+  onFieldChange: (field: keyof typeof defaultBusinessSetupForm, value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <View style={styles.stack}>
+      <FormSection title="Business setup">
+        <Field label="Business name" value={form.businessName} onChangeText={(value) => onFieldChange('businessName', value)} />
+        <Field label="Contact name" value={form.contactName} onChangeText={(value) => onFieldChange('contactName', value)} />
+        <Field label="Contact email" value={form.contactEmail} onChangeText={(value) => onFieldChange('contactEmail', value)} />
+        <Field label="Phone" value={form.contactPhone} onChangeText={(value) => onFieldChange('contactPhone', value)} />
+        <Field label="Payment note" multiline value={form.directPaymentNotes} onChangeText={(value) => onFieldChange('directPaymentNotes', value)} />
+      </FormSection>
+      <View style={styles.formActions}>
+        <SettingActionButton disabled={busy} label={busy ? 'Saving...' : 'Finish setup'} onPress={onSubmit} />
+      </View>
+    </View>
+  );
+}
+
 function OverviewTab({
   busyAction,
   listings,
-  onArchiveExperience,
-  onArchiveStay,
+  onArchive,
+  onEdit,
   profile,
   requests,
 }: {
   busyAction: string | null;
   listings: any;
-  onArchiveExperience: (id: Id<'experiences'>) => void;
-  onArchiveStay: (id: Id<'stays'>) => void;
+  onArchive: (kind: ListingKind, id: Id<'experiences'> | Id<'stays'>) => void;
+  onEdit: (listing: any) => void;
   profile: any;
   requests: any[] | undefined;
 }) {
@@ -431,19 +790,16 @@ function OverviewTab({
       {listings === undefined ? (
         <LoadingRows />
       ) : experiences.length + stays.length === 0 ? (
-        <PanelState icon="playlist-plus" title="No listings yet" body="Add an experience or stay, then submit it for review." />
+        <PanelState icon="playlist-plus" title="No listings yet" body="Create a listing, then submit it for review." />
       ) : (
         <View style={styles.stack}>
-          {[...experiences, ...stays].map((listing) => (
+          {[...experiences, ...stays].slice(0, 4).map((listing) => (
             <ListingRow
               busy={busyAction === listing._id}
               key={`${listing.kind}-${listing._id}`}
               listing={listing}
-              onArchive={() =>
-                listing.kind === 'experience'
-                  ? onArchiveExperience(listing._id as Id<'experiences'>)
-                  : onArchiveStay(listing._id as Id<'stays'>)
-              }
+              onArchive={() => onArchive(listing.kind, listing._id)}
+              onEdit={() => onEdit(listing)}
             />
           ))}
         </View>
@@ -452,22 +808,131 @@ function OverviewTab({
   );
 }
 
-function ExperienceForm({
+function ListingsTab({
+  busyAction,
+  experienceForm,
+  experienceId,
+  listingKind,
+  listingKindOptions,
+  listings,
+  onArchive,
+  onEdit,
+  onExperienceFieldChange,
+  onKindChange,
+  onNew,
+  onPickImage,
+  onRouteVibeChange,
+  onSaveExperience,
+  onSaveStay,
+  onStayFieldChange,
+  onStayStyleChange,
+  routeVibe,
+  stayForm,
+  stayId,
+  stayStyle,
+}: {
+  busyAction: string | null;
+  experienceForm: ExperienceFormState;
+  experienceId?: Id<'experiences'>;
+  listingKind: ListingKind;
+  listingKindOptions: readonly { key: ListingKind; label: string }[];
+  listings: any;
+  onArchive: (kind: ListingKind, id: Id<'experiences'> | Id<'stays'>) => void;
+  onEdit: (listing: any) => void;
+  onExperienceFieldChange: <Key extends keyof ExperienceFormState>(field: Key, value: ExperienceFormState[Key]) => void;
+  onKindChange: (kind: ListingKind) => void;
+  onNew: (kind: ListingKind) => void;
+  onPickImage: (target: 'experienceCover' | 'experienceGallery' | 'stayCover' | 'stayGallery') => void;
+  onRouteVibeChange: (value: RouteVibe) => void;
+  onSaveExperience: (shouldSubmit: boolean) => void;
+  onSaveStay: (shouldSubmit: boolean) => void;
+  onStayFieldChange: <Key extends keyof StayFormState>(field: Key, value: StayFormState[Key]) => void;
+  onStayStyleChange: (value: StayStyle) => void;
+  routeVibe: RouteVibe;
+  stayForm: StayFormState;
+  stayId?: Id<'stays'>;
+  stayStyle: StayStyle;
+}) {
+  const rows = listingKind === 'experience' ? listings?.experiences ?? [] : listings?.stays ?? [];
+
+  return (
+    <View style={styles.stack}>
+      <View style={styles.toolbar}>
+        <SegmentedTabs options={listingKindOptions} value={listingKind} onChange={onKindChange} />
+        <SettingActionButton label="New" onPress={() => onNew(listingKind)} variant="secondary" />
+      </View>
+      {listings === undefined ? (
+        <LoadingRows />
+      ) : rows.length > 0 ? (
+        <View style={styles.stack}>
+          {rows.map((listing: any) => (
+            <ListingRow
+              busy={busyAction === listing._id}
+              key={`${listing.kind}-${listing._id}`}
+              listing={listing}
+              onArchive={() => onArchive(listing.kind, listing._id)}
+              onEdit={() => onEdit(listing)}
+            />
+          ))}
+        </View>
+      ) : (
+        <PanelState icon="playlist-plus" title="No listings" body="Create a draft below." />
+      )}
+
+      {listingKind === 'experience' ? (
+        <ExperienceEditor
+          busyAction={busyAction}
+          form={experienceForm}
+          isEditing={Boolean(experienceId)}
+          onFieldChange={onExperienceFieldChange}
+          onPickCover={() => onPickImage('experienceCover')}
+          onPickGallery={() => onPickImage('experienceGallery')}
+          onSave={() => onSaveExperience(false)}
+          onSubmit={() => onSaveExperience(true)}
+        />
+      ) : (
+        <StayEditor
+          busyAction={busyAction}
+          form={stayForm}
+          isEditing={Boolean(stayId)}
+          onFieldChange={onStayFieldChange}
+          onPickCover={() => onPickImage('stayCover')}
+          onPickGallery={() => onPickImage('stayGallery')}
+          onRouteVibeChange={onRouteVibeChange}
+          onSave={() => onSaveStay(false)}
+          onStayStyleChange={onStayStyleChange}
+          onSubmit={() => onSaveStay(true)}
+          routeVibe={routeVibe}
+          stayStyle={stayStyle}
+        />
+      )}
+    </View>
+  );
+}
+
+function ExperienceEditor({
   busyAction,
   form,
+  isEditing,
   onFieldChange,
+  onPickCover,
+  onPickGallery,
   onSave,
   onSubmit,
 }: {
   busyAction: string | null;
-  form: typeof defaultExperienceForm;
-  onFieldChange: (field: keyof typeof defaultExperienceForm, value: string) => void;
+  form: ExperienceFormState;
+  isEditing: boolean;
+  onFieldChange: <Key extends keyof ExperienceFormState>(field: Key, value: ExperienceFormState[Key]) => void;
+  onPickCover: () => void;
+  onPickGallery: () => void;
   onSave: () => void;
   onSubmit: () => void;
 }) {
   const busy = busyAction === 'saveExperience' || busyAction === 'submitExperience';
+
   return (
-    <View style={styles.stack}>
+    <EditorPanel title={isEditing ? 'Edit experience' : 'New experience'}>
       <FormSection title="Basics">
         <Field label="Title" value={form.title} onChangeText={(value) => onFieldChange('title', value)} />
         <Field label="Short line" value={form.subtitle} onChangeText={(value) => onFieldChange('subtitle', value)} />
@@ -478,31 +943,40 @@ function ExperienceForm({
         <Field label="Location label" value={form.locationLabel} onChangeText={(value) => onFieldChange('locationLabel', value)} />
         <Field label="Town" value={form.town} onChangeText={(value) => onFieldChange('town', value)} />
         <Field label="Region" value={form.region} onChangeText={(value) => onFieldChange('region', value)} />
-        <Field label="Coordinates" placeholder="17.0832, -22.5597" value={form.coordinate} onChangeText={(value) => onFieldChange('coordinate', value)} />
+        <Field label="Coordinates" placeholder={DEFAULT_COORDINATE} value={form.coordinate} onChangeText={(value) => onFieldChange('coordinate', value)} />
       </FormSection>
+      <PhotoPicker
+        coverUri={form.imageUri}
+        galleryUris={getGalleryPreviews(form)}
+        isUploading={busyAction?.startsWith('upload:experience') ?? false}
+        onPickCover={onPickCover}
+        onPickGallery={onPickGallery}
+      />
       <FormSection title="Booking">
         <Field label="Duration" value={form.durationLabel} onChangeText={(value) => onFieldChange('durationLabel', value)} />
         <Field keyboardType="numeric" label="Group size" value={form.groupCapacity} onChangeText={(value) => onFieldChange('groupCapacity', value)} />
         <Field keyboardType="numeric" label="Price USD" value={form.priceUsd} onChangeText={(value) => onFieldChange('priceUsd', value)} />
         <Field label="Availability" value={form.availabilityLabel} onChangeText={(value) => onFieldChange('availabilityLabel', value)} />
+        <Field label="Confirmation" value={form.confirmMode} onChangeText={(value) => onFieldChange('confirmMode', value)} />
         <Field label="Included items" multiline value={form.includes} onChangeText={(value) => onFieldChange('includes', value)} />
       </FormSection>
-      <FormSection title="Photos and notes">
-        <Field label="Main photo URL" value={form.imageUri} onChangeText={(value) => onFieldChange('imageUri', value)} />
-        <Field label="Gallery URLs" multiline value={form.galleryImages} onChangeText={(value) => onFieldChange('galleryImages', value)} />
+      <FormSection title="Notes">
         <Field label="Payment note" multiline value={form.directPaymentNotes} onChangeText={(value) => onFieldChange('directPaymentNotes', value)} />
         <Field label="Cancellation" multiline value={form.cancellationPolicy} onChangeText={(value) => onFieldChange('cancellationPolicy', value)} />
         <Field label="Contact note" multiline value={form.contactNote} onChangeText={(value) => onFieldChange('contactNote', value)} />
       </FormSection>
       <FormActions busy={busy} onSave={onSave} onSubmit={onSubmit} />
-    </View>
+    </EditorPanel>
   );
 }
 
-function StayForm({
+function StayEditor({
   busyAction,
   form,
+  isEditing,
   onFieldChange,
+  onPickCover,
+  onPickGallery,
   onRouteVibeChange,
   onSave,
   onStayStyleChange,
@@ -511,8 +985,11 @@ function StayForm({
   stayStyle,
 }: {
   busyAction: string | null;
-  form: typeof defaultStayForm;
-  onFieldChange: (field: keyof typeof defaultStayForm, value: string) => void;
+  form: StayFormState;
+  isEditing: boolean;
+  onFieldChange: <Key extends keyof StayFormState>(field: Key, value: StayFormState[Key]) => void;
+  onPickCover: () => void;
+  onPickGallery: () => void;
   onRouteVibeChange: (value: RouteVibe) => void;
   onSave: () => void;
   onStayStyleChange: (value: StayStyle) => void;
@@ -521,8 +998,9 @@ function StayForm({
   stayStyle: StayStyle;
 }) {
   const busy = busyAction === 'saveStay' || busyAction === 'submitStay';
+
   return (
-    <View style={styles.stack}>
+    <EditorPanel title={isEditing ? 'Edit stay' : 'New stay'}>
       <FormSection title="Property">
         <Field label="Property name" value={form.name} onChangeText={(value) => onFieldChange('name', value)} />
         <Field label="Summary" multiline value={form.summary} onChangeText={(value) => onFieldChange('summary', value)} />
@@ -533,8 +1011,15 @@ function StayForm({
         <Field label="Location label" value={form.locationLabel} onChangeText={(value) => onFieldChange('locationLabel', value)} />
         <Field label="Town" value={form.town} onChangeText={(value) => onFieldChange('town', value)} />
         <Field label="Region" value={form.region} onChangeText={(value) => onFieldChange('region', value)} />
-        <Field label="Coordinates" placeholder="17.0832, -22.5597" value={form.coordinate} onChangeText={(value) => onFieldChange('coordinate', value)} />
+        <Field label="Coordinates" placeholder={DEFAULT_COORDINATE} value={form.coordinate} onChangeText={(value) => onFieldChange('coordinate', value)} />
       </FormSection>
+      <PhotoPicker
+        coverUri={form.imageUri}
+        galleryUris={getGalleryPreviews(form)}
+        isUploading={busyAction?.startsWith('upload:stay') ?? false}
+        onPickCover={onPickCover}
+        onPickGallery={onPickGallery}
+      />
       <FormSection title="Rooms">
         <Field label="Room type" value={form.roomLabel} onChangeText={(value) => onFieldChange('roomLabel', value)} />
         <Field label="Room detail" value={form.roomDetail} onChangeText={(value) => onFieldChange('roomDetail', value)} />
@@ -553,15 +1038,58 @@ function StayForm({
         <Field label="Amenities" multiline value={form.amenities} onChangeText={(value) => onFieldChange('amenities', value)} />
         <Field label="Nearby" multiline value={form.nearbyHighlights} onChangeText={(value) => onFieldChange('nearbyHighlights', value)} />
       </FormSection>
-      <FormSection title="Photos and notes">
-        <Field label="Main photo URL" value={form.imageUri} onChangeText={(value) => onFieldChange('imageUri', value)} />
-        <Field label="Gallery URLs" multiline value={form.galleryImages} onChangeText={(value) => onFieldChange('galleryImages', value)} />
+      <FormSection title="Notes">
         <Field label="Payment note" multiline value={form.directPaymentNotes} onChangeText={(value) => onFieldChange('directPaymentNotes', value)} />
         <Field label="Cancellation" multiline value={form.cancellationPolicy} onChangeText={(value) => onFieldChange('cancellationPolicy', value)} />
         <Field label="Contact note" multiline value={form.contactNote} onChangeText={(value) => onFieldChange('contactNote', value)} />
       </FormSection>
       <FormActions busy={busy} onSave={onSave} onSubmit={onSubmit} />
-    </View>
+    </EditorPanel>
+  );
+}
+
+function PhotoPicker({
+  coverUri,
+  galleryUris,
+  isUploading,
+  onPickCover,
+  onPickGallery,
+}: {
+  coverUri: string;
+  galleryUris: string[];
+  isUploading: boolean;
+  onPickCover: () => void;
+  onPickGallery: () => void;
+}) {
+  return (
+    <FormSection title="Photos">
+      <View style={styles.photoActions}>
+        <Pressable accessibilityRole="button" disabled={isUploading} onPress={onPickCover} style={styles.uploadButton}>
+          <MaterialCommunityIcons name="image-plus" color={designSystem.colors.darkGreen} size={17} />
+          <ThemedText style={styles.uploadButtonText}>{isUploading ? 'Uploading...' : 'Cover'}</ThemedText>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={isUploading} onPress={onPickGallery} style={styles.uploadButtonSecondary}>
+          <MaterialCommunityIcons name="image-multiple-outline" color={businessColors.text} size={17} />
+          <ThemedText style={styles.uploadButtonSecondaryText}>Gallery</ThemedText>
+        </Pressable>
+      </View>
+      <View style={styles.coverFrame}>
+        {coverUri ? (
+          <ExpoImage source={{ uri: coverUri }} style={styles.coverImage} contentFit="cover" />
+        ) : (
+          <View style={styles.coverEmpty}>
+            <MaterialCommunityIcons name="image-outline" color={businessColors.textSubtle} size={26} />
+          </View>
+        )}
+      </View>
+      {galleryUris.length > 0 ? (
+        <View style={styles.galleryStrip}>
+          {galleryUris.map((uri) => (
+            <ExpoImage key={uri} source={{ uri }} style={styles.galleryThumb} contentFit="cover" />
+          ))}
+        </View>
+      ) : null}
+    </FormSection>
   );
 }
 
@@ -599,12 +1127,24 @@ function RequestsTab({
   );
 }
 
-function ListingRow({ busy, listing, onArchive }: { busy: boolean; listing: any; onArchive: () => void }) {
+function ListingRow({
+  busy,
+  listing,
+  onArchive,
+  onEdit,
+}: {
+  busy: boolean;
+  listing: any;
+  onArchive: () => void;
+  onEdit: () => void;
+}) {
   return (
     <View style={styles.row}>
       <View style={styles.flexText}>
         <View style={styles.titleLine}>
-          <ThemedText numberOfLines={1} style={styles.rowTitle}>{listing.title}</ThemedText>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>
+            {listing.title}
+          </ThemedText>
           <StatusPill status={listing.reviewStatus} />
         </View>
         <ThemedText numberOfLines={1} style={styles.metaText}>
@@ -612,7 +1152,10 @@ function ListingRow({ busy, listing, onArchive }: { busy: boolean; listing: any;
         </ThemedText>
         {listing.rejectionNote ? <ThemedText style={styles.metaText}>{listing.rejectionNote}</ThemedText> : null}
       </View>
-      <IconButton disabled={busy || listing.status === 'archived'} icon="archive-outline" label="Archive" onPress={onArchive} />
+      <View style={styles.actionRow}>
+        <IconButton disabled={busy} icon="pencil-outline" label="Edit" onPress={onEdit} />
+        <IconButton disabled={busy || listing.status === 'archived'} icon="archive-outline" label="Archive" onPress={onArchive} />
+      </View>
     </View>
   );
 }
@@ -632,7 +1175,9 @@ function RequestRow({
     <View style={styles.row}>
       <View style={styles.flexText}>
         <View style={styles.titleLine}>
-          <ThemedText numberOfLines={1} style={styles.rowTitle}>{request.title}</ThemedText>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>
+            {request.title}
+          </ThemedText>
           <StatusPill status={request.status} />
         </View>
         <ThemedText numberOfLines={1} style={styles.metaText}>{request.detailLabel}</ThemedText>
@@ -645,6 +1190,15 @@ function RequestRow({
         <IconButton disabled={busy || request.status === 'confirmed'} icon="check" label="Confirm" onPress={onConfirm} primary />
         <IconButton disabled={busy || request.status === 'cancelled'} icon="close" label="Cancel" onPress={onCancel} />
       </View>
+    </View>
+  );
+}
+
+function EditorPanel({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <View style={styles.editorPanel}>
+      <ThemedText style={styles.editorTitle}>{title}</ThemedText>
+      {children}
     </View>
   );
 }
@@ -681,7 +1235,7 @@ function Field({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={designSystem.colors.mutedText}
+        placeholderTextColor={businessColors.placeholder}
         style={[styles.input, multiline && styles.textArea]}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
@@ -757,29 +1311,103 @@ function IconButton({
       onPress={onPress}
       style={[styles.iconButton, primary && styles.iconButtonPrimary, disabled && styles.disabled]}
     >
-      <MaterialCommunityIcons
-        color={primary ? designSystem.colors.darkGreen : designSystem.colors.ink}
-        name={icon}
-        size={16}
-      />
+      <MaterialCommunityIcons color={primary ? designSystem.colors.darkGreen : businessColors.text} name={icon} size={16} />
       <ThemedText style={[styles.iconButtonText, primary && styles.iconButtonTextPrimary]}>{label}</ThemedText>
     </Pressable>
   );
 }
 
+const businessColors = designSystem.semantic.dark;
+
 const styles = StyleSheet.create({
-  stack: {
-    gap: 16,
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  headerPanel: {
+  businessName: {
+    color: designSystem.colors.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  coverEmpty: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.surfaceRaised,
-    borderColor: designSystem.colors.borderSoft,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  coverFrame: {
+    aspectRatio: 16 / 9,
+    backgroundColor: businessColors.surface,
+    borderColor: businessColors.borderSoft,
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  coverImage: {
+    height: '100%',
+    width: '100%',
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  editorPanel: {
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 16,
     padding: 14,
+  },
+  editorTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 21,
+  },
+  field: {
+    flexGrow: 1,
+    gap: 6,
+    minWidth: 210,
+  },
+  fieldLabel: {
+    color: designSystem.colors.gray,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  fieldWide: {
+    minWidth: 280,
+  },
+  flexText: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  formActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  formGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  formSection: {
+    gap: 10,
+  },
+  galleryStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  galleryThumb: {
+    backgroundColor: businessColors.surface,
+    borderRadius: 8,
+    height: 70,
+    width: 70,
   },
   headerIcon: {
     alignItems: 'center',
@@ -789,132 +1417,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 40,
   },
-  businessName: {
-    color: designSystem.colors.ink,
-    fontSize: 18,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-  flexText: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  metaText: {
-    color: designSystem.colors.mutedText,
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 17,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  metric: {
-    backgroundColor: designSystem.colors.surfaceRaised,
-    borderColor: designSystem.colors.borderSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexGrow: 1,
-    minWidth: 120,
-    padding: 14,
-  },
-  metricValue: {
-    color: designSystem.colors.ink,
-    fontSize: 22,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '800',
-    lineHeight: 26,
-  },
-  metricLabel: {
-    color: designSystem.colors.mutedText,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-    marginTop: 4,
-  },
-  formSection: {
-    gap: 10,
-  },
-  sectionTitle: {
-    color: designSystem.colors.ink,
-    fontSize: 15,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  formGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  field: {
-    flexGrow: 1,
-    gap: 6,
-    minWidth: 210,
-  },
-  fieldWide: {
-    minWidth: 280,
-  },
-  fieldLabel: {
-    color: designSystem.colors.gray,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  input: {
-    backgroundColor: designSystem.colors.surfaceRaised,
-    borderColor: designSystem.colors.borderSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    color: designSystem.colors.ink,
-    fontSize: 14,
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
-  textArea: {
-    minHeight: 96,
-    paddingTop: 10,
-  },
-  formActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  row: {
-    alignItems: 'flex-start',
-    backgroundColor: designSystem.colors.surfaceRaised,
-    borderColor: designSystem.colors.borderSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'space-between',
-    padding: 12,
-  },
-  titleLine: {
+  headerPanel: {
     alignItems: 'center',
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  rowTitle: {
-    color: designSystem.colors.ink,
-    flexShrink: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
+    padding: 14,
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: businessColors.surface,
+    borderColor: businessColors.borderSoft,
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',
@@ -934,23 +1450,96 @@ const styles = StyleSheet.create({
   iconButtonTextPrimary: {
     color: designSystem.colors.darkGreen,
   },
-  disabled: {
-    opacity: 0.5,
+  input: {
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: businessColors.text,
+    fontSize: 14,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  loadingPanel: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 140,
+  },
+  metaText: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  metric: {
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 120,
+    padding: 14,
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metricLabel: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  metricValue: {
+    color: designSystem.colors.ink,
+    fontSize: 22,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
+    lineHeight: 26,
   },
   panelState: {
     alignItems: 'flex-start',
-    backgroundColor: designSystem.colors.surfaceRaised,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,
     padding: 16,
   },
-  stateTitle: {
+  photoActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  row: {
+    alignItems: 'flex-start',
+    backgroundColor: businessColors.surfaceRaised,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  rowTitle: {
     color: designSystem.colors.ink,
-    fontSize: 16,
+    flexShrink: 1,
+    fontSize: 14,
     fontWeight: '800',
-    lineHeight: 20,
+    lineHeight: 18,
+  },
+  sectionTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  stack: {
+    gap: 16,
   },
   stateBody: {
     color: designSystem.colors.mutedText,
@@ -958,10 +1547,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 18,
   },
-  loadingPanel: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 140,
+  stateTitle: {
+    color: designSystem.colors.ink,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  statusNeutral: {
+    backgroundColor: businessColors.overlay,
   },
   statusPill: {
     borderRadius: 999,
@@ -970,9 +1563,6 @@ const styles = StyleSheet.create({
   },
   statusPositive: {
     backgroundColor: designSystem.colors.lime,
-  },
-  statusNeutral: {
-    backgroundColor: designSystem.colors.whiteOverlayBarely,
   },
   statusText: {
     color: designSystem.colors.darkGreen,
@@ -983,5 +1573,52 @@ const styles = StyleSheet.create({
   },
   statusTextNeutral: {
     color: designSystem.colors.ink,
+  },
+  textArea: {
+    minHeight: 96,
+    paddingTop: 10,
+  },
+  titleLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  toolbar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  uploadButton: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.lime,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 38,
+    paddingHorizontal: 12,
+  },
+  uploadButtonSecondary: {
+    alignItems: 'center',
+    backgroundColor: businessColors.surface,
+    borderColor: businessColors.borderSoft,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 38,
+    paddingHorizontal: 12,
+  },
+  uploadButtonSecondaryText: {
+    color: businessColors.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  uploadButtonText: {
+    color: designSystem.colors.darkGreen,
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

@@ -125,6 +125,15 @@ async function resolveStorageImageUrl(ctx: QueryCtx | MutationCtx, storageId?: I
   return await ctx.storage.getUrl(storageId);
 }
 
+async function resolveStorageGalleryUrls(ctx: QueryCtx | MutationCtx, storageIds?: Id<'_storage'>[]) {
+  if (!storageIds?.length) {
+    return [];
+  }
+
+  const urls = await Promise.all(storageIds.map((storageId) => ctx.storage.getUrl(storageId)));
+  return urls.filter((url): url is string => Boolean(url));
+}
+
 async function requireManagedImageUrl(ctx: MutationCtx, storageId: Id<'_storage'>) {
   const metadata = await ctx.db.system.get('_storage', storageId);
   if (!metadata) {
@@ -147,9 +156,9 @@ async function requireManagedImageUrl(ctx: MutationCtx, storageId: Id<'_storage'
   return imageUrl;
 }
 
-function normalizeGalleryImages(galleryImages: readonly string[], imageUri: string) {
+function normalizeGalleryImages(galleryImages: readonly string[], imageUri: string, storageGalleryImages: readonly string[] = []) {
   const seen = new Set<string>();
-  return [imageUri, ...galleryImages]
+  return [imageUri, ...storageGalleryImages, ...galleryImages]
     .map((uri) => uri.trim())
     .filter((uri) => {
       if (!uri || seen.has(uri)) {
@@ -262,13 +271,20 @@ function hiddenGemExperienceToPublicLocation(experience: Doc<'experiences'>) {
   };
 }
 
-function toPublicExperience(experience: Doc<'experiences'>) {
+async function toPublicExperience(ctx: QueryCtx | MutationCtx, experience: Doc<'experiences'>) {
   const coordinate = normalizeCoordinate(experience.coordinate ?? []);
   const inferred = getSupportedCountryMetadata(coordinate);
+  const storedImageUrl = await resolveStorageImageUrl(ctx, experience.imageStorageId);
+  const imageUri = storedImageUrl ?? experience.imageUri;
+  const storedGalleryUrls = await resolveStorageGalleryUrls(ctx, experience.galleryStorageIds);
+  const galleryImages = normalizeGalleryImages(experience.galleryImages ?? [], imageUri, storedGalleryUrls);
+  const { imageStorageId: _imageStorageId, galleryStorageIds: _galleryStorageIds, ...publicExperience } = experience;
 
   return {
-    ...experience,
+    ...publicExperience,
     itemKind: 'experience' as const,
+    imageUri,
+    galleryImages,
     countryCode: experience.countryCode ?? inferred.countryCode,
     countryLabel: experience.countryLabel ?? inferred.countryLabel,
     planningLocationId: experience.planningLocationId ?? inferred.planningLocationId,
@@ -282,13 +298,20 @@ function toPublicExperience(experience: Doc<'experiences'>) {
   };
 }
 
-function toPublicStay(stay: Doc<'stays'>) {
+async function toPublicStay(ctx: QueryCtx | MutationCtx, stay: Doc<'stays'>) {
   const coordinate = normalizeCoordinate(stay.coordinate);
   const inferred = getSupportedCountryMetadata(coordinate);
+  const storedImageUrl = await resolveStorageImageUrl(ctx, stay.imageStorageId);
+  const imageUri = storedImageUrl ?? stay.imageUri;
+  const storedGalleryUrls = await resolveStorageGalleryUrls(ctx, stay.galleryStorageIds);
+  const galleryImages = normalizeGalleryImages(stay.galleryImages, imageUri, storedGalleryUrls);
+  const { imageStorageId: _imageStorageId, galleryStorageIds: _galleryStorageIds, ...publicStay } = stay;
 
   return {
-    ...stay,
+    ...publicStay,
     id: stay.slug,
+    imageUri,
+    galleryImages,
     priceLabel: `$${stay.pricePerNight}`,
     countryCode: stay.countryCode ?? inferred.countryCode,
     countryLabel: stay.countryLabel ?? inferred.countryLabel,
@@ -322,11 +345,15 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
     return true;
   });
 
-  const experiences = experienceDocs
-    .filter((experience) => experience.itemKind !== 'hiddenGem' && publicStatus(experience.status))
-    .filter(publicProviderReview)
-    .map(toPublicExperience);
-  const stays = stayDocs.filter((stay) => publicStatus(stay.status)).filter(publicProviderReview).map(toPublicStay);
+  const experiences = await Promise.all(
+    experienceDocs
+      .filter((experience) => experience.itemKind !== 'hiddenGem' && publicStatus(experience.status))
+      .filter(publicProviderReview)
+      .map((experience) => toPublicExperience(ctx, experience))
+  );
+  const stays = await Promise.all(
+    stayDocs.filter((stay) => publicStatus(stay.status)).filter(publicProviderReview).map((stay) => toPublicStay(ctx, stay))
+  );
   const locations = [...liveLocations, ...legacyLocations];
   const markers = [
     ...locations
@@ -413,10 +440,12 @@ export const listManagedCatalog = query({
           .filter((location) => matchesStatus(location.status))
           .map((location) => toPublicLocation(ctx, location, { includeStorageIds: true }))
       ),
-      experiences: experiences
-        .filter((experience) => experience.itemKind !== 'hiddenGem' && matchesStatus(experience.status))
-        .map(toPublicExperience),
-      stays: stays.filter((stay) => matchesStatus(stay.status)).map(toPublicStay),
+      experiences: await Promise.all(
+        experiences
+          .filter((experience) => experience.itemKind !== 'hiddenGem' && matchesStatus(experience.status))
+          .map((experience) => toPublicExperience(ctx, experience))
+      ),
+      stays: await Promise.all(stays.filter((stay) => matchesStatus(stay.status)).map((stay) => toPublicStay(ctx, stay))),
       requests: {
         reservations,
         bookings,

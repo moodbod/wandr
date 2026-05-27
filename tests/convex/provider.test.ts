@@ -64,6 +64,59 @@ function experienceDraft(title: string) {
   };
 }
 
+function stayDraft(name: string) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return {
+    name,
+    locationLabel: 'Windhoek',
+    town: 'Windhoek',
+    region: 'Khomas',
+    countryCode: 'NA',
+    countryLabel: 'Namibia',
+    summary: 'A provider-managed stay for guests.',
+    coordinate: [17.0832, -22.5597],
+    imageUri: `https://example.com/${slug}.jpg`,
+    galleryImages: [`https://example.com/${slug}.jpg`],
+    priceUsd: 120,
+    currencyCode: 'USD',
+    bookingNote: 'Request to reserve this stay.',
+    stayStyle: 'lodge' as const,
+    routeVibe: 'wildlife stop' as const,
+    sleepSignal: 'Quiet lodge stay',
+    idealFor: ['Couples'],
+    amenities: ['Breakfast'],
+    nearbyHighlights: ['City center'],
+    bookingProfile: {
+      roomOptions: [
+        {
+          id: 'standard-room',
+          label: 'Standard room',
+          detail: 'Queen room',
+          maxAdults: 2,
+          maxChildren: 1,
+          maxRooms: 3,
+          bedOptions: [{ id: 'queen', label: 'Queen bed' }],
+        },
+      ],
+      arrivalOptions: [{ id: 'arrival', label: '15:00 - 20:00' }],
+      defaultRoomOptionId: 'standard-room',
+      defaultArrivalOptionId: 'arrival',
+    },
+    acceptedPaymentModes: ['cash'] as ('cash' | 'platform')[],
+    directPaymentNotes: 'Cash on arrival.',
+  };
+}
+
+async function seedStorageFile(t: TestBackend, contentType = 'image/jpeg', byteLength = 4) {
+  return await t.run(async (ctx) =>
+    ctx.storage.store(
+      new File([new Uint8Array(byteLength).fill(0xff)], contentType.startsWith('image/') ? 'image.jpg' : 'file.txt', {
+        type: contentType,
+      })
+    )
+  );
+}
+
 describe('service provider APIs', () => {
   it('gates provider tools and keeps submitted listings hidden until admin approval', async () => {
     const t = createTest();
@@ -77,14 +130,28 @@ describe('service provider APIs', () => {
 
     await admin.client.mutation(api.admin.inviteServiceProvider, {
       userId: provider.userId,
-      businessName: 'Provider Tours',
       providerType: 'experiences',
-      acceptedPaymentModes: ['cash'],
-      directPaymentNotes: 'Cash on arrival.',
     });
 
     const providerSession = await provider.client.query(api.authSession.getCurrentSession, {});
     expect(providerSession?.role).toBe('serviceProvider');
+    const invitedProfile = await provider.client.query(api.provider.getMyBusinessProfile, {});
+    expect(invitedProfile).toMatchObject({
+      status: 'invited',
+      providerType: 'experiences',
+    });
+
+    await expect(
+      provider.client.mutation(api.provider.upsertMyExperienceDraft, experienceDraft('Invited tour'))
+    ).rejects.toThrow(/Provider setup required/);
+
+    await provider.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Provider Tours',
+      contactEmail: 'provider@example.com',
+      contactName: 'Provider',
+      acceptedPaymentModes: ['cash'],
+      directPaymentNotes: 'Cash on arrival.',
+    });
 
     const created = await provider.client.mutation(api.provider.upsertMyExperienceDraft, experienceDraft('Desert Walk'));
     await provider.client.mutation(api.provider.submitMyExperienceForReview, {
@@ -125,14 +192,18 @@ describe('service provider APIs', () => {
 
     await admin.client.mutation(api.admin.inviteServiceProvider, {
       userId: providerA.userId,
-      businessName: 'Provider A Tours',
       providerType: 'experiences',
+    });
+    await providerA.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Provider A Tours',
       acceptedPaymentModes: ['cash'],
     });
     await admin.client.mutation(api.admin.inviteServiceProvider, {
       userId: providerB.userId,
-      businessName: 'Provider B Tours',
       providerType: 'experiences',
+    });
+    await providerB.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Provider B Tours',
       acceptedPaymentModes: ['cash'],
     });
 
@@ -196,5 +267,152 @@ describe('service provider APIs', () => {
 
     const booking = await t.run(async (ctx) => ctx.db.get(bookingId as Id<'bookings'>));
     expect(booking?.status).toBe('confirmed');
+  });
+
+  it('uses Convex Storage images for provider experiences and rejects invalid uploads', async () => {
+    const t = createTest();
+    const admin = await seedUser(t, 'admin', 'admin');
+    const provider = await seedUser(t, 'provider');
+    const traveler = await seedUser(t, 'traveler');
+    const coverStorageId = await seedStorageFile(t);
+    const galleryStorageId = await seedStorageFile(t);
+    const oversizedStorageId = await seedStorageFile(t, 'image/jpeg', 8 * 1024 * 1024 + 1);
+
+    await admin.client.mutation(api.admin.inviteServiceProvider, {
+      userId: provider.userId,
+      providerType: 'experiences',
+    });
+    await provider.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Storage Tours',
+      acceptedPaymentModes: ['cash'],
+    });
+
+    await expect(
+      provider.client.mutation(api.provider.upsertMyExperienceDraft, {
+        ...experienceDraft('Broken Upload'),
+        imageStorageId: oversizedStorageId as Id<'_storage'>,
+      })
+    ).rejects.toThrow(/8 MB/);
+
+    const created = await provider.client.mutation(api.provider.upsertMyExperienceDraft, {
+      ...experienceDraft('Stored Desert Walk'),
+      galleryImages: ['https://legacy.example.com/gallery.jpg'],
+      galleryStorageIds: [galleryStorageId as Id<'_storage'>],
+      imageStorageId: coverStorageId as Id<'_storage'>,
+      imageUri: 'https://legacy.example.com/cover.jpg',
+    });
+    await provider.client.mutation(api.provider.submitMyExperienceForReview, {
+      experienceId: created.experienceId as Id<'experiences'>,
+    });
+    await admin.client.mutation(api.admin.reviewProviderListing, {
+      kind: 'experience',
+      id: created.experienceId as Id<'experiences'>,
+      decision: 'approved',
+    });
+
+    const ownListings = await provider.client.query(api.provider.listMyListings, {});
+    expect(ownListings.experiences[0]).toMatchObject({
+      imageStorageId: coverStorageId,
+      galleryStorageIds: [galleryStorageId],
+      reviewStatus: 'approved',
+      status: 'live',
+      title: 'Stored Desert Walk',
+    });
+    expect(ownListings.experiences[0].imageUri).not.toBe('https://legacy.example.com/cover.jpg');
+
+    const catalog = await traveler.client.query(api.catalog.getLiveCatalog, {});
+    const storedExperience = catalog.experiences.find((experience: any) => experience.slug === 'stored-desert-walk');
+    expect(storedExperience?.imageUri).toBeTruthy();
+    expect(storedExperience?.imageUri).not.toBe('https://legacy.example.com/cover.jpg');
+    expect(storedExperience?.galleryImages.length).toBeGreaterThanOrEqual(2);
+
+    const page = await traveler.client.query(api.explore.getPageContent, { slug: 'explore' });
+    expect(JSON.stringify(page)).toContain('Stored Desert Walk');
+  });
+
+  it('uses Convex Storage images for provider stays and trip stay reads', async () => {
+    const t = createTest();
+    const admin = await seedUser(t, 'admin', 'admin');
+    const provider = await seedUser(t, 'stay-provider');
+    const traveler = await seedUser(t, 'traveler');
+    const coverStorageId = await seedStorageFile(t);
+    const galleryStorageId = await seedStorageFile(t);
+
+    await admin.client.mutation(api.admin.inviteServiceProvider, {
+      userId: provider.userId,
+      providerType: 'stays',
+    });
+    await provider.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Storage Stays',
+      acceptedPaymentModes: ['cash'],
+    });
+
+    const created = await provider.client.mutation(api.provider.upsertMyStayDraft, {
+      ...stayDraft('Stored City Lodge'),
+      galleryImages: ['https://legacy.example.com/stay-gallery.jpg'],
+      galleryStorageIds: [galleryStorageId as Id<'_storage'>],
+      imageStorageId: coverStorageId as Id<'_storage'>,
+      imageUri: 'https://legacy.example.com/stay-cover.jpg',
+    });
+    await provider.client.mutation(api.provider.submitMyStayForReview, {
+      stayId: created.stayId as Id<'stays'>,
+    });
+    await admin.client.mutation(api.admin.reviewProviderListing, {
+      kind: 'stay',
+      id: created.stayId as Id<'stays'>,
+      decision: 'approved',
+    });
+
+    const stays = await traveler.client.query(api.trip.listAllStays, {});
+    const listedStay = stays.find((stay: any) => stay.slug === 'stored-city-lodge');
+    expect(listedStay?.imageUri).toBeTruthy();
+    expect(listedStay?.imageUri).not.toBe('https://legacy.example.com/stay-cover.jpg');
+
+    const detail = await traveler.client.query(api.trip.getStayBySlug, { slug: 'stored-city-lodge' });
+    expect(detail?.galleryImages.length).toBeGreaterThanOrEqual(2);
+    expect(detail?.imageUri).not.toBe('https://legacy.example.com/stay-cover.jpg');
+  });
+
+  it('limits provider listing edits and archives to their own business', async () => {
+    const t = createTest();
+    const admin = await seedUser(t, 'admin', 'admin');
+    const providerA = await seedUser(t, 'provider-a');
+    const providerB = await seedUser(t, 'provider-b');
+
+    await admin.client.mutation(api.admin.inviteServiceProvider, {
+      userId: providerA.userId,
+      providerType: 'experiences',
+    });
+    await providerA.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Provider A Tours',
+      acceptedPaymentModes: ['cash'],
+    });
+    await admin.client.mutation(api.admin.inviteServiceProvider, {
+      userId: providerB.userId,
+      providerType: 'experiences',
+    });
+    await providerB.client.mutation(api.provider.completeMyBusinessSetup, {
+      businessName: 'Provider B Tours',
+      acceptedPaymentModes: ['cash'],
+    });
+
+    const providerAExperience = await providerA.client.mutation(
+      api.provider.upsertMyExperienceDraft,
+      experienceDraft('Private Provider Walk')
+    );
+
+    await expect(
+      providerB.client.mutation(api.provider.upsertMyExperienceDraft, {
+        ...experienceDraft('Hijacked Walk'),
+        experienceId: providerAExperience.experienceId as Id<'experiences'>,
+      })
+    ).rejects.toThrow(/Experience not found/);
+
+    await expect(
+      providerB.client.mutation(api.provider.archiveMyListing, {
+        kind: 'experience',
+        id: providerAExperience.experienceId as Id<'experiences'>,
+      })
+    ).rejects.toThrow(/Experience not found/);
   });
 });
