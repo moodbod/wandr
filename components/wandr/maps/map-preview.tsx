@@ -31,7 +31,10 @@ const HIDDEN_MAPBOX_SOURCE_LAYER_IDS = [
 function MapPreviewComponent({
   centerCoordinate,
   userCoordinate = null,
+  userAccuracy = null,
   userHeading = null,
+  userIsStale = false,
+  userSpeed = null,
   viewportPadding,
   markers = [],
   routeCoordinates,
@@ -319,7 +322,9 @@ function MapPreviewComponent({
               avatarPaletteKey={location.travelerSlug}
               avatarUri={location.avatarUri}
               coordinate={location.coordinate}
+              heading={location.heading}
               name={location.name}
+              speed={location.speed}
             />
           ))}
         </MapboxMap>
@@ -407,14 +412,14 @@ function MapPreviewComponent({
           />
         ) : null}
         <MapboxGL.LocationPuck
-          visible
+          visible={Boolean(userCoordinate)}
           puckBearing="heading"
-          puckBearingEnabled={normalizedUserHeading !== null || !userCoordinate}
+          puckBearingEnabled={Boolean(userCoordinate) && !userIsStale}
           scale={1}
           pulsing={{
-            color: designSystem.colors.lime,
-            isEnabled: true,
-            radius: 24,
+            color: userIsStale ? '#6B7280' : '#1D8BFF',
+            isEnabled: Boolean(userCoordinate) && !userIsStale,
+            radius: getPuckPulseRadius(userAccuracy, userSpeed),
           }}
         />
 
@@ -441,7 +446,9 @@ function MapPreviewComponent({
             avatarPaletteKey={location.travelerSlug}
             avatarUri={location.avatarUri}
             coordinate={location.coordinate}
+            heading={location.heading}
             name={location.name}
+            speed={location.speed}
           />
         ))}
 
@@ -538,6 +545,16 @@ function normalizeHeading(heading?: number | null) {
   }
 
   return ((heading % 360) + 360) % 360;
+}
+
+function getPuckPulseRadius(accuracy?: number | null, speed?: number | null) {
+  const accuracyRadius = typeof accuracy === 'number' && Number.isFinite(accuracy)
+    ? Math.max(20, Math.min(56, accuracy * 0.5))
+    : 24;
+
+  return typeof speed === 'number' && Number.isFinite(speed) && speed >= 1.2
+    ? Math.max(accuracyRadius, 32)
+    : accuracyRadius;
 }
 
 const styles = StyleSheet.create({

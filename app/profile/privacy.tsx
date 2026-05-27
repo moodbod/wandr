@@ -33,6 +33,7 @@ export default function PrivacyScreen() {
   const [showSavedPlaces, setShowSavedPlaces] = useState(true);
   const [showTripActivity, setShowTripActivity] = useState(false);
   const [locationSharing, setLocationSharing] = useState<LocationSharing>('off');
+  const [showOtherUsersLiveLocation, setShowOtherUsersLiveLocation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -45,6 +46,7 @@ export default function PrivacyScreen() {
     setShowSavedPlaces(settings.showSavedPlaces);
     setShowTripActivity(settings.showTripActivity);
     setLocationSharing(settings.locationSharing);
+    setShowOtherUsersLiveLocation(settings.showOtherUsersLiveLocation);
   }, [settings]);
 
   const savePrivacy = async ({
@@ -52,11 +54,13 @@ export default function PrivacyScreen() {
     nextShowSavedPlaces = showSavedPlaces,
     nextShowTripActivity = showTripActivity,
     nextLocationSharing = locationSharing,
+    nextShowOtherUsersLiveLocation = showOtherUsersLiveLocation,
   }: {
     nextProfileVisibility?: ProfileVisibility;
     nextShowSavedPlaces?: boolean;
     nextShowTripActivity?: boolean;
     nextLocationSharing?: LocationSharing;
+    nextShowOtherUsersLiveLocation?: boolean;
   }) => {
     if (!traveler?.slug) {
       return;
@@ -71,6 +75,7 @@ export default function PrivacyScreen() {
         showSavedPlaces: nextShowSavedPlaces,
         showTripActivity: nextShowTripActivity,
         locationSharing: nextLocationSharing,
+        showOtherUsersLiveLocation: nextShowOtherUsersLiveLocation,
       });
     } catch (error) {
       console.error('Failed to update privacy settings', error);
@@ -122,6 +127,16 @@ export default function PrivacyScreen() {
         onChange={(nextLocationSharing) => {
           setLocationSharing(nextLocationSharing);
           void savePrivacy({ nextLocationSharing });
+        }}
+      />
+      <SettingSwitchRow
+        description="Show live pucks from travelers who are sharing with you."
+        disabled={!canEdit}
+        label="Show other users live location"
+        value={showOtherUsersLiveLocation}
+        onValueChange={(nextShowOtherUsersLiveLocation) => {
+          setShowOtherUsersLiveLocation(nextShowOtherUsersLiveLocation);
+          void savePrivacy({ nextShowOtherUsersLiveLocation });
         }}
       />
     </ProfileSettingScreen>

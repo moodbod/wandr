@@ -19,7 +19,10 @@ export type SharedMapUserLocation = {
   avatarUri?: string | null;
   baseLabel?: string | null;
   coordinate: readonly [number, number];
+  heading?: number | null;
+  speed?: number | null;
   updatedAt?: number;
+  expiresAt?: number;
 };
 
 export type MapPreviewProps = {
@@ -27,8 +30,14 @@ export type MapPreviewProps = {
   userCoordinate?: readonly [number, number] | null;
   userAvatarPaletteKey?: string | null;
   userAvatarUri?: string | null;
+  userAccuracy?: number | null;
   userHeading?: number | null;
+  userIsStale?: boolean;
   userName?: string | null;
+  userPuckVariant?: 'navigation' | 'avatar';
+  userSpeed?: number | null;
+  userStaleReason?: 'cached' | 'timeout' | 'permissionDenied' | 'unavailable' | null;
+  userUpdatedAt?: number | null;
   viewportPadding?: {
     paddingBottom?: number;
     paddingLeft?: number;

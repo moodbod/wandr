@@ -37,7 +37,6 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
-import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import { useVisibleSharedLocations } from '@/hooks/use-visible-shared-locations';
 import {
   usePlanningLocation,
@@ -79,7 +78,6 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const liveCatalog = useQuery(getLiveCatalogRef);
   const currentLocation = useCurrentLocation();
   const sharedUserLocations = useVisibleSharedLocations();
-  useSharedLocationPublishing(currentLocation);
   const [searchQuery, setSearchQuery] = useState('');
   const [discoveryMode, setDiscoveryMode] = useState<'route' | 'nearby'>('route');
   const [locationSheetVisible, setLocationSheetVisible] = useState(false);
@@ -297,6 +295,15 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     <MapPreview
       centerCoordinate={centerCoordinate}
       userCoordinate={userCoordinate}
+      userAccuracy={currentLocation.accuracy}
+      userAvatarPaletteKey={traveler?.slug}
+      userAvatarUri={traveler?.avatarUri}
+      userHeading={currentLocation.heading}
+      userIsStale={currentLocation.isStale}
+      userName={traveler?.name}
+      userPuckVariant="navigation"
+      userSpeed={currentLocation.speed}
+      userUpdatedAt={currentLocation.updatedAt}
       markers={mapMarkers}
       sharedUserLocations={sharedUserLocations}
       followUserLocation={discoveryMode === 'nearby' && Boolean(userCoordinate)}

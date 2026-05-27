@@ -33,7 +33,6 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
-import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import {
   usePlanningLocation,
   useSyncPlanningLocationWithAvailableLocations,
@@ -81,26 +80,44 @@ export default function ExploreScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const currentLocationState = useCurrentLocation();
-  useSharedLocationPublishing(currentLocationState);
-  const { coordinate: currentLocation, heading: currentHeading } = currentLocationState;
+  const {
+    accuracy: currentAccuracy,
+    coordinate: currentLocation,
+    heading: currentHeading,
+    isStale: currentIsStale,
+    speed: currentSpeed,
+    updatedAt: currentUpdatedAt,
+  } = currentLocationState;
 
   return (
     <ConnectedExploreScreen
+      currentAccuracy={currentAccuracy}
       currentHeading={currentHeading}
+      currentIsStale={currentIsStale}
       currentLocation={currentLocation}
+      currentSpeed={currentSpeed}
+      currentUpdatedAt={currentUpdatedAt}
       isDark={isDark}
       mapTopInset={insets.top}
     />
   );
 }
 function ConnectedExploreScreen({
+  currentAccuracy,
   currentHeading,
+  currentIsStale,
   currentLocation,
+  currentSpeed,
+  currentUpdatedAt,
   isDark,
   mapTopInset,
 }: {
+  currentAccuracy?: number | null;
   currentHeading?: number | null;
+  currentIsStale?: boolean;
   currentLocation?: readonly [number, number] | null;
+  currentSpeed?: number | null;
+  currentUpdatedAt?: number | null;
   isDark: boolean;
   mapTopInset: number;
 }) {
@@ -162,7 +179,11 @@ function ConnectedExploreScreen({
           centerCoordinate={loadingMapCenterCoordinate}
           locationLabel={planningLocation.label}
           userCoordinate={currentLocationInPlanningLocation}
+          userAccuracy={currentAccuracy}
           userHeading={currentHeading}
+          userIsStale={currentIsStale}
+          userSpeed={currentSpeed}
+          userUpdatedAt={currentUpdatedAt}
           markers={[]}
           followUserLocation={Boolean(currentLocationInPlanningLocation)}
           mapPersistKey={isLargeScreen ? 'app-background' : undefined}
@@ -222,7 +243,11 @@ function ConnectedExploreScreen({
   return (
     <ExploreScreenView
       currentHeading={currentHeading}
+      currentIsStale={currentIsStale}
       currentLocation={currentLocation}
+      currentAccuracy={currentAccuracy}
+      currentSpeed={currentSpeed}
+      currentUpdatedAt={currentUpdatedAt}
       headerAnimatedStyle={headerAnimatedStyle}
       isCardLoading={false}
       isDark={isDark}
@@ -242,8 +267,12 @@ function ConnectedExploreScreen({
 
 function ExploreScreenView({
   animatedIndex,
+  currentAccuracy,
   currentHeading,
+  currentIsStale,
   currentLocation,
+  currentSpeed,
+  currentUpdatedAt,
   headerAnimatedStyle,
   isCardLoading,
   isDark,
@@ -258,8 +287,12 @@ function ExploreScreenView({
   onSelectTrip,
 }: {
   animatedIndex?: ReturnType<typeof useSharedValue<number>>;
+  currentAccuracy?: number | null;
   currentHeading?: number | null;
+  currentIsStale?: boolean;
   currentLocation?: readonly [number, number] | null;
+  currentSpeed?: number | null;
+  currentUpdatedAt?: number | null;
   headerAnimatedStyle?: object;
   isCardLoading: boolean;
   isDark: boolean;
@@ -689,7 +722,11 @@ function ExploreScreenView({
         centerCoordinate={mapCenterCoordinate}
         locationLabel={mapLocationLabel}
         userCoordinate={currentLocationInPlanningLocation}
+        userAccuracy={currentAccuracy}
         userHeading={currentHeading}
+        userIsStale={currentIsStale}
+        userSpeed={currentSpeed}
+        userUpdatedAt={currentUpdatedAt}
         viewportPadding={
           isLargeScreen
             ? {

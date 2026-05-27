@@ -570,6 +570,15 @@ export function StayDetailScreen({
               <MapPreview
                 centerCoordinate={stay.coordinate}
                 userCoordinate={currentLocation.coordinate}
+                userAccuracy={currentLocation.accuracy}
+                userAvatarPaletteKey={traveler?.slug}
+                userAvatarUri={traveler?.avatarUri}
+                userHeading={currentLocation.heading}
+                userIsStale={currentLocation.isStale}
+                userName={traveler?.name}
+                userPuckVariant="navigation"
+                userSpeed={currentLocation.speed}
+                userUpdatedAt={currentLocation.updatedAt}
                 markers={[
                   {
                     id: stay.id,

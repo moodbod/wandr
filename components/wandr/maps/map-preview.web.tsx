@@ -11,6 +11,7 @@ import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
+import { registerPmtilesProtocol } from '@/lib/pmtiles-protocol.web';
 import { fetchRoutePath } from '@/lib/routing';
 
 import type { MapMarker, MapPreviewProps, SharedMapUserLocation } from './mapbox/types';
@@ -66,10 +67,14 @@ void preloadMapboxModule();
 function MapPreviewWebComponent({
   centerCoordinate,
   userCoordinate = null,
+  userAccuracy = null,
   userAvatarPaletteKey,
   userAvatarUri,
   userHeading = null,
+  userIsStale = false,
   userName,
+  userPuckVariant = 'navigation',
+  userSpeed = null,
   viewportPadding,
   markers = [],
   routeCoordinates,
@@ -129,6 +134,7 @@ function MapPreviewWebComponent({
   const mapStyleURL = offlineMapState.styleUrl ?? MAPBOX_STREET_STYLE_URL;
   const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
   const followZoomLevel = Math.max(zoomLevel, 17);
+  const normalizedUserHeading = normalizeHeading(userHeading);
   const stayMarkers = useMemo(
     () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
     [normalizedMarkers]
@@ -200,6 +206,8 @@ function MapPreviewWebComponent({
       return;
     }
 
+    registerPmtilesProtocol(mapbox);
+
     const isReusingPersistentMap = Boolean(persistentState?.map);
     const mapHost = persistentState?.host ?? document.createElement('div');
     if (persistentState) {
@@ -236,7 +244,7 @@ function MapPreviewWebComponent({
       sharedUserMarkerRefs.current = persistentState.sharedUserMarkers;
       userMarkerRef.current = persistentState.userMarker;
       lastCameraTargetKeyRef.current = isReusingPersistentMap
-        ? getCameraTargetKey(mapCenterCoordinate, zoomLevel)
+        ? getCameraTargetKey(mapCenterCoordinate, zoomLevel, normalizedUserHeading)
         : persistentState.lastCameraTargetKey;
     }
     currentMapStyleURLRef.current = persistentState?.currentMapStyleURL ?? initialConfig.mapStyleURL;
@@ -357,7 +365,7 @@ function MapPreviewWebComponent({
       currentMapStyleURLRef.current = null;
       setIsMapReady(false);
     };
-  }, [cameraPadding, followUserLocation, interactionEnabled, mapCenterCoordinate, mapbox, persistKey, zoomLevel]);
+  }, [cameraPadding, followUserLocation, interactionEnabled, mapCenterCoordinate, mapbox, normalizedUserHeading, persistKey, zoomLevel]);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -425,7 +433,7 @@ function MapPreviewWebComponent({
       return;
     }
 
-    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel);
+    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
     if (cameraTargetKey === lastCameraTargetKeyRef.current) {
       return;
     }
@@ -434,14 +442,14 @@ function MapPreviewWebComponent({
     hasUserInteractedRef.current = false;
     mapRef.current.resize();
     mapRef.current.easeTo({
-      bearing: userHeading ?? 0,
+      bearing: normalizedUserHeading ?? 0,
       center: userCoordinate as [number, number],
       duration: 650,
       padding: cameraPadding,
       pitch: 0,
       zoom: followZoomLevel,
     });
-  }, [cameraPadding, followUserLocation, followZoomLevel, userCoordinate, userHeading]);
+  }, [cameraPadding, followUserLocation, followZoomLevel, normalizedUserHeading, userCoordinate]);
 
   useEffect(() => {
     if (!mapRef.current || !userCoordinate || recenterToUserSignal === 0) {
@@ -449,18 +457,18 @@ function MapPreviewWebComponent({
     }
 
     isFollowingUserRef.current = true;
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel);
+    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
     hasUserInteractedRef.current = false;
     mapRef.current.resize();
     mapRef.current.easeTo({
-      bearing: userHeading ?? 0,
+      bearing: normalizedUserHeading ?? 0,
       center: userCoordinate as [number, number],
       duration: 650,
       padding: cameraPadding,
       pitch: 0,
       zoom: followZoomLevel,
     });
-  }, [cameraPadding, followZoomLevel, recenterToUserSignal, userCoordinate, userHeading]);
+  }, [cameraPadding, followZoomLevel, normalizedUserHeading, recenterToUserSignal, userCoordinate]);
 
   useEffect(() => {
     if (!showRoutes || routeMarkerCoordinates.length === 0 || shouldHideMainRouteForStayFocus) {
@@ -570,8 +578,12 @@ function MapPreviewWebComponent({
         <UserLocationPuck
           avatarPaletteKey={userAvatarPaletteKey}
           avatarUri={userAvatarUri}
-          heading={userHeading}
+          heading={normalizedUserHeading}
+          isStale={userIsStale}
           name={userName}
+          accuracy={userAccuracy}
+          speed={userSpeed}
+          variant={userPuckVariant}
         />
       );
       return;
@@ -580,12 +592,16 @@ function MapPreviewWebComponent({
     const { element, root } = createUserMarkerElement({
       avatarPaletteKey: userAvatarPaletteKey,
       avatarUri: userAvatarUri,
-      heading: userHeading,
+      heading: normalizedUserHeading,
+      isStale: userIsStale,
       name: userName,
+      accuracy: userAccuracy,
+      speed: userSpeed,
+      variant: userPuckVariant,
     });
     const marker = new mapbox.Marker({ element }).setLngLat(userCoordinate as [number, number]).addTo(mapRef.current);
     userMarkerRef.current = { marker, root };
-  }, [isMapReady, mapbox, userAvatarPaletteKey, userAvatarUri, userCoordinate, userHeading, userName]);
+  }, [isMapReady, mapbox, normalizedUserHeading, userAccuracy, userAvatarPaletteKey, userAvatarUri, userCoordinate, userIsStale, userName, userPuckVariant, userSpeed]);
 
   useEffect(() => {
     if (!mapbox || !mapRef.current || !isMapReady) {
@@ -599,8 +615,10 @@ function MapPreviewWebComponent({
       const { element, root } = createUserMarkerElement({
         avatarPaletteKey: location.travelerSlug,
         avatarUri: location.avatarUri,
-        heading: null,
+        heading: location.heading,
         name: location.name,
+        speed: location.speed,
+        variant: 'avatar',
       });
       const marker = new mapbox.Marker({ element })
         .setLngLat(location.coordinate as [number, number])
@@ -899,20 +917,29 @@ function createMarkerElement(marker: MapMarker, isDark: boolean, variant: MapPre
 }
 
 function createUserMarkerElement({
+  accuracy,
   avatarPaletteKey,
   avatarUri,
   heading,
+  isStale = false,
   name,
+  speed,
+  variant = 'avatar',
 }: {
+  accuracy?: number | null;
   avatarPaletteKey?: string | null;
   avatarUri?: string | null;
   heading?: number | null;
+  isStale?: boolean;
   name?: string | null;
+  speed?: number | null;
+  variant?: 'navigation' | 'avatar';
 }) {
   const element = document.createElement('div');
+  const markerSize = variant === 'navigation' ? 88 : 58;
   element.style.cssText = [
-    'width:58px',
-    'height:58px',
+    `width:${markerSize}px`,
+    `height:${markerSize}px`,
     'border-radius:999px',
     'display:flex',
     'align-items:center',
@@ -923,10 +950,14 @@ function createUserMarkerElement({
   const root = createRoot(element);
   root.render(
     <UserLocationPuck
+      accuracy={accuracy}
       avatarPaletteKey={avatarPaletteKey}
       avatarUri={avatarUri}
       heading={heading}
+      isStale={isStale}
       name={name}
+      speed={speed}
+      variant={variant}
     />
   );
 
@@ -1036,8 +1067,17 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#039;');
 }
 
-function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number) {
-  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}`;
+function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number, heading?: number | null) {
+  const headingKey = typeof heading === 'number' && Number.isFinite(heading) ? `:${heading.toFixed(0)}` : '';
+  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}${headingKey}`;
+}
+
+function normalizeHeading(heading?: number | null) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+    return null;
+  }
+
+  return ((heading % 360) + 360) % 360;
 }
 
 function hideMapboxControls(host: HTMLDivElement) {

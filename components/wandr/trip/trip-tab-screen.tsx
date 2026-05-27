@@ -11,7 +11,6 @@ import { useCurrentLocation } from '@/hooks/use-current-location';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { usePlanningLocation, useSyncPlanningLocationWithCurrentLocation } from '@/hooks/use-planning-location';
 import { useResponsive } from '@/hooks/use-responsive';
-import { useSharedLocationPublishing } from '@/hooks/use-shared-location-publishing';
 import { createTripRef, deleteTripRef, getTripDashboardRef, getTripSettingsRef, inviteFriendsToTripRef, listUserTripsRef, removeExperienceFromTripRef, updateTripSettingsRef } from '@/lib/convex';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { TripDashboard } from '@/types/trip';
@@ -85,7 +84,6 @@ function ConnectedTripScreen({
     getTripDashboardRef,
     selectedTripId ? { travelerSlug, tripId: selectedTripId } : { travelerSlug }
   );
-  useSharedLocationPublishing(currentLocationState);
 
   const createTripMutation = useMutation(createTripRef);
   const deleteTripMutation = useMutation(deleteTripRef);
@@ -270,6 +268,7 @@ function ConnectedTripScreen({
   return (
     <>
       <TripScreenView
+        currentLocation={currentLocationState}
         insetsBottom={insetsBottom}
         insetsTop={insetsTop}
         isDark={isDark}

@@ -3,12 +3,24 @@ type CachedRoute = {
   expiresAt: number;
   route: RoutePoint[];
 };
+type PersistedRouteCache = {
+  entries: Record<string, CachedRoute>;
+  version: 1;
+};
 
 const ROUTE_CACHE_TTL_MS = 5 * 60_000;
 const ROUTE_FETCH_TIMEOUT_MS = 10_000;
 const ROUTE_COORDINATE_PRECISION = 5;
+const ROUTE_CACHE_STORAGE_KEY = 'wandr.route-cache.v1';
+const ROUTE_CACHE_STORAGE_FILE = 'wandr-route-cache.json';
+const ROUTE_CACHE_MAX_PERSISTED_ENTRIES = 80;
+const ROUTE_CACHE_MAX_STORAGE_BYTES = 900_000;
+const ROUTE_CACHE_WRITE_DEBOUNCE_MS = 300;
 const routeCache = new Map<string, CachedRoute>();
 const inFlightRoutes = new Map<string, Promise<RoutePoint[]>>();
+let routeCacheHydrated = false;
+let routeCacheHydrationPromise: Promise<void> | null = null;
+let routeCacheWriteTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function fetchRoutePath(
   coordinates: readonly (readonly [number, number])[]
@@ -22,14 +34,16 @@ export async function fetchRoutePath(
     return [];
   }
 
+  await hydratePersistentRouteCache();
+
   const cacheKey = getRouteCacheKey(validCoords);
   const cachedRoute = routeCache.get(cacheKey);
   if (cachedRoute && cachedRoute.expiresAt > Date.now()) {
     return cachedRoute.route;
   }
 
-  if (cachedRoute) {
-    routeCache.delete(cacheKey);
+  if (cachedRoute && isLikelyOffline()) {
+    return cachedRoute.route;
   }
 
   const inFlightRoute = inFlightRoutes.get(cacheKey);
@@ -44,9 +58,11 @@ export async function fetchRoutePath(
           expiresAt: Date.now() + ROUTE_CACHE_TTL_MS,
           route,
         });
+        schedulePersistentRouteCacheWrite();
+        return route;
       }
 
-      return route;
+      return cachedRoute?.route ?? route;
     })
     .finally(() => {
       inFlightRoutes.delete(cacheKey);
@@ -230,3 +246,177 @@ function geojsonToRoutePoints(geojson: { coordinates?: number[][] }): RoutePoint
     longitude: coord[0],
   }));
 }
+
+async function hydratePersistentRouteCache() {
+  if (routeCacheHydrated) {
+    return;
+  }
+
+  routeCacheHydrationPromise ??= readPersistentRouteCache()
+    .then((storedCache) => {
+      routeCacheHydrated = true;
+      if (!storedCache) {
+        return;
+      }
+
+      Object.entries(storedCache.entries).forEach(([key, entry]) => {
+        if (isValidCachedRoute(entry)) {
+          routeCache.set(key, entry);
+        }
+      });
+    })
+    .catch(() => {
+      routeCacheHydrated = true;
+    })
+    .finally(() => {
+      routeCacheHydrationPromise = null;
+    });
+
+  await routeCacheHydrationPromise;
+}
+
+function schedulePersistentRouteCacheWrite() {
+  if (routeCacheWriteTimer) {
+    clearTimeout(routeCacheWriteTimer);
+  }
+
+  routeCacheWriteTimer = setTimeout(() => {
+    routeCacheWriteTimer = null;
+    void writePersistentRouteCache(serializePersistentRouteCache()).catch(() => undefined);
+  }, ROUTE_CACHE_WRITE_DEBOUNCE_MS);
+}
+
+async function readPersistentRouteCache() {
+  const browserStorage = getBrowserLocalStorage();
+  if (browserStorage) {
+    return parsePersistentRouteCache(browserStorage.getItem(ROUTE_CACHE_STORAGE_KEY));
+  }
+
+  try {
+    const fileSystem = await import('expo-file-system/legacy');
+    const fileUri = getNativeRouteCacheFileUri(fileSystem.documentDirectory);
+    if (!fileUri) {
+      return null;
+    }
+
+    const fileInfo = await fileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists) {
+      return null;
+    }
+
+    return parsePersistentRouteCache(await fileSystem.readAsStringAsync(fileUri));
+  } catch {
+    return null;
+  }
+}
+
+async function writePersistentRouteCache(serializedCache: string) {
+  if (serializedCache.length > ROUTE_CACHE_MAX_STORAGE_BYTES) {
+    return;
+  }
+
+  const browserStorage = getBrowserLocalStorage();
+  if (browserStorage) {
+    browserStorage.setItem(ROUTE_CACHE_STORAGE_KEY, serializedCache);
+    return;
+  }
+
+  try {
+    const fileSystem = await import('expo-file-system/legacy');
+    const fileUri = getNativeRouteCacheFileUri(fileSystem.documentDirectory);
+    if (!fileUri) {
+      return;
+    }
+    await fileSystem.writeAsStringAsync(fileUri, serializedCache);
+  } catch {
+    // Route cache persistence is best effort; live routing still works without it.
+  }
+}
+
+function getNativeRouteCacheFileUri(documentDirectory: string | null) {
+  return documentDirectory ? `${documentDirectory}${ROUTE_CACHE_STORAGE_FILE}` : null;
+}
+
+function serializePersistentRouteCache() {
+  const entries = Array.from(routeCache.entries())
+    .filter(([, entry]) => isValidCachedRoute(entry))
+    .sort(([, a], [, b]) => b.expiresAt - a.expiresAt)
+    .slice(0, ROUTE_CACHE_MAX_PERSISTED_ENTRIES);
+
+  return JSON.stringify({
+    entries: Object.fromEntries(entries),
+    version: 1,
+  } satisfies PersistedRouteCache);
+}
+
+function parsePersistentRouteCache(value: string | null): PersistedRouteCache | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<PersistedRouteCache>;
+    if (parsed.version !== 1 || typeof parsed.entries !== 'object' || !parsed.entries) {
+      return null;
+    }
+
+    const entries: PersistedRouteCache['entries'] = {};
+    Object.entries(parsed.entries).forEach(([key, entry]) => {
+      if (typeof key === 'string' && isValidCachedRoute(entry)) {
+        entries[key] = entry;
+      }
+    });
+
+    return { entries, version: 1 };
+  } catch {
+    return null;
+  }
+}
+
+function isValidCachedRoute(value: unknown): value is CachedRoute {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const route = (value as CachedRoute).route;
+  return (
+    typeof (value as CachedRoute).expiresAt === 'number' &&
+    Number.isFinite((value as CachedRoute).expiresAt) &&
+    Array.isArray(route) &&
+    route.every(
+      (point) =>
+        typeof point.latitude === 'number' &&
+        Number.isFinite(point.latitude) &&
+        typeof point.longitude === 'number' &&
+        Number.isFinite(point.longitude)
+    )
+  );
+}
+
+function getBrowserLocalStorage() {
+  try {
+    return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function isLikelyOffline() {
+  return typeof navigator !== 'undefined' && 'onLine' in navigator && navigator.onLine === false;
+}
+
+export const routingCacheForTest = {
+  clearMemoryCache() {
+    routeCache.clear();
+    inFlightRoutes.clear();
+  },
+  getRouteCacheKey,
+  parsePersistentRouteCache,
+  primeMemoryCache(coordinates: readonly (readonly [number, number])[], route: RoutePoint[], expiresAt: number) {
+    routeCache.set(getRouteCacheKey(coordinates.map(roundCoordinateForRoute)), {
+      expiresAt,
+      route,
+    });
+  },
+  serializePersistentRouteCache,
+};

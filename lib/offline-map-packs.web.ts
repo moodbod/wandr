@@ -12,7 +12,7 @@ const CACHE_NAME = 'wandr-offline-map-packs-v1';
 
 type WebPackFile = {
   bytes?: number;
-  kind?: 'style' | 'tile' | 'sprite' | 'glyph' | 'metadata' | 'asset';
+  kind?: 'style' | 'tile' | 'pmtiles' | 'sprite' | 'glyph' | 'metadata' | 'asset';
   url: string;
 };
 
@@ -111,7 +111,7 @@ async function downloadPack(
     });
   }
 
-  const styleReadinessError = getStyleReadinessError(styleJson, region);
+  const styleReadinessError = getStyleReadinessError(styleJson, region, files);
   if (styleReadinessError) {
     throw new Error(styleReadinessError);
   }
@@ -183,18 +183,23 @@ function normalizeManifestFiles(manifest: WebPackManifest, region: OfflineMapReg
   });
 }
 
-function normalizeUrl(url: string) {
-  return new URL(url, window.location.origin).toString();
+function normalizeUrl(url: string, origin = getCurrentOrigin()) {
+  return new URL(url, origin).toString();
 }
 
-function getManifestReadinessError(manifest: WebPackManifest, files: WebPackFile[], region: OfflineMapRegion) {
+function getManifestReadinessError(
+  manifest: WebPackManifest,
+  files: WebPackFile[],
+  region: OfflineMapRegion,
+  origin = getCurrentOrigin()
+) {
   const styleUrl = manifest.styleUrl || region.webPack?.styleUrl;
   if (!styleUrl) {
     return `Offline map pack for ${region.label} is missing a local style file.`;
   }
 
-  const normalizedStyleUrl = normalizeUrl(styleUrl);
-  if (!isSameOriginUrl(normalizedStyleUrl)) {
+  const normalizedStyleUrl = normalizeUrl(styleUrl, origin);
+  if (!isSameOriginUrl(normalizedStyleUrl, origin)) {
     return `Offline map pack for ${region.label} must use an app-owned style file.`;
   }
 
@@ -204,14 +209,20 @@ function getManifestReadinessError(manifest: WebPackManifest, files: WebPackFile
   }
 
   const hasTileAssets = files.some((file) => file.kind === 'tile');
-  if (!hasTileAssets) {
-    return `Offline map pack for ${region.label} does not include tile assets yet. Publish local vector or raster tiles before downloading.`;
+  const hasPmtilesAssets = files.some((file) => file.kind === 'pmtiles');
+  if (!hasTileAssets && !hasPmtilesAssets) {
+    return `Offline map pack for ${region.label} does not include tile or PMTiles assets yet. Publish local vector, raster, or PMTiles tiles before downloading.`;
   }
 
   return null;
 }
 
-function getStyleReadinessError(style: WebMapStyle | null, region: OfflineMapRegion) {
+function getStyleReadinessError(
+  style: WebMapStyle | null,
+  region: OfflineMapRegion,
+  files: readonly WebPackFile[],
+  origin = getCurrentOrigin()
+) {
   if (!style) {
     return `Offline map pack for ${region.label} has an invalid style file.`;
   }
@@ -225,10 +236,26 @@ function getStyleReadinessError(style: WebMapStyle | null, region: OfflineMapReg
     const sourceUrls = [source.url, source.data, ...(source.tiles ?? [])].filter((url): url is string => Boolean(url));
     for (const sourceUrl of sourceUrls) {
       if (sourceUrl.startsWith('pmtiles://')) {
-        return `Offline map pack for ${region.label} uses PMTiles, but the PWA map reader is not installed yet.`;
+        const archiveUrl = normalizePmtilesArchiveUrl(sourceUrl, origin);
+        if (!archiveUrl) {
+          return `Offline map pack for ${region.label} has an invalid PMTiles source.`;
+        }
+
+        if (!isSameOriginUrl(archiveUrl, origin)) {
+          return `Offline map pack for ${region.label} must use an app-owned PMTiles archive.`;
+        }
+
+        const manifestListsArchive = files.some(
+          (file) => file.kind === 'pmtiles' && normalizeUrl(file.url, origin) === archiveUrl
+        );
+        if (!manifestListsArchive) {
+          return `Offline map pack for ${region.label} must list its PMTiles archive in metadata.json.`;
+        }
+
+        continue;
       }
 
-      if (!isSameOriginUrl(normalizeUrl(sourceUrl))) {
+      if (!isSameOriginUrl(normalizeUrl(sourceUrl, origin), origin)) {
         return `Offline map pack for ${region.label} still points at remote map assets.`;
       }
     }
@@ -237,8 +264,28 @@ function getStyleReadinessError(style: WebMapStyle | null, region: OfflineMapReg
   return null;
 }
 
-function isSameOriginUrl(url: string) {
-  return new URL(url, window.location.origin).origin === window.location.origin;
+function normalizePmtilesArchiveUrl(sourceUrl: string, origin: string) {
+  if (!sourceUrl.startsWith('pmtiles://')) {
+    return null;
+  }
+
+  const rawArchiveUrl = sourceUrl
+    .slice('pmtiles://'.length)
+    .replace(/\/\{z\}\/\{x\}\/\{y\}$/u, '');
+
+  if (!rawArchiveUrl) {
+    return null;
+  }
+
+  return normalizeUrl(rawArchiveUrl, origin);
+}
+
+function isSameOriginUrl(url: string, origin = getCurrentOrigin()) {
+  return new URL(url, origin).origin === origin;
+}
+
+function getCurrentOrigin() {
+  return window.location.origin;
 }
 
 async function openDatabase() {
@@ -308,4 +355,9 @@ export const offlineMapPackAdapter: OfflineMapPackAdapter = {
   downloadPack,
   getLocalStyleUrlForRegion,
   listPacks,
+};
+
+export const offlineMapPackValidationForTest = {
+  getManifestReadinessError,
+  getStyleReadinessError,
 };

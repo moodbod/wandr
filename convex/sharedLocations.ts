@@ -59,6 +59,18 @@ function normalizeAccuracy(accuracy: number | undefined) {
   return typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null;
 }
 
+function normalizeHeading(heading: number | undefined) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+    return null;
+  }
+
+  return ((heading % 360) + 360) % 360;
+}
+
+function normalizeSpeed(speed: number | undefined) {
+  return typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed : null;
+}
+
 async function deleteSharedLocation(ctx: MutationCtx, travelerSlug: string) {
   const existing = await ctx.db
     .query('sharedLocations')
@@ -119,19 +131,25 @@ function canViewSharedLocation({
   isSelf,
   locationSharing,
   profileVisibility,
+  viewerCanSeeOtherUsers,
 }: {
   hasSharedCircle: boolean;
   isConnected: boolean;
   isSelf: boolean;
   locationSharing: LocationSharing;
   profileVisibility: ProfileVisibility;
+  viewerCanSeeOtherUsers: boolean;
 }) {
   if (locationSharing === 'off') {
     return false;
   }
 
+  if (!viewerCanSeeOtherUsers) {
+    return false;
+  }
+
   if (isSelf) {
-    return true;
+    return false;
   }
 
   if (profileVisibility === 'private') {
@@ -163,7 +181,10 @@ function buildSharedLocationView(
     baseLabel: profile.baseLabel,
     coordinate,
     accuracy: location.accuracy ?? null,
+    heading: normalizeHeading(location.heading),
+    speed: normalizeSpeed(location.speed),
     updatedAt: location.updatedAt,
+    expiresAt: location.expiresAt,
     locationSharing,
     profileVisibility,
   };
@@ -174,6 +195,8 @@ export const publishSharedLocation = mutation({
     travelerSlug: v.string(),
     coordinate: v.array(v.number()),
     accuracy: v.optional(v.number()),
+    heading: v.optional(v.number()),
+    speed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
@@ -194,6 +217,8 @@ export const publishSharedLocation = mutation({
     }
 
     const accuracy = normalizeAccuracy(args.accuracy);
+    const heading = normalizeHeading(args.heading);
+    const speed = normalizeSpeed(args.speed);
     const now = Date.now();
     const existing = await ctx.db
       .query('sharedLocations')
@@ -203,6 +228,8 @@ export const publishSharedLocation = mutation({
       travelerSlug,
       coordinate: [coordinate[0], coordinate[1]],
       accuracy: accuracy ?? undefined,
+      heading: heading ?? undefined,
+      speed: speed ?? undefined,
       updatedAt: now,
       expiresAt: now + SHARED_LOCATION_TTL_MS,
     };
@@ -241,11 +268,13 @@ export const listVisibleSharedLocations = query({
     }
 
     const now = Date.now();
-    const [locations, friendSlugs, viewerCircleIds] = await Promise.all([
+    const [locations, friendSlugs, viewerCircleIds, viewerUser] = await Promise.all([
       listFreshSharedLocations(ctx, now),
       getFriendConnectionSet(ctx, viewerSlug),
       getActiveCircleIdSet(ctx, viewerSlug),
+      getAppUser(ctx, viewerSlug),
     ]);
+    const viewerCanSeeOtherUsers = viewerUser?.showOtherUsersLiveLocation === true;
     const visibleLocations = [];
 
     for (const location of locations) {
@@ -276,6 +305,7 @@ export const listVisibleSharedLocations = query({
             isSelf,
             locationSharing,
             profileVisibility,
+            viewerCanSeeOtherUsers,
           })
         ) {
           continue;
