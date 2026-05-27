@@ -196,7 +196,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   }, [featuredStay, filteredStays]);
   const catalogMarkers = useMemo(() => {
     return (liveCatalog?.markers ?? []).filter((marker: any) =>
-      coordinateIsInPlanningLocation(marker.coordinate, planningLocation)
+      marker.itemKind === 'stay' && coordinateIsInPlanningLocation(marker.coordinate, planningLocation)
     );
   }, [liveCatalog?.markers, planningLocation]);
   const mapMarkers = useMemo(() => {
