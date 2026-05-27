@@ -147,6 +147,7 @@ type MapboxUserMarkerProps = {
   avatarUri?: string | null;
   coordinate: readonly [number, number];
   heading?: number | null;
+  isStale?: boolean;
   name?: string | null;
   speed?: number | null;
   variant?: 'navigation' | 'avatar';
@@ -158,6 +159,7 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
   avatarUri,
   coordinate,
   heading,
+  isStale = false,
   name,
   speed,
   variant = 'avatar',
@@ -221,6 +223,7 @@ export const MapboxUserMarker = memo(function MapboxUserMarker({
         avatarPaletteKey={avatarPaletteKey}
         avatarUri={avatarUri}
         heading={heading}
+        isStale={isStale}
         name={name}
         speed={speed}
         variant={variant}

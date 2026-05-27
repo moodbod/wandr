@@ -68,6 +68,10 @@ function publicStatus(status?: ContentStatus) {
   return status === undefined || status === 'live';
 }
 
+function publicProviderReview(item: { businessProfileId?: Id<'businessProfiles'>; reviewStatus?: 'draft' | 'submitted' | 'approved' | 'rejected' }) {
+  return !item.businessProfileId || item.reviewStatus === 'approved';
+}
+
 function getSupportedCountryMetadata(
   coordinate: Coordinate | null
 ): { countryCode?: string; countryLabel?: string; planningLocationId?: string } {
@@ -308,6 +312,7 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
     ...gemDocs.map(legacyGemToPublicLocation),
     ...experienceDocs
       .filter((experience) => experience.itemKind === 'hiddenGem' && publicStatus(experience.status))
+      .filter(publicProviderReview)
       .map(hiddenGemExperienceToPublicLocation),
   ].filter((location) => {
     if (knownLocationSlugs.has(location.slug)) {
@@ -319,8 +324,9 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
 
   const experiences = experienceDocs
     .filter((experience) => experience.itemKind !== 'hiddenGem' && publicStatus(experience.status))
+    .filter(publicProviderReview)
     .map(toPublicExperience);
-  const stays = stayDocs.filter((stay) => publicStatus(stay.status)).map(toPublicStay);
+  const stays = stayDocs.filter((stay) => publicStatus(stay.status)).filter(publicProviderReview).map(toPublicStay);
   const locations = [...liveLocations, ...legacyLocations];
   const markers = [
     ...locations
@@ -802,6 +808,9 @@ export const updateManagedContentStatus = mutation({
       await ctx.db.patch(id, {
         status: args.status,
         updatedByAdminSlug: admin.slug,
+        ...(existing.businessProfileId && args.status === 'live'
+          ? { reviewStatus: 'approved' as const, reviewedByAdminSlug: admin.slug, reviewedAt: now }
+          : {}),
         publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
         archivedAt: args.status === 'archived' ? now : undefined,
       });
@@ -824,6 +833,9 @@ export const updateManagedContentStatus = mutation({
     await ctx.db.patch(id, {
       status: args.status,
       updatedByAdminSlug: admin.slug,
+      ...(existing.businessProfileId && args.status === 'live'
+        ? { reviewStatus: 'approved' as const, reviewedByAdminSlug: admin.slug, reviewedAt: now }
+        : {}),
       publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt,
       archivedAt: args.status === 'archived' ? now : undefined,
     });

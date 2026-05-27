@@ -1,7 +1,7 @@
 import { useMutation } from 'convex/react';
 import { type Href, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, ShieldCheck, Trash } from 'phosphor-react-native';
+import { Camera, ShieldCheck, Storefront, Trash } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { type Country } from 'react-native-country-picker-modal';
@@ -36,6 +36,7 @@ export default function EditProfileScreen() {
   const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
   const isAdmin = session?.role === 'admin';
+  const canManageBusiness = session?.role === 'serviceProvider' || session?.role === 'admin';
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
   const [name, setName] = useState('');
@@ -228,6 +229,18 @@ export default function EditProfileScreen() {
             style={styles.managerActionButton}>
             <ShieldCheck color={designSystem.colors.darkGreen} size={18} weight="bold" />
             <ThemedText style={styles.managerActionText}>Admin dashboard</ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+      {canManageBusiness ? (
+        <View style={styles.managerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open business dashboard"
+            onPress={() => router.push('/profile/business' as Href)}
+            style={styles.managerActionButton}>
+            <Storefront color={designSystem.colors.darkGreen} size={18} weight="bold" />
+            <ThemedText style={styles.managerActionText}>My business</ThemedText>
           </Pressable>
         </View>
       ) : null}

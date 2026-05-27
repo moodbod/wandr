@@ -23,6 +23,8 @@ import { staysTable } from './tables/stays';
 import { invitesTable } from './tables/invites';
 import { tripsTable } from './tables/trips';
 import { sharedLocationsTable } from './tables/sharedLocations';
+import { supportMessagesTable, supportReadsTable, supportThreadsTable } from './tables/support';
+import { businessProfilesTable } from './tables/businessProfiles';
 
 const { users: _authUsersTable, ...authTablesWithoutUsers } = authTables;
 
@@ -39,7 +41,7 @@ export default defineSchema({
     slug: v.optional(v.string()),
     countryCode: v.optional(v.string()),
     countryLabel: v.optional(v.string()),
-    role: v.optional(v.union(v.literal('traveler'), v.literal('admin'))),
+    role: v.optional(v.union(v.literal('traveler'), v.literal('serviceProvider'), v.literal('admin'))),
     homeCity: v.optional(v.string()),
     travelStyle: v.optional(v.union(v.literal('solo'), v.literal('couple'), v.literal('friends'), v.literal('family'))),
     onboardingCompletedAt: v.optional(v.number()),
@@ -87,6 +89,7 @@ export default defineSchema({
   ...authTablesWithoutUsers,
 
   regions: regionsTable,
+  businessProfiles: businessProfilesTable,
   trips: tripsTable,
   invites: invitesTable,
   experiences: experiencesTable,
@@ -127,6 +130,9 @@ export default defineSchema({
   connections: connectionsTable,
   calls: callsTable,
   sharedLocations: sharedLocationsTable,
+  supportThreads: supportThreadsTable,
+  supportMessages: supportMessagesTable,
+  supportReads: supportReadsTable,
 
   bookings: bookingsTable,
   likes: likesTable,
@@ -141,7 +147,10 @@ export default defineSchema({
       v.literal('content.status'),
       v.literal('content.migrate'),
       v.literal('request.status'),
-      v.literal('photo.status')
+      v.literal('photo.status'),
+      v.literal('provider.invite'),
+      v.literal('provider.status'),
+      v.literal('provider.review')
     ),
     targetKind: v.union(
       v.literal('user'),
@@ -151,7 +160,8 @@ export default defineSchema({
       v.literal('booking'),
       v.literal('reservation'),
       v.literal('photo'),
-      v.literal('catalog')
+      v.literal('catalog'),
+      v.literal('businessProfile')
     ),
     targetId: v.string(),
     targetLabel: v.optional(v.string()),
@@ -196,6 +206,15 @@ export default defineSchema({
     checkIn: v.number(),
     checkOut: v.number(),
     status: v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled')),
+    paymentMode: v.optional(v.union(v.literal('cash'), v.literal('platform'))),
+    paymentStatus: v.optional(
+      v.union(v.literal('unpaid'), v.literal('pending'), v.literal('paid'), v.literal('refunded'), v.literal('failed'))
+    ),
+    platformFeeAmount: v.optional(v.number()),
+    providerReceivableAmount: v.optional(v.number()),
+    externalCheckoutId: v.optional(v.string()),
+    externalPaymentProvider: v.optional(v.string()),
+    paymentCapturedAt: v.optional(v.number()),
     totalPrice: v.number(),
     bookedAt: v.number(),
     roomTypeId: v.optional(v.string()),

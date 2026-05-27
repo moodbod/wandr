@@ -241,6 +241,10 @@ function isLiveContent(status?: 'draft' | 'live' | 'archived') {
   return status === undefined || status === 'live';
 }
 
+function isPublicProviderContent(item: { businessProfileId?: Id<'businessProfiles'>; reviewStatus?: 'draft' | 'submitted' | 'approved' | 'rejected' }) {
+  return !item.businessProfileId || item.reviewStatus === 'approved';
+}
+
 function hiddenGemToExperience(gem: Doc<'gems'>): ExploreExperience {
   return {
     slug: getHiddenGemSlug(gem.title),
@@ -306,11 +310,11 @@ async function getAddableCatalogItem(ctx: QueryCtx | MutationCtx, slug: string) 
     .withIndex('by_slug', (q) => q.eq('slug', slug))
     .unique();
 
-  if (experience && experience.itemKind !== 'hiddenGem' && isLiveContent(experience.status)) {
+  if (experience && experience.itemKind !== 'hiddenGem' && isLiveContent(experience.status) && isPublicProviderContent(experience)) {
     return { kind: 'experience' as const, value: experience };
   }
 
-  if (experience?.itemKind === 'hiddenGem' && isLiveContent(experience.status)) {
+  if (experience?.itemKind === 'hiddenGem' && isLiveContent(experience.status) && isPublicProviderContent(experience)) {
     return { kind: 'location' as const, value: experience };
   }
 
@@ -1480,6 +1484,10 @@ export const addExperienceToTrip = mutation({
       travelerNote?: string;
       currencyCode?: string;
       priceSnapshot?: number;
+      paymentMode?: 'cash';
+      paymentStatus?: 'unpaid';
+      platformFeeAmount?: number;
+      providerReceivableAmount?: number;
     } = {
       contentKind: addableContent.kind,
       contentSlug: args.experienceSlug,
@@ -1496,6 +1504,12 @@ export const addExperienceToTrip = mutation({
     if (travelerNote !== undefined) requestFields.travelerNote = travelerNote;
     if (currencyCode !== undefined) requestFields.currencyCode = currencyCode;
     if (priceSnapshot !== undefined) requestFields.priceSnapshot = priceSnapshot;
+    if (addableContent.kind === 'experience') {
+      requestFields.paymentMode = 'cash';
+      requestFields.paymentStatus = 'unpaid';
+      requestFields.platformFeeAmount = 0;
+      requestFields.providerReceivableAmount = (priceSnapshot ?? 0) * (partySize ?? 1);
+    }
 
     // Check if already in this trip
     const existing = await ctx.db
@@ -1589,7 +1603,7 @@ export const bookStay = mutation({
       .withIndex('by_slug', (q) => q.eq('slug', args.staySlug))
       .unique();
 
-    if (!stay || !isLiveContent(stay.status)) {
+    if (!stay || !isLiveContent(stay.status) || !isPublicProviderContent(stay)) {
       throw new Error('Stay not found.');
     }
 
@@ -1634,6 +1648,10 @@ export const bookStay = mutation({
       travelerSlug,
       tripId: resolvedTripId,
       bookedAt: Date.now(),
+      paymentMode: 'cash',
+      paymentStatus: 'unpaid',
+      platformFeeAmount: 0,
+      providerReceivableAmount: stay.pricePerNight,
     });
   },
 });
@@ -1855,7 +1873,7 @@ export const createStayBooking = mutation({
       .withIndex('by_slug', (q) => q.eq('slug', args.staySlug))
       .unique();
 
-    if (!stay || !isLiveContent(stay.status)) {
+    if (!stay || !isLiveContent(stay.status) || !isPublicProviderContent(stay)) {
       throw new Error('Stay not found.');
     }
 
@@ -1925,6 +1943,10 @@ export const createStayBooking = mutation({
       roomTypeId?: string;
       roomCount: number;
       stayBookingDetails?: Doc<'reservations'>['stayBookingDetails'];
+      paymentMode: 'cash';
+      paymentStatus: 'unpaid';
+      platformFeeAmount: number;
+      providerReceivableAmount: number;
     } = {
       staySlug: args.staySlug,
       travelerSlug,
@@ -1935,6 +1957,10 @@ export const createStayBooking = mutation({
       status: 'pending',
       bookedAt: now,
       roomCount,
+      paymentMode: 'cash',
+      paymentStatus: 'unpaid',
+      platformFeeAmount: 0,
+      providerReceivableAmount: args.totalPrice,
     };
     if (roomTypeId) reservationFields.roomTypeId = roomTypeId;
     if (args.stayBookingDetails) reservationFields.stayBookingDetails = args.stayBookingDetails;
@@ -1962,6 +1988,10 @@ export const createStayBooking = mutation({
       totalPrice: number;
       roomTypeId?: string;
       stayBookingDetails?: Doc<'bookings'>['stayBookingDetails'];
+      paymentMode: 'cash';
+      paymentStatus: 'unpaid';
+      platformFeeAmount: number;
+      providerReceivableAmount: number;
     } = {
       experienceSlug: args.staySlug,
       contentKind: 'stay',
@@ -1976,6 +2006,10 @@ export const createStayBooking = mutation({
       checkIn: args.checkIn,
       checkOut: args.checkOut,
       totalPrice: args.totalPrice,
+      paymentMode: 'cash',
+      paymentStatus: 'unpaid',
+      platformFeeAmount: 0,
+      providerReceivableAmount: args.totalPrice,
     };
     if (roomTypeId) mirrorFields.roomTypeId = roomTypeId;
     if (args.stayBookingDetails) mirrorFields.stayBookingDetails = args.stayBookingDetails;
@@ -2002,7 +2036,7 @@ export const listAllStays = query({
   handler: async (ctx) => {
     const stays = await ctx.db.query('stays').take(200);
     return stays
-      .filter((stay) => isLiveContent(stay.status))
+      .filter((stay) => isLiveContent(stay.status) && isPublicProviderContent(stay))
       .map((stay) => ({
         ...stay,
         id: stay.slug,
@@ -2159,7 +2193,9 @@ export const getStayBySlug = query({
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
       .unique();
 
-    return stay && isLiveContent(stay.status) ? { ...stay, id: stay.slug, priceLabel: `$${stay.pricePerNight}` } : null;
+    return stay && isLiveContent(stay.status) && isPublicProviderContent(stay)
+      ? { ...stay, id: stay.slug, priceLabel: `$${stay.pricePerNight}` }
+      : null;
   },
 });
 

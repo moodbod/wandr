@@ -13,6 +13,8 @@ export default function FriendsLayout() {
       <Stack.Screen name="call/[callId]" options={{ title: 'Friend call' }} />
       <Stack.Screen name="group/[circleId]" options={{ title: 'Friends group chat' }} />
       <Stack.Screen name="direct/[threadId]" options={{ title: 'Direct friend chat' }} />
+      <Stack.Screen name="support/index" options={{ title: 'Support chat' }} />
+      <Stack.Screen name="support/[threadId]" options={{ title: 'Support chat' }} />
       <Stack.Screen name="profile/[travelerSlug]" options={{ title: 'Friend profile' }} />
     </Stack>
   );

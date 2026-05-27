@@ -200,6 +200,24 @@ export type DirectChatMessage = {
   } | null;
 };
 
+export type SupportChatMessage = {
+  _id: Id<'supportMessages'>;
+  kind: 'text';
+  body: string;
+  createdAt: number;
+  senderSlug: string;
+  senderRole: 'traveler' | 'admin';
+  senderName: string;
+  senderAvatarUri: string | null;
+  isOwnMessage: boolean;
+  replyTo: {
+    messageId: Id<'supportMessages'>;
+    senderName: string;
+    preview: string;
+    kind: string;
+  } | null;
+};
+
 export type FriendDiscoveryPayload = {
   intro: {
     title: string;
@@ -217,11 +235,12 @@ export type FriendDiscoveryPayload = {
 
 export type FriendChatListItem = {
   id: string;
-  kind: 'group' | 'direct';
+  kind: 'group' | 'direct' | 'support';
   title: string;
   subtitle: string;
   preview: string | null;
   updatedAt: number;
+  threadId?: Id<'supportThreads'> | null;
   travelerSlug?: string;
   avatarUri?: string | null;
   avatarUris?: string[];
@@ -285,6 +304,36 @@ export type DirectChatPayload = {
     baseLabel: string;
   };
   messages: DirectChatMessage[];
+  composer: {
+    placeholder: string;
+  };
+} | null;
+
+export type SupportChatListPayload = {
+  isAdmin: boolean;
+  ownThread: FriendChatListItem & {
+    kind: 'support';
+    threadId: Id<'supportThreads'> | null;
+  };
+  adminThreads: (FriendChatListItem & {
+    kind: 'support';
+    threadId: Id<'supportThreads'>;
+  })[];
+};
+
+export type SupportChatPayload = {
+  threadId: Id<'supportThreads'> | null;
+  status: 'open' | 'closed';
+  title: string;
+  subtitle: string;
+  traveler: {
+    slug: string;
+    name: string;
+    avatarUri: string | null;
+    baseLabel: string;
+  };
+  isAdmin: boolean;
+  messages: SupportChatMessage[];
   composer: {
     placeholder: string;
   };

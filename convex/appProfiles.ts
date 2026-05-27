@@ -5,7 +5,7 @@ type ProfileCtx = QueryCtx | MutationCtx;
 type TravelStyle = 'solo' | 'couple' | 'friends' | 'family';
 type TravelPace = 'slow' | 'balanced' | 'fast';
 type TravelVibe = 'adventure' | 'culture' | 'social' | 'relaxation' | 'food';
-type UserRole = 'traveler' | 'admin';
+export type UserRole = 'traveler' | 'serviceProvider' | 'admin';
 
 type CoreProfileInput = {
   name: string;
@@ -53,7 +53,7 @@ export type PublicTravelerProfile = {
   onboardingCompletedAt: number | null;
   regionCode: string;
   regionName: string;
-  role: 'traveler' | 'admin';
+  role: UserRole;
   slug: string;
   travelerSlug: string;
   travelPace: TravelPace;
@@ -74,7 +74,11 @@ function getDefaultVibe(travelStyle?: TravelStyle | null): TravelVibe {
 }
 
 export function getAuthUserRole(user: AuthUserProfile | null | undefined): UserRole {
-  return user?.role === 'admin' ? 'admin' : 'traveler';
+  if (user?.role === 'admin' || user?.role === 'serviceProvider') {
+    return user.role;
+  }
+
+  return 'traveler';
 }
 
 export function getDefaultAuthProfileFields(input: {

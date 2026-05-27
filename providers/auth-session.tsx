@@ -8,7 +8,7 @@ type AuthSession = {
   travelerSlug: string;
   email: string;
   name: string;
-  role: 'traveler' | 'admin';
+  role: 'traveler' | 'serviceProvider' | 'admin';
 };
 
 type AuthSessionContextValue = {
