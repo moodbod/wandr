@@ -37,6 +37,7 @@ type WandrMessageBase = {
 export function WandrGiftedChat<TMessage extends WandrMessageBase>({
   bottomOffset,
   header,
+  hasTools = true,
   isSending,
   isWidgetMessage,
   messages,
@@ -55,6 +56,7 @@ export function WandrGiftedChat<TMessage extends WandrMessageBase>({
 }: {
   bottomOffset: number;
   header?: ReactNode;
+  hasTools?: boolean;
   isSending: boolean;
   isWidgetMessage?: (message: TMessage) => boolean;
   messages: TMessage[];
@@ -151,6 +153,7 @@ export function WandrGiftedChat<TMessage extends WandrMessageBase>({
           onOpenTools={onOpenTools}
           placeholder={placeholder}
           isSending={isSending}
+          hasTools={hasTools}
         />
       </View>
     </KeyboardAvoidingView>

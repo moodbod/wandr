@@ -60,7 +60,7 @@ export function FriendChatListRow({
             style={styles.avatarButton}>
             <WandrAvatar
               name={item.title || item.travelerSlug || 'Traveler'}
-              paletteKey={item.travelerSlug}
+              paletteKey={item.travelerSlug ?? item.id}
               size={44}
               uri={item.avatarUri}
               style={styles.avatar}
@@ -85,7 +85,9 @@ export function FriendChatListRow({
               </ThemedText>
             ) : null}
           </View>
-          <ThemedText style={styles.time}>{formatRelativeTime(item.updatedAt)}</ThemedText>
+          {item.updatedAt > 0 ? (
+            <ThemedText style={styles.time}>{formatRelativeTime(item.updatedAt)}</ThemedText>
+          ) : null}
         </View>
         {item.preview ? (
           <ThemedText

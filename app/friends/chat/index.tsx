@@ -17,6 +17,7 @@ import { FriendChatListRow } from '@/components/wandr/friends/friend-chat-list-r
 import FriendViewerProfileScreen from '@/components/wandr/friends/friend-viewer-profile-screen';
 import { styles } from '@/components/wandr/friends/friends-chat-list-screen.styles';
 import FriendsChatScreen from '@/components/wandr/friends/group-chat-screen';
+import SupportChatScreen from '@/components/wandr/friends/support-chat-screen';
 import { WandrHeader } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { AppMapWorkspace } from '@/components/wandr/maps/app-map-workspace';
@@ -25,14 +26,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import { useResponsive } from '@/hooks/use-responsive';
-import { createOpenFriendGroupRef, getFriendChatListRef, joinFriendCircleRef, listUserTripsRef } from '@/lib/convex';
+import { createOpenFriendGroupRef, getFriendChatListRef, getSupportChatListRef, joinFriendCircleRef, listUserTripsRef } from '@/lib/convex';
 import type { FriendChatListItem, JoinableFriendGroup } from '@/types/friends';
 
 type ChatFilter = 'primary' | 'groups' | 'chats';
 type ChatDetail =
   | { kind: 'direct'; id: string }
   | { kind: 'group'; id: string }
-  | { kind: 'profile'; slug: string };
+  | { kind: 'profile'; slug: string }
+  | { kind: 'support'; id?: string };
 
 const chatFilters: { key: ChatFilter; label: string }[] = [
   { key: 'primary', label: 'Primary' },
@@ -46,12 +48,14 @@ export default function FriendsChatListScreen() {
   const params = useLocalSearchParams<{
     directThreadId?: string | string[];
     groupCircleId?: string | string[];
+    supportThreadId?: string | string[];
   }>();
   const isDark = useColorScheme() === 'dark';
   const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const { bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const chatList = useQuery(getFriendChatListRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
+  const supportList = useQuery(getSupportChatListRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const createGroup = useMutation(createOpenFriendGroupRef);
   const joinGroup = useMutation(joinFriendCircleRef);
@@ -66,6 +70,7 @@ export default function FriendsChatListScreen() {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const directThreadId = Array.isArray(params.directThreadId) ? params.directThreadId[0] : params.directThreadId;
   const groupCircleId = Array.isArray(params.groupCircleId) ? params.groupCircleId[0] : params.groupCircleId;
+  const supportThreadId = Array.isArray(params.supportThreadId) ? params.supportThreadId[0] : params.supportThreadId;
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredGroups = useMemo(() => {
@@ -104,8 +109,34 @@ export default function FriendsChatListScreen() {
       )
     );
   }, [chatList?.directs, normalizedSearchQuery]);
+  const filteredSupportRows = useMemo(() => {
+    const rows = supportList?.ownThread ? [supportList.ownThread] : [];
+    if (!normalizedSearchQuery) {
+      return rows;
+    }
+
+    return rows.filter((item) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearchQuery)
+      )
+    );
+  }, [normalizedSearchQuery, supportList?.ownThread]);
+  const filteredSupportInboxRows = useMemo(() => {
+    const ownThreadId = supportList?.ownThread.threadId ? String(supportList.ownThread.threadId) : null;
+    const rows = (supportList?.adminThreads ?? []).filter((item) => String(item.threadId) !== ownThreadId);
+    if (!normalizedSearchQuery) {
+      return rows;
+    }
+
+    return rows.filter((item) =>
+      [item.title, item.subtitle, item.preview ?? ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearchQuery)
+      )
+    );
+  }, [normalizedSearchQuery, supportList?.adminThreads, supportList?.ownThread.threadId]);
   const showGroups = activeFilter === 'primary' || activeFilter === 'groups';
   const showDirects = activeFilter === 'primary' || activeFilter === 'chats';
+  const showSupport = activeFilter === 'primary' || activeFilter === 'chats';
 
   useEffect(() => {
     if (!isLargeScreen) {
@@ -127,8 +158,17 @@ export default function FriendsChatListScreen() {
           ? current
           : { kind: 'group', id: groupCircleId }
       );
+      return;
     }
-  }, [directThreadId, groupCircleId, isLargeScreen]);
+
+    if (supportThreadId) {
+      setDetail((current) =>
+        current?.kind === 'support' && current.id === supportThreadId
+          ? current
+          : { kind: 'support', id: supportThreadId }
+      );
+    }
+  }, [directThreadId, groupCircleId, isLargeScreen, supportThreadId]);
 
   const handleCreateGroup = async () => {
     sheetRef.current?.snapToIndex(0);
@@ -149,6 +189,15 @@ export default function FriendsChatListScreen() {
     }
 
     router.push(`/friends/group/${circleId}` as never);
+  };
+
+  const openSupport = (threadId?: string | null) => {
+    if (isLargeScreen) {
+      setDetail(threadId ? { kind: 'support', id: threadId } : { kind: 'support' });
+      return;
+    }
+
+    router.push((threadId ? `/friends/support/${threadId}` : '/friends/support') as never);
   };
 
   const handleSubmitCreateGroup = async () => {
@@ -200,8 +249,15 @@ export default function FriendsChatListScreen() {
     const href = item.href ?? '';
     const groupId = href.match(/\/friends\/group\/([^/?#]+)/)?.[1];
     const directId = href.match(/\/friends\/direct\/([^/?#]+)/)?.[1];
+    const supportId = href.match(/\/friends\/support\/([^/?#]+)/)?.[1];
+    const isSupportHref = href === '/friends/support' || Boolean(supportId);
 
     if (isLargeScreen) {
+      if (isSupportHref) {
+        openSupport(supportId ? decodeURIComponent(supportId) : null);
+        return;
+      }
+
       if (groupId) {
         openGroup(decodeURIComponent(groupId));
         return;
@@ -295,6 +351,28 @@ export default function FriendsChatListScreen() {
           }
         />
 
+        {showSupport && filteredSupportRows.length ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Support</ThemedText>
+            <View style={styles.rowList}>
+              {filteredSupportRows.map((item: FriendChatListItem) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {showSupport && filteredSupportInboxRows.length ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Support inbox</ThemedText>
+            <View style={styles.rowList}>
+              {filteredSupportInboxRows.map((item: FriendChatListItem) => (
+                <FriendChatListRow key={item.id} item={item} onPress={() => openChatItem(item)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {showGroups && filteredGroups.length ? (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Groups</ThemedText>
@@ -345,7 +423,9 @@ export default function FriendsChatListScreen() {
           </View>
         ) : null}
 
-        {(showGroups ? filteredGroups.length + filteredJoinableGroups.length : 0) + (showDirects ? filteredDirects.length : 0) === 0 ? (
+        {(showSupport ? filteredSupportRows.length + filteredSupportInboxRows.length : 0) +
+          (showGroups ? filteredGroups.length + filteredJoinableGroups.length : 0) +
+          (showDirects ? filteredDirects.length : 0) === 0 ? (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyTitle}>No chats yet</ThemedText>
             <ThemedText style={styles.emptyDescription}>
@@ -363,6 +443,8 @@ export default function FriendsChatListScreen() {
     <FriendsChatScreen circleId={detail.id} onClose={() => setDetail(null)} />
   ) : detail?.kind === 'profile' ? (
     <FriendViewerProfileScreen onClose={() => setDetail(null)} travelerSlug={detail.slug} />
+  ) : detail?.kind === 'support' ? (
+    <SupportChatScreen embedded onClose={() => setDetail(null)} threadId={detail.id} />
   ) : null;
 
   return (

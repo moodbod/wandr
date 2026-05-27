@@ -6,13 +6,26 @@ import { recordAdminAuditEvent } from './adminAudit';
 import { getAuthUserRole, type AuthUserProfile } from './appProfiles';
 import { requireAdmin } from './authHelpers';
 
-const userRoleValidator = v.union(v.literal('traveler'), v.literal('admin'));
-const roleFilterValidator = v.union(v.literal('traveler'), v.literal('admin'), v.literal('all'));
+const userRoleValidator = v.union(v.literal('traveler'), v.literal('serviceProvider'), v.literal('admin'));
+const roleFilterValidator = v.union(v.literal('traveler'), v.literal('serviceProvider'), v.literal('admin'), v.literal('all'));
 const requestStatusValidator = v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'));
 const requestSourceValidator = v.union(v.literal('experienceBooking'), v.literal('stayBooking'));
+const providerTypeValidator = v.union(v.literal('experiences'), v.literal('stays'), v.literal('both'));
+const providerStatusValidator = v.union(v.literal('invited'), v.literal('active'), v.literal('suspended'));
+const providerStatusFilterValidator = v.union(v.literal('invited'), v.literal('active'), v.literal('suspended'), v.literal('all'));
+const providerReviewStatusValidator = v.union(v.literal('draft'), v.literal('submitted'), v.literal('approved'), v.literal('rejected'));
+const providerReviewStatusFilterValidator = v.union(
+  v.literal('draft'),
+  v.literal('submitted'),
+  v.literal('approved'),
+  v.literal('rejected'),
+  v.literal('all')
+);
+const paymentModeValidator = v.union(v.literal('cash'), v.literal('platform'));
 
-type UserRole = 'traveler' | 'admin';
+type UserRole = 'traveler' | 'serviceProvider' | 'admin';
 type RequestStatus = 'pending' | 'confirmed' | 'cancelled';
+type PaymentMode = 'cash' | 'platform';
 type Coordinate = readonly [number, number];
 
 function normalizeSearch(value?: string) {
@@ -34,6 +47,16 @@ function matchesUserSearch(user: Doc<'users'>, search: string | null) {
     .some((value) => value.toLowerCase().includes(search));
 }
 
+function optionalText(value?: string) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePaymentModes(value?: PaymentMode[]): PaymentMode[] {
+  const modes: PaymentMode[] = value?.length ? value : ['cash'];
+  return Array.from(new Set<PaymentMode>(modes));
+}
+
 function toUserRow(user: Doc<'users'>) {
   return {
     userId: user._id,
@@ -45,6 +68,37 @@ function toUserRow(user: Doc<'users'>) {
     countryLabel: user.countryLabel ?? null,
     createdAt: user._creationTime,
   };
+}
+
+function toProviderBusinessRow(profile: Doc<'businessProfiles'>, owner: Doc<'users'> | null) {
+  return {
+    _id: profile._id,
+    ownerUserId: profile.ownerUserId,
+    ownerSlug: profile.ownerSlug,
+    ownerName: owner?.name ?? profile.ownerSlug,
+    ownerEmail: owner?.email ?? profile.contactEmail ?? null,
+    businessName: profile.businessName,
+    providerType: profile.providerType,
+    contactEmail: profile.contactEmail ?? null,
+    contactPhone: profile.contactPhone ?? null,
+    status: profile.status,
+    acceptedPaymentModes: profile.acceptedPaymentModes,
+    directPaymentNotes: profile.directPaymentNotes ?? null,
+    subscriptionStatus: profile.subscriptionStatus ?? 'none',
+    invitedByAdminSlug: profile.invitedByAdminSlug,
+    invitedAt: profile.invitedAt,
+    updatedAt: profile.updatedAt,
+  };
+}
+
+function matchesProviderSearch(profile: Doc<'businessProfiles'>, owner: Doc<'users'> | null, search: string | null) {
+  if (!search) {
+    return true;
+  }
+
+  return [profile.businessName, profile.ownerSlug, profile.contactEmail, profile.contactPhone, owner?.name, owner?.email]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(search));
 }
 
 function paginateRows<T>(rows: T[], cursor?: number, limit?: number) {
@@ -360,6 +414,7 @@ export const getOverview = query({
       notices,
       photos,
       auditEvents,
+      businessProfiles,
     ] = await Promise.all([
       ctx.db.query('users').take(500),
       ctx.db.query('locations').take(500),
@@ -374,6 +429,7 @@ export const getOverview = query({
       ctx.db.query('notices').take(500),
       ctx.db.query('photos').take(500),
       ctx.db.query('adminAuditEvents').withIndex('by_createdAt').order('desc').take(8),
+      ctx.db.query('businessProfiles').take(500),
     ]);
     const actionableBookings = bookings.filter(isActionableExperienceBooking);
     const allRequests = [...actionableBookings, ...reservations];
@@ -385,6 +441,12 @@ export const getOverview = query({
       total: photos.length,
     };
     const adminCount = users.filter((user) => getUserRole(user) === 'admin').length;
+    const providerUserCount = users.filter((user) => getUserRole(user) === 'serviceProvider').length;
+    const providerOwnedExperiences = experiences.filter((experience) => Boolean(experience.businessProfileId));
+    const providerOwnedStays = stays.filter((stay) => Boolean(stay.businessProfileId));
+    const providerSubmissions = [...providerOwnedExperiences, ...providerOwnedStays].filter(
+      (item) => item.reviewStatus === 'submitted'
+    ).length;
     const experienceBySlug = new Map(experiences.map((experience) => [experience.slug, experience]));
     const stayBySlug = new Map(stays.map((stay) => [stay.slug, stay]));
     const locationBySlug = new Map(locations.map((location) => [location.slug, location]));
@@ -435,7 +497,19 @@ export const getOverview = query({
       users: {
         total: users.length,
         admins: adminCount,
-        travelers: users.length - adminCount,
+        serviceProviders: providerUserCount,
+        travelers: users.length - adminCount - providerUserCount,
+      },
+      providers: {
+        active: businessProfiles.filter((profile) => profile.status === 'active').length,
+        invited: businessProfiles.filter((profile) => profile.status === 'invited').length,
+        suspended: businessProfiles.filter((profile) => profile.status === 'suspended').length,
+        submittedListings: providerSubmissions,
+        total: businessProfiles.length,
+        listings: {
+          experiences: providerOwnedExperiences.length,
+          stays: providerOwnedStays.length,
+        },
       },
       content: {
         locations: countContentStatus(locations),
@@ -532,6 +606,263 @@ export const updateUserRole = mutation({
     }
 
     return toUserRow(updated);
+  },
+});
+
+export const inviteServiceProvider = mutation({
+  args: {
+    userId: v.id('users'),
+    businessName: v.string(),
+    providerType: providerTypeValidator,
+    contactEmail: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    contactName: v.optional(v.string()),
+    acceptedPaymentModes: v.optional(v.array(paymentModeValidator)),
+    directPaymentNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new ConvexError('User not found.');
+    }
+    if (!user.slug) {
+      throw new ConvexError('User must finish onboarding before provider access.');
+    }
+
+    const now = Date.now();
+    const businessName = args.businessName.trim();
+    if (businessName.length < 2) {
+      throw new ConvexError('Business name is required.');
+    }
+
+    const existing = await ctx.db
+      .query('businessProfiles')
+      .withIndex('by_ownerSlug', (q) => q.eq('ownerSlug', user.slug!))
+      .unique();
+    const paymentModes = normalizePaymentModes(args.acceptedPaymentModes);
+    const payload = {
+      businessName,
+      providerType: args.providerType,
+      contactEmail: optionalText(args.contactEmail) ?? user.email,
+      contactPhone: optionalText(args.contactPhone),
+      contactName: optionalText(args.contactName) ?? user.name,
+      status: 'active' as const,
+      acceptedPaymentModes: paymentModes,
+      directPaymentNotes: optionalText(args.directPaymentNotes),
+      subscriptionStatus: existing?.subscriptionStatus ?? ('none' as const),
+      invitedByAdminSlug: existing?.invitedByAdminSlug ?? admin.slug,
+      invitedAt: existing?.invitedAt ?? now,
+      suspendedAt: undefined,
+      updatedAt: now,
+    };
+
+    const businessProfileId = existing
+      ? existing._id
+      : await ctx.db.insert('businessProfiles', {
+          ownerUserId: args.userId,
+          ownerSlug: user.slug,
+          ...payload,
+        });
+
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    }
+
+    if (getUserRole(user) !== 'admin') {
+      await ctx.db.patch(args.userId, { role: 'serviceProvider' });
+    }
+
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'provider.invite',
+      targetKind: 'businessProfile',
+      targetId: businessProfileId,
+      targetLabel: businessName,
+      summary: `Invited ${user.slug} as a ${args.providerType} provider.`,
+    });
+
+    const profile = await ctx.db.get(businessProfileId);
+    if (!profile) {
+      throw new ConvexError('Provider profile not found.');
+    }
+
+    return toProviderBusinessRow(profile, await ctx.db.get(profile.ownerUserId));
+  },
+});
+
+export const listServiceProviders = query({
+  args: {
+    cursor: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    status: v.optional(providerStatusFilterValidator),
+    search: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const search = normalizeSearch(args.search);
+    const status = args.status === 'all' ? undefined : args.status;
+    const profiles = status
+      ? await ctx.db.query('businessProfiles').withIndex('by_status', (q) => q.eq('status', status)).order('desc').take(250)
+      : await ctx.db.query('businessProfiles').order('desc').take(250);
+    const rows = await Promise.all(
+      profiles.map(async (profile) => {
+        const owner = await ctx.db.get(profile.ownerUserId);
+        return {
+          profile,
+          row: toProviderBusinessRow(profile, owner),
+          owner,
+        };
+      })
+    );
+
+    return paginateRows(
+      rows.filter(({ profile, owner }) => matchesProviderSearch(profile, owner, search)).map(({ row }) => row),
+      args.cursor,
+      args.limit
+    );
+  },
+});
+
+export const updateServiceProviderStatus = mutation({
+  args: {
+    businessProfileId: v.id('businessProfiles'),
+    status: providerStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const profile = await ctx.db.get(args.businessProfileId);
+    if (!profile) {
+      throw new ConvexError('Provider profile not found.');
+    }
+
+    await ctx.db.patch(args.businessProfileId, {
+      status: args.status,
+      suspendedAt: args.status === 'suspended' ? Date.now() : undefined,
+      updatedAt: Date.now(),
+    });
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'provider.status',
+      targetKind: 'businessProfile',
+      targetId: args.businessProfileId,
+      targetLabel: profile.businessName,
+      summary: `Changed provider status to ${args.status}.`,
+    });
+
+    return true;
+  },
+});
+
+export const listProviderSubmissions = query({
+  args: {
+    cursor: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    reviewStatus: v.optional(providerReviewStatusFilterValidator),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const reviewStatus = args.reviewStatus === 'all' ? undefined : args.reviewStatus;
+    const [experiences, stays, profiles] = await Promise.all([
+      reviewStatus
+        ? ctx.db.query('experiences').withIndex('by_reviewStatus', (q) => q.eq('reviewStatus', reviewStatus)).order('desc').take(250)
+        : ctx.db.query('experiences').order('desc').take(250),
+      reviewStatus
+        ? ctx.db.query('stays').withIndex('by_reviewStatus', (q) => q.eq('reviewStatus', reviewStatus)).order('desc').take(250)
+        : ctx.db.query('stays').order('desc').take(250),
+      ctx.db.query('businessProfiles').take(500),
+    ]);
+    const businessById = new Map(profiles.map((profile) => [profile._id, profile]));
+    const rows = [
+      ...experiences
+        .filter((experience) => experience.businessProfileId)
+        .filter((experience) => !reviewStatus || experience.reviewStatus === reviewStatus)
+        .map((experience) => ({
+          _id: experience._id,
+          kind: 'experience' as const,
+          title: experience.title,
+          slug: experience.slug,
+          status: experience.status ?? 'draft',
+          reviewStatus: experience.reviewStatus ?? 'draft',
+          businessName: businessById.get(experience.businessProfileId!)?.businessName ?? 'Provider',
+          submittedBySlug: experience.submittedBySlug ?? experience.managerSlug ?? null,
+          submittedAt: experience.submittedAt ?? experience._creationTime,
+          rejectionNote: experience.rejectionNote ?? null,
+        })),
+      ...stays
+        .filter((stay) => stay.businessProfileId)
+        .filter((stay) => !reviewStatus || stay.reviewStatus === reviewStatus)
+        .map((stay) => ({
+          _id: stay._id,
+          kind: 'stay' as const,
+          title: stay.name,
+          slug: stay.slug,
+          status: stay.status ?? 'draft',
+          reviewStatus: stay.reviewStatus ?? 'draft',
+          businessName: businessById.get(stay.businessProfileId!)?.businessName ?? 'Provider',
+          submittedBySlug: stay.submittedBySlug ?? stay.managerSlug ?? null,
+          submittedAt: stay.submittedAt ?? stay._creationTime,
+          rejectionNote: stay.rejectionNote ?? null,
+        })),
+    ].sort((a, b) => b.submittedAt - a.submittedAt);
+
+    return paginateRows(rows, args.cursor, args.limit);
+  },
+});
+
+export const reviewProviderListing = mutation({
+  args: {
+    kind: v.union(v.literal('experience'), v.literal('stay')),
+    id: v.union(v.id('experiences'), v.id('stays')),
+    decision: v.union(v.literal('approved'), v.literal('rejected')),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const now = Date.now();
+    const reviewPatch = {
+      reviewStatus: args.decision,
+      reviewedByAdminSlug: admin.slug,
+      reviewedAt: now,
+      rejectionNote: args.decision === 'rejected' ? optionalText(args.note) : undefined,
+      status: args.decision === 'approved' ? ('live' as const) : ('draft' as const),
+      publishedAt: args.decision === 'approved' ? now : undefined,
+      updatedByAdminSlug: admin.slug,
+    };
+
+    if (args.kind === 'experience') {
+      const id = args.id as Id<'experiences'>;
+      const experience = await ctx.db.get(id);
+      if (!experience?.businessProfileId) {
+        throw new ConvexError('Provider experience not found.');
+      }
+      await ctx.db.patch(id, reviewPatch);
+      await recordAdminAuditEvent(ctx, {
+        actor: admin,
+        action: 'provider.review',
+        targetKind: 'experience',
+        targetId: id,
+        targetLabel: experience.title,
+        summary: `${args.decision === 'approved' ? 'Approved' : 'Rejected'} provider experience.`,
+      });
+      return true;
+    }
+
+    const id = args.id as Id<'stays'>;
+    const stay = await ctx.db.get(id);
+    if (!stay?.businessProfileId) {
+      throw new ConvexError('Provider stay not found.');
+    }
+    await ctx.db.patch(id, reviewPatch);
+    await recordAdminAuditEvent(ctx, {
+      actor: admin,
+      action: 'provider.review',
+      targetKind: 'stay',
+      targetId: id,
+      targetLabel: stay.name,
+      summary: `${args.decision === 'approved' ? 'Approved' : 'Rejected'} provider stay.`,
+    });
+    return true;
   },
 });
 

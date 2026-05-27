@@ -8,7 +8,10 @@ export type AdminAuditAction =
   | 'content.status'
   | 'content.migrate'
   | 'request.status'
-  | 'photo.status';
+  | 'photo.status'
+  | 'provider.invite'
+  | 'provider.status'
+  | 'provider.review';
 
 export type AdminAuditTargetKind =
   | 'user'
@@ -18,7 +21,8 @@ export type AdminAuditTargetKind =
   | 'booking'
   | 'reservation'
   | 'photo'
-  | 'catalog';
+  | 'catalog'
+  | 'businessProfile';
 
 export type AdminAuditActor = {
   name?: string | null;

@@ -13,6 +13,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="preferences" options={{ title: 'Preferences' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="offline-maps" options={{ title: 'Downloaded maps' }} />
+      <Stack.Screen name="business" options={{ title: 'My business' }} />
       <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
       <Stack.Screen name="account" options={{ title: 'Account' }} />
     </Stack>

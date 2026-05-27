@@ -4,16 +4,22 @@ import { makeFunctionReference } from 'convex/server';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import type { ExploreGroupTripDetail, ExploreJoinableTrip, ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
+import type { SupportChatListPayload, SupportChatPayload } from '@/types/friends';
 import type { StayBookingProfile } from '@/types/stays';
 import type { TripDashboard, TripItineraryItem } from '@/types/trip';
 
 export type ContentStatus = 'draft' | 'live' | 'archived';
 export type CuratedContentKind = 'location' | 'experience' | 'stay';
-export type AdminUserRole = 'traveler' | 'admin';
+export type AdminUserRole = 'traveler' | 'serviceProvider' | 'admin';
 export type AdminRoleFilter = AdminUserRole | 'all';
 export type AdminRequestStatus = 'pending' | 'confirmed' | 'cancelled';
 export type AdminRequestStatusFilter = AdminRequestStatus | 'all';
 export type AdminRequestSource = 'experienceBooking' | 'stayBooking';
+export type ProviderType = 'experiences' | 'stays' | 'both';
+export type ProviderStatus = 'invited' | 'active' | 'suspended';
+export type ProviderStatusFilter = ProviderStatus | 'all';
+export type ProviderReviewStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+export type ProviderReviewStatusFilter = ProviderReviewStatus | 'all';
 
 export const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const hasConvexUrl = Boolean(convexUrl);
@@ -420,7 +426,7 @@ export const completeOnboardingRef = makeFunctionReference<
     countryLabel: string;
     homeCity: string | null;
     travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   }
 >('authSession:completeOnboarding') as FunctionReference<
   'mutation',
@@ -439,7 +445,7 @@ export const completeOnboardingRef = makeFunctionReference<
     countryLabel: string;
     homeCity: string | null;
     travelStyle: 'solo' | 'couple' | 'friends' | 'family';
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   }
 >;
 
@@ -450,7 +456,7 @@ export const getCurrentAuthSessionRef = makeFunctionReference<
     travelerSlug: string;
     email: string;
     name: string;
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   } | null
 >('authSession:getCurrentSession') as FunctionReference<
   'query',
@@ -460,7 +466,7 @@ export const getCurrentAuthSessionRef = makeFunctionReference<
     travelerSlug: string;
     email: string;
     name: string;
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   } | null
 >;
 
@@ -472,7 +478,7 @@ export const getCurrentAuthIdentityRef = makeFunctionReference<
     name: string | null;
     travelerSlug: string | null;
     onboardingCompleted: boolean;
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   } | null
 >('authSession:getCurrentIdentity') as FunctionReference<
   'query',
@@ -483,7 +489,7 @@ export const getCurrentAuthIdentityRef = makeFunctionReference<
     name: string | null;
     travelerSlug: string | null;
     onboardingCompleted: boolean;
-    role: 'traveler' | 'admin';
+    role: AdminUserRole;
   } | null
 >;
 
@@ -1223,6 +1229,60 @@ export const markDirectChatReadRef = makeFunctionReference<
   boolean
 >;
 
+export const getSupportChatListRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string },
+  SupportChatListPayload
+>('support:getSupportChatList') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string },
+  SupportChatListPayload
+>;
+
+export const getSupportChatRef = makeFunctionReference<
+  'query',
+  { travelerSlug: string; threadId?: Id<'supportThreads'> },
+  SupportChatPayload
+>('support:getSupportChat') as FunctionReference<
+  'query',
+  'public',
+  { travelerSlug: string; threadId?: Id<'supportThreads'> },
+  SupportChatPayload
+>;
+
+export const sendSupportMessageRef = makeFunctionReference<
+  'mutation',
+  {
+    travelerSlug: string;
+    body: string;
+    threadId?: Id<'supportThreads'>;
+    replyToMessageId?: Id<'supportMessages'>;
+  },
+  { threadId: Id<'supportThreads'>; messageId: Id<'supportMessages'> } | null
+>('support:sendSupportMessage') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    travelerSlug: string;
+    body: string;
+    threadId?: Id<'supportThreads'>;
+    replyToMessageId?: Id<'supportMessages'>;
+  },
+  { threadId: Id<'supportThreads'>; messageId: Id<'supportMessages'> } | null
+>;
+
+export const markSupportChatReadRef = makeFunctionReference<
+  'mutation',
+  { travelerSlug: string; threadId?: Id<'supportThreads'> },
+  boolean
+>('support:markSupportChatRead') as FunctionReference<
+  'mutation',
+  'public',
+  { travelerSlug: string; threadId?: Id<'supportThreads'> },
+  boolean
+>;
+
 export const approveTripJoinRequestRef = makeFunctionReference<
   'mutation',
   { travelerSlug: string; notificationId: Id<'notices'> },
@@ -1360,6 +1420,160 @@ export const adminListAuditEventsRef = makeFunctionReference<
   { cursor?: number; limit?: number },
   any
 >('admin:listAuditEvents') as FunctionReference<'query', 'public', { cursor?: number; limit?: number }, any>;
+
+export const adminInviteServiceProviderRef = makeFunctionReference<
+  'mutation',
+  {
+    userId: Id<'users'>;
+    businessName: string;
+    providerType: ProviderType;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactName?: string;
+    acceptedPaymentModes?: ('cash' | 'platform')[];
+    directPaymentNotes?: string;
+  },
+  any
+>('admin:inviteServiceProvider') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    userId: Id<'users'>;
+    businessName: string;
+    providerType: ProviderType;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactName?: string;
+    acceptedPaymentModes?: ('cash' | 'platform')[];
+    directPaymentNotes?: string;
+  },
+  any
+>;
+
+export const adminListServiceProvidersRef = makeFunctionReference<
+  'query',
+  { cursor?: number; limit?: number; status?: ProviderStatusFilter; search?: string },
+  any
+>('admin:listServiceProviders') as FunctionReference<
+  'query',
+  'public',
+  { cursor?: number; limit?: number; status?: ProviderStatusFilter; search?: string },
+  any
+>;
+
+export const adminUpdateServiceProviderStatusRef = makeFunctionReference<
+  'mutation',
+  { businessProfileId: Id<'businessProfiles'>; status: ProviderStatus },
+  boolean
+>('admin:updateServiceProviderStatus') as FunctionReference<
+  'mutation',
+  'public',
+  { businessProfileId: Id<'businessProfiles'>; status: ProviderStatus },
+  boolean
+>;
+
+export const adminListProviderSubmissionsRef = makeFunctionReference<
+  'query',
+  { cursor?: number; limit?: number; reviewStatus?: ProviderReviewStatusFilter },
+  any
+>('admin:listProviderSubmissions') as FunctionReference<
+  'query',
+  'public',
+  { cursor?: number; limit?: number; reviewStatus?: ProviderReviewStatusFilter },
+  any
+>;
+
+export const adminReviewProviderListingRef = makeFunctionReference<
+  'mutation',
+  {
+    kind: 'experience' | 'stay';
+    id: Id<'experiences'> | Id<'stays'>;
+    decision: 'approved' | 'rejected';
+    note?: string;
+  },
+  boolean
+>('admin:reviewProviderListing') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    kind: 'experience' | 'stay';
+    id: Id<'experiences'> | Id<'stays'>;
+    decision: 'approved' | 'rejected';
+    note?: string;
+  },
+  boolean
+>;
+
+export const providerGetMyBusinessProfileRef = makeFunctionReference<'query', Record<string, never>, any>(
+  'provider:getMyBusinessProfile'
+) as FunctionReference<'query', 'public', Record<string, never>, any>;
+
+export const providerListMyListingsRef = makeFunctionReference<'query', Record<string, never>, any>(
+  'provider:listMyListings'
+) as FunctionReference<'query', 'public', Record<string, never>, any>;
+
+export const providerGenerateImageUploadUrlRef = makeFunctionReference<'mutation', Record<string, never>, string>(
+  'provider:generateProviderImageUploadUrl'
+) as FunctionReference<'mutation', 'public', Record<string, never>, string>;
+
+export const providerUpsertMyExperienceDraftRef = makeFunctionReference<'mutation', any, any>(
+  'provider:upsertMyExperienceDraft'
+) as FunctionReference<'mutation', 'public', any, any>;
+
+export const providerSubmitMyExperienceForReviewRef = makeFunctionReference<
+  'mutation',
+  { experienceId: Id<'experiences'> },
+  boolean
+>('provider:submitMyExperienceForReview') as FunctionReference<
+  'mutation',
+  'public',
+  { experienceId: Id<'experiences'> },
+  boolean
+>;
+
+export const providerUpsertMyStayDraftRef = makeFunctionReference<'mutation', any, any>(
+  'provider:upsertMyStayDraft'
+) as FunctionReference<'mutation', 'public', any, any>;
+
+export const providerSubmitMyStayForReviewRef = makeFunctionReference<'mutation', { stayId: Id<'stays'> }, boolean>(
+  'provider:submitMyStayForReview'
+) as FunctionReference<'mutation', 'public', { stayId: Id<'stays'> }, boolean>;
+
+export const providerListMyRequestsRef = makeFunctionReference<
+  'query',
+  { status?: AdminRequestStatusFilter },
+  any[]
+>('provider:listMyRequests') as FunctionReference<'query', 'public', { status?: AdminRequestStatusFilter }, any[]>;
+
+export const providerUpdateMyRequestStatusRef = makeFunctionReference<
+  'mutation',
+  {
+    requestId: Id<'bookings'> | Id<'reservations'>;
+    source: AdminRequestSource;
+    status: 'confirmed' | 'cancelled';
+  },
+  boolean
+>('provider:updateMyRequestStatus') as FunctionReference<
+  'mutation',
+  'public',
+  {
+    requestId: Id<'bookings'> | Id<'reservations'>;
+    source: AdminRequestSource;
+    status: 'confirmed' | 'cancelled';
+  },
+  boolean
+>;
+
+export const providerArchiveMyListingRef = makeFunctionReference<
+  'mutation',
+  { kind: 'experience' | 'stay'; id: Id<'experiences'> | Id<'stays'> },
+  boolean
+>('provider:archiveMyListing') as FunctionReference<
+  'mutation',
+  'public',
+  { kind: 'experience' | 'stay'; id: Id<'experiences'> | Id<'stays'> },
+  boolean
+>;
 
 export const acceptTripInviteRef = makeFunctionReference<
   'mutation',

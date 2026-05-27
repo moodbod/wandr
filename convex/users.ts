@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 
 import { internalMutation } from './_generated/server';
 
-const userRoleValidator = v.union(v.literal('traveler'), v.literal('admin'));
+const userRoleValidator = v.union(v.literal('traveler'), v.literal('serviceProvider'), v.literal('admin'));
 
 export const setRole = internalMutation({
   args: {

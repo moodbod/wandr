@@ -32,8 +32,12 @@ function MapPreviewComponent({
   centerCoordinate,
   userCoordinate = null,
   userAccuracy = null,
+  userAvatarPaletteKey,
+  userAvatarUri,
   userHeading = null,
   userIsStale = false,
+  userName,
+  userPuckVariant = 'navigation',
   userSpeed = null,
   viewportPadding,
   markers = [],
@@ -411,17 +415,19 @@ function MapPreviewComponent({
             heading={normalizedUserHeading ?? undefined}
           />
         ) : null}
-        <MapboxGL.LocationPuck
-          visible={Boolean(userCoordinate)}
-          puckBearing="heading"
-          puckBearingEnabled={Boolean(userCoordinate) && !userIsStale}
-          scale={1}
-          pulsing={{
-            color: userIsStale ? '#6B7280' : '#1D8BFF',
-            isEnabled: Boolean(userCoordinate) && !userIsStale,
-            radius: getPuckPulseRadius(userAccuracy, userSpeed),
-          }}
-        />
+        {userCoordinate ? (
+          <MapboxUserMarker
+            accuracy={userAccuracy}
+            avatarPaletteKey={userAvatarPaletteKey}
+            avatarUri={userAvatarUri}
+            coordinate={userCoordinate}
+            heading={normalizedUserHeading}
+            isStale={userIsStale}
+            name={userName}
+            speed={userSpeed}
+            variant={userPuckVariant}
+          />
+        ) : null}
 
         {normalizedMarkers.map((marker) => {
           return (
@@ -545,16 +551,6 @@ function normalizeHeading(heading?: number | null) {
   }
 
   return ((heading % 360) + 360) % 360;
-}
-
-function getPuckPulseRadius(accuracy?: number | null, speed?: number | null) {
-  const accuracyRadius = typeof accuracy === 'number' && Number.isFinite(accuracy)
-    ? Math.max(20, Math.min(56, accuracy * 0.5))
-    : 24;
-
-  return typeof speed === 'number' && Number.isFinite(speed) && speed >= 1.2
-    ? Math.max(accuracyRadius, 32)
-    : accuracyRadius;
 }
 
 const styles = StyleSheet.create({

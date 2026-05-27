@@ -80,6 +80,10 @@ function isLiveContent(status?: 'draft' | 'live' | 'archived') {
   return status === undefined || status === 'live';
 }
 
+function isPublicProviderContent(item: { businessProfileId?: Id<'businessProfiles'>; reviewStatus?: 'draft' | 'submitted' | 'approved' | 'rejected' }) {
+  return !item.businessProfileId || item.reviewStatus === 'approved';
+}
+
 function toExploreExperience(doc: ExperienceDoc): ExploreExperience {
   const coordinate = toCoordinate(doc.coordinate);
   const inferredCountry = getSupportedCountryMetadata(coordinate);
@@ -383,7 +387,7 @@ async function resolveExplorePlace(
     .withIndex('by_slug', (q) => q.eq('slug', slug))
     .unique();
 
-  if (experience && isLiveContent(experience.status)) {
+  if (experience && isLiveContent(experience.status) && isPublicProviderContent(experience)) {
     const normalized = toExploreExperience(experience);
     return {
       countryCode: normalized.countryCode,
@@ -402,7 +406,7 @@ async function resolveExplorePlace(
     .withIndex('by_slug', (q) => q.eq('slug', slug))
     .unique();
 
-  if (stay && isLiveContent(stay.status)) {
+  if (stay && isLiveContent(stay.status) && isPublicProviderContent(stay)) {
     return {
       countryCode: stay.countryCode,
       countryLabel: stay.countryLabel,
@@ -1080,6 +1084,10 @@ export const addExperienceToTrip = mutation({
       experienceSlug: args.experienceSlug,
       travelerSlug,
       bookedAt: Date.now(),
+      paymentMode: 'cash',
+      paymentStatus: 'unpaid',
+      platformFeeAmount: 0,
+      providerReceivableAmount: 0,
     });
   },
 });

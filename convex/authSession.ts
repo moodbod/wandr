@@ -92,7 +92,9 @@ async function createUniqueTravelerSlug(ctx: MutationCtx, name: string) {
 }
 
 function getBackendManagedRole(existingUser: AuthUserProfile | null) {
-  return existingUser?.role === 'admin' ? 'admin' : DEFAULT_USER_ROLE;
+  return existingUser?.role === 'admin' || existingUser?.role === 'serviceProvider'
+    ? existingUser.role
+    : DEFAULT_USER_ROLE;
 }
 
 export const completeOnboarding = mutation({

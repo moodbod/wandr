@@ -19,10 +19,19 @@ import {
   type AdminRequestSource,
   type AdminRequestStatusFilter,
   type AdminRoleFilter,
+  type ProviderReviewStatusFilter,
+  type ProviderStatus,
+  type ProviderStatusFilter,
+  type ProviderType,
   adminGetOverviewRef,
+  adminInviteServiceProviderRef,
   adminListAuditEventsRef,
+  adminListProviderSubmissionsRef,
   adminListRequestsRef,
+  adminListServiceProvidersRef,
   adminListUsersRef,
+  adminReviewProviderListingRef,
+  adminUpdateServiceProviderStatusRef,
   adminUpdateRequestStatusRef,
   adminUpdateUserRoleRef,
   listManagedLocationPhotosRef,
@@ -30,12 +39,13 @@ import {
 } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
-type AdminSection = 'overview' | 'content' | 'requests' | 'moderation' | 'users' | 'audit';
+type AdminSection = 'overview' | 'content' | 'providers' | 'requests' | 'moderation' | 'users' | 'audit';
 type PhotoStatusFilter = 'approved' | 'pending' | 'rejected' | 'all';
 
 const sectionOptions: readonly { icon: keyof typeof MaterialCommunityIcons.glyphMap; key: AdminSection; label: string }[] = [
   { key: 'overview', label: 'Overview', icon: 'view-dashboard-outline' },
   { key: 'content', label: 'Content', icon: 'map-marker-multiple-outline' },
+  { key: 'providers', label: 'Providers', icon: 'storefront-outline' },
   { key: 'requests', label: 'Requests', icon: 'calendar-check-outline' },
   { key: 'moderation', label: 'Photos', icon: 'image-check-outline' },
   { key: 'users', label: 'Users', icon: 'account-cog-outline' },
@@ -59,7 +69,28 @@ const photoFilters = [
 const roleFilters = [
   { key: 'all', label: 'All' },
   { key: 'admin', label: 'Admins' },
+  { key: 'serviceProvider', label: 'Providers' },
   { key: 'traveler', label: 'Travelers' },
+] as const;
+
+const providerTypeOptions: readonly { key: ProviderType; label: string }[] = [
+  { key: 'both', label: 'Both' },
+  { key: 'experiences', label: 'Experiences' },
+  { key: 'stays', label: 'Stays' },
+] as const;
+
+const providerStatusFilters: readonly { key: ProviderStatusFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'invited', label: 'Invited' },
+  { key: 'active', label: 'Active' },
+  { key: 'suspended', label: 'Suspended' },
+] as const;
+
+const providerSubmissionFilters: readonly { key: ProviderReviewStatusFilter; label: string }[] = [
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'all', label: 'All' },
 ] as const;
 
 export function AdminDashboardScreen() {
@@ -138,6 +169,7 @@ export function AdminDashboardScreen() {
           <View style={styles.sectionFrame}>
             {activeSection === 'overview' ? <OverviewSection onSelectSection={setActiveSection} /> : null}
             {activeSection === 'content' ? <AdminContentDashboard inPanel={false} travelerSlug={session.travelerSlug} /> : null}
+            {activeSection === 'providers' ? <ProvidersSection /> : null}
             {activeSection === 'requests' ? <RequestsSection /> : null}
             {activeSection === 'moderation' ? <ModerationSection travelerSlug={session.travelerSlug} /> : null}
             {activeSection === 'users' ? <UsersSection currentUserSlug={session.travelerSlug} /> : null}
@@ -249,6 +281,12 @@ function OverviewSection({ onSelectSection }: { onSelectSection: (section: Admin
           label="Admins"
           onPress={() => onSelectSection('users')}
         />
+        <OverviewAction
+          count={overview.providers?.submittedListings ?? 0}
+          icon="account-clock-outline"
+          label="Provider reviews"
+          onPress={() => onSelectSection('providers')}
+        />
       </View>
       <SectionBlock title="Platform data">
         <PlatformDataGrid overview={overview} />
@@ -301,6 +339,181 @@ function RequestsSection() {
           ))}
         </View>
       )}
+    </ScrollView>
+  );
+}
+
+function ProvidersSection() {
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [providerSearch, setProviderSearch] = useState('');
+  const [providerType, setProviderType] = useState<ProviderType>('both');
+  const [providerStatus, setProviderStatus] = useState<ProviderStatusFilter>('all');
+  const [submissionFilter, setSubmissionFilter] = useState<ProviderReviewStatusFilter>('submitted');
+  const [businessName, setBusinessName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [directPaymentNotes, setDirectPaymentNotes] = useState('Guests can pay cash or arrange bank transfer directly.');
+  const [reviewNote, setReviewNote] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const users = useQuery(adminListUsersRef, { limit: 24, role: 'all', search: inviteSearch });
+  const providers = useQuery(adminListServiceProvidersRef, { limit: 80, status: providerStatus, search: providerSearch });
+  const submissions = useQuery(adminListProviderSubmissionsRef, { limit: 80, reviewStatus: submissionFilter });
+  const inviteProvider = useMutation(adminInviteServiceProviderRef);
+  const updateProviderStatus = useMutation(adminUpdateServiceProviderStatusRef);
+  const reviewProviderListing = useMutation(adminReviewProviderListingRef);
+
+  async function inviteUser(user: any) {
+    const resolvedBusinessName = businessName.trim() || user.name || user.slug || 'Provider business';
+    setBusyId(user.userId);
+    try {
+      await inviteProvider({
+        userId: user.userId as Id<'users'>,
+        businessName: resolvedBusinessName,
+        providerType,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+        contactName: user.name,
+        acceptedPaymentModes: ['cash'],
+        directPaymentNotes: directPaymentNotes.trim() || undefined,
+      });
+      setBusinessName('');
+      setContactEmail('');
+      setContactPhone('');
+    } catch (error) {
+      Alert.alert('Invite failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function changeProviderStatus(provider: any, status: ProviderStatus) {
+    setBusyId(provider._id);
+    try {
+      await updateProviderStatus({
+        businessProfileId: provider._id as Id<'businessProfiles'>,
+        status,
+      });
+    } catch (error) {
+      Alert.alert('Provider update failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reviewSubmission(submission: any, decision: 'approved' | 'rejected') {
+    setBusyId(submission._id);
+    try {
+      await reviewProviderListing({
+        kind: submission.kind,
+        id: submission._id as Id<'experiences'> | Id<'stays'>,
+        decision,
+        note: decision === 'rejected' ? reviewNote.trim() || undefined : undefined,
+      });
+      if (decision === 'rejected') {
+        setReviewNote('');
+      }
+    } catch (error) {
+      Alert.alert('Review failed', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <SectionBlock title="Invite provider">
+        <View style={styles.formPanel}>
+          <SegmentedTabs options={providerTypeOptions} value={providerType} onChange={setProviderType} />
+          <View style={styles.formGrid}>
+            <LabeledInput label="User search" onChangeText={setInviteSearch} placeholder="Name, email, or slug" value={inviteSearch} />
+            <LabeledInput label="Business name" onChangeText={setBusinessName} placeholder="Fallbacks to user name" value={businessName} />
+            <LabeledInput label="Contact email" onChangeText={setContactEmail} placeholder="Optional" value={contactEmail} />
+            <LabeledInput label="Phone" onChangeText={setContactPhone} placeholder="Optional" value={contactPhone} />
+            <LabeledInput
+              label="Cash/direct-pay note"
+              multiline
+              onChangeText={setDirectPaymentNotes}
+              placeholder="How guests pay outside Wandr"
+              value={directPaymentNotes}
+            />
+          </View>
+          {users === undefined ? (
+            <LoadingRows />
+          ) : users.page.length === 0 ? (
+            <EmptyState label="No users match this search." />
+          ) : (
+            <View style={styles.rowList}>
+              {users.page.map((user: any) => (
+                <InviteUserRow
+                  busy={busyId === user.userId}
+                  key={user.userId}
+                  user={user}
+                  onInvite={() => inviteUser(user)}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </SectionBlock>
+
+      <SectionBlock title="Provider businesses">
+        <View style={styles.toolbar}>
+          <TextInput
+            accessibilityLabel="Search providers"
+            onChangeText={setProviderSearch}
+            placeholder="Search providers"
+            placeholderTextColor={designSystem.colors.darkMutedText}
+            style={styles.searchInput}
+            value={providerSearch}
+          />
+        </View>
+        <SegmentedTabs options={providerStatusFilters} value={providerStatus} onChange={setProviderStatus} />
+        {providers === undefined ? (
+          <LoadingRows />
+        ) : providers.page.length === 0 ? (
+          <EmptyState label="No provider businesses found." />
+        ) : (
+          <View style={styles.rowList}>
+            {providers.page.map((provider: any) => (
+              <ProviderBusinessRow
+                busy={busyId === provider._id}
+                key={provider._id}
+                provider={provider}
+                onActivate={() => changeProviderStatus(provider, 'active')}
+                onSuspend={() => changeProviderStatus(provider, 'suspended')}
+              />
+            ))}
+          </View>
+        )}
+      </SectionBlock>
+
+      <SectionBlock title="Listing review">
+        <SegmentedTabs options={providerSubmissionFilters} value={submissionFilter} onChange={setSubmissionFilter} />
+        <LabeledInput
+          label="Rejection note"
+          multiline
+          onChangeText={setReviewNote}
+          placeholder="Only used when rejecting"
+          value={reviewNote}
+        />
+        {submissions === undefined ? (
+          <LoadingRows />
+        ) : submissions.page.length === 0 ? (
+          <EmptyState label="No listings in this queue." />
+        ) : (
+          <View style={styles.rowList}>
+            {submissions.page.map((submission: any) => (
+              <ProviderSubmissionRow
+                busy={busyId === submission._id}
+                key={`${submission.kind}-${submission._id}`}
+                submission={submission}
+                onApprove={() => reviewSubmission(submission, 'approved')}
+                onReject={() => reviewSubmission(submission, 'rejected')}
+              />
+            ))}
+          </View>
+        )}
+      </SectionBlock>
     </ScrollView>
   );
 }
@@ -442,6 +655,8 @@ function PlatformDataGrid({ overview }: { overview: any }) {
     { label: 'Notifications', value: overview.platform?.engagement?.notices ?? 0 },
     { label: 'Unread notifications', value: overview.platform?.engagement?.unreadNotices ?? 0 },
     { label: 'Content records', value: overview.platform?.content?.all ?? 0 },
+    { label: 'Provider businesses', value: overview.providers?.total ?? 0 },
+    { label: 'Provider listings', value: (overview.providers?.listings?.experiences ?? 0) + (overview.providers?.listings?.stays ?? 0) },
   ];
 
   return (
@@ -587,6 +802,159 @@ function UserRow({
   );
 }
 
+function InviteUserRow({
+  busy,
+  onInvite,
+  user,
+}: {
+  busy: boolean;
+  onInvite: () => void;
+  user: any;
+}) {
+  return (
+    <View style={styles.dataRow}>
+      <View style={styles.flexText}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{user.name}</ThemedText>
+          <StatusPill status={user.role} />
+        </View>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>{user.email ?? user.slug ?? 'No email'}</ThemedText>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>
+          {user.onboardingCompleted ? 'Ready to invite' : 'Needs onboarding first'}
+        </ThemedText>
+      </View>
+      <IconAction
+        disabled={busy || !user.onboardingCompleted}
+        icon="account-plus-outline"
+        label="Invite"
+        onPress={onInvite}
+        variant="primary"
+      />
+    </View>
+  );
+}
+
+function ProviderBusinessRow({
+  busy,
+  onActivate,
+  onSuspend,
+  provider,
+}: {
+  busy: boolean;
+  onActivate: () => void;
+  onSuspend: () => void;
+  provider: any;
+}) {
+  return (
+    <View style={styles.dataRow}>
+      <View style={styles.flexText}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{provider.businessName}</ThemedText>
+          <StatusPill status={provider.status} />
+          <StatusPill status={provider.providerType} />
+        </View>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>
+          {provider.ownerName} - {provider.ownerEmail ?? provider.ownerSlug}
+        </ThemedText>
+        <ThemedText numberOfLines={2} style={styles.rowMeta}>
+          Payments: {(provider.acceptedPaymentModes ?? ['cash']).join(', ')}
+          {provider.directPaymentNotes ? ` - ${provider.directPaymentNotes}` : ''}
+        </ThemedText>
+      </View>
+      <View style={styles.rowActions}>
+        <IconAction
+          disabled={busy || provider.status === 'active'}
+          icon="check-circle-outline"
+          label="Activate"
+          onPress={onActivate}
+          variant="primary"
+        />
+        <IconAction
+          disabled={busy || provider.status === 'suspended'}
+          icon="pause-circle-outline"
+          label="Suspend"
+          onPress={onSuspend}
+        />
+      </View>
+    </View>
+  );
+}
+
+function ProviderSubmissionRow({
+  busy,
+  onApprove,
+  onReject,
+  submission,
+}: {
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  submission: any;
+}) {
+  return (
+    <View style={styles.dataRow}>
+      <View style={styles.flexText}>
+        <View style={styles.rowTitleLine}>
+          <ThemedText numberOfLines={1} style={styles.rowTitle}>{submission.title}</ThemedText>
+          <StatusPill status={submission.kind} />
+          <StatusPill status={submission.reviewStatus} />
+        </View>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>
+          {submission.businessName} - {submission.submittedBySlug ?? submission.slug}
+        </ThemedText>
+        <ThemedText numberOfLines={1} style={styles.rowMeta}>{formatDate(submission.submittedAt)}</ThemedText>
+        {submission.rejectionNote ? (
+          <ThemedText numberOfLines={2} style={styles.rowMeta}>{submission.rejectionNote}</ThemedText>
+        ) : null}
+      </View>
+      <View style={styles.rowActions}>
+        <IconAction
+          disabled={busy || submission.reviewStatus === 'approved'}
+          icon="check"
+          label="Approve"
+          onPress={onApprove}
+          variant="primary"
+        />
+        <IconAction
+          disabled={busy || submission.reviewStatus === 'rejected'}
+          icon="close"
+          label="Reject"
+          onPress={onReject}
+        />
+      </View>
+    </View>
+  );
+}
+
+function LabeledInput({
+  label,
+  multiline = false,
+  onChangeText,
+  placeholder,
+  value,
+}: {
+  label: string;
+  multiline?: boolean;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  return (
+    <View style={[styles.formField, multiline && styles.formFieldWide]}>
+      <ThemedText style={styles.formLabel}>{label}</ThemedText>
+      <TextInput
+        multiline={multiline}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={designSystem.colors.darkMutedText}
+        style={[styles.searchInput, multiline && styles.textAreaInput]}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        value={value}
+      />
+    </View>
+  );
+}
+
 function AuditRows({ rows }: { rows: any[] }) {
   if (rows.length === 0) {
     return <EmptyState label="No recent activity." />;
@@ -619,11 +987,17 @@ function SectionBlock({ children, title }: { children: React.ReactNode; title: s
 }
 
 function StatusPill({ status }: { status: string }) {
-  const isPositive = status === 'admin' || status === 'confirmed' || status === 'approved' || status === 'live';
+  const isPositive =
+    status === 'admin' ||
+    status === 'serviceProvider' ||
+    status === 'active' ||
+    status === 'confirmed' ||
+    status === 'approved' ||
+    status === 'live';
   const tone =
     isPositive
       ? styles.statusPositive
-      : status === 'pending' || status === 'draft'
+      : status === 'pending' || status === 'draft' || status === 'invited'
         ? styles.statusPending
         : styles.statusMuted;
 
@@ -688,6 +1062,7 @@ function buildOverviewMetrics(overview: any) {
   return [
     { label: 'Users', value: overview.users.total, icon: 'account-group-outline' as const },
     { label: 'Admins', value: overview.users.admins, icon: 'shield-account-outline' as const },
+    { label: 'Providers', value: overview.providers?.active ?? 0, icon: 'storefront-outline' as const },
     { label: 'Trips', value: overview.platform?.trips?.total ?? 0, icon: 'map-outline' as const },
     { label: 'Distance covered', value: `${formatDistance(overview.platform?.distance?.coveredKm ?? 0)} km`, icon: 'map-marker-distance' as const },
     { label: 'Planned distance', value: `${formatDistance(overview.platform?.distance?.plannedKm ?? 0)} km`, icon: 'routes' as const },
@@ -695,6 +1070,7 @@ function buildOverviewMetrics(overview: any) {
     { label: 'Live content', value: overview.content.locations.live + overview.content.experiences.live + overview.content.stays.live, icon: 'earth' as const },
     { label: 'Drafts', value: overview.content.locations.draft + overview.content.experiences.draft + overview.content.stays.draft, icon: 'file-document-edit-outline' as const },
     { label: 'Pending requests', value: overview.requests.pending, icon: 'calendar-clock' as const },
+    { label: 'Provider reviews', value: overview.providers?.submittedListings ?? 0, icon: 'account-clock-outline' as const },
     { label: 'Pending photos', value: overview.photos.pending, icon: 'image-multiple-outline' as const },
     { label: 'Messages', value: overview.platform?.engagement?.messages ?? 0, icon: 'message-text-outline' as const },
     { label: 'Groups', value: overview.platform?.engagement?.circles ?? 0, icon: 'account-multiple-outline' as const },
@@ -704,6 +1080,7 @@ function buildOverviewMetrics(overview: any) {
 function getSectionSubtitle(section: AdminSection) {
   if (section === 'overview') return 'Live operations, queues, and platform health.';
   if (section === 'content') return 'Create, edit, publish, and archive travel content.';
+  if (section === 'providers') return 'Invite businesses and review provider-submitted listings.';
   if (section === 'requests') return 'Confirm or cancel experience and stay requests.';
   if (section === 'moderation') return 'Approve or reject traveler photos.';
   if (section === 'users') return 'Search users and manage admin roles.';
@@ -1037,6 +1414,32 @@ const styles = StyleSheet.create({
   photoBody: {
     gap: 8,
     padding: 12,
+  },
+  formPanel: {
+    gap: 12,
+  },
+  formGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  formField: {
+    flexGrow: 1,
+    gap: 6,
+    minWidth: 190,
+  },
+  formFieldWide: {
+    minWidth: 260,
+  },
+  formLabel: {
+    color: designSystem.colors.mutedText,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 15,
+  },
+  textAreaInput: {
+    minHeight: 82,
+    paddingTop: 10,
   },
   toolbar: {
     flexDirection: 'row',

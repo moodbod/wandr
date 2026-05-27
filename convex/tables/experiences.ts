@@ -4,6 +4,13 @@ import { v } from 'convex/values';
 export const experiencesTable = defineTable({
   slug: v.string(),
   managerSlug: v.optional(v.string()),
+  businessProfileId: v.optional(v.id('businessProfiles')),
+  submittedBySlug: v.optional(v.string()),
+  reviewStatus: v.optional(v.union(v.literal('draft'), v.literal('submitted'), v.literal('approved'), v.literal('rejected'))),
+  reviewedByAdminSlug: v.optional(v.string()),
+  reviewedAt: v.optional(v.number()),
+  submittedAt: v.optional(v.number()),
+  rejectionNote: v.optional(v.string()),
   itemKind: v.optional(v.union(v.literal('experience'), v.literal('hiddenGem'))),
   badge: v.string(),
   badgeTone: v.optional(v.union(v.literal('accent'), v.literal('soft'), v.literal('dark'))),
@@ -71,6 +78,10 @@ export const experiencesTable = defineTable({
     })
   ),
   includes: v.array(v.string()),
+  acceptedPaymentModes: v.optional(v.array(v.union(v.literal('cash'), v.literal('platform')))),
+  directPaymentNotes: v.optional(v.string()),
+  cancellationPolicy: v.optional(v.string()),
+  contactNote: v.optional(v.string()),
   regionId: v.optional(v.id('regions')),
   status: v.optional(v.union(v.literal('draft'), v.literal('live'), v.literal('archived'))),
   createdByAdminSlug: v.optional(v.string()),
@@ -85,5 +96,7 @@ export const experiencesTable = defineTable({
 })
   .index('by_slug', ['slug'])
   .index('by_managerSlug', ['managerSlug'])
+  .index('by_businessProfileId', ['businessProfileId'])
+  .index('by_reviewStatus', ['reviewStatus'])
   .index('by_status', ['status'])
   .index('by_status_and_planningLocationId', ['status', 'planningLocationId']);

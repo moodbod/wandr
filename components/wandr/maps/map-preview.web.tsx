@@ -936,7 +936,7 @@ function createUserMarkerElement({
   variant?: 'navigation' | 'avatar';
 }) {
   const element = document.createElement('div');
-  const markerSize = variant === 'navigation' ? 88 : 58;
+  const markerSize = variant === 'navigation' ? 96 : 58;
   element.style.cssText = [
     `width:${markerSize}px`,
     `height:${markerSize}px`,
@@ -944,7 +944,7 @@ function createUserMarkerElement({
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    'overflow:hidden',
+    'overflow:visible',
   ].join(';');
 
   const root = createRoot(element);

@@ -26,6 +26,15 @@ export const bookingsTable = defineTable({
   checkIn: v.optional(v.number()),
   checkOut: v.optional(v.number()),
   totalPrice: v.optional(v.number()),
+  paymentMode: v.optional(v.union(v.literal('cash'), v.literal('platform'))),
+  paymentStatus: v.optional(
+    v.union(v.literal('unpaid'), v.literal('pending'), v.literal('paid'), v.literal('refunded'), v.literal('failed'))
+  ),
+  platformFeeAmount: v.optional(v.number()),
+  providerReceivableAmount: v.optional(v.number()),
+  externalCheckoutId: v.optional(v.string()),
+  externalPaymentProvider: v.optional(v.string()),
+  paymentCapturedAt: v.optional(v.number()),
   roomTypeId: v.optional(v.string()),
   stayBookingDetails: v.optional(
     v.object({
