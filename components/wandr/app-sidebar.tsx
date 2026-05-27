@@ -7,8 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { useManagerMode } from '@/hooks/use-manager-mode';
-import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { WandrAvatar } from '@/components/wandr/avatar';
 import { useAuthSession } from '@/providers/auth-session';
 
@@ -34,8 +32,6 @@ export function AppSidebar() {
   const traveler = useCurrentTraveler();
   const { session } = useAuthSession();
   const isAdmin = session?.role === 'admin';
-  const { isManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
-  const { mode: managerResourceMode, openManager, setSurface, surface: managerSurface } = useManagerResourceMode();
 
   const activeColor = isDark ? designSystem.colors.lime : designSystem.colors.fern;
   const inactiveColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
@@ -43,7 +39,6 @@ export function AppSidebar() {
   const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteBorder;
   const activeBackground = isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.limeMist;
   const activeHref = getActiveNavHref(pathname);
-  const canUseManagerMode = isAdmin && isManagerMode;
 
   return (
     <View
@@ -87,7 +82,6 @@ export function AppSidebar() {
               accessibilityRole="button"
               accessibilityState={{ selected: activeHref === '/admin' }}
               onPress={() => {
-                setSurface('profile');
                 router.push('/admin' as Href);
               }}
               style={[styles.navItem, activeHref === '/admin' && { backgroundColor: activeBackground }]}
@@ -100,66 +94,23 @@ export function AppSidebar() {
             </Pressable>
           </View>
         ) : null}
-        {canUseManagerMode ? (
-          <View style={[styles.managerSection, { backgroundColor: surfaceColor, borderColor }]}>
-            <Pressable
-              accessibilityLabel="Manage experiences and groups"
-              accessibilityRole="button"
-              accessibilityState={{ selected: activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' }}
-              onPress={() => {
-                openManager('experiences');
-                router.push('/profile');
-              }}
-              style={[
-                styles.navItem,
-                activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' && { backgroundColor: activeBackground },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="map-marker-path"
-                size={22}
-                color={activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'experiences' ? activeColor : inactiveColor}
-              />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Manage rooms"
-              accessibilityRole="button"
-              accessibilityState={{ selected: activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' }}
-              onPress={() => {
-                openManager('rooms');
-                router.push('/profile');
-              }}
-              style={[
-                styles.navItem,
-                activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' && { backgroundColor: activeBackground },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="bed-king"
-                size={22}
-                color={activeHref === '/profile' && managerSurface === 'manager' && managerResourceMode === 'rooms' ? activeColor : inactiveColor}
-              />
-            </Pressable>
-          </View>
-        ) : null}
         <View style={styles.bottomSection}>
-        <Pressable
-          accessibilityLabel="Profile"
-          accessibilityRole="button"
-          onPress={() => {
-            setSurface('profile');
-            router.push('/profile');
-          }}
-          style={styles.profileNavItem}
-        >
-          <WandrAvatar
-            name={traveler?.name || 'Traveler'}
-            paletteKey={traveler?.slug}
-            size={32}
-            uri={traveler?.avatarUri}
-            style={[styles.avatarCircle, { borderColor }]}
-          />
-        </Pressable>
+          <Pressable
+            accessibilityLabel="Profile"
+            accessibilityRole="button"
+            onPress={() => {
+              router.push('/profile');
+            }}
+            style={styles.profileNavItem}
+          >
+            <WandrAvatar
+              name={traveler?.name || 'Traveler'}
+              paletteKey={traveler?.slug}
+              size={32}
+              uri={traveler?.avatarUri}
+              style={[styles.avatarCircle, { borderColor }]}
+            />
+          </Pressable>
         </View>
       </View>
     </View>

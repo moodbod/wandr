@@ -1,19 +1,23 @@
 import { useMutation, useQuery } from 'convex/react';
+import { Image as ExpoImage } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Check, Plus, X } from 'phosphor-react-native';
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import type { Id } from '@/convex/_generated/dataModel';
 import { ThemedText } from '@/components/themed-text';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { LargeScreenPanel } from '@/components/wandr/large-screen-workspace';
+import { MapPreview } from '@/components/wandr/maps/map-preview';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   type ContentStatus,
   type CuratedContentKind,
+  generateManagedImageUploadUrlRef,
   listManagedCatalogRef,
   migrateLegacyContentAsLiveRef,
   updateManagedContentStatusRef,
@@ -38,6 +42,7 @@ type LocationForm = {
   countryLabel: string;
   planningLocationId: string;
   coordinate: string;
+  imageStorageId: Id<'_storage'> | null;
   imageUri: string;
   galleryImages: string;
   visitTips: string;
@@ -106,6 +111,10 @@ const statusFilters = [
   { key: 'archived', label: 'Archived' },
 ] as const;
 
+const DEFAULT_LOCATION_COORDINATE: readonly [number, number] = [17.0832, -22.5597];
+const MAX_OPTIMIZED_IMAGE_DIMENSION = 1800;
+const IMAGE_UPLOAD_QUALITY = 0.92;
+
 const defaultLocationForm = (): LocationForm => ({
   title: '',
   description: '',
@@ -118,7 +127,8 @@ const defaultLocationForm = (): LocationForm => ({
   countryCode: 'NA',
   countryLabel: 'Namibia',
   planningLocationId: 'namibia',
-  coordinate: '17.0832, -22.5597',
+  coordinate: formatCoordinate(DEFAULT_LOCATION_COORDINATE),
+  imageStorageId: null,
   imageUri: '',
   galleryImages: '',
   visitTips: '',
@@ -197,6 +207,7 @@ export function AdminContentDashboard({
     [statusFilter]
   );
   const catalog = useQuery(listManagedCatalogRef, queryArgs);
+  const generateManagedImageUploadUrl = useMutation(generateManagedImageUploadUrlRef);
   const upsertLocation = useMutation(upsertManagedLocationRef);
   const upsertExperience = useMutation(upsertManagedExperienceRef);
   const upsertStay = useMutation(upsertManagedStayRef);
@@ -250,12 +261,53 @@ export function AdminContentDashboard({
         ...optionalArg('countryLabel', locationForm.countryLabel),
         ...optionalArg('planningLocationId', locationForm.planningLocationId),
         coordinate: parseCoordinate(locationForm.coordinate),
-        imageUri: locationForm.imageUri.trim(),
-        galleryImages: parseMediaList(locationForm.galleryImages, locationForm.imageUri),
+        imageStorageId: requireStorageId(locationForm.imageStorageId),
+        galleryImages: parseList(locationForm.galleryImages),
         visitTips: parseList(locationForm.visitTips),
         ...optionalArg('sectionsTitle', locationForm.sectionsTitle),
         status,
       });
+    });
+  };
+
+  const pickLocationImage = async () => {
+    await runAction('Uploading place image', async () => {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        throw new Error('Allow photo access to upload a place image.');
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [16, 10],
+        exif: false,
+        mediaTypes: ['images'],
+        quality: IMAGE_UPLOAD_QUALITY,
+      });
+
+      if (result.canceled || !result.assets[0]?.uri) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const optimized = await optimizePickedImage(asset);
+      const uploadUrl = await generateManagedImageUploadUrl({});
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': optimized.mimeType },
+        body: optimized.blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('The optimized image could not be uploaded.');
+      }
+
+      const { storageId } = (await uploadResponse.json()) as { storageId: Id<'_storage'> };
+      setLocationForm((current) => ({
+        ...current,
+        imageStorageId: storageId,
+        imageUri: optimized.previewUri,
+      }));
     });
   };
 
@@ -377,21 +429,26 @@ export function AdminContentDashboard({
 
         <View style={styles.toolbar}>
           <View style={styles.statusFilters}>
-            {statusFilters.map((filter) => (
-              <Pressable
-                key={filter.key}
-                onPress={() => setStatusFilter(filter.key)}
-                style={[
-                  styles.statusFilter,
-                  {
-                    borderColor: statusFilter === filter.key ? designSystem.colors.lime : colors.borderSoft,
-                    backgroundColor: statusFilter === filter.key ? designSystem.colors.lime : colors.surface,
-                  },
-                ]}
-              >
-                <ThemedText style={styles.statusFilterText}>{filter.label}</ThemedText>
-              </Pressable>
-            ))}
+            {statusFilters.map((filter) => {
+              const isActive = statusFilter === filter.key;
+              return (
+                <Pressable
+                  key={filter.key}
+                  onPress={() => setStatusFilter(filter.key)}
+                  style={[
+                    styles.statusFilter,
+                    {
+                      borderColor: isActive ? designSystem.colors.lime : colors.borderSoft,
+                      backgroundColor: isActive ? designSystem.colors.lime : colors.surface,
+                    },
+                  ]}
+                >
+                  <ThemedText style={[styles.statusFilterText, !isActive && styles.statusFilterTextInactive]}>
+                    {filter.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
           <ActionButton
             icon={<Plus color={designSystem.colors.darkGreen} size={14} weight="bold" />}
@@ -453,7 +510,12 @@ export function AdminContentDashboard({
               </View>
 
               {activeTab === 'locations' ? (
-                <LocationEditor form={locationForm} onChange={setLocationForm} />
+                <LocationEditor
+                  form={locationForm}
+                  isUploadingImage={busyLabel === 'Uploading place image'}
+                  onChange={setLocationForm}
+                  onPickImage={pickLocationImage}
+                />
               ) : activeTab === 'experiences' ? (
                 <ExperienceEditor form={experienceForm} onChange={setExperienceForm} />
               ) : (
@@ -471,7 +533,17 @@ export function AdminContentDashboard({
   return <LargeScreenPanel kind="main">{content}</LargeScreenPanel>;
 }
 
-function LocationEditor({ form, onChange }: { form: LocationForm; onChange: (form: LocationForm) => void }) {
+function LocationEditor({
+  form,
+  isUploadingImage,
+  onChange,
+  onPickImage,
+}: {
+  form: LocationForm;
+  isUploadingImage: boolean;
+  onChange: (form: LocationForm) => void;
+  onPickImage: () => void;
+}) {
   return (
     <View style={styles.formGrid}>
       <Field label="Title" value={form.title} onChangeText={(title) => onChange({ ...form, title })} />
@@ -479,8 +551,14 @@ function LocationEditor({ form, onChange }: { form: LocationForm; onChange: (for
       <Field label="Location label" value={form.locationLabel} onChangeText={(locationLabel) => onChange({ ...form, locationLabel })} />
       <Field label="Town" value={form.town} onChangeText={(town) => onChange({ ...form, town })} />
       <Field label="Region" value={form.region} onChangeText={(region) => onChange({ ...form, region })} />
-      <Field label="Coordinate" value={form.coordinate} onChangeText={(coordinate) => onChange({ ...form, coordinate })} />
-      <Field label="Image URL" value={form.imageUri} onChangeText={(imageUri) => onChange({ ...form, imageUri })} />
+      <LocationImageField form={form} isUploading={isUploadingImage} onPickImage={onPickImage} />
+      <LocationPinPicker
+        coordinateValue={form.coordinate}
+        imageUri={form.imageUri}
+        title={form.title}
+        onChangeCoordinate={(coordinate) => onChange({ ...form, coordinate: formatCoordinate(coordinate) })}
+      />
+      <Field label="Pinned coordinate" value={form.coordinate} onChangeText={(coordinate) => onChange({ ...form, coordinate })} />
       <Field label="Gallery URLs" multiline value={form.galleryImages} onChangeText={(galleryImages) => onChange({ ...form, galleryImages })} />
       <Field label="Description" multiline value={form.description} onChangeText={(description) => onChange({ ...form, description })} />
       <Field label="Summary" multiline value={form.summary} onChangeText={(summary) => onChange({ ...form, summary })} />
@@ -549,6 +627,96 @@ function StayEditor({ form, onChange }: { form: StayForm; onChange: (form: StayF
   );
 }
 
+function LocationImageField({
+  form,
+  isUploading,
+  onPickImage,
+}: {
+  form: LocationForm;
+  isUploading: boolean;
+  onPickImage: () => void;
+}) {
+  const hasStorageImage = Boolean(form.imageStorageId);
+
+  return (
+    <View style={styles.fieldWide}>
+      <View style={styles.mediaFieldHeader}>
+        <View style={styles.flexText}>
+          <ThemedText style={styles.fieldLabel}>Place image</ThemedText>
+          <ThemedText style={styles.fieldHint}>
+            {hasStorageImage ? 'Convex storage image ready.' : 'Upload a compressed image before saving.'}
+          </ThemedText>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isUploading}
+          onPress={onPickImage}
+          style={[styles.uploadButton, isUploading && styles.actionDisabled]}
+        >
+          {isUploading ? <ActivityIndicator color={designSystem.colors.darkGreen} size="small" /> : null}
+          <ThemedText style={styles.uploadButtonText}>{hasStorageImage ? 'Replace image' : 'Upload image'}</ThemedText>
+        </Pressable>
+      </View>
+      <View style={styles.imagePreviewFrame}>
+        {form.imageUri ? (
+          <ExpoImage contentFit="cover" source={{ uri: form.imageUri }} style={styles.imagePreview} />
+        ) : (
+          <View style={styles.imagePreviewEmpty}>
+            <ThemedText style={styles.emptyText}>No place image uploaded.</ThemedText>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function LocationPinPicker({
+  coordinateValue,
+  imageUri,
+  onChangeCoordinate,
+  title,
+}: {
+  coordinateValue: string;
+  imageUri: string;
+  onChangeCoordinate: (coordinate: readonly [number, number]) => void;
+  title: string;
+}) {
+  const coordinate = parseCoordinateOrDefault(coordinateValue);
+
+  return (
+    <View style={styles.fieldWide}>
+      <View style={styles.mediaFieldHeader}>
+        <View style={styles.flexText}>
+          <ThemedText style={styles.fieldLabel}>Map pin</ThemedText>
+          <ThemedText style={styles.fieldHint}>Tap the Mapbox map to set this place.</ThemedText>
+        </View>
+        <ThemedText style={styles.coordinateLabel}>{formatCoordinate(coordinate)}</ThemedText>
+      </View>
+      <View style={styles.mapPickerFrame}>
+        <MapPreview
+          centerCoordinate={coordinate}
+          colorSchemeMode="dark"
+          interactionEnabled
+          markerVariant="default"
+          markers={[
+            {
+              coordinate,
+              id: 'admin-location-pin',
+              imageUri: imageUri || undefined,
+              label: title || 'Pinned place',
+              tone: 'accent',
+            },
+          ]}
+          onMapPress={onChangeCoordinate}
+          showRoutes={false}
+          style={styles.mapPicker}
+          zoomLevel={11}
+        />
+      </View>
+    </View>
+  );
+}
+
 function Field({
   keyboardType,
   label,
@@ -600,7 +768,11 @@ function RecordRow({
   onPress: () => void;
   onPublish: () => void;
 }) {
+  const isDark = useColorScheme() === 'dark';
   const status = (item.status ?? 'live') as ContentStatus;
+  const inactiveBorder = isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft;
+  const inactiveBackground = isDark ? designSystem.colors.darkSurface : designSystem.colors.surface;
+  const selectedBackground = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.whiteGlassStrong;
 
   return (
     <Pressable
@@ -608,8 +780,8 @@ function RecordRow({
       style={[
         styles.recordRow,
         {
-          borderColor: isSelected ? designSystem.colors.lime : designSystem.colors.borderSoft,
-          backgroundColor: isSelected ? designSystem.colors.whiteGlassStrong : designSystem.colors.surface,
+          borderColor: isSelected ? designSystem.colors.lime : inactiveBorder,
+          backgroundColor: isSelected ? selectedBackground : inactiveBackground,
         },
       ]}
     >
@@ -626,7 +798,7 @@ function RecordRow({
         ) : null}
         {status !== 'archived' ? (
           <Pressable accessibilityLabel="Archive" onPress={onArchive} style={styles.iconButton}>
-            <X color={designSystem.colors.mutedText} size={13} weight="bold" />
+            <X color={designSystem.colors.darkMutedText} size={13} weight="bold" />
           </Pressable>
         ) : null}
       </View>
@@ -635,9 +807,11 @@ function RecordRow({
 }
 
 function StatusPill({ status }: { status: ContentStatus }) {
+  const isLive = status === 'live';
+
   return (
-    <View style={[styles.statusPill, status === 'live' ? styles.statusLive : status === 'draft' ? styles.statusDraft : styles.statusArchived]}>
-      <ThemedText style={styles.statusText}>{status}</ThemedText>
+    <View style={[styles.statusPill, isLive ? styles.statusLive : status === 'draft' ? styles.statusDraft : styles.statusArchived]}>
+      <ThemedText style={[styles.statusText, !isLive && styles.statusTextMuted]}>{status}</ThemedText>
     </View>
   );
 }
@@ -655,18 +829,20 @@ function ActionButton({
   onPress: () => void;
   variant?: 'primary' | 'secondary';
 }) {
+  const isPrimary = variant === 'primary';
+
   return (
     <Pressable
       disabled={disabled}
       onPress={onPress}
       style={[
         styles.actionButton,
-        variant === 'primary' ? styles.actionPrimary : styles.actionSecondary,
+        isPrimary ? styles.actionPrimary : styles.actionSecondary,
         disabled && styles.actionDisabled,
       ]}
     >
       {icon}
-      <ThemedText style={styles.actionLabel}>{label}</ThemedText>
+      <ThemedText style={[styles.actionLabel, !isPrimary && styles.actionLabelSecondary]}>{label}</ThemedText>
     </Pressable>
   );
 }
@@ -729,6 +905,7 @@ function locationFormFromItem(item: any): LocationForm {
     countryLabel: item.countryLabel ?? 'Namibia',
     planningLocationId: item.planningLocationId ?? 'namibia',
     coordinate: formatCoordinate(item.coordinate),
+    imageStorageId: item.imageStorageId ?? null,
     imageUri: item.imageUri ?? '',
     galleryImages: (item.galleryImages ?? []).join('\n'),
     visitTips: (item.visitTips ?? []).join('\n'),
@@ -799,6 +976,13 @@ function requireText(value: string, label: string) {
   return trimmed;
 }
 
+function requireStorageId(storageId: Id<'_storage'> | null) {
+  if (!storageId) {
+    throw new Error('Upload a place image before saving.');
+  }
+  return storageId;
+}
+
 function optionalArg<Key extends string>(key: Key, value: string) {
   const trimmed = value.trim();
   return trimmed ? ({ [key]: trimmed } as Record<Key, string>) : {};
@@ -811,7 +995,102 @@ function parseCoordinate(value: string) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
     throw new Error('Coordinate must be "longitude, latitude".');
   }
+  if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+    throw new Error('Coordinate is outside valid map bounds.');
+  }
   return [lng, lat];
+}
+
+function parseCoordinateOrDefault(value: string): readonly [number, number] {
+  try {
+    const coordinate = parseCoordinate(value);
+    return [coordinate[0], coordinate[1]];
+  } catch {
+    return DEFAULT_LOCATION_COORDINATE;
+  }
+}
+
+async function optimizePickedImage(asset: ImagePicker.ImagePickerAsset) {
+  const response = await fetch(asset.uri);
+  const originalBlob = await response.blob();
+  const originalMimeType = asset.mimeType ?? originalBlob.type ?? 'image/jpeg';
+
+  if (Platform.OS !== 'web' || typeof document === 'undefined' || typeof window === 'undefined') {
+    return {
+      blob: originalBlob,
+      mimeType: originalMimeType,
+      previewUri: asset.uri,
+    };
+  }
+
+  try {
+    return await optimizeImageBlobForWeb(originalBlob, originalMimeType, asset.uri);
+  } catch {
+    return {
+      blob: originalBlob,
+      mimeType: originalMimeType,
+      previewUri: asset.uri,
+    };
+  }
+}
+
+async function optimizeImageBlobForWeb(originalBlob: Blob, originalMimeType: string, fallbackPreviewUri: string) {
+  const image = await loadImageElement(originalBlob);
+  const scale = Math.min(1, MAX_OPTIMIZED_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return {
+      blob: originalBlob,
+      mimeType: originalMimeType,
+      previewUri: fallbackPreviewUri,
+    };
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, 0, 0, width, height);
+
+  const candidate = await canvasToBlob(canvas, 'image/webp', IMAGE_UPLOAD_QUALITY);
+  const optimizedBlob =
+    candidate && (candidate.size < originalBlob.size || (originalBlob.size > 8_000_000 && candidate.size <= 8_000_000))
+      ? candidate
+      : originalBlob;
+  const mimeType = optimizedBlob === candidate ? 'image/webp' : originalMimeType;
+
+  return {
+    blob: optimizedBlob,
+    mimeType,
+    previewUri: optimizedBlob === originalBlob ? fallbackPreviewUri : URL.createObjectURL(optimizedBlob),
+  };
+}
+
+function loadImageElement(blob: Blob) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new window.Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read that image.'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, mimeType, quality);
+  });
 }
 
 function parseList(value: string) {
@@ -902,6 +1181,7 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   embeddedRoot: {
+    backgroundColor: designSystem.colors.darkBackground,
     flex: 1,
     minHeight: 0,
   },
@@ -955,6 +1235,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 14,
   },
+  statusFilterTextInactive: {
+    color: designSystem.colors.darkText,
+  },
   busyText: {
     color: designSystem.colors.mutedText,
     fontSize: 12,
@@ -968,6 +1251,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   listPane: {
+    backgroundColor: designSystem.colors.darkSurface,
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
@@ -978,6 +1262,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   editorPane: {
+    backgroundColor: designSystem.colors.darkSurface,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
@@ -1029,8 +1314,8 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
   },
   actionSecondary: {
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderWidth: 1,
   },
   actionDisabled: {
@@ -1042,10 +1327,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 14,
   },
+  actionLabelSecondary: {
+    color: designSystem.colors.darkText,
+  },
   formGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+  flexText: {
+    flex: 1,
+    minWidth: 0,
   },
   field: {
     gap: 6,
@@ -1059,6 +1351,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 14,
+  },
+  fieldHint: {
+    color: designSystem.colors.darkMutedText,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  mediaFieldHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  uploadButton: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.lime,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 38,
+    paddingHorizontal: 14,
+  },
+  uploadButtonText: {
+    color: designSystem.colors.darkGreen,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 14,
+  },
+  imagePreviewFrame: {
+    aspectRatio: 16 / 9,
+    backgroundColor: designSystem.colors.charcoalSoft,
+    borderColor: designSystem.colors.darkBorderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  imagePreview: {
+    height: '100%',
+    width: '100%',
+  },
+  imagePreviewEmpty: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  coordinateLabel: {
+    color: designSystem.colors.darkMutedText,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  mapPickerFrame: {
+    backgroundColor: designSystem.colors.charcoalSoft,
+    borderColor: designSystem.colors.darkBorderSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 280,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  mapPicker: {
+    flex: 1,
   },
   input: {
     borderRadius: 8,
@@ -1104,8 +1462,8 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.white,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 999,
     borderWidth: 1,
     height: 26,
@@ -1121,10 +1479,10 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
   },
   statusDraft: {
-    backgroundColor: designSystem.colors.surface,
+    backgroundColor: designSystem.colors.darkSurface,
   },
   statusArchived: {
-    backgroundColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkBorderSoft,
   },
   statusText: {
     color: designSystem.colors.darkGreen,
@@ -1132,5 +1490,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 12,
     textTransform: 'capitalize',
+  },
+  statusTextMuted: {
+    color: designSystem.colors.darkText,
   },
 });

@@ -44,6 +44,7 @@ const stayBookingProfileValidator = v.object({
 
 type ContentStatus = 'draft' | 'live' | 'archived';
 type Coordinate = readonly [number, number];
+const MAX_MANAGED_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function slugify(value: string) {
   return (
@@ -112,9 +113,60 @@ async function createUniqueSlug(
   }
 }
 
-function toPublicLocation(location: Doc<'locations'>) {
+async function resolveStorageImageUrl(ctx: QueryCtx | MutationCtx, storageId?: Id<'_storage'>) {
+  if (!storageId) {
+    return null;
+  }
+
+  return await ctx.storage.getUrl(storageId);
+}
+
+async function requireManagedImageUrl(ctx: MutationCtx, storageId: Id<'_storage'>) {
+  const metadata = await ctx.db.system.get('_storage', storageId);
+  if (!metadata) {
+    throw new ConvexError('Upload a place image before saving.');
+  }
+
+  if (metadata.contentType && !metadata.contentType.startsWith('image/')) {
+    throw new ConvexError('Place image upload must be an image file.');
+  }
+
+  if (metadata.size > MAX_MANAGED_IMAGE_BYTES) {
+    throw new ConvexError('Place image must be 8 MB or smaller after compression.');
+  }
+
+  const imageUrl = await ctx.storage.getUrl(storageId);
+  if (!imageUrl) {
+    throw new ConvexError('Uploaded place image is unavailable.');
+  }
+
+  return imageUrl;
+}
+
+function normalizeGalleryImages(galleryImages: readonly string[], imageUri: string) {
+  const seen = new Set<string>();
+  return [imageUri, ...galleryImages]
+    .map((uri) => uri.trim())
+    .filter((uri) => {
+      if (!uri || seen.has(uri)) {
+        return false;
+      }
+
+      seen.add(uri);
+      return true;
+    });
+}
+
+async function toPublicLocation(
+  ctx: QueryCtx | MutationCtx,
+  location: Doc<'locations'>,
+  options?: { includeStorageIds?: boolean }
+) {
   const coordinate = normalizeCoordinate(location.coordinate);
   const inferred = getSupportedCountryMetadata(coordinate);
+  const storedImageUrl = await resolveStorageImageUrl(ctx, location.imageStorageId);
+  const imageUri = storedImageUrl ?? location.imageUri;
+  const galleryImages = normalizeGalleryImages(location.galleryImages, imageUri);
 
   return {
     _id: location._id,
@@ -131,8 +183,9 @@ function toPublicLocation(location: Doc<'locations'>) {
     countryLabel: location.countryLabel ?? inferred.countryLabel,
     planningLocationId: location.planningLocationId ?? inferred.planningLocationId,
     coordinate,
-    imageUri: location.imageUri,
-    galleryImages: location.galleryImages,
+    imageUri,
+    galleryImages,
+    ...(options?.includeStorageIds ? { imageStorageId: location.imageStorageId ?? null } : {}),
     visitTips: location.visitTips,
     sections: location.sections ?? [],
     sectionsTitle: location.sectionsTitle ?? 'More to know',
@@ -249,7 +302,7 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
     ctx.db.query('stays').order('desc').take(250),
   ]);
 
-  const liveLocations = locationDocs.map(toPublicLocation);
+  const liveLocations = await Promise.all(locationDocs.map((location) => toPublicLocation(ctx, location)));
   const knownLocationSlugs = new Set(liveLocations.map((location) => location.slug));
   const legacyLocations = [
     ...gemDocs.map(legacyGemToPublicLocation),
@@ -349,7 +402,11 @@ export const listManagedCatalog = query({
     const matchesStatus = (value?: ContentStatus) => !status || (value ?? 'live') === status;
 
     return {
-      locations: locations.filter((location) => matchesStatus(location.status)).map(toPublicLocation),
+      locations: await Promise.all(
+        locations
+          .filter((location) => matchesStatus(location.status))
+          .map((location) => toPublicLocation(ctx, location, { includeStorageIds: true }))
+      ),
       experiences: experiences
         .filter((experience) => experience.itemKind !== 'hiddenGem' && matchesStatus(experience.status))
         .map(toPublicExperience),
@@ -359,6 +416,14 @@ export const listManagedCatalog = query({
         bookings,
       },
     };
+  },
+});
+
+export const generateManagedImageUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
@@ -377,7 +442,8 @@ export const upsertManagedLocation = mutation({
     countryLabel: v.optional(v.string()),
     planningLocationId: v.optional(v.string()),
     coordinate: coordinateValidator,
-    imageUri: v.string(),
+    imageStorageId: v.id('_storage'),
+    imageUri: v.optional(v.string()),
     galleryImages: galleryValidator,
     visitTips: v.array(v.string()),
     sections: v.optional(v.array(v.object({ title: v.string(), body: v.string() }))),
@@ -389,6 +455,8 @@ export const upsertManagedLocation = mutation({
     const now = Date.now();
     const slug = await createUniqueSlug(ctx, 'locations', args.title, args.locationId);
     const status = args.status ?? 'draft';
+    const imageUri = await requireManagedImageUrl(ctx, args.imageStorageId);
+    const galleryImages = normalizeGalleryImages(args.galleryImages, imageUri);
 
     if (args.locationId) {
       const existing = await ctx.db.get(args.locationId);
@@ -410,8 +478,9 @@ export const upsertManagedLocation = mutation({
         countryLabel: args.countryLabel,
         planningLocationId: args.planningLocationId,
         coordinate: args.coordinate,
-        imageUri: args.imageUri,
-        galleryImages: args.galleryImages,
+        imageStorageId: args.imageStorageId,
+        imageUri,
+        galleryImages,
         visitTips: args.visitTips,
         sections: args.sections,
         sectionsTitle: args.sectionsTitle,
@@ -447,8 +516,9 @@ export const upsertManagedLocation = mutation({
       countryLabel: args.countryLabel,
       planningLocationId: args.planningLocationId,
       coordinate: args.coordinate,
-      imageUri: args.imageUri,
-      galleryImages: args.galleryImages,
+      imageStorageId: args.imageStorageId,
+      imageUri,
+      galleryImages,
       visitTips: args.visitTips,
       sections: args.sections,
       sectionsTitle: args.sectionsTitle,
@@ -707,6 +777,9 @@ export const updateManagedContentStatus = mutation({
       const existing = await ctx.db.get(id);
       if (!existing) {
         throw new ConvexError('Location not found');
+      }
+      if (args.status === 'live' && !existing.imageStorageId) {
+        throw new ConvexError('Upload a place image before publishing.');
       }
       await ctx.db.patch(id, { ...patch, publishedAt: args.status === 'live' ? existing.publishedAt ?? now : existing.publishedAt });
       await recordAdminAuditEvent(ctx, {

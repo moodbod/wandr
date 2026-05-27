@@ -1257,6 +1257,10 @@ export const listManagedCatalogRef = makeFunctionReference<
   any
 >('catalog:listManagedCatalog') as FunctionReference<'query', 'public', { status?: ContentStatus }, any>;
 
+export const generateManagedImageUploadUrlRef = makeFunctionReference<'mutation', Record<string, never>, string>(
+  'catalog:generateManagedImageUploadUrl'
+) as FunctionReference<'mutation', 'public', Record<string, never>, string>;
+
 export const upsertManagedLocationRef = makeFunctionReference<
   'mutation',
   any,

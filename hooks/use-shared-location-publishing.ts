@@ -3,13 +3,14 @@ import { useEffect } from 'react';
 
 import { clearSharedLocationRef, publishSharedLocationRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
-import { useCurrentUserSettings } from './use-current-user-settings';
+import { useCurrentLocationSharingSetting } from './use-current-user-settings';
 
 type CurrentLocationSnapshot = {
   accuracy: number | null;
   coordinate: readonly [number, number] | null;
   hasPermission: boolean;
 };
+type LocationSharingSetting = 'off' | 'whileUsing' | 'tripOnly';
 
 const MIN_SYNC_INTERVAL_MS = 30_000;
 const MIN_SYNC_MOVE_METERS = 20;
@@ -24,15 +25,22 @@ const lastSyncByTraveler = new Map<
 const clearedTravelers = new Set<string>();
 
 export function useSharedLocationPublishing(location: CurrentLocationSnapshot) {
+  const currentLocationSharing = useCurrentLocationSharingSetting();
+
+  useSharedLocationPublishingForSetting(location, currentLocationSharing);
+}
+
+export function useSharedLocationPublishingForSetting(
+  location: CurrentLocationSnapshot,
+  locationSharing: LocationSharingSetting | undefined
+) {
   const { session } = useAuthSession();
-  const settings = useCurrentUserSettings();
   const publishSharedLocation = useMutation(publishSharedLocationRef);
   const clearSharedLocation = useMutation(clearSharedLocationRef);
   const travelerSlug = session?.travelerSlug ?? null;
-  const locationSharing = settings?.locationSharing ?? 'off';
 
   useEffect(() => {
-    if (!travelerSlug || !settings) {
+    if (!travelerSlug || !locationSharing) {
       return;
     }
 
@@ -84,7 +92,6 @@ export function useSharedLocationPublishing(location: CurrentLocationSnapshot) {
     location.hasPermission,
     locationSharing,
     publishSharedLocation,
-    settings,
     travelerSlug,
   ]);
 }
