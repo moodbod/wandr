@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { AuthRouteGate } from '@/components/wandr/auth-route-gate';
+import { LocationSharingPublisherGate } from '@/components/wandr/location-sharing-publisher';
 import { PwaCacheRegistrar } from '@/components/wandr/pwa-cache-registrar';
 import { designSystem } from '@/constants/design-system';
 import { ActiveFriendCallProvider, useActiveFriendCall } from '@/hooks/use-active-friend-call';
@@ -81,6 +82,7 @@ export function AppShell({
       </View>
 
       <AuthRouteGate />
+      <LocationSharingPublisherGate />
       <TripNotificationCenterGate enabled={Boolean(convexClient && isSignedIn)} />
       {convexClient && isSignedIn && canUseNativeCalls ? (
         <Suspense fallback={null}>

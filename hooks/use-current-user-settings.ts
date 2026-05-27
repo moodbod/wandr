@@ -4,11 +4,19 @@ import { getUserSettingsRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 import { useLiveExchangeRates } from './use-live-exchange-rates';
 
-export function useCurrentUserSettings() {
+function useCurrentUserSettingsQuery() {
   const { session } = useAuthSession();
-  const settings = useQuery(getUserSettingsRef, session?.travelerSlug ? { travelerSlug: session.travelerSlug } : 'skip');
+  return useQuery(getUserSettingsRef, session?.travelerSlug ? { travelerSlug: session.travelerSlug } : 'skip');
+}
+
+export function useCurrentUserSettings() {
+  const settings = useCurrentUserSettingsQuery();
   const preferredCurrency = settings?.preferredCurrency;
   useLiveExchangeRates(Boolean(preferredCurrency && preferredCurrency !== 'USD'));
 
   return settings;
+}
+
+export function useCurrentLocationSharingSetting() {
+  return useCurrentUserSettingsQuery()?.locationSharing;
 }

@@ -128,8 +128,8 @@ export function AdminDashboardScreen() {
             tabStyle={styles.mobileTab}
           />
         )}
-        <View style={[styles.mainPanel, { backgroundColor: designSystem.colors.background, borderColor: designSystem.colors.borderSoft }]}>
-          <View style={styles.header}>
+        <View style={[styles.mainPanel, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft }]}>
+          <View style={[styles.header, { borderBottomColor: colors.borderSoft }]}>
             <View style={styles.headerText}>
               <ThemedText style={styles.title}>Admin</ThemedText>
               <ThemedText style={styles.subtitle}>{getSectionSubtitle(activeSection)}</ThemedText>
@@ -160,9 +160,13 @@ function AdminAccessState({
   onPress: () => void;
   title: string;
 }) {
+  const isDark = useColorScheme() === 'dark';
+  const surfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
+  const borderColor = isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft;
+
   return (
     <ThemedView style={styles.centerState}>
-      <View style={[styles.accessPanel, { backgroundColor: designSystem.colors.surfaceRaised, borderColor: designSystem.colors.borderSoft }]}>
+      <View style={[styles.accessPanel, { backgroundColor: surfaceColor, borderColor }]}>
         <MaterialCommunityIcons name="shield-lock-outline" size={28} color={designSystem.colors.fern} />
         <ThemedText style={styles.accessTitle}>{title}</ThemedText>
         <ThemedText style={styles.accessBody}>{body}</ThemedText>
@@ -371,7 +375,7 @@ function UsersSection({ currentUserSlug }: { currentUserSlug: string }) {
           accessibilityLabel="Search users"
           onChangeText={setSearch}
           placeholder="Search users"
-          placeholderTextColor={designSystem.colors.mutedText}
+          placeholderTextColor={designSystem.colors.darkMutedText}
           style={styles.searchInput}
           value={search}
         />
@@ -615,8 +619,9 @@ function SectionBlock({ children, title }: { children: React.ReactNode; title: s
 }
 
 function StatusPill({ status }: { status: string }) {
+  const isPositive = status === 'admin' || status === 'confirmed' || status === 'approved' || status === 'live';
   const tone =
-    status === 'admin' || status === 'confirmed' || status === 'approved' || status === 'live'
+    isPositive
       ? styles.statusPositive
       : status === 'pending' || status === 'draft'
         ? styles.statusPending
@@ -624,7 +629,7 @@ function StatusPill({ status }: { status: string }) {
 
   return (
     <View style={[styles.statusPill, tone]}>
-      <ThemedText style={styles.statusText}>{status}</ThemedText>
+      <ThemedText style={[styles.statusText, !isPositive && styles.statusTextMuted]}>{status}</ThemedText>
     </View>
   );
 }
@@ -642,16 +647,19 @@ function IconAction({
   onPress: () => void;
   variant?: 'primary' | 'secondary';
 }) {
+  const isPrimary = variant === 'primary';
+  const foregroundColor = isPrimary ? designSystem.colors.darkGreen : designSystem.colors.darkText;
+
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={[styles.iconAction, variant === 'primary' && styles.iconActionPrimary, disabled && styles.actionDisabled]}
+      style={[styles.iconAction, isPrimary && styles.iconActionPrimary, disabled && styles.actionDisabled]}
     >
-      <MaterialCommunityIcons name={icon} size={17} color={designSystem.colors.darkGreen} />
-      <ThemedText style={styles.iconActionText}>{label}</ThemedText>
+      <MaterialCommunityIcons name={icon} size={17} color={foregroundColor} />
+      <ThemedText style={[styles.iconActionText, !isPrimary && styles.iconActionTextSecondary]}>{label}</ThemedText>
     </Pressable>
   );
 }
@@ -779,7 +787,6 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'flex-start',
-    borderBottomColor: designSystem.colors.borderSoft,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -816,8 +823,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   metricTile: {
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
@@ -845,8 +852,8 @@ const styles = StyleSheet.create({
   },
   overviewAction: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -881,8 +888,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   platformCell: {
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
@@ -908,8 +915,8 @@ const styles = StyleSheet.create({
   },
   dataRow: {
     alignItems: 'flex-start',
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -920,8 +927,8 @@ const styles = StyleSheet.create({
   },
   auditRow: {
     alignItems: 'flex-start',
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -966,10 +973,10 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.lime,
   },
   statusPending: {
-    backgroundColor: designSystem.colors.creamMuted,
+    backgroundColor: designSystem.colors.whiteOverlayBarely,
   },
   statusMuted: {
-    backgroundColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkBorderSoft,
   },
   statusText: {
     color: designSystem.colors.darkGreen,
@@ -978,10 +985,13 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     textTransform: 'capitalize',
   },
+  statusTextMuted: {
+    color: designSystem.colors.darkText,
+  },
   iconAction: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.white,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',
@@ -998,6 +1008,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  iconActionTextSecondary: {
+    color: designSystem.colors.darkText,
+  },
   actionDisabled: {
     opacity: 0.45,
   },
@@ -1007,8 +1020,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   photoCard: {
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
@@ -1030,11 +1043,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchInput: {
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
-    color: designSystem.colors.ink,
+    color: designSystem.colors.darkText,
     flex: 1,
     fontSize: 14,
     minHeight: 44,
@@ -1048,8 +1061,8 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    backgroundColor: designSystem.colors.surface,
-    borderColor: designSystem.colors.borderSoft,
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',

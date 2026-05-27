@@ -18,8 +18,6 @@ import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useManagerMode } from '@/hooks/use-manager-mode';
-import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   getFriendsDashboardRef,
@@ -28,10 +26,8 @@ import {
   listTravelerHistoryRef,
 } from '@/lib/convex';
 import { formatUsdConversion } from '@/lib/currency';
-import { useAuthSession } from '@/providers/auth-session';
 import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
-import { AdminContentDashboard } from '../manager/admin-content-dashboard';
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
 import { ProfileSettingsSidebar } from './profile-settings-sidebar';
@@ -55,10 +51,6 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const { isLargeScreen } = useResponsive();
-  const { session } = useAuthSession();
-  const isAdmin = session?.role === 'admin';
-  const { isManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
-  const { surface: managerSurface } = useManagerResourceMode();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const history = useQuery(listTravelerHistoryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
@@ -87,7 +79,6 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
   const planningLabel = rawPlanningLabel || null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
-  const canUseManagerMode = isAdmin && isManagerMode;
 
   const mainContent = (
     <>
@@ -152,13 +143,9 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
     return (
       <ThemedView style={styles.root}>
         <LargeScreenWorkspace mapContent={<AppMapWorkspace />}>
-          {canUseManagerMode && managerSurface === 'manager' ? (
-            <AdminContentDashboard travelerSlug={traveler?.slug} />
-          ) : (
-            <LargeScreenPanel kind="main">
-              {mainContent}
-            </LargeScreenPanel>
-          )}
+          <LargeScreenPanel kind="main">
+            {mainContent}
+          </LargeScreenPanel>
         </LargeScreenWorkspace>
       </ThemedView>
     );

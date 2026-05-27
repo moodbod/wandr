@@ -15,6 +15,7 @@ export const locationsTable = defineTable({
   countryLabel: v.optional(v.string()),
   planningLocationId: v.optional(v.string()),
   coordinate: v.array(v.number()),
+  imageStorageId: v.optional(v.id('_storage')),
   imageUri: v.string(),
   galleryImages: v.array(v.string()),
   visitTips: v.array(v.string()),

@@ -64,6 +64,12 @@ async function seedExperience(
   );
 }
 
+async function seedStorageImage(t: TestBackend) {
+  return await t.run(async (ctx) =>
+    ctx.storage.store(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }))
+  );
+}
+
 describe('admin dashboard APIs', () => {
   it('blocks travelers from admin queries and mutations', async () => {
     const t = createTest();
@@ -166,6 +172,7 @@ describe('admin dashboard APIs', () => {
   it('uses real content mutations and reflects content metrics', async () => {
     const t = createTest();
     const admin = await seedUser(t, 'admin', 'admin');
+    const imageStorageId = await seedStorageImage(t);
 
     const created = await admin.client.mutation(api.catalog.upsertManagedLocation, {
       title: 'Real admin location',
@@ -174,8 +181,8 @@ describe('admin dashboard APIs', () => {
       locationLabel: 'Windhoek',
       region: 'Khomas',
       coordinate: [17.08, -22.56],
-      imageUri: 'https://example.com/location.jpg',
-      galleryImages: ['https://example.com/location.jpg'],
+      imageStorageId,
+      galleryImages: [],
       visitTips: ['Bring water'],
       status: 'draft',
     });

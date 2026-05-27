@@ -1,7 +1,7 @@
 import { useMutation } from 'convex/react';
 import { type Href, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Bed, Camera, MapTrifold, ShieldCheck, Trash } from 'phosphor-react-native';
+import { Camera, ShieldCheck, Trash } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { type Country } from 'react-native-country-picker-modal';
@@ -13,15 +13,12 @@ import {
   SettingActionButton,
   SettingOptionGroup,
   SettingRow,
-  SettingSwitchRow,
   SettingTextInput,
 } from '@/components/wandr/profile/profile-setting-screen';
 import { WandrAvatar } from '@/components/wandr/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
-import { useManagerMode } from '@/hooks/use-manager-mode';
-import { useManagerResourceMode } from '@/hooks/use-manager-resource-mode';
 import { generateAvatarUploadUrlRef, updateTravelerProfileRef } from '@/lib/convex';
 import { useAuthSession } from '@/providers/auth-session';
 
@@ -39,8 +36,6 @@ export default function EditProfileScreen() {
   const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
   const isAdmin = session?.role === 'admin';
-  const { isLoading: managerModeIsLoading, isManagerMode, setManagerMode } = useManagerMode(session?.travelerSlug, isAdmin);
-  const { openManager } = useManagerResourceMode();
   const generateAvatarUploadUrl = useMutation(generateAvatarUploadUrlRef);
   const updateTravelerProfile = useMutation(updateTravelerProfileRef);
   const [name, setName] = useState('');
@@ -233,40 +228,6 @@ export default function EditProfileScreen() {
             style={styles.managerActionButton}>
             <ShieldCheck color={designSystem.colors.darkGreen} size={18} weight="bold" />
             <ThemedText style={styles.managerActionText}>Admin dashboard</ThemedText>
-          </Pressable>
-        </View>
-      ) : null}
-      {isAdmin ? (
-        <SettingSwitchRow
-          disabled={managerModeIsLoading}
-          label="Manager mode"
-          value={isManagerMode}
-          onValueChange={setManagerMode}
-        />
-      ) : null}
-      {isAdmin && isManagerMode ? (
-        <View style={styles.managerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open experience management"
-            onPress={() => {
-              openManager('experiences');
-              router.push('/profile');
-            }}
-            style={styles.managerActionButton}>
-            <MapTrifold color={designSystem.colors.darkGreen} size={18} weight="bold" />
-            <ThemedText style={styles.managerActionText}>Experiences</ThemedText>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open room management"
-            onPress={() => {
-              openManager('rooms');
-              router.push('/profile');
-            }}
-            style={styles.managerActionButton}>
-            <Bed color={designSystem.colors.darkGreen} size={18} weight="bold" />
-            <ThemedText style={styles.managerActionText}>Rooms</ThemedText>
           </Pressable>
         </View>
       ) : null}
