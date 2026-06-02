@@ -1,13 +1,12 @@
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { Sheet, SheetScrollView, SheetRef } from '@/components/ui/sheet';
 import { ThemedView } from '@/components/themed-view';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
 import { styles } from '@/components/wandr/explore/hidden-gem-detail-screen.styles';
@@ -51,13 +50,9 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   );
   const bookExperience = useMutation(bookExperienceRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
-  const tripSheetRef = useRef<BottomSheet>(null);
+  const tripSheetRef = useRef<SheetRef>(null);
   const [bookingAction, setBookingAction] = useState<'primary' | null>(null);
-  const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setOptimisticLiked(null);
-  }, [slug]);
+  const [optimisticLiked, setOptimisticLiked] = useState<{ slug: string; liked: boolean } | null>(null);
 
   if (!slug || page === undefined || page === null) {
     return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
@@ -69,7 +64,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
   if (!detail || !card) {
     return <HiddenGemDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
-  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
+  const isLiked = optimisticLiked?.slug === slug ? optimisticLiked.liked : likeState?.liked ?? false;
   const mapCenterCoordinate = card.coordinate ?? page.search.map.centerCoordinate;
   const mapMarkers = card.coordinate
     ? [
@@ -90,7 +85,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     }
 
     const nextLiked = !isLiked;
-    setOptimisticLiked(nextLiked);
+    setOptimisticLiked({ slug, liked: nextLiked });
 
     try {
       const result = await toggleLocationLike({
@@ -98,7 +93,7 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
         locationKind: 'location',
         locationSlug: slug,
       });
-      setOptimisticLiked(result.liked);
+      setOptimisticLiked({ slug, liked: result.liked });
     } catch {
       setOptimisticLiked(null);
     }
@@ -222,24 +217,32 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
         </View>
       </ScrollView>
 
-      <GlassBottomSheet ref={tripSheetRef} index={-1} snapPoints={['60%', '90%']}>
-        <BottomSheetView style={styles.sheetContainer}>
+      <Sheet
+        ref={tripSheetRef}
+        index={-1}
+        snapPoints={[520, 'full']}
+        enablePanDownToClose>
+        <SheetScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 36) },
+          ]}>
           <View style={styles.sheetHeader}>
             <ThemedText style={styles.sheetTitle}>Add to trip</ThemedText>
           </View>
-          <ScrollView contentContainerStyle={styles.sheetContent}>
-            {trips?.map((trip) => (
-              <Pressable
-                key={trip._id}
-                onPress={() => void addHiddenGemToTrip(trip._id as Id<'trips'>)}
-                style={[styles.tripRow, isDark && styles.tripRowDark]}
-              >
-                <ThemedText style={styles.tripName}>{trip.name}</ThemedText>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </BottomSheetView>
-      </GlassBottomSheet>
+          {trips?.map((trip) => (
+            <Pressable
+              key={trip._id}
+              onPress={() => void addHiddenGemToTrip(trip._id as Id<'trips'>)}
+              style={[styles.tripRow, isDark && styles.tripRowDark]}
+            >
+              <ThemedText style={styles.tripName}>{trip.name}</ThemedText>
+            </Pressable>
+          ))}
+        </SheetScrollView>
+      </Sheet>
     </ThemedView>
   );
 }

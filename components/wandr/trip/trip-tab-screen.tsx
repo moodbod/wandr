@@ -1,9 +1,8 @@
 import { ThemedText } from '@/components/themed-text';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { GlassButton } from '@/components/ui/glass-button';
-import { WandrAvatar } from '@/components/wandr/avatar';
+import { Sheet, SheetTextInput, SheetView, SheetRef } from '@/components/ui/sheet';
 import { styles } from '@/components/wandr/trip/trip-screen.styles';
 import { TripLoadingScreen, TripScreenView } from '@/components/wandr/trip/trip-screen-view';
+import { TripSettingsSheet } from '@/components/wandr/trip/trip-settings-sheet';
 import { designSystem } from '@/constants/design-system';
 import { getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -14,12 +13,10 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { createTripRef, deleteTripRef, getTripDashboardRef, getTripSettingsRef, inviteFriendsToTripRef, listUserTripsRef, removeExperienceFromTripRef, updateTripSettingsRef } from '@/lib/convex';
 import { orderTripsByPlanningCountry } from '@/lib/trip-ordering';
 import type { TripDashboard } from '@/types/trip';
-import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { GlobeHemisphereWest, LockSimple, PencilSimple, UsersThree } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TripScreen() {
@@ -50,6 +47,21 @@ export default function TripScreen() {
     />
   );
 }
+
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+
+  return () => {
+    isCancelled = true;
+  };
+}
+
 function ConnectedTripScreen({
   insetsBottom,
   insetsTop,
@@ -90,8 +102,8 @@ function ConnectedTripScreen({
   const inviteFriendsToTripMutation = useMutation(inviteFriendsToTripRef);
   const removeExperienceFromTripMutation = useMutation(removeExperienceFromTripRef);
   const updateTripSettingsMutation = useMutation(updateTripSettingsRef);
-  const createSheetRef = useRef<BottomSheet>(null);
-  const settingsSheetRef = useRef<BottomSheet>(null);
+  const createSheetRef = useRef<SheetRef>(null);
+  const settingsSheetRef = useRef<SheetRef>(null);
   const [newTripName, setNewTripName] = useState('');
   const [isSavingTrip, setIsSavingTrip] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -110,13 +122,15 @@ function ConnectedTripScreen({
     }
 
     if (routeTripId && orderedTrips.some((candidate) => candidate._id === routeTripId)) {
-      setSelectedTripId(routeTripId);
+      if (routeTripId !== selectedTripId) {
+        return deferStateSync(() => setSelectedTripId(routeTripId));
+      }
       return;
     }
 
     const hasSelection = orderedTrips.some((candidate) => candidate._id === selectedTripId);
     if (!selectedTripId || !hasSelection) {
-      setSelectedTripId(orderedTrips[0]._id);
+      return deferStateSync(() => setSelectedTripId(orderedTrips[0]._id));
     }
   }, [orderedTrips, routeTripId, selectedTripId]);
 
@@ -125,19 +139,20 @@ function ConnectedTripScreen({
       return;
     }
 
-    setSettingsName(tripSettings.name);
-    setSettingsVisibility(tripSettings.visibility);
-    setSettingsLoadedTripId(tripSettings.tripId);
+    return deferStateSync(() => {
+      setSettingsName(tripSettings.name);
+      setSettingsVisibility(tripSettings.visibility);
+      setSettingsLoadedTripId(tripSettings.tripId);
+    });
   }, [settingsLoadedTripId, tripSettings]);
 
   useEffect(() => {
     if (trip) {
-      setLastResolvedTrip(trip);
-      return;
+      return deferStateSync(() => setLastResolvedTrip(trip));
     }
 
     if (!selectedTripId) {
-      setLastResolvedTrip(null);
+      return deferStateSync(() => setLastResolvedTrip(null));
     }
   }, [selectedTripId, trip]);
 
@@ -288,15 +303,15 @@ function ConnectedTripScreen({
         useSkeletons={!trip}
       />
 
-      <GlassBottomSheet
+      <Sheet
         ref={createSheetRef}
         index={-1}
         snapPoints={['40%']}
         enablePanDownToClose
       >
-        <BottomSheetView style={styles.sheetContent}>
+        <SheetView style={styles.sheetContent}>
           <ThemedText style={styles.sheetTitle}>Create New Trip</ThemedText>
-          <BottomSheetTextInput
+          <SheetTextInput
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="Trip Name (e.g. Namibia Road Trip)"
             placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
@@ -312,180 +327,27 @@ function ConnectedTripScreen({
               {isSavingTrip ? 'Creating...' : 'Create Trip'}
             </ThemedText>
           </Pressable>
-        </BottomSheetView>
-      </GlassBottomSheet>
+        </SheetView>
+      </Sheet>
 
-      <GlassBottomSheet
+      <TripSettingsSheet
         ref={settingsSheetRef}
-        index={-1}
-        snapPoints={['82%']}
-        enablePanDownToClose
-      >
-        <BottomSheetScrollView
-          contentContainerStyle={[
-            styles.sheetContent,
-            { paddingBottom: insetsBottom + 28 },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <ThemedText style={styles.sheetTitle}>Edit trip</ThemedText>
-
-          {!tripSettings ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator />
-            </View>
-          ) : (
-            <>
-              <View style={styles.fieldGroup}>
-                <ThemedText style={styles.fieldLabel}>Trip name</ThemedText>
-                <BottomSheetTextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  placeholder="Trip name"
-                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
-                  value={settingsName}
-                  onChangeText={setSettingsName}
-                />
-              </View>
-
-              <View style={styles.fieldGroup}>
-                <ThemedText style={styles.fieldLabel}>Visibility</ThemedText>
-                <View style={styles.visibilityRow}>
-                  <Pressable
-                    disabled={!tripSettings.canChangeVisibility}
-                    onPress={() => setSettingsVisibility('private')}
-                    style={[
-                      styles.visibilityOption,
-                      settingsVisibility === 'private' && styles.visibilityOptionActive,
-                      !tripSettings.canChangeVisibility && styles.visibilityOptionDisabled,
-                    ]}>
-                    <LockSimple
-                      size={18}
-                      weight="bold"
-                      color={settingsVisibility === 'private' ? designSystem.colors.darkGreen : designSystem.colors.gray}
-                    />
-                    <View style={styles.visibilityCopy}>
-                      <ThemedText style={styles.visibilityTitle}>Private</ThemedText>
-                      <ThemedText style={styles.visibilityBody}>Only you see it until you open it up.</ThemedText>
-                    </View>
-                  </Pressable>
-                  <Pressable
-                    disabled={!tripSettings.canChangeVisibility}
-                    onPress={() => setSettingsVisibility('public')}
-                    style={[
-                      styles.visibilityOption,
-                      settingsVisibility === 'public' && styles.visibilityOptionActive,
-                      !tripSettings.canChangeVisibility && styles.visibilityOptionDisabled,
-                    ]}>
-                    <GlobeHemisphereWest
-                      size={18}
-                      weight="bold"
-                      color={settingsVisibility === 'public' ? designSystem.colors.darkGreen : designSystem.colors.gray}
-                    />
-                    <View style={styles.visibilityCopy}>
-                      <ThemedText style={styles.visibilityTitle}>Public</ThemedText>
-                      <ThemedText style={styles.visibilityBody}>Lets you invite friends into this trip.</ThemedText>
-                    </View>
-                  </Pressable>
-                </View>
-                {!tripSettings.canChangeVisibility ? (
-                  <ThemedText style={styles.helperText}>
-                    This trip already has invited members, so it stays public.
-                  </ThemedText>
-                ) : null}
-              </View>
-
-              {settingsVisibility === 'public' ? (
-                <View style={styles.fieldGroup}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionHeaderCopy}>
-                      <ThemedText style={styles.fieldLabel}>Invite friends</ThemedText>
-                      <ThemedText style={styles.helperText}>
-                        Invite people already on your friends list into this trip.
-                      </ThemedText>
-                    </View>
-                    <UsersThree size={18} color={designSystem.colors.darkGreen} weight="bold" />
-                  </View>
-
-                  {tripSettings.friends.length === 0 ? (
-                    <View style={styles.emptyInviteState}>
-                      <ThemedText style={styles.emptyInviteTitle}>No friends yet</ThemedText>
-                      <ThemedText style={styles.emptyInviteBody}>
-                        Add people in Friends first, then they can be invited here.
-                      </ThemedText>
-                    </View>
-                  ) : (
-                    <View style={styles.friendList}>
-                      {tripSettings.friends.map((friend: any) => {
-                        const isInvited = tripSettings.invitedFriendSlugs.includes(friend.slug);
-                        const isBusy = invitingFriendSlug === friend.slug;
-
-                        return (
-                          <View key={friend.slug} style={styles.friendRow}>
-                            <View style={styles.friendIdentity}>
-                              <View style={styles.avatarWrap}>
-                                <WandrAvatar
-                                  name={friend.name || friend.slug || 'Traveler'}
-                                  paletteKey={friend.slug}
-                                  size={38}
-                                  uri={friend.avatarUri}
-                                  style={styles.avatarImage}
-                                />
-                              </View>
-                              <View style={styles.friendCopy}>
-                                <ThemedText style={styles.friendName}>{friend.name}</ThemedText>
-                                <ThemedText style={styles.friendMeta}>{friend.baseLabel}</ThemedText>
-                              </View>
-                            </View>
-
-                            <GlassButton
-                              accessibilityLabel={isInvited ? `${friend.name} already invited` : `Invite ${friend.name}`}
-                              onPress={isInvited ? undefined : () => handleInviteFriend(friend.slug)}
-                              width={96}
-                              height={40}
-                              radius={20}
-                              variant={isInvited ? 'subtle' : 'primary'}
-                              style={isInvited ? styles.invitedButton : null}
-                            >
-                              <ThemedText style={isInvited ? styles.invitedButtonText : styles.inviteButtonText}>
-                                {isBusy ? 'Sending' : isInvited ? 'Invited' : 'Invite'}
-                              </ThemedText>
-                            </GlassButton>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              ) : null}
-
-              <View style={styles.fieldGroup}>
-                <Pressable
-                  style={[styles.actionBtn, styles.actionBtnPrimary, isSavingSettings && styles.actionDisabled]}
-                  onPress={handleSaveSettings}
-                  disabled={isSavingSettings}
-                >
-                  <ThemedText style={styles.actionBtnPrimaryText}>
-                    {isSavingSettings ? 'Saving...' : 'Save trip settings'}
-                  </ThemedText>
-                </Pressable>
-
-                <Pressable
-                  style={[styles.actionBtn, styles.actionBtnDark]}
-                  onPress={() => {
-                    settingsSheetRef.current?.close();
-                    setIsEditing(true);
-                  }}
-                >
-                  <View style={styles.inlineActionRow}>
-                    <PencilSimple size={18} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
-                    <ThemedText style={styles.inlineActionText}>Edit itinerary</ThemedText>
-                  </View>
-                </Pressable>
-              </View>
-            </>
-          )}
-        </BottomSheetScrollView>
-      </GlassBottomSheet>
+        insetsBottom={insetsBottom}
+        invitingFriendSlug={invitingFriendSlug}
+        isDark={isDark}
+        isSaving={isSavingSettings}
+        name={settingsName}
+        tripSettings={tripSettings}
+        visibility={settingsVisibility}
+        onChangeName={setSettingsName}
+        onChangeVisibility={setSettingsVisibility}
+        onEditItinerary={() => {
+          settingsSheetRef.current?.close();
+          setIsEditing(true);
+        }}
+        onInviteFriend={handleInviteFriend}
+        onSave={handleSaveSettings}
+      />
     </>
   );
 }

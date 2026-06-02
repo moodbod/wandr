@@ -1,4 +1,3 @@
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,8 +6,8 @@ import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { Sheet, SheetScrollView, SheetRef } from '@/components/ui/sheet';
 import { ThemedView } from '@/components/themed-view';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExploreMapHero } from '@/components/wandr/explore/map-hero';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
@@ -33,12 +32,26 @@ export default function TripMapScreen() {
   return <ConnectedTripMapScreen />;
 }
 
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+
+  return () => {
+    isCancelled = true;
+  };
+}
+
 function ConnectedTripMapScreen() {
-  const sheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<SheetRef>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isLargeScreen } = useResponsive();
-  const snapPoints = useMemo(() => ['34%', '64%', '100%'], []);
+  const snapPoints = useMemo(() => [188, '42%', '62%'], []);
   const animatedIndex = useSharedValue(0);
   const traveler = useCurrentTraveler();
   const params = useLocalSearchParams<{ tripId?: string }>();
@@ -111,18 +124,17 @@ function ConnectedTripMapScreen() {
 
     const hasSelectedTrip = orderedTrips.some((candidate) => candidate._id === selectedTripId);
     if (!selectedTripId || !hasSelectedTrip) {
-      setSelectedTripId(orderedTrips[0]._id);
+      return deferStateSync(() => setSelectedTripId(orderedTrips[0]._id));
     }
   }, [orderedTrips, selectedTripId]);
 
   useEffect(() => {
     if (trip) {
-      setLastResolvedTrip(trip);
-      return;
+      return deferStateSync(() => setLastResolvedTrip(trip));
     }
 
     if (!selectedTripId) {
-      setLastResolvedTrip(null);
+      return deferStateSync(() => setLastResolvedTrip(null));
     }
   }, [selectedTripId, trip]);
 
@@ -190,7 +202,7 @@ function TripMapScreenView({
   fallbackLocationLabel: string;
   headerAnimatedStyle?: object;
   insetsTop: number;
-  sheetRef?: React.RefObject<BottomSheet | null>;
+  sheetRef?: React.RefObject<SheetRef | null>;
   snapPoints?: (string | number)[];
   trip: TripDashboard | null;
   trips: readonly TripListItem[];
@@ -243,13 +255,15 @@ function TripMapScreenView({
           </View>
         ) : null}
 
-        <GlassBottomSheet
-          index={useSkeletons ? 0 : 1}
+        <Sheet
+          backgroundInteraction="enabled"
+          enablePanDownToClose={false}
+          index={0}
           ref={sheetRef}
-          snapPoints={snapPoints ?? ['34%', '64%', '100%']}
+          snapPoints={snapPoints ?? [188, '42%', '62%']}
           animatedIndex={animatedIndex}
-          style={styles.sheet}>
-          <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+          showDragIndicator>
+          <SheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
             <Animated.View style={headerAnimatedStyle ? [styles.sectionHeader, headerAnimatedStyle] : styles.sectionHeader}>
               {useSkeletons ? <TripMapSheetHeaderSkeleton /> : (
                 <View style={styles.sectionCopy}>
@@ -277,8 +291,8 @@ function TripMapScreenView({
             )}
 
             <TripTimelineSection items={items} isLoading={useSkeletons} variant="sheet" />
-          </BottomSheetScrollView>
-        </GlassBottomSheet>
+          </SheetScrollView>
+        </Sheet>
       </View>
     </ThemedView>
   );
@@ -321,15 +335,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  sheet: {
-    zIndex: 30,
-    elevation: 30,
-  },
   sheetContent: {
-    paddingTop: designSystem.spacing.lg,
+    paddingTop: designSystem.spacing.sm,
     paddingHorizontal: designSystem.spacing.lg,
-    paddingBottom: 132,
-    gap: 24,
+    paddingBottom: 96,
+    gap: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -347,7 +357,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...designSystem.type.title,
-    color: designSystem.colors.ink,
   },
   headerMetaSkeleton: {
     width: 126,

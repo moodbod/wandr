@@ -2,7 +2,7 @@ import type React from 'react';
 import { MagnifyingGlass } from 'phosphor-react-native';
 import { StyleSheet, View } from 'react-native';
 
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -41,11 +41,8 @@ export function DiscoveryFilters({
 }: DiscoveryFiltersProps) {
   const isDark = useColorScheme() === 'dark';
   const isDesktopMap = variant === 'desktopMap';
-  const desktopBorderColor = 'rgba(255, 255, 255, 0.12)';
-  const desktopControlSurfaceColor = 'rgba(8, 9, 14, 0.82)';
   const desktopInactiveTabColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
   const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
-  const desktopPlaceholderTextColor = 'rgba(243, 244, 239, 0.58)';
   const desktopSearchIconColor = isDark ? 'rgba(243, 244, 239, 0.78)' : designSystem.colors.fern;
   const showRegionTabs = regions.length > 1;
   const showIntentTabs = intents.length > 1;
@@ -59,33 +56,27 @@ export function DiscoveryFilters({
             {leadingSearchAccessory}
           </View>
         ) : null}
-        <GlassInput
+        <Input
           autoCapitalize="none"
           autoCorrect={false}
-          containerStyle={[styles.searchInput, isDesktopMap && styles.desktopSearchInput]}
-          contentStyle={
-            isDesktopMap
-              ? [
-                  styles.desktopSearchInputContent,
-                  {
-                    backgroundColor: desktopControlSurfaceColor,
-                    borderColor: desktopBorderColor,
-                  },
-                ]
-              : undefined
-          }
-          intensity={70}
+          containerStyle={[
+            styles.searchInput,
+            isDesktopMap && styles.desktopSearchInput,
+            isDesktopMap && styles.desktopSearchInputContent,
+          ]}
           leftIcon={
             isDesktopMap ? (
-              <View style={styles.desktopSearchIconBadge}>
-                <MagnifyingGlass color={desktopSearchIconColor} size={15} weight="bold" />
-              </View>
-            ) : undefined
+              <MagnifyingGlass color={desktopSearchIconColor} size={18} weight="regular" />
+            ) : (
+              <MagnifyingGlass
+                color={isDark ? designSystem.colors.darkPlaceholderText : designSystem.colors.placeholderText}
+                size={18}
+                weight="regular"
+              />
+            )
           }
           onChangeText={onSearchQueryChange}
-          plain={isDesktopMap}
           placeholder={searchPlaceholder}
-          placeholderTextColor={isDesktopMap ? desktopPlaceholderTextColor : undefined}
           returnKeyType="search"
           style={isDesktopMap ? [styles.desktopSearchText, { color: desktopInactiveTextColor }] : undefined}
           value={searchQuery}
@@ -98,13 +89,16 @@ export function DiscoveryFilters({
       </View>
 
       {showFilterTabs ? (
-        <View style={isDesktopMap ? styles.desktopFilterDock : undefined}>
+        <View style={isDesktopMap ? styles.desktopFilterDock : styles.filterDock}>
           {showRegionTabs ? (
             <SegmentedTabs
               value={activeRegion}
               options={regions}
               onChange={onRegionChange}
-              style={fullBleed ? styles.fullBleedTabs : undefined}
+              style={[
+                fullBleed ? styles.fullBleedTabs : undefined,
+                isDesktopMap ? styles.desktopTabsRow : undefined,
+              ]}
               tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
               activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
               inactiveTabStyle={
@@ -131,7 +125,11 @@ export function DiscoveryFilters({
               value={activeIntent}
               options={intents}
               onChange={onIntentChange}
-              style={fullBleed ? styles.fullBleedTabs : undefined}
+              style={[
+                fullBleed ? styles.fullBleedTabs : undefined,
+                isDesktopMap ? styles.desktopTabsRow : undefined,
+                isDesktopMap && showRegionTabs ? styles.desktopIntentTabsRow : undefined,
+              ]}
               tabStyle={[styles.borderlessTab, isDesktopMap && styles.desktopTab]}
               activeTabStyle={isDesktopMap ? styles.desktopActiveTab : undefined}
               inactiveTabStyle={
@@ -198,32 +196,20 @@ const styles = StyleSheet.create({
   desktopSearchInputContent: {
     height: 58,
     gap: 14,
-    paddingLeft: 14,
+    paddingLeft: 18,
     paddingRight: 18,
     borderRadius: designSystem.radii.pill,
-    borderWidth: 1,
-    overflow: 'hidden',
-    boxShadow: '0 18px 38px rgba(0,0,0,0.38)',
-  },
-  desktopSearchIconBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    boxShadow: '0 8px 18px rgba(0,0,0,0.22)',
   },
   desktopSearchText: {
     color: designSystem.colors.darkTextWarm,
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '500',
+  },
+  filterDock: {
+    gap: designSystem.spacing.xs,
   },
   desktopFilterDock: {
-    gap: 8,
     alignItems: 'flex-start',
   },
   fullBleedTabs: {
@@ -236,9 +222,15 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   desktopTabContent: {
-    gap: 8,
+    gap: 12,
     paddingHorizontal: 8,
     paddingRight: 8,
+  },
+  desktopTabsRow: {
+    alignSelf: 'stretch',
+  },
+  desktopIntentTabsRow: {
+    marginTop: 12,
   },
   desktopTab: {
     minHeight: 36,

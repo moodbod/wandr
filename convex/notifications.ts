@@ -228,6 +228,28 @@ export const listDevicePushTokensForTraveler = internalQuery({
   },
 });
 
+export const listChatPushTokensForTraveler = internalQuery({
+  args: {
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Respect the recipient's "Messages" notification toggle (defaults on when unset).
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_slug', (q) => q.eq('slug', args.travelerSlug))
+      .unique();
+
+    if (user?.messagesEnabled === false) {
+      return [];
+    }
+
+    return await ctx.db
+      .query('tokens')
+      .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', args.travelerSlug))
+      .take(20);
+  },
+});
+
 export const sendIncomingCallPush = internalAction({
   args: {
     recipientSlug: v.string(),
@@ -293,7 +315,7 @@ export const sendChatPush = internalAction({
     const recipientSlugs = [...new Set(args.recipientSlugs)];
     const tokenGroups = await Promise.all(
       recipientSlugs.map((travelerSlug) =>
-        ctx.runQuery(internal.notifications.listDevicePushTokensForTraveler, { travelerSlug })
+        ctx.runQuery(internal.notifications.listChatPushTokensForTraveler, { travelerSlug })
       )
     );
     const tokens: Doc<'tokens'>[] = tokenGroups.flat();

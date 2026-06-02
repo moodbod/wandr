@@ -1,12 +1,11 @@
-import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { ArrowUp, MapPin } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetFlatList, SheetRef } from '@/components/ui/sheet';
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import {
   allPlanningCountryOptions,
@@ -17,6 +16,12 @@ import {
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
+
+const knownPlanningCountryCodes = new Set(
+  allPlanningCountryOptions
+    .map((location) => location.countryCode?.toUpperCase())
+    .filter((countryCode): countryCode is string => Boolean(countryCode))
+);
 
 type PlanningLocationSheetProps = {
   availableLocations?: readonly PlanningLocation[];
@@ -35,7 +40,7 @@ export function PlanningLocationSheet({
   onClose,
   onSelectLocation,
 }: PlanningLocationSheetProps) {
-  const sheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<SheetRef>(null);
   const [query, setQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const insets = useSafeAreaInsets();
@@ -66,6 +71,10 @@ export function PlanningLocationSheet({
     return locations;
   }, [dataBackedLocations]);
   const countryOptions = useMemo(() => {
+    if (!isSearchExpanded) {
+      return [];
+    }
+
     const mergedOptions = allPlanningCountryOptions.map((location) => {
       const availableLocation = location.countryCode
         ? availabilityByCountryCode.get(location.countryCode.toUpperCase())
@@ -84,13 +93,8 @@ export function PlanningLocationSheet({
         isSupported: false,
       };
     });
-    const knownCountryCodes = new Set(
-      allPlanningCountryOptions
-        .map((location) => location.countryCode?.toUpperCase())
-        .filter((countryCode): countryCode is string => Boolean(countryCode))
-    );
     const extraAvailableLocations = dataBackedLocations.filter(
-      (location) => !location.countryCode || !knownCountryCodes.has(location.countryCode.toUpperCase())
+      (location) => !location.countryCode || !knownPlanningCountryCodes.has(location.countryCode.toUpperCase())
     );
 
     return [...mergedOptions, ...extraAvailableLocations].sort((a, b) => {
@@ -103,8 +107,12 @@ export function PlanningLocationSheet({
 
       return a.label.localeCompare(b.label);
     });
-  }, [availabilityByCountryCode, dataBackedLocations]);
+  }, [availabilityByCountryCode, dataBackedLocations, isSearchExpanded]);
   const searchOptions = useMemo(() => {
+    if (!isSearchExpanded) {
+      return [];
+    }
+
     if (!normalizedQuery) {
       return countryOptions;
     }
@@ -115,7 +123,7 @@ export function PlanningLocationSheet({
         .toLowerCase()
         .includes(normalizedQuery)
     );
-  }, [countryOptions, normalizedQuery]);
+  }, [countryOptions, isSearchExpanded, normalizedQuery]);
   const defaultOptions =
     dataBackedLocations.length > 0
       ? [...dataBackedLocations, otherCountriesPlanningLocationOption]
@@ -131,26 +139,24 @@ export function PlanningLocationSheet({
     sheetRef.current?.close();
   }, [visible]);
 
-  useEffect(() => {
-    if (!visible) {
-      setQuery('');
-      setIsSearchExpanded(false);
-    }
-  }, [visible]);
-
   function expandSearch() {
     setIsSearchExpanded(true);
     sheetRef.current?.snapToIndex(1);
   }
 
+  function resetSearchState() {
+    setQuery('');
+    setIsSearchExpanded(false);
+  }
+
   function handleSelectLocation(location: PlanningLocation) {
     onSelectLocation(location);
-    setQuery('');
+    resetSearchState();
     sheetRef.current?.close();
   }
 
   return (
-    <GlassBottomSheet
+    <Sheet
       ref={sheetRef}
       index={visible ? 0 : -1}
       snapPoints={snapPoints}
@@ -163,19 +169,20 @@ export function PlanningLocationSheet({
         }
 
         if (index === -1 && visible) {
+          resetSearchState();
           onClose();
         }
-      }}
-      backdropComponent={(props) => (
-        <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} pressBehavior="close" />
-      )}
-    >
-      <BottomSheetFlatList
+      }}>
+      <SheetFlatList
         data={options}
         extraData={`${selectedLocation.id}-${isSearchExpanded}-${query}`}
+        initialNumToRender={isSearchExpanded ? 12 : Math.max(1, options.length)}
         keyExtractor={(location) => location.id}
         keyboardShouldPersistTaps="handled"
+        maxToRenderPerBatch={12}
+        removeClippedSubviews
         stickyHeaderIndices={isSearchExpanded ? [0] : undefined}
+        windowSize={7}
         contentContainerStyle={StyleSheet.flatten([
           styles.listContent,
           isDesktop ? styles.desktopListContent : null,
@@ -184,7 +191,7 @@ export function PlanningLocationSheet({
         ListHeaderComponent={
           isSearchExpanded ? (
             <View style={styles.header}>
-              <GlassInput
+              <Input
                 autoCapitalize="words"
                 leftIcon={<MapPin color={mutedColor} size={isDesktop ? 18 : 20} weight="bold" />}
                 placeholder="Where are you planning?"
@@ -252,8 +259,8 @@ export function PlanningLocationSheet({
                       </View>
                     ) : null}
                     {isDisabled ? (
-                      <View style={styles.disabledPill}>
-                        <ThemedText style={styles.disabledPillText}>Soon</ThemedText>
+                      <View style={[styles.disabledPill, { backgroundColor: currentPillBackgroundColor }]}>
+                        <ThemedText style={[styles.disabledPillText, { color: mutedColor }]}>Soon</ThemedText>
                       </View>
                     ) : null}
                   </View>
@@ -283,7 +290,7 @@ export function PlanningLocationSheet({
           );
         }}
       />
-    </GlassBottomSheet>
+    </Sheet>
   );
 }
 

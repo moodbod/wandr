@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
 
@@ -11,6 +11,13 @@ type WandrAvatarProps = {
   uri?: string | null;
   paletteKey?: string | null;
   style?: StyleProp<ViewStyle>;
+};
+
+type WandrAvatarImageSourceProps = {
+  name?: string | null;
+  paletteKey?: string | null;
+  size?: number;
+  uri?: string | null;
 };
 
 const AVATAR_PALETTE = [
@@ -66,7 +73,6 @@ export function WandrAvatar({ name, size, uri, paletteKey, style }: WandrAvatarP
             {
               color: palette.textColor,
               fontSize: Math.max(12, size * 0.38),
-              lineHeight: size,
             },
           ]}>
           {initials}
@@ -80,6 +86,32 @@ export function WandrAvatar({ name, size, uri, paletteKey, style }: WandrAvatarP
       )}
     </View>
   );
+}
+
+export function getWandrAvatarImageSource({
+  name,
+  paletteKey,
+  size = 56,
+  uri,
+}: WandrAvatarImageSourceProps): ImageSourcePropType {
+  const resolvedUri = typeof uri === 'string' && uri.trim().length > 0 ? uri.trim() : null;
+
+  if (resolvedUri) {
+    return { uri: resolvedUri };
+  }
+
+  const normalizedName = name?.trim() ?? '';
+  const palette = getAvatarPalette(paletteKey ?? normalizedName);
+  const initials = getInitials(normalizedName) ?? 'WA';
+  const fontSize = Math.max(12, size * 0.38);
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<rect width="${size}" height="${size}" rx="${size / 2}" fill="${palette.backgroundColor}"/>`,
+    `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="${fontSize}" font-weight="700" fill="${palette.textColor}">${escapeSvgText(initials)}</text>`,
+    '</svg>',
+  ].join('');
+
+  return { uri: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` };
 }
 
 function getInitials(name: string) {
@@ -111,6 +143,15 @@ function getAvatarPalette(paletteKey: string) {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
+function escapeSvgText(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 const styles = StyleSheet.create({
   avatar: {
     backgroundColor: designSystem.colors.surfaceMuted,
@@ -128,6 +169,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     includeFontPadding: false,
     textAlign: 'center',
-    textAlignVertical: 'center',
   },
 });

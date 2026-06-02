@@ -17,6 +17,7 @@ type TripSwitcherProps = {
   onSelectTrip: (id: string) => void;
   onNewTrip: () => void;
   onRenameTrip?: (id: string, name: string) => void;
+  showDeleteActions?: boolean;
 };
 
 export function TripSwitcher({
@@ -28,6 +29,7 @@ export function TripSwitcher({
   onSelectTrip,
   onNewTrip,
   onRenameTrip,
+  showDeleteActions = true,
 }: TripSwitcherProps) {
   const isDark = useColorScheme() === 'dark';
 
@@ -78,15 +80,17 @@ export function TripSwitcher({
               ) : (
                 <View style={[styles.imagePlaceholder, isDark && styles.imagePlaceholderDark]} />
               )}
-              <Pressable
-                accessibilityLabel={`Delete ${t.name}`}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  onDeleteTrip(t._id);
-                }}
-                style={[styles.deleteButton, isDark && styles.deleteButtonDark]}>
-                <X size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
-              </Pressable>
+              {showDeleteActions ? (
+                <Pressable
+                  accessibilityLabel={`Delete ${t.name}`}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onDeleteTrip(t._id);
+                  }}
+                  style={[styles.deleteButton, isDark && styles.deleteButtonDark]}>
+                  <X size={14} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
+                </Pressable>
+              ) : null}
               {t.isGroupTrip ? (
                 <View style={[styles.groupBadge, isDark && styles.groupBadgeDark]}>
                   <UsersThree
@@ -162,10 +166,11 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.darkSurface,
   },
   imageFrameActive: {
-    borderWidth: 0,
+    borderColor: designSystem.colors.lime,
+    borderWidth: 3,
   },
   imagePlaceholder: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     backgroundColor: designSystem.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

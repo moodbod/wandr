@@ -133,7 +133,15 @@ export default function ExploreGroupTripDetailScreen({
               {detail.hostName} - {detail.memberCount} travelers - {detail.locationLabel}
             </ThemedText>
             <TravelerAvatarStack
-              avatars={detail.avatarUris}
+              avatars={
+                detail.avatars
+                  ? detail.avatars.map((avatar) => ({
+                      name: avatar.name,
+                      paletteKey: avatar.travelerSlug,
+                      uri: avatar.avatarUri,
+                    }))
+                  : detail.avatarUris
+              }
               fallbackName={detail.hostName || detail.groupName}
               fallbackPaletteKey={detail.circleId}
               totalCount={detail.memberCount}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(timeout 5 ls -la /Users/tuyoleni/Developer/Moodbod/Mobile/wandr)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/search.sh)",
+      "Bash(/tmp/search.sh)",
+      "Read(//Users/tuyoleni/.profiles/moodbod/home/Library/**)",
+      "Bash(mkdir -p /Users/tuyoleni/.profiles/moodbod/home/Library/Developer)",
+      "Bash(ln -s /Users/tuyoleni/Library/Developer/CoreSimulator /Users/tuyoleni/.profiles/moodbod/home/Library/Developer/CoreSimulator)"
+    ]
+  }
+}

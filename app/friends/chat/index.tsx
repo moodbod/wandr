@@ -1,15 +1,14 @@
 import { useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import BottomSheet, { BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
-import { Check, FadersHorizontal } from 'phosphor-react-native';
+import { Check, FadersHorizontal, MagnifyingGlass } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { GlassInput } from '@/components/ui/glass-input';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetTextInput, SheetView, SheetRef } from '@/components/ui/sheet';
 import { SegmentedTabs, SegmentedTabsAccessory } from '@/components/ui/segmented-tabs';
 import { WandrAvatar } from '@/components/wandr/avatar';
 import DirectChatScreen from '@/components/wandr/friends/direct-chat-screen';
@@ -59,7 +58,7 @@ export default function FriendsChatListScreen() {
   const trips = useQuery(listUserTripsRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const createGroup = useMutation(createOpenFriendGroupRef);
   const joinGroup = useMutation(joinFriendCircleRef);
-  const sheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<SheetRef>(null);
   const [groupName, setGroupName] = useState('');
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [selectedFriendSlugs, setSelectedFriendSlugs] = useState<string[]>([]);
@@ -333,9 +332,16 @@ export default function FriendsChatListScreen() {
           </View>
         ) : null}
 
-        <GlassInput
+        <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
+          leftIcon={
+            <MagnifyingGlass
+              color={isDark ? designSystem.colors.darkPlaceholderText : designSystem.colors.placeholderText}
+              size={18}
+              weight="regular"
+            />
+          }
           placeholder="Search chats"
           returnKeyType="search"
         />
@@ -464,13 +470,13 @@ export default function FriendsChatListScreen() {
         chatListContent
       )}
 
-      <GlassBottomSheet ref={sheetRef} index={-1} snapPoints={['68%']} enablePanDownToClose>
-        <BottomSheetView style={styles.sheetContent}>
+      <Sheet ref={sheetRef} index={-1} snapPoints={['68%']} enablePanDownToClose>
+        <SheetView style={styles.sheetContent}>
           <View style={styles.sheetHeader}>
             <ThemedText style={styles.sheetTitle}>Create group</ThemedText>
             <ThemedText style={styles.sheetDescription}>Invite friends now or start an open group.</ThemedText>
           </View>
-          <BottomSheetTextInput
+          <SheetTextInput
             style={[styles.sheetInput, isDark ? styles.sheetInputDark : null]}
             placeholder="Group name"
             placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
@@ -563,8 +569,8 @@ export default function FriendsChatListScreen() {
                   : 'Create open group'}
             </ThemedText>
           </Pressable>
-        </BottomSheetView>
-      </GlassBottomSheet>
+        </SheetView>
+      </Sheet>
     </ThemedView>
   );
 }

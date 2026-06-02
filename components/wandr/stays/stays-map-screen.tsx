@@ -8,11 +8,18 @@ import {
   ScrollView,
   View,
   useWindowDimensions,
+  type StyleProp,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationArrow } from 'phosphor-react-native';
+import {
+  ArrowCounterClockwise,
+  Bed,
+  GlobeHemisphereWest,
+  NavigationArrow,
+} from 'phosphor-react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -26,11 +33,13 @@ import { StaysDiscoveryControls } from '@/components/wandr/stays/stays-discovery
 import { styles } from '@/components/wandr/stays/stays-map-screen.styles';
 import { StaysRailCard } from '@/components/wandr/stays/stays-rail-card';
 import { designSystem } from '@/constants/design-system';
+import { GlassView } from '@/lib/glass-effect';
 import {
   buildPlanningLocationsFromDestinations,
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
   getPlanningLocationCenterCoordinate,
+  type PlanningLocation,
 } from '@/constants/planning-countries';
 import { rankStayProperties } from '@/constants/stays-content';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -58,6 +67,31 @@ import {
 import { StayDetailScreen } from './stay-detail-screen';
 
 const USE_NATIVE_ANIMATED_DRIVER = Platform.OS !== 'web';
+type EmptyActionKind = 'clearSearch' | 'location' | 'nearby' | 'route';
+type EmptyStaysContent = {
+  message: string;
+  primaryAction: EmptyActionKind;
+  primaryLabel: string;
+  title: string;
+};
+
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+
+  return () => {
+    isCancelled = true;
+  };
+}
+
+function hasPlanningLocationSpatialFilter(location: PlanningLocation) {
+  return Boolean(location.bounds || (location.centerCoordinate && location.radiusKm));
+}
 
 export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const router = useRouter();
@@ -85,32 +119,39 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const [sortMode, setSortMode] = useState<'best' | 'price'>('best');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedStaySlug, setSelectedStaySlug] = useState<string | null>(null);
+  const [mapResetSignal, setMapResetSignal] = useState(0);
   const scrollRef = useRef<ScrollView | null>(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const [scrollX] = useState(() => new Animated.Value(0));
 
   const orderedTrips = useMemo(
     () => orderTripsByPlanningCountry(trips ?? [], planningLocation),
     [planningLocation, trips]
   );
+  const planningLocationHasSpatialFilter = hasPlanningLocationSpatialFilter(planningLocation);
 
   const locationTrips = useMemo(
-    () => orderedTrips.filter((candidate) => coordinateIsInPlanningLocation(candidate.centerCoordinate, planningLocation)),
-    [orderedTrips, planningLocation]
+    () =>
+      planningLocationHasSpatialFilter
+        ? orderedTrips.filter((candidate) => coordinateIsInPlanningLocation(candidate.centerCoordinate, planningLocation))
+        : [],
+    [orderedTrips, planningLocation, planningLocationHasSpatialFilter]
   );
+  const selectedTripMatchesPlanningLocation = selectedTripId
+    ? locationTrips.some((candidate) => candidate._id === selectedTripId)
+    : false;
 
   useEffect(() => {
     if (locationTrips.length === 0) {
       if (selectedTripId) {
-        setSelectedTripId(undefined);
+        return deferStateSync(() => setSelectedTripId(undefined));
       }
       return;
     }
 
-    const selectedTripMatchesLocation = locationTrips.some((candidate) => candidate._id === selectedTripId);
-    if (!selectedTripMatchesLocation) {
-      setSelectedTripId(locationTrips[0]._id);
+    if (!selectedTripMatchesPlanningLocation) {
+      return deferStateSync(() => setSelectedTripId(locationTrips[0]._id));
     }
-  }, [locationTrips, selectedTripId]);
+  }, [locationTrips, selectedTripId, selectedTripMatchesPlanningLocation]);
 
   const rankedStays = useMemo(
     () =>
@@ -128,11 +169,13 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   useSyncPlanningLocationWithAvailableLocations(availablePlanningLocations);
   useSyncPlanningLocationWithCurrentLocation(currentLocation.coordinate, availablePlanningLocations);
   const routeCoordinates = useMemo(() => {
-    return buildTripRouteCoordinates(trip, { onlyRemaining: false });
-  }, [trip]);
+    return buildTripRouteCoordinates(selectedTripMatchesPlanningLocation ? trip : null, { onlyRemaining: false });
+  }, [selectedTripMatchesPlanningLocation, trip]);
   const locationRouteCoordinates = useMemo(() => {
-    return routeCoordinates.filter((coordinate) => coordinateIsInPlanningLocation(coordinate, planningLocation));
-  }, [planningLocation, routeCoordinates]);
+    return planningLocationHasSpatialFilter
+      ? routeCoordinates.filter((coordinate) => coordinateIsInPlanningLocation(coordinate, planningLocation))
+      : routeCoordinates;
+  }, [planningLocation, planningLocationHasSpatialFilter, routeCoordinates]);
   const filteredStays = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const locationBase = rankedStays.filter((stay) =>
@@ -228,8 +271,9 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     [filteredStays, snapInterval]
   );
   const discoveryControlsHeight = 188;
-  const carouselBottomOffset = Platform.OS === 'web' ? 68 : insets.bottom + 64;
-  const carouselContentBottomPadding = Platform.OS === 'android' ? 24 : insets.bottom + 54;
+  const carouselBottomOffset = Platform.OS === 'ios' ? 104 : Platform.OS === 'web' ? 68 : 96;
+  const emptyNoticeBottomOffset = carouselBottomOffset;
+  const emptyStaysContent = getEmptyStaysContent(searchQuery, discoveryMode);
 
   const scrollToCard = useCallback((index: number, animated = true) => {
     scrollRef.current?.scrollTo({
@@ -247,7 +291,10 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   }, [scrollToCard, scrollX]);
 
   useEffect(() => {
-    resetToStart();
+    return deferStateSync(() => {
+      setSelectedStaySlug(null);
+      resetToStart();
+    });
   }, [planningLocation.id, resetToStart]);
 
   useEffect(() => {
@@ -256,7 +303,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     }
 
     if (selectedIndex >= filteredStays.length) {
-      resetToStart();
+      return deferStateSync(resetToStart);
     }
   }, [filteredStays.length, resetToStart, selectedIndex]);
 
@@ -268,18 +315,35 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
     }
   };
 
-  const tripCenterInPlanningLocation = coordinateIsInPlanningLocation(trip?.centerCoordinate, planningLocation)
+  const featuredStayInPlanningLocation =
+    featuredStay &&
+    destinationMatchesPlanningLocation({
+      coordinate: featuredStay.coordinate,
+      countryCode: featuredStay.countryCode,
+      countryLabel: featuredStay.countryLabel,
+      location: planningLocation,
+      planningLocationId: featuredStay.planningLocationId,
+      labels: [featuredStay.name, featuredStay.town, featuredStay.region, featuredStay.locationLabel],
+    })
+      ? featuredStay
+      : null;
+  const tripCenterInPlanningLocation = selectedTripMatchesPlanningLocation && coordinateIsInPlanningLocation(trip?.centerCoordinate, planningLocation)
     ? trip?.centerCoordinate
     : null;
   const planningCenterCoordinate = getPlanningLocationCenterCoordinate(planningLocation);
   const centerCoordinate =
-    featuredStay?.coordinate ??
+    featuredStayInPlanningLocation?.coordinate ??
     tripCenterInPlanningLocation ??
     planningCenterCoordinate ??
     null;
-  const userCoordinate = coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
+  const currentCoordinateInPlanningLocation = coordinateIsInPlanningLocation(currentLocation.coordinate, planningLocation)
     ? currentLocation.coordinate
     : null;
+  const userCoordinate = currentLocation.coordinate;
+  const handleResetMapPosition = useCallback(() => {
+    resetToStart();
+    setMapResetSignal((current) => current + 1);
+  }, [resetToStart]);
   const handleSelectStayIndex = useCallback((stayIndex: number, shouldScroll = true) => {
     if (stayIndex < 0 || stayIndex >= filteredStays.length) {
       return;
@@ -293,6 +357,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   }, [filteredStays, scrollToCard]);
   const mapContent = (
     <MapPreview
+      key={`stays-map-${planningLocation.id}-${mapResetSignal}`}
       centerCoordinate={centerCoordinate}
       userCoordinate={userCoordinate}
       userAccuracy={currentLocation.accuracy}
@@ -306,7 +371,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       userUpdatedAt={currentLocation.updatedAt}
       markers={mapMarkers}
       sharedUserLocations={sharedUserLocations}
-      followUserLocation={discoveryMode === 'nearby' && Boolean(userCoordinate)}
+      followUserLocation={discoveryMode === 'nearby' && Boolean(currentCoordinateInPlanningLocation)}
       persistKey={isLargeScreen ? 'app-background' : undefined}
       routeCoordinates={locationRouteCoordinates}
       showRoutes={locationRouteCoordinates.length > 1}
@@ -356,7 +421,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
             <GlassButton
               accessibilityLabel="Reset map position"
               height={52}
-              onPress={() => resetToStart()}
+              onPress={handleResetMapPosition}
               radius={designSystem.radii.pill}
               width={52}
             >
@@ -380,9 +445,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
       }}
       onOpenLocationSheet={() => setLocationSheetVisible(true)}
       planningLocation={planningLocation}
-      onResetMap={() => {
-        scrollX.setValue(0);
-      }}
+      onResetMap={handleResetMapPosition}
       onSelectTrip={(tripId) => {
         setSelectedTripId(tripId);
         setDiscoveryMode('route');
@@ -421,17 +484,19 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
             >
               <View style={styles.stayList}>
                 {filteredStays.length === 0 ? (
-                  <View
-                    style={[
-                      styles.emptyNotice,
-                      {
-                        borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
-                        backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteGlassMedium,
-                      },
-                    ]}
-                  >
-                    <ThemedText style={styles.emptyNoticeText}>No hotels here yet</ThemedText>
-                  </View>
+                  <StaysEmptyNotice
+                    content={emptyStaysContent}
+                    isDark={isDark}
+                    onClearSearch={() => {
+                      setSearchQuery('');
+                      resetToStart();
+                    }}
+                    onOpenLocationSheet={() => setLocationSheetVisible(true)}
+                    onSelectDiscoveryMode={(mode) => {
+                      setDiscoveryMode(mode);
+                      resetToStart();
+                    }}
+                  />
                 ) : null}
                 {filteredStays.map((stay, index) => {
                   const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
@@ -474,6 +539,8 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           onClose={() => setLocationSheetVisible(false)}
           onSelectLocation={(location) => {
             setPlanningLocation(location, { manual: true });
+            setSelectedTripId(undefined);
+            setSelectedStaySlug(null);
             resetToStart();
           }}
         />
@@ -504,10 +571,41 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         onClose={() => setLocationSheetVisible(false)}
         onSelectLocation={(location) => {
           setPlanningLocation(location, { manual: true });
+          setSelectedTripId(undefined);
+          setSelectedStaySlug(null);
           resetToStart();
         }}
       />
 
+      {filteredStays.length === 0 ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.emptyNoticeOverlay,
+            {
+              bottom: emptyNoticeBottomOffset,
+            },
+          ]}
+        >
+          <StaysEmptyNotice
+            content={emptyStaysContent}
+            isDark={isDark}
+            onClearSearch={() => {
+              setSearchQuery('');
+              resetToStart();
+            }}
+            onOpenLocationSheet={() => setLocationSheetVisible(true)}
+            onSelectDiscoveryMode={(mode) => {
+              setDiscoveryMode(mode);
+              resetToStart();
+            }}
+            style={{ width: cardWidth }}
+            variant="floating"
+          />
+        </View>
+      ) : null}
+
+      {filteredStays.length > 0 ? (
       <View pointerEvents="box-none" style={[styles.carouselWrap, { bottom: carouselBottomOffset }]}>
         <Animated.ScrollView
           ref={scrollRef}
@@ -528,25 +626,10 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
             {
               paddingLeft: railPadding,
               paddingRight: railPadding,
-              paddingBottom: carouselContentBottomPadding,
             },
           ]}
           style={styles.carousel}
         >
-          {filteredStays.length === 0 ? (
-            <View
-              style={[
-                styles.emptyNotice,
-                {
-                  width: Math.min(cardWidth, 220),
-                  borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft,
-                  backgroundColor: isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteGlassMedium,
-                },
-              ]}
-            >
-              <ThemedText style={styles.emptyNoticeText}>No hotels here yet</ThemedText>
-            </View>
-          ) : null}
           {filteredStays.map((stay, index) => {
             const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
             const price = formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
@@ -615,6 +698,163 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
           })}
         </Animated.ScrollView>
       </View>
+      ) : null}
     </ThemedView>
   );
+}
+
+function getEmptyStaysContent(searchQuery: string, discoveryMode: 'route' | 'nearby'): EmptyStaysContent {
+  if (searchQuery.trim()) {
+    return {
+      title: 'No hotel matches',
+      message: 'Clear the search to see every stay in this planning location.',
+      primaryLabel: 'Clear search',
+      primaryAction: 'clearSearch',
+    };
+  }
+
+  if (discoveryMode === 'nearby') {
+    return {
+      title: 'No nearby hotels',
+      message: 'Route results may still have options for this trip.',
+      primaryLabel: 'View route',
+      primaryAction: 'route',
+    };
+  }
+
+  return {
+    title: 'No hotels here yet',
+    message: 'Try another planning location with available stays.',
+    primaryLabel: 'Change location',
+    primaryAction: 'location',
+  };
+}
+
+function StaysEmptyNotice({
+  content,
+  isDark,
+  onClearSearch,
+  onOpenLocationSheet,
+  onSelectDiscoveryMode,
+  style,
+  variant = 'list',
+}: {
+  content: EmptyStaysContent;
+  isDark: boolean;
+  onClearSearch: () => void;
+  onOpenLocationSheet: () => void;
+  onSelectDiscoveryMode: (mode: 'route' | 'nearby') => void;
+  style?: StyleProp<ViewStyle>;
+  variant?: 'list' | 'floating';
+}) {
+  const isFloating = variant === 'floating';
+  const copyColor = isFloating
+    ? designSystem.colors.darkText
+    : isDark
+      ? designSystem.colors.darkText
+      : designSystem.colors.ink;
+  const mutedCopyColor = isFloating
+    ? designSystem.colors.darkTextSoft
+    : isDark
+      ? designSystem.colors.darkTextSoft
+      : designSystem.colors.warmDark;
+  const borderColor = isFloating
+    ? designSystem.colors.whiteOverlayFaint
+    : isDark
+      ? designSystem.colors.darkBorderSoft
+      : designSystem.colors.borderSoft;
+  const handleAction = (action: EmptyActionKind) => {
+    if (action === 'clearSearch') {
+      onClearSearch();
+      return;
+    }
+
+    if (action === 'location') {
+      onOpenLocationSheet();
+      return;
+    }
+
+    onSelectDiscoveryMode(action);
+  };
+
+  return (
+    <View
+      style={[
+        styles.emptyNotice,
+        isFloating ? styles.emptyNoticeFloating : styles.emptyNoticeList,
+        { borderColor },
+        style,
+      ]}
+    >
+      <GlassView
+        colorScheme={isFloating || isDark ? 'dark' : 'light'}
+        glassEffectStyle={isFloating ? 'clear' : 'regular'}
+        isInteractive={isFloating}
+        pointerEvents="none"
+        style={styles.emptyNoticeGlassFill}
+      />
+      <View style={styles.emptyNoticeContent}>
+        <View style={styles.emptyNoticeTopRow}>
+          <View
+            style={[
+              styles.emptyNoticeIcon,
+              { backgroundColor: designSystem.colors.lime },
+            ]}
+          >
+            <Bed color={designSystem.colors.darkGreen} size={22} weight="bold" />
+          </View>
+
+          <View style={styles.emptyNoticeCopy}>
+            <ThemedText
+              lightColor={copyColor}
+              darkColor={copyColor}
+              style={styles.emptyNoticeTitle}
+              numberOfLines={2}
+            >
+              {content.title}
+            </ThemedText>
+            <ThemedText
+              lightColor={mutedCopyColor}
+              darkColor={mutedCopyColor}
+              style={styles.emptyNoticeText}
+              numberOfLines={2}
+            >
+              {content.message}
+            </ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.emptyNoticeActions}>
+          <Pressable
+            accessibilityLabel={content.primaryLabel}
+            accessibilityRole="button"
+            onPress={() => handleAction(content.primaryAction)}
+            style={styles.emptyNoticePrimaryAction}
+          >
+            {getEmptyActionIcon(content.primaryAction, designSystem.colors.darkGreen)}
+            <ThemedText
+              lightColor={designSystem.colors.darkGreen}
+              darkColor={designSystem.colors.darkGreen}
+              style={styles.emptyNoticePrimaryActionText}
+              numberOfLines={1}
+            >
+              {content.primaryLabel}
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function getEmptyActionIcon(action: EmptyActionKind, color: string) {
+  if (action === 'clearSearch') {
+    return <ArrowCounterClockwise color={color} size={16} weight="bold" />;
+  }
+
+  if (action === 'location') {
+    return <GlobeHemisphereWest color={color} size={16} weight="bold" />;
+  }
+
+  return <NavigationArrow color={color} size={16} weight="bold" />;
 }

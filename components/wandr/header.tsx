@@ -1,7 +1,5 @@
 import { useQuery } from 'convex/react';
-import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import {
   Bell,
   CaretLeft,
@@ -24,15 +22,23 @@ import {
   Plus,
   Sun,
   UserCircle,
-  UserPlus
+  UserPlus,
 } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
 import type { HeaderAction, HeaderConfig } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -43,17 +49,12 @@ import { getHeaderBadgeCountsRef } from '@/lib/convex';
 
 export type { HeaderAction };
 
-type WeatherData = {
-  temp: number;
-  description: string;
-  code: number;
-};
+type WeatherData = { temp: number; description: string; code: number };
 
 function getWeatherInfo(code: number) {
   if (code === 0) return { desc: 'Clear', Icon: Sun };
   if (code <= 3) return { desc: 'Cloudy', Icon: Cloud };
   if (code <= 48) return { desc: 'Foggy', Icon: CloudFog };
-  if (code <= 55) return { desc: 'Drizzle', Icon: CloudRain };
   if (code <= 65) return { desc: 'Rain', Icon: CloudRain };
   if (code <= 75) return { desc: 'Snow', Icon: CloudSnow };
   if (code >= 95) return { desc: 'Storm', Icon: Lightning };
@@ -80,6 +81,7 @@ export function WandrHeader({
   weatherCoords,
 }: WandrHeaderProps) {
   const router = useRouter();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const { isMobile } = useResponsive();
@@ -93,19 +95,21 @@ export function WandrHeader({
   const trailingActions = config.trailingActions ?? [];
   const traveler = useCurrentTraveler();
   const hasBadgeActions = trailingActions.some(
-    (action) => action.kind === 'chat' || action.kind === 'notifications'
+    (a) => a.kind === 'chat' || a.kind === 'notifications'
   );
   const badgeCounts = useQuery(
     getHeaderBadgeCountsRef,
     traveler?.slug && hasBadgeActions ? { travelerSlug: traveler.slug } : 'skip'
   );
-  const hasActions = Boolean(
-    config.leadingAction || leadingContent || trailingActions.length > 0 || weatherCoords || bottomContent
-  );
   const hasTopRowContent = Boolean(
-    config.leadingAction || leadingContent || trailingActions.length > 0 || weatherCoords || config.searchPlaceholder
+    config.leadingAction ||
+      leadingContent ||
+      trailingActions.length > 0 ||
+      weatherCoords ||
+      config.searchPlaceholder
   );
-  const isButtonOnlyHeader = true;
+  const hasActions = hasTopRowContent || Boolean(bottomContent);
+  const isNativeStackScreen = Boolean(segments[0]) && segments[0] !== '(tabs)';
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
@@ -125,39 +129,30 @@ export function WandrHeader({
             description: getWeatherInfo(data.current.weather_code).desc,
           });
         }
-      } catch (e) {
-        console.warn('Failed to fetch weather', e);
+      } catch {
+        // ignore weather fetch errors
       }
     }
     fetchWeather();
   }, [weatherCoords]);
 
-  const themeTextColor = useThemeColor(
+  useEffect(() => {
+    Animated.spring(bottomAnimation, {
+      toValue: bottomContentVisible ? 1 : 0,
+      useNativeDriver: false,
+      speed: 14,
+      bounciness: 0,
+    }).start();
+  }, [bottomAnimation, bottomContentVisible]);
+
+  const textColor = useThemeColor(
     { light: designSystem.colors.ink, dark: designSystem.colors.darkText },
     'text'
   );
-  const textColor = themeTextColor;
-  const blurBackgroundColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.lightGlassHeader;
 
-  const HeaderContainer = config.overlay || isButtonOnlyHeader ? View : BlurView;
-  const containerProps = config.overlay
-    ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset }] }
-    : isButtonOnlyHeader
-      ? { pointerEvents: 'box-none' as const, style: [styles.shell, styles.overlayShell, styles.transparentShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset }] }
-    : {
-        intensity: 80,
-        tint: isDark ? 'dark' as const : 'light' as const,
-        style: [styles.shell, styles.overlayShell, { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset, backgroundColor: blurBackgroundColor }]
-      };
-
-  useEffect(() => {
-    Animated.timing(bottomAnimation, {
-      toValue: bottomContentVisible ? 1 : 0,
-      duration: bottomContentVisible ? 220 : 180,
-      easing: bottomContentVisible ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [bottomAnimation, bottomContentVisible]);
+  if (isNativeStackScreen) {
+    return null;
+  }
 
   if (!hasActions) {
     return config.overlay ? (
@@ -168,26 +163,24 @@ export function WandrHeader({
   }
 
   const animatedBottomStyle = {
-    height: bottomAnimation.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, bottomContentHeight],
-    }),
+    height: bottomAnimation.interpolate({ inputRange: [0, 1], outputRange: [0, bottomContentHeight] }),
     opacity: bottomAnimation,
-    transform: [
-      {
-        translateY: bottomAnimation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-10, 0],
-        }),
-      },
-    ],
+    transform: [{ translateY: bottomAnimation.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
   };
 
   const WeatherInfo = weather ? getWeatherInfo(weather.code) : null;
   const WeatherIcon = WeatherInfo?.Icon ?? Sun;
 
   return (
-    <HeaderContainer {...containerProps}>
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.shell,
+        styles.overlayShell,
+        styles.transparentShell,
+        { paddingHorizontal: headerHorizontalInset, paddingTop: headerTopInset },
+      ]}
+    >
       {hasTopRowContent ? (
         <View style={styles.content}>
           <View style={styles.leading}>
@@ -200,28 +193,39 @@ export function WandrHeader({
                 side="left"
               />
             ) : null}
-
             {config.searchPlaceholder ? (
-              <GlassInput
+              <Input
                 containerStyle={styles.searchContainer}
+                leftIcon={
+                  <MagnifyingGlass
+                    color={isDark ? designSystem.colors.darkPlaceholderText : designSystem.colors.placeholderText}
+                    size={18}
+                    weight="regular"
+                  />
+                }
                 placeholder={config.searchPlaceholder}
                 style={[styles.searchInput, { color: textColor }]}
                 returnKeyType="search"
               />
             ) : null}
-
             {leadingContent ? <View style={styles.leadingContent}>{leadingContent}</View> : null}
           </View>
 
           <View style={styles.trailing}>
             {weatherCoords ? (
-              <View style={[
-                styles.weatherBadge,
-                { backgroundColor: isDark ? designSystem.colors.whiteOverlayThin : designSystem.colors.borderFaint }
-              ]}>
+              <View
+                style={[
+                  styles.weatherBadge,
+                  {
+                    backgroundColor: isDark
+                      ? designSystem.colors.whiteOverlayThin
+                      : designSystem.colors.borderFaint,
+                  },
+                ]}
+              >
                 {weather ? (
                   <>
-                    <WeatherIcon size={16} color={textColor} weight="bold" />
+                    <WeatherIcon size={15} color={textColor} weight="bold" />
                     <ThemedText style={[styles.weatherText, { color: textColor }]}>
                       {weather.temp}°
                     </ThemedText>
@@ -231,28 +235,21 @@ export function WandrHeader({
                 )}
               </View>
             ) : null}
-            {trailingActions.length > 1 ? (
-              <HeaderActionGroup
-                actions={trailingActions}
-                badgeCounts={badgeCounts}
+            {trailingActions.map((action, index) => (
+              <HeaderActionButton
+                action={action}
+                badgeCount={getActionBadgeCount(action, badgeCounts)}
                 iconColor={textColor}
+                key={`${action.kind}-${index}`}
                 onBack={() => router.back()}
                 onNavigate={(href) => router.push(href)}
+                side="right"
               />
-            ) : trailingActions.map((action, index) => (
-                <HeaderActionButton
-                  action={action}
-                  badgeCount={getActionBadgeCount(action, badgeCounts)}
-                  iconColor={textColor}
-                  key={`${action.kind}-${index}`}
-                  onBack={() => router.back()}
-                  onNavigate={(href) => router.push(href)}
-                  side="right"
-                />
-              ))}
+            ))}
           </View>
         </View>
       ) : null}
+
       {bottomContent ? (
         <Animated.View
           pointerEvents={bottomContentVisible ? 'auto' : 'none'}
@@ -261,7 +258,7 @@ export function WandrHeader({
           <View style={styles.bottomContentInner}>{bottomContent}</View>
         </Animated.View>
       ) : null}
-    </HeaderContainer>
+    </View>
   );
 }
 
@@ -280,12 +277,11 @@ function HeaderActionButton({
   onNavigate: (href: NonNullable<HeaderAction['href']>) => void;
   side: 'left' | 'right';
 }) {
-  const customRender = typeof action.render === 'function' ? action.render({ iconColor }) : action.render;
-  const handlePress = () => {
-    if (action.isLoading) {
-      return;
-    }
+  const customRender =
+    typeof action.render === 'function' ? action.render({ iconColor }) : action.render;
 
+  const handlePress = () => {
+    if (action.isLoading) return;
     performHeaderAction(action, onBack, onNavigate);
   };
 
@@ -296,123 +292,19 @@ function HeaderActionButton({
       ) : (
         <GlassButton
           accessibilityLabel={action.accessibilityLabel ?? action.kind}
+          disabled={action.isLoading}
+          height={44}
           onPress={handlePress}
-          width={48}
-          height={48}
-        >
-          {action.isLoading ? <ActivityIndicator color={iconColor} /> : renderHeaderIcon(action, iconColor)}
+          style={styles.iconButton}
+          width={44}>
+          {action.isLoading ? (
+            <ActivityIndicator color={iconColor} />
+          ) : (
+            renderHeaderIcon(action, iconColor)
+          )}
         </GlassButton>
       )}
-      {badgeCount ? (
-        <HeaderBadge count={badgeCount} style={styles.floatingBadge} />
-      ) : null}
-    </View>
-  );
-}
-
-function HeaderActionGroup({
-  actions,
-  badgeCounts,
-  iconColor,
-  onBack,
-  onNavigate,
-}: {
-  actions: HeaderAction[];
-  badgeCounts?: { chatUnreadCount: number; notificationUnreadCount: number };
-  iconColor: string;
-  onBack: () => void;
-  onNavigate: (href: NonNullable<HeaderAction['href']>) => void;
-}) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
-  const isAndroid = Platform.OS === 'android';
-  const groupRadius = 24;
-  const surfaceColor = isDark ? designSystem.colors.darkGlassHeader : designSystem.colors.whiteOverlayFaint;
-  const borderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
-  const fallbackSurfaceColor = isAndroid
-    ? (isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised)
-    : surfaceColor;
-  const fallbackBorderColor = isAndroid
-    ? (isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt)
-    : borderColor;
-
-  return (
-    <View style={[styles.actionGroup, { borderRadius: groupRadius }]}>
-      {shouldUseNativeGlass ? (
-        <>
-          <GlassView
-            style={[StyleSheet.absoluteFillObject, { borderRadius: groupRadius }]}
-            glassEffectStyle="clear"
-            tintColor={designSystem.colors.transparentWhite}
-          />
-          <View
-            pointerEvents="none"
-            style={[
-              styles.actionGroupOverlay,
-              {
-                borderRadius: groupRadius,
-                backgroundColor: surfaceColor,
-                borderColor,
-              },
-            ]}
-          />
-        </>
-      ) : (
-        <View
-          style={[
-            styles.actionGroupFallback,
-            {
-              borderRadius: groupRadius,
-              backgroundColor: fallbackSurfaceColor,
-              borderColor: fallbackBorderColor,
-            },
-            isAndroid ? styles.androidGroupFill : null,
-          ]}
-        />
-      )}
-
-      {actions.map((action, index) => {
-        const badgeCount = getActionBadgeCount(action, badgeCounts);
-        const customRender = typeof action.render === 'function' ? action.render({ iconColor }) : action.render;
-
-        return (
-          <View key={`${action.kind}-${index}`} style={[styles.groupActionWrap, customRender ? styles.groupActionWrapCustom : null]}>
-            {index > 0 ? (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.groupDivider,
-                  { backgroundColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft },
-                ]}
-              />
-            ) : null}
-            {customRender ? (
-              <View style={styles.groupAction}>{customRender}</View>
-            ) : (
-              <Pressable
-                accessibilityLabel={action.accessibilityLabel ?? action.kind}
-                accessibilityRole="button"
-                disabled={action.isLoading}
-                onPress={() => performHeaderAction(action, onBack, onNavigate)}
-                style={({ pressed }) => [
-                  styles.groupAction,
-                  pressed
-                    ? (isAndroid
-                        ? { backgroundColor: isDark ? designSystem.colors.darkCard : designSystem.colors.lightSurfaceAlt }
-                        : styles.groupActionPressed)
-                    : null,
-                ]}
-              >
-                {action.isLoading ? <ActivityIndicator color={iconColor} /> : renderHeaderIcon(action, iconColor)}
-              </Pressable>
-            )}
-            {badgeCount ? (
-              <HeaderBadge count={badgeCount} style={styles.groupBadge} />
-            ) : null}
-          </View>
-        );
-      })}
+      {badgeCount ? <HeaderBadge count={badgeCount} style={styles.floatingBadge} /> : null}
     </View>
   );
 }
@@ -421,14 +313,8 @@ function getActionBadgeCount(
   action: HeaderAction,
   badgeCounts?: { chatUnreadCount: number; notificationUnreadCount: number }
 ) {
-  if (action.kind === 'chat') {
-    return badgeCounts?.chatUnreadCount ?? 0;
-  }
-
-  if (action.kind === 'notifications') {
-    return badgeCounts?.notificationUnreadCount ?? 0;
-  }
-
+  if (action.kind === 'chat') return badgeCounts?.chatUnreadCount ?? 0;
+  if (action.kind === 'notifications') return badgeCounts?.notificationUnreadCount ?? 0;
   return 0;
 }
 
@@ -445,71 +331,37 @@ function performHeaderAction(
   onBack: () => void,
   onNavigate: (href: NonNullable<HeaderAction['href']>) => void
 ) {
-  if (action.onPress) {
-    action.onPress();
-    return;
-  }
-
-  if (action.kind === 'back') {
-    onBack();
-    return;
-  }
-
-  if (action.href) {
-    onNavigate(action.href);
-    return;
-  }
-
-  if (action.kind === 'notifications') {
-    onNavigate('/notifications');
-    return;
-  }
-
-  if (action.kind === 'chat') {
-    onNavigate('/friends/chat');
-  }
+  if (action.onPress) { action.onPress(); return; }
+  if (action.kind === 'back') { onBack(); return; }
+  if (action.href) { onNavigate(action.href); return; }
+  if (action.kind === 'notifications') { onNavigate('/notifications'); return; }
+  if (action.kind === 'chat') { onNavigate('/friends/chat'); }
 }
 
 function renderHeaderIcon(action: HeaderAction, color: string) {
   switch (action.kind) {
-    case 'avatar':
-      return <UserCircle color={color} size={20} weight="fill" />;
-    case 'back':
-      return <CaretLeft color={color} size={22} weight="bold" />;
-    case 'call':
-      return <Phone color={color} size={20} weight="bold" />;
-    case 'chat':
-      return <ChatCircleDots color={color} size={20} weight="bold" />;
-    case 'check':
-      return <Check color={color} size={20} weight="bold" />;
-    case 'favorite':
-      return (
-        <Heart
-          color={action.isActive ? designSystem.colors.liked : color}
-          size={20}
-          weight={action.isActive ? 'fill' : 'bold'}
-        />
-      );
-    case 'filter':
-      return <FadersHorizontal color={color} size={20} weight="bold" />;
-    case 'locate':
-      return <NavigationArrow color={color} size={20} weight="bold" />;
-    case 'map':
-      return <MapTrifold color={color} size={20} weight="bold" />;
-    case 'search':
-      return <MagnifyingGlass color={color} size={20} weight="bold" />;
-    case 'menu':
-      return <DotsThree color={color} size={20} weight="bold" />;
-    case 'notifications':
-      return <Bell color={color} size={20} weight="bold" />;
-    case 'pencil':
-      return <PencilSimple color={color} size={20} weight="bold" />;
-    case 'plus':
-      return <Plus color={color} size={20} weight="bold" />;
-    case 'settings':
-      return <GearSix color={color} size={20} weight="bold" />;
-    case 'share':
-      return <UserPlus color={color} size={20} weight="bold" />;
+    case 'avatar': return <UserCircle color={color} size={22} weight="regular" />;
+    case 'back': return <CaretLeft color={color} size={22} weight="bold" />;
+    case 'call': return <Phone color={color} size={20} weight="regular" />;
+    case 'chat': return <ChatCircleDots color={color} size={22} weight="regular" />;
+    case 'check': return <Check color={color} size={20} weight="bold" />;
+    case 'favorite': return (
+      <Heart
+        color={action.isActive ? designSystem.colors.liked : color}
+        size={22}
+        weight={action.isActive ? 'fill' : 'regular'}
+      />
+    );
+    case 'filter': return <FadersHorizontal color={color} size={20} weight="regular" />;
+    case 'locate': return <NavigationArrow color={color} size={20} weight="regular" />;
+    case 'map': return <MapTrifold color={color} size={20} weight="regular" />;
+    case 'search': return <MagnifyingGlass color={color} size={20} weight="regular" />;
+    case 'menu': return <DotsThree color={color} size={22} weight="bold" />;
+    case 'notifications': return <Bell color={color} size={22} weight="regular" />;
+    case 'pencil': return <PencilSimple color={color} size={20} weight="regular" />;
+    case 'plus': return <Plus color={color} size={22} weight="bold" />;
+    case 'settings': return <GearSix color={color} size={20} weight="regular" />;
+    case 'share': return <UserPlus color={color} size={20} weight="regular" />;
   }
 }
 
@@ -574,68 +426,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     position: 'relative',
   },
-  actionGroup: {
-    flexDirection: 'row',
-    height: 48,
-    overflow: 'visible',
-    position: 'relative',
-  },
-  actionGroupOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  actionGroupFallback: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 1,
-  },
-  androidGroupFill: {
-    overflow: 'hidden',
-  },
-  groupActionWrap: {
-    height: 48,
-    position: 'relative',
-    width: 48,
-    zIndex: 1,
-  },
-  groupActionWrapCustom: {
-    zIndex: 2,
-  },
-  groupAction: {
+  iconButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    height: 48,
     justifyContent: 'center',
-    overflow: 'visible',
-    width: 48,
-  },
-  groupActionPressed: {
-    opacity: 0.68,
-  },
-  groupDivider: {
-    height: 24,
-    left: 0,
-    position: 'absolute',
-    top: 12,
-    width: StyleSheet.hairlineWidth,
   },
   badge: {
     position: 'absolute',
-    minWidth: 18,
-    height: 18,
+    minWidth: 17,
+    height: 17,
     paddingHorizontal: 4,
     borderRadius: 9,
     backgroundColor: designSystem.colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1,
     elevation: 3,
   },
   floatingBadge: {
-    top: -3,
-    right: -3,
-  },
-  groupBadge: {
-    top: 5,
-    right: 7,
+    top: -2,
+    right: -2,
   },
   badgeText: {
     fontSize: 10,
@@ -649,12 +463,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: designSystem.colors.whiteOverlayThin,
+    height: 30,
+    borderRadius: 15,
   },
   weatherText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

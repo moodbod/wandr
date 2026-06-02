@@ -2,23 +2,24 @@ import { useMutation, useQuery } from 'convex/react';
 import * as Contacts from 'expo-contacts';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MagnifyingGlass } from 'phosphor-react-native';
 
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetScrollView, SheetRef } from '@/components/ui/sheet';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { FriendMatchCard } from '@/components/wandr/friends/friend-match-card';
 import { styles } from '@/components/wandr/friends/friends-discover-screen.styles';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useFriendsBootstrap } from '@/hooks/use-friends-bootstrap';
 import { actOnFriendCandidateRef, getFriendDiscoveryRef, matchFriendContactsRef, trackFriendDiscoveryViewRef } from '@/lib/convex';
 
@@ -69,6 +70,7 @@ export default function FriendsDiscoverScreen({
 } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
   const traveler = useCurrentTraveler();
   const { isBootstrapping, bootstrapError } = useFriendsBootstrap(traveler?.slug);
   const discovery = useQuery(getFriendDiscoveryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
@@ -82,7 +84,7 @@ export default function FriendsDiscoverScreen({
   const [busyCandidateSlug, setBusyCandidateSlug] = useState<string | null>(null);
   const [hiddenCandidateSlugs, setHiddenCandidateSlugs] = useState<Set<string>>(() => new Set());
   const hasTrackedViewRef = useRef(false);
-  const contactSheetRef = useRef<BottomSheet>(null);
+  const contactSheetRef = useRef<SheetRef>(null);
 
   const contactNumbers = useMemo(() => deviceContacts.map((contact) => contact.phoneNumber), [deviceContacts]);
   const contactsByPhoneNumber = useMemo(() => {
@@ -271,10 +273,17 @@ export default function FriendsDiscoverScreen({
         ]}>
         {bootstrapError ? <ThemedText style={styles.notice}>{bootstrapError}</ThemedText> : null}
 
-        <GlassInput
+        <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
           containerStyle={styles.search}
+          leftIcon={
+            <MagnifyingGlass
+              color={isDark ? designSystem.colors.darkPlaceholderText : designSystem.colors.placeholderText}
+              size={18}
+              weight="regular"
+            />
+          }
           placeholder="Search by name, city, or destination"
         />
 
@@ -321,8 +330,8 @@ export default function FriendsDiscoverScreen({
         ) : null}
       </ScrollView>
 
-      <GlassBottomSheet ref={contactSheetRef} index={-1} snapPoints={['72%']} enablePanDownToClose>
-        <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
+      <Sheet ref={contactSheetRef} index={-1} snapPoints={['72%']} enablePanDownToClose>
+        <SheetScrollView contentContainerStyle={styles.sheetContent}>
           <View style={styles.sheetHeader}>
             <View style={styles.sheetHeaderCopy}>
               <ThemedText style={styles.sheetTitle}>Contacts</ThemedText>
@@ -434,8 +443,8 @@ export default function FriendsDiscoverScreen({
               {deviceContacts.length - matchedPhoneNumbers.size - unmatchedContacts.length === 1 ? '' : 's'} hidden.
             </ThemedText>
           ) : null}
-        </BottomSheetScrollView>
-      </GlassBottomSheet>
+        </SheetScrollView>
+      </Sheet>
     </ThemedView>
   );
 }

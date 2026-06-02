@@ -1,10 +1,11 @@
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import * as Haptics from 'expo-haptics';
 import React from 'react';
-import { Platform, Pressable, StyleSheet, type ViewStyle, type StyleProp, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, type ViewStyle, type StyleProp } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { designSystem } from '@/constants/design-system';
+import { GlassView, isLiquidGlassAvailable } from '@/lib/glass-effect';
 
 type GlassButtonProps = {
   onPress?: () => void;
@@ -29,40 +30,31 @@ export function GlassButton({
   height = 48,
   accessibilityLabel,
   disabled = false,
-  variant = 'subtle',
 }: GlassButtonProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const scale = useSharedValue(1);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const handlePressIn = () => {
-    if (disabled) {
-      return;
-    }
+    if (disabled) return;
     scale.value = withSpring(0.96, { damping: 18, stiffness: 320 });
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 300 });
   };
 
-  const isPrimary = variant === 'primary';
-  const shouldUseNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
-  const isAndroid = Platform.OS === 'android';
-  const tintColor = isPrimary ? designSystem.colors.limeSoft : designSystem.colors.transparentWhite;
-  const surfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassStrong;
-  const borderColor = isDark ? designSystem.colors.darkSurfaceBorder : designSystem.colors.whiteBorder;
-  const androidSurfaceColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.surfaceRaised;
-  const androidDisabledSurfaceColor = isDark ? designSystem.colors.darkCard : designSystem.colors.surface;
-  const androidBorderColor = isDark ? designSystem.colors.darkBorder : designSystem.colors.lightSurfaceAlt;
-  const fallbackSurfaceColor = isAndroid ? androidSurfaceColor : surfaceColor;
-  const fallbackBorderColor = isAndroid ? androidBorderColor : borderColor;
+  const hasNativeGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+  const backgroundColor = hasNativeGlass
+    ? 'transparent'
+    : isDark
+      ? designSystem.colors.whiteOverlayThin
+      : designSystem.colors.scrimFaint;
 
   return (
     <AnimatedPressable
@@ -72,54 +64,14 @@ export function GlassButton({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={[
-        styles.container, 
-        { borderRadius: radius, width, height }, 
-        style, 
-        animatedStyle
-      ]}
+      style={[styles.container, { borderRadius: radius, width, height }, style, animatedStyle]}
     >
-      <View style={[styles.fill, { borderRadius: radius }]}>
-        {shouldUseNativeGlass ? (
-          <>
-            <GlassView
-              style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
-              glassEffectStyle={isPrimary ? 'regular' : 'clear'}
-              tintColor={tintColor}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                styles.nativeOverlay,
-                {
-                  borderRadius: radius,
-                  backgroundColor: isPrimary ? designSystem.colors.limeSoft : surfaceColor,
-                  borderColor: isPrimary ? designSystem.colors.border : borderColor,
-                },
-              ]}
-            />
-          </>
-        ) : (
-          <View
-            style={[
-              styles.fallbackFill,
-              {
-                borderRadius: radius,
-                backgroundColor: isPrimary
-                  ? (disabled && isAndroid ? androidDisabledSurfaceColor : designSystem.colors.lime)
-                  : (disabled && isAndroid ? androidDisabledSurfaceColor : fallbackSurfaceColor),
-                borderColor: isPrimary
-                  ? (isAndroid ? designSystem.colors.darkGreen : designSystem.colors.border)
-                  : fallbackBorderColor,
-              },
-              isAndroid ? styles.androidFill : null,
-            ]}
-          />
-        )}
-        <View style={styles.content}>
-          {children}
-        </View>
-      </View>
+      <GlassView
+        glassEffectStyle="regular"
+        isInteractive={!disabled}
+        style={[styles.fill, { borderRadius: radius, backgroundColor }]}>
+        <View style={styles.content}>{children}</View>
+      </GlassView>
     </AnimatedPressable>
   );
 }
@@ -136,22 +88,9 @@ const styles = StyleSheet.create({
     height: '100%',
     overflow: 'hidden',
   },
-  fallbackFill: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  nativeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  androidFill: {
-    overflow: 'hidden',
   },
 });

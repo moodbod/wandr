@@ -1,15 +1,16 @@
 import { useQuery } from 'convex/react';
 import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView, isLiquidGlassAvailable } from '@/lib/glass-effect';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { CalendarBlank, ImagesSquare, Ticket } from 'phosphor-react-native';
+import { CalendarBlank, GearSix, ImagesSquare, Ticket } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { GlassButton } from '@/components/ui/glass-button';
 import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { WandrHeader } from '@/components/wandr/header';
 import { LargeScreenPanel, LargeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
@@ -30,7 +31,6 @@ import type { ProfilePlaceItem, TravelerBookingItem } from '@/types/trip';
 
 import { ProfileActivitySummary } from './profile-activity-summary';
 import { ProfileHero } from './profile-hero';
-import { ProfileSettingsSidebar } from './profile-settings-sidebar';
 import { RecentExpeditions } from './recent-expeditions';
 
 type ProfileOverviewScreenProps = {
@@ -45,6 +45,7 @@ const profileTabs = [
 ] as const;
 export function ProfileOverviewScreen({ showBackButton = false }: ProfileOverviewScreenProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const traveler = useCurrentTraveler();
   const settings = useCurrentUserSettings();
   const colorScheme = useColorScheme();
@@ -52,7 +53,6 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const { isLargeScreen } = useResponsive();
   const [activeTab, setActiveTab] = useState<ProfileTab>('gallery');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const history = useQuery(listTravelerHistoryRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const savedPlaces = useQuery(listSavedPlacesRef, traveler?.slug ? { travelerSlug: traveler.slug } : 'skip');
   const bookings = useQuery(
@@ -79,45 +79,57 @@ export function ProfileOverviewScreen({ showBackButton = false }: ProfileOvervie
   const rawPlanningLabel = friendsDashboard?.profile?.destinationLabel?.trim() ?? '';
   const planningLabel = rawPlanningLabel || null;
   const galleryItems = buildGalleryItems(history ?? [], savedPlaces ?? []);
+  const showMobileBackHeader = !isLargeScreen && showBackButton;
+  const showMobileSettingsButton = !isLargeScreen && !showBackButton;
+  const mobileTopPadding = showBackButton ? insets.top + 88 : insets.top + 18;
+  const settingsIconColor = colors.text;
+  const profileHero = (
+    <ProfileHero
+      avatarUri={avatarUri}
+      avatarPaletteKey={traveler?.slug}
+      baseLabel={baseLabel}
+      displayName={displayName || 'Traveler'}
+      planningLabel={planningLabel}
+    />
+  );
 
   const mainContent = (
     <>
-      {!isLargeScreen ? (
+      {showMobileBackHeader ? (
         <WandrHeader
           config={{
             overlay: true,
-            leadingAction: showBackButton
-              ? { kind: 'back', accessibilityLabel: 'Go back' }
-              : { kind: 'menu', accessibilityLabel: 'Open profile settings', onPress: () => setIsSidebarOpen(true) },
+            leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
           }}
         />
       ) : null}
-
-      <ProfileSettingsSidebar
-        avatarUri={avatarUri}
-        avatarPaletteKey={traveler?.slug}
-        baseLabel={baseLabel}
-        isOpen={isSidebarOpen}
-        name={traveler?.name ?? 'Traveler'}
-        onClose={() => setIsSidebarOpen(false)}
-      />
 
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: isLargeScreen ? insets.top + 24 : insets.top + 88,
+            paddingTop: isLargeScreen ? insets.top + 24 : mobileTopPadding,
             paddingBottom: insets.bottom + 120,
           },
         ]}
         showsVerticalScrollIndicator={false}>
-        <ProfileHero
-          avatarUri={avatarUri}
-          avatarPaletteKey={traveler?.slug}
-          baseLabel={baseLabel}
-          displayName={displayName || 'Traveler'}
-          planningLabel={planningLabel}
-        />
+        {showMobileSettingsButton ? (
+          <View style={styles.mobileHeroRow}>
+            <View style={styles.mobileHeroBody}>{profileHero}</View>
+            <GlassButton
+              accessibilityLabel="Open profile settings"
+              height={44}
+              onPress={() => router.push('/profile/settings')}
+              radius={22}
+              style={styles.mobileSettingsButton}
+              width={44}
+            >
+              <GearSix color={settingsIconColor} size={21} weight="regular" />
+            </GlassButton>
+          </View>
+        ) : (
+          profileHero
+        )}
         <ProfileActivitySummary
           addedCount={isLoading ? 0 : bookingCount}
           friendCount={isLoading ? 0 : friendCount}
@@ -275,7 +287,6 @@ function GalleryTitleGlass({
         <GlassView
           style={StyleSheet.absoluteFill}
           glassEffectStyle="clear"
-          tintColor={designSystem.colors.transparentWhite}
         />
       ) : Platform.OS === 'ios' ? (
         <BlurView intensity={72} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -486,6 +497,18 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingHorizontal: 20,
   },
+  mobileHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  mobileHeroBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mobileSettingsButton: {
+    marginTop: 2,
+  },
   tabsContent: {
     paddingRight: 0,
   },
@@ -543,7 +566,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   galleryOverlayTint: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: designSystem.radii.pill,
   },

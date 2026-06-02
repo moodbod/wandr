@@ -1,6 +1,4 @@
 import { Image as ExpoImage } from 'expo-image';
-import type { CameraPosition } from 'expo-maps';
-import { NativeModulesProxy } from 'expo-modules-core';
 import { ArrowsOutSimple, MapPin, MapTrifold } from 'phosphor-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 
@@ -17,9 +15,6 @@ type RouteMapWidgetProps = {
   createdAt: number;
 };
 
-type ExpoMapsModule = typeof import('expo-maps');
-
-let cachedExpoMaps: ExpoMapsModule | null | undefined;
 const GOOGLE_MAP_WITHOUT_POI_STYLE = JSON.stringify([
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
@@ -104,7 +99,7 @@ function ExpoRouteMapPreview({
   const expoMaps = getExpoMapsModule();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const cameraPosition: CameraPosition = {
+  const cameraPosition = {
     coordinates: toExpoCoordinate(centerCoordinate),
     zoom: 13,
   };
@@ -208,25 +203,10 @@ function ExpoRouteMapPreview({
   );
 }
 
-function getExpoMapsModule() {
-  if (cachedExpoMaps !== undefined) {
-    return cachedExpoMaps;
-  }
-
-  if (!NativeModulesProxy.ExpoMaps) {
-    cachedExpoMaps = null;
-    return cachedExpoMaps;
-  }
-
-  try {
-    // expo-maps is native-module backed, so it may be absent until the dev client is rebuilt.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    cachedExpoMaps = require('expo-maps') as ExpoMapsModule;
-  } catch {
-    cachedExpoMaps = null;
-  }
-
-  return cachedExpoMaps;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getExpoMapsModule(): any {
+  // expo-maps is not bundled in Expo Go — always returns null (falls back to image/icon).
+  return null;
 }
 
 function toExpoCoordinate(coordinate: readonly [number, number]) {
@@ -252,7 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.charcoal,
   },
   routeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     justifyContent: 'space-between',
     padding: 10,
   },

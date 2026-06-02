@@ -32,12 +32,11 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
   const [pickerSelectCallback, setPickerSelectCallback] = useState<((location: PlanningLocation) => void) | null>(null);
 
   const setPlanningLocation = useCallback((location: PlanningLocation, options?: { manual?: boolean }) => {
-    if (options?.manual) {
-      setHasManualSelection(true);
-    } else if (options?.manual === false) {
-      setHasManualSelection(false);
+    const nextManualSelection = options?.manual;
+    if (nextManualSelection !== undefined) {
+      setHasManualSelection((current) => current === nextManualSelection ? current : nextManualSelection);
     }
-    setPlanningLocationState(location);
+    setPlanningLocationState((current) => locationsAreEquivalent(current, location) ? current : location);
   }, []);
 
   const openPlanningLocationSheet = useCallback((options?: OpenPlanningLocationSheetOptions) => {
@@ -72,16 +71,14 @@ export function PlanningLocationProvider({ children }: { children: React.ReactNo
   return (
     <PlanningLocationContext.Provider value={value}>
       {children}
-      {pickerVisible ? (
-        <PlanningLocationSheet
-          availableLocations={pickerAvailableLocations}
-          currentCoordinate={pickerCoordinate}
-          selectedLocation={planningLocation}
-          visible={pickerVisible}
-          onClose={handleClosePicker}
-          onSelectLocation={handleSelectPickerLocation}
-        />
-      ) : null}
+      <PlanningLocationSheet
+        availableLocations={pickerAvailableLocations}
+        currentCoordinate={pickerCoordinate}
+        selectedLocation={planningLocation}
+        visible={pickerVisible}
+        onClose={handleClosePicker}
+        onSelectLocation={handleSelectPickerLocation}
+      />
     </PlanningLocationContext.Provider>
   );
 }
@@ -97,15 +94,29 @@ export function usePlanningLocation() {
 }
 
 function locationsAreEquivalent(a: PlanningLocation, b: PlanningLocation) {
-  const aCenter = a.centerCoordinate?.join(',');
-  const bCenter = b.centerCoordinate?.join(',');
-
   return (
     a.id === b.id &&
+    a.label === b.label &&
     a.detail === b.detail &&
+    a.countryCode === b.countryCode &&
+    a.countryLabel === b.countryLabel &&
     a.isSupported === b.isSupported &&
-    aCenter === bCenter
+    a.isSearchPrompt === b.isSearchPrompt &&
+    coordinateKey(a.centerCoordinate) === coordinateKey(b.centerCoordinate) &&
+    boundsKey(a.bounds) === boundsKey(b.bounds) &&
+    a.radiusKm === b.radiusKm &&
+    a.searchAliases.join('|') === b.searchAliases.join('|')
   );
+}
+
+function coordinateKey(coordinate?: readonly [number, number]) {
+  return coordinate?.join(',') ?? '';
+}
+
+function boundsKey(bounds?: PlanningLocation['bounds']) {
+  return bounds
+    ? `${bounds.minLng},${bounds.maxLng},${bounds.minLat},${bounds.maxLat}`
+    : '';
 }
 
 export function useSyncPlanningLocationWithAvailableLocations(availableLocations?: readonly PlanningLocation[]) {
@@ -118,14 +129,20 @@ export function useSyncPlanningLocationWithAvailableLocations(availableLocations
 
     const dataBackedLocation = getDataBackedPlanningLocation(planningLocation, availableLocations);
 
+    // Compare by stable `id`, never deep equality: `availableLocations` is rebuilt with
+    // fresh objects every render, and two builds of the same place can differ in derived
+    // fields (alias order, bounds, coordinate precision). A deep check would then report
+    // "changed" every render and loop forever ("Maximum update depth exceeded").
     if (dataBackedLocation) {
-      if (!locationsAreEquivalent(planningLocation, dataBackedLocation)) {
+      if (dataBackedLocation.id !== planningLocation.id) {
         setPlanningLocation(dataBackedLocation);
       }
       return;
     }
 
-    setPlanningLocation(availableLocations[0], { manual: false });
+    if (availableLocations[0].id !== planningLocation.id) {
+      setPlanningLocation(availableLocations[0], { manual: false });
+    }
   }, [availableLocations, planningLocation, setPlanningLocation]);
 }
 

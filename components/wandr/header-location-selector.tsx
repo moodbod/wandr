@@ -1,5 +1,5 @@
 import { CaretDown } from 'phosphor-react-native';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -27,10 +27,11 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
 
   if (isDesktopMap) {
     return (
-      <Pressable
+      <GlassButton
         accessibilityLabel="Change planning location"
-        accessibilityRole="button"
+        height={58}
         onPress={onPress}
+        radius={designSystem.radii.pill}
         style={[
           styles.desktopSelector,
           {
@@ -38,7 +39,7 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
             borderColor: desktopBorderColor,
           },
         ]}
-      >
+        width={undefined}>
         <View style={styles.desktopContent}>
           {location.countryCode ? (
             <View style={styles.desktopAvatarGlow}>
@@ -52,7 +53,7 @@ export function HeaderLocationSelector({ location, onPress, variant = 'default' 
           </View>
           <CaretDown color={textColor} size={16} weight="bold" />
         </View>
-      </Pressable>
+      </GlassButton>
     );
   }
 
@@ -85,8 +86,6 @@ const styles = StyleSheet.create({
     width: 'auto',
     minWidth: 132,
     maxWidth: 230,
-    boxShadow: '0 8px 14px rgba(0,0,0,0.12)',
-    elevation: 8,
   },
   desktopSelector: {
     height: 58,
@@ -96,7 +95,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     overflow: 'hidden',
-    boxShadow: '0 18px 38px rgba(0,0,0,0.38)',
   },
   content: {
     height: '100%',
@@ -122,7 +120,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 0 24px rgba(198,239,174,0.28)',
   },
   copy: {
     flexShrink: 1,

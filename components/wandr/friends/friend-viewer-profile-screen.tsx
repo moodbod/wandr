@@ -45,6 +45,8 @@ export default function FriendViewerProfileScreen({
   const [isActing, setIsActing] = useState(false);
 
   const isLoading = traveler === undefined || profile === undefined;
+  const canMessage = Boolean(profile?.relationship.directThreadId);
+  const messageColor = canMessage ? colors.text : colors.textSubtle;
 
   const handleFriend = async () => {
     if (!traveler?.slug || !profileSlug || isActing) {
@@ -100,7 +102,7 @@ export default function FriendViewerProfileScreen({
               />
               <Pressable
                 accessibilityLabel={`Message ${profile.traveler.name}`}
-                disabled={!profile.relationship.directThreadId}
+                disabled={!canMessage}
                 onPress={() => {
                   if (profile.relationship.directThreadId) {
                     router.push(`/friends/direct/${profile.relationship.directThreadId}` as never);
@@ -109,10 +111,10 @@ export default function FriendViewerProfileScreen({
                 style={[
                   styles.messageButton,
                   { backgroundColor: colors.surface },
-                  !profile.relationship.directThreadId ? styles.disabledAction : null,
+                  !canMessage ? styles.disabledAction : null,
                 ]}>
-                <ChatCircleDots color={designSystem.colors.ink} size={18} weight="bold" />
-                <ThemedText style={styles.messageButtonText}>Message</ThemedText>
+                <ChatCircleDots color={messageColor} size={18} weight="bold" />
+                <ThemedText style={[styles.messageButtonText, { color: messageColor }]}>Message</ThemedText>
               </Pressable>
             </View>
 
@@ -158,7 +160,6 @@ function ViewerHero({
   profile: NonNullable<FriendViewerProfile>;
 }) {
   const avatarUri = profile.traveler.avatarUri ?? null;
-  const matchScore = profile.profile?.matchScore ?? 0;
   const sharedCount = profile.profile?.sharedInterests.length ?? 0;
 
   return (
@@ -186,7 +187,6 @@ function ViewerHero({
         </View>
       </View>
       <View style={styles.statsRow}>
-        <Stat label="Match" value={matchScore ? `${matchScore}%` : '-'} />
         <Stat label="Shared" value={sharedCount} />
         <Stat label="Friends" value={friendCount} />
       </View>

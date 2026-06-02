@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPlanningLocationsFromDestinations,
+  coordinateIsInPlanningLocation,
   defaultPlanningLocation,
+  defaultPlanningLocations,
   getDataBackedPlanningLocation,
+  getPlanningLocationForCoordinate,
 } from '../../constants/planning-countries';
 
 describe('planning country availability', () => {
@@ -78,5 +81,14 @@ describe('planning country availability', () => {
       detail: '1 place available',
       isSupported: true,
     });
+  });
+
+  it('classifies South African trip coordinates beyond the Western Cape', () => {
+    const southAfrica = defaultPlanningLocations.find((location) => location.id === 'south-africa');
+
+    expect(southAfrica).toBeDefined();
+    expect(getPlanningLocationForCoordinate([31.0218, -29.8587])?.id).toBe('south-africa');
+    expect(getPlanningLocationForCoordinate([30.5271, -25.4658])?.id).toBe('south-africa');
+    expect(coordinateIsInPlanningLocation([19.2407, -34.4092], southAfrica!)).toBe(true);
   });
 });

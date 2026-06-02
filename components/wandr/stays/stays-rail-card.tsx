@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
+import { GlassView } from '@/lib/glass-effect';
 
 type StaysRailCardProps = {
   imageUri: string;
@@ -35,11 +36,7 @@ export function StaysRailCard({
         styles.propertyRow,
         isFloating && styles.propertyRowFloating,
         {
-          backgroundColor: isFloating
-            ? isDark
-              ? designSystem.colors.darkSurface
-              : designSystem.colors.surfaceRaised
-            : 'transparent',
+          backgroundColor: 'transparent',
           borderBottomColor: isFloating
             ? 'transparent'
             : isDark
@@ -48,6 +45,14 @@ export function StaysRailCard({
         },
       ]}
     >
+      {isFloating ? (
+        <GlassView
+          glassEffectStyle="clear"
+          isInteractive
+          pointerEvents="none"
+          style={styles.floatingGlassFill}
+        />
+      ) : null}
       <View style={styles.propertyImageShell}>
         <Image source={imageUri} contentFit="cover" style={styles.propertyImage} />
         <View style={styles.priceBadge}>
@@ -105,9 +110,14 @@ const styles = StyleSheet.create({
   },
   propertyRowFloating: {
     borderRadius: designSystem.radii.card,
+    overflow: 'hidden',
     paddingHorizontal: 12,
     boxShadow: '0 10px 20px rgba(0,0,0,0.16)',
     elevation: 8,
+  },
+  floatingGlassFill: {
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
+    borderRadius: designSystem.radii.card,
   },
   propertyImageShell: {
     width: 96,

@@ -121,6 +121,10 @@ export const designSystem = {
       text: '#0e0f0c',
       textMuted: '#454745',
       textSubtle: '#868685',
+      // Accent text/icons on an adaptive page/surface background. Dark green reads on
+      // light surfaces; lime reads on dark surfaces. (Text on a fixed lime button/pill
+      // should keep `colors.darkGreen` directly — not this token.)
+      accent: '#163300',
       background: '#f9f9f6',
       surface: '#f4f4f1',
       surfaceRaised: '#ffffff',
@@ -134,6 +138,7 @@ export const designSystem = {
       text: '#f9f9f6',
       textMuted: '#c5c8d0',
       textSubtle: 'rgba(249,249,246,0.68)',
+      accent: '#c6efae',
       background: '#111217',
       surface: '#18191f',
       surfaceRaised: '#1b1c20',

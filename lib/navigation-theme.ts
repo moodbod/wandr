@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, type Theme } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, type Theme } from "expo-router/react-navigation";
 import { Platform } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
@@ -28,8 +28,11 @@ export function getNavigationTheme(isDark: boolean): Theme {
 
 export function getStackScreenOptions(isDark: boolean) {
   return {
-    animation: (Platform.OS === 'web' ? 'none' : 'fade') as any,
-    animationDuration: Platform.OS === 'web' ? 0 : 160,
+    // 'default' = the platform's native push animation (iOS slide-from-right).
+    // Do NOT use 'ios' — it is not a valid react-native-screens animation and crashes natively.
+    animation: Platform.select({ web: 'none', default: 'default' }) as 'none' | 'default',
+    headerTitle: '',
+    title: '',
     contentStyle: {
       backgroundColor: getNavigationBackground(isDark),
     },

@@ -1,4 +1,3 @@
-import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { Check, MagnifyingGlass, MapPin } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -6,13 +5,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Country, type CountryCode } from 'react-native-country-picker-modal';
 
 import { ThemedText } from '@/components/themed-text';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { Input } from '@/components/ui/input';
+import { Sheet, SheetFlatList, SheetRef } from '@/components/ui/sheet';
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { allPlanningCountryOptions } from '@/constants/planning-countries';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
+
+type CountryPickerOption = {
+  code: CountryCode;
+  label: string;
+  searchText: string;
+};
+
+const countryPickerOptions: readonly CountryPickerOption[] = allPlanningCountryOptions
+  .filter((location) => location.countryCode && location.countryLabel)
+  .map((location) => ({
+    code: location.countryCode as CountryCode,
+    label: location.countryLabel ?? location.label,
+    searchText: `${location.countryLabel ?? location.label} ${location.countryCode} ${location.searchAliases.join(' ')}`.toLowerCase(),
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label));
 
 type CountryPickerFieldProps = {
   accessibilityLabel: string;
@@ -33,33 +47,21 @@ export function CountryPickerField({
 }: CountryPickerFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const sheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<SheetRef>(null);
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const { isLargeScreen } = useResponsive();
   const isDesktop = Platform.OS === 'web' && isLargeScreen;
   const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
   const snapPoints = useMemo(() => [isDesktop ? '100%' : '84%'], [isDesktop]);
-  const countryOptions = useMemo(
-    () =>
-      allPlanningCountryOptions
-        .filter((location) => location.countryCode && location.countryLabel)
-        .map((location) => ({
-          code: location.countryCode as CountryCode,
-          label: location.countryLabel ?? location.label,
-          searchText: `${location.countryLabel ?? location.label} ${location.countryCode} ${location.searchAliases.join(' ')}`.toLowerCase(),
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    []
-  );
   const normalizedQuery = query.trim().toLowerCase();
   const filteredCountryOptions = useMemo(() => {
     if (!normalizedQuery) {
-      return countryOptions;
+      return countryPickerOptions;
     }
 
-    return countryOptions.filter((country) => country.searchText.includes(normalizedQuery));
-  }, [countryOptions, normalizedQuery]);
+    return countryPickerOptions.filter((country) => country.searchText.includes(normalizedQuery));
+  }, [normalizedQuery]);
 
   function resetSheetState() {
     setIsOpen(false);
@@ -149,7 +151,7 @@ export function CountryPickerField({
           </>
         )}
       </Pressable>
-      <GlassBottomSheet
+      <Sheet
         ref={sheetRef}
         index={isOpen ? 0 : -1}
         renderInModal
@@ -159,17 +161,18 @@ export function CountryPickerField({
         backgroundStyle={{ backgroundColor: isDark ? 'rgba(20, 20, 20, 0.65)' : 'rgba(255, 255, 255, 0.85)' }}
         desktopModalHostStyle={isDesktop ? { alignItems: 'center', justifyContent: 'center', paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } : undefined}
         desktopPopupHostStyle={isDesktop ? { width: 520, maxWidth: '90%', height: 640, maxHeight: '85%', borderRadius: 24, overflow: 'hidden' } : undefined}
-        onClose={resetSheetState}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} pressBehavior="close" />
-        )}>
-        <BottomSheetFlatList
+        onClose={resetSheetState}>
+        <SheetFlatList
           data={filteredCountryOptions}
           extraData={`${countryCode}-${query}`}
+          initialNumToRender={14}
           keyExtractor={(country) => country.code}
           keyboardShouldPersistTaps="handled"
+          maxToRenderPerBatch={12}
+          removeClippedSubviews
           stickyHeaderIndices={[0]}
           showsVerticalScrollIndicator={false}
+          windowSize={7}
           contentContainerStyle={[styles.sheetListContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
           ListHeaderComponent={
             <View style={styles.sheetHeader}>
@@ -186,9 +189,7 @@ export function CountryPickerField({
                     handleSelectCountry(firstCountry);
                   }
                 }}
-                darkColor="rgba(255, 255, 255, 0.04)"
-                lightColor="rgba(0, 0, 0, 0.04)"
-                containerStyle={{ borderWidth: 0, borderRadius: 16, height: 48 }}
+                containerStyle={styles.countrySearchInput}
               />
             </View>
           }
@@ -221,7 +222,7 @@ export function CountryPickerField({
             );
           }}
         />
-      </GlassBottomSheet>
+      </Sheet>
     </>
   );
 }
@@ -317,6 +318,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: designSystem.spacing.md,
     paddingTop: designSystem.spacing.md,
     paddingBottom: designSystem.spacing.sm,
+  },
+  countrySearchInput: {
+    height: 48,
   },
   sheetListContent: {
     paddingHorizontal: designSystem.spacing.sm,

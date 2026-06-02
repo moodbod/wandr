@@ -10,23 +10,33 @@ import type { TripListItem } from '@/types/trip';
 type TripFilterTabsProps = {
   trips: readonly TripListItem[];
   selectedTripId?: string;
+  selectFirstByDefault?: boolean;
+  leadingChildren?: React.ReactNode;
   children?: React.ReactNode;
   variant?: 'default' | 'desktopMap';
   onSelectTrip: (tripId: string) => void;
 };
 
-export function TripFilterTabs({ children, trips, selectedTripId, variant = 'default', onSelectTrip }: TripFilterTabsProps) {
+export function TripFilterTabs({
+  children,
+  leadingChildren,
+  selectFirstByDefault = true,
+  trips,
+  selectedTripId,
+  variant = 'default',
+  onSelectTrip,
+}: TripFilterTabsProps) {
   const isDark = useColorScheme() === 'dark';
   const isDesktopMap = variant === 'desktopMap';
   const desktopInactivePillColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
   const desktopInactiveBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
   const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
 
-  if (trips.length === 0 && !children) {
+  if (trips.length === 0 && !leadingChildren && !children) {
     return null;
   }
 
-  const selectedTrip = selectedTripId ?? trips[0]?._id;
+  const selectedTrip = selectedTripId ?? (selectFirstByDefault ? trips[0]?._id : undefined);
 
   return (
     <ScrollView
@@ -35,6 +45,7 @@ export function TripFilterTabs({ children, trips, selectedTripId, variant = 'def
       style={[styles.scroller, isDesktopMap && styles.desktopScroller]}
       contentContainerStyle={[styles.tabs, isDesktopMap && styles.desktopTabs]}
     >
+      {leadingChildren}
       {trips.map((trip) => {
         const isActive = trip._id === selectedTrip;
 

@@ -413,83 +413,6 @@ async function buildDirectCallMemberViews(ctx: QueryCtx | MutationCtx, thread: F
   );
 }
 
-async function notifyCircleMembersAboutCall(
-  ctx: MutationCtx,
-  args: {
-    circleId: Id<'circles'>;
-    actorSlug: string;
-    callId: Id<'calls'>;
-    title: string;
-    body: string;
-    kind: 'friend_call' | 'friend_call_reminder';
-    mode?: 'voice' | 'video';
-  }
-) {
-  const members = await getCircleMembers(ctx, args.circleId);
-  const actor = args.kind === 'friend_call' ? await getAppUser(ctx, args.actorSlug) : null;
-  for (const member of members) {
-    if (member.travelerSlug === args.actorSlug || member.status !== 'active') {
-      continue;
-    }
-
-    await insertAppNotification(ctx, {
-      recipientSlug: member.travelerSlug,
-      actorSlug: args.actorSlug,
-      kind: args.kind,
-      title: args.title,
-      body: args.body,
-      href: `/friends/call/${args.callId}`,
-      entityId: args.callId,
-      entityLabel: args.title,
-    });
-
-    if (args.kind === 'friend_call' && args.mode) {
-      await ctx.scheduler.runAfter(0, internal.notifications.sendIncomingCallPush, {
-        recipientSlug: member.travelerSlug,
-        callerName: actor?.name ?? args.actorSlug,
-        circleName: args.title,
-        callId: args.callId,
-        mode: args.mode,
-      });
-    }
-  }
-}
-
-async function notifyDirectParticipantAboutCall(
-  ctx: MutationCtx,
-  args: {
-    thread: FriendDirectThreadDoc;
-    actorSlug: string;
-    callId: Id<'calls'>;
-    title: string;
-    body: string;
-    kind: 'friend_call' | 'friend_call_reminder';
-    mode?: 'voice' | 'video';
-  }
-) {
-  const recipientSlug = args.thread.participantA === args.actorSlug ? args.thread.participantB : args.thread.participantA;
-  const actor = args.kind === 'friend_call' ? await getAppUser(ctx, args.actorSlug) : null;
-  await insertAppNotification(ctx, {
-    recipientSlug,
-    actorSlug: args.actorSlug,
-    kind: args.kind,
-    title: args.title,
-    body: args.body,
-    href: `/friends/call/${args.callId}`,
-    entityId: args.callId,
-    entityLabel: args.title,
-  });
-
-  if (args.kind === 'friend_call' && args.mode) {
-    await ctx.scheduler.runAfter(0, internal.notifications.sendIncomingCallPush, {
-      recipientSlug,
-      callerName: actor?.name ?? args.actorSlug,
-      circleName: args.title,
-      callId: args.callId,
-      mode: args.mode,
-    });
-  }
-}
 
 function computeMatchScore(current: PublicTravelerProfile, candidate: PublicTravelerProfile) {
   const sharedInterests = candidate.interests.filter((interest) => current.interests.includes(interest));
@@ -1181,6 +1104,7 @@ export const getFriendChatList = query({
           preview: summary.latestMessagePreview,
           updatedAt: summary.latestActivityAt,
           avatarUris: summary.avatarUris,
+          members: summary.members,
           memberCount: summary.memberCount,
           href: `/friends/group/${summary._id}`,
         };
@@ -1233,6 +1157,7 @@ export const getFriendChatList = query({
         preview: circle.latestMessagePreview,
         updatedAt: circle.latestActivityAt,
         avatarUris: circle.avatarUris,
+        members: circle.members,
         memberCount: circle.memberCount,
         href: `/friends/group/${circle._id}`,
       })),
@@ -2216,23 +2141,6 @@ export const getFriendChat = query({
                   mapMarkers: routeShare?.routeMapMarkers ?? [],
                 }
               : null,
-          callCard:
-            message.kind === 'call' || message.kind === 'scheduled_call'
-              ? {
-                  callId: message.callId ?? null,
-                  mode: message.callMode ?? 'voice',
-                  status: message.callStatus ?? (message.kind === 'scheduled_call' ? 'scheduled' : 'active'),
-                  scheduledFor: message.callScheduledFor ?? null,
-                  endsAt: message.callEndsAt ?? null,
-                  reminderMinutesBefore: message.callReminderMinutesBefore ?? null,
-                  title:
-                    message.callTitle ??
-                    (message.kind === 'scheduled_call'
-                      ? `Scheduled ${formatCallMode(message.callMode ?? 'voice')}`
-                      : `${formatCallMode(message.callMode ?? 'voice')} started`),
-                  description: message.callDescription ?? null,
-                }
-              : null,
         };
       })
     );
@@ -2305,23 +2213,6 @@ export const getDirectChat = query({
                   senderName: message.replyToSenderName,
                   preview: message.replyToPreview,
                   kind: message.replyToKind ?? 'text',
-                }
-              : null,
-          callCard:
-            message.kind === 'call' || message.kind === 'scheduled_call'
-              ? {
-                  callId: message.callId ?? null,
-                  mode: message.callMode ?? 'voice',
-                  status: message.callStatus ?? (message.kind === 'scheduled_call' ? 'scheduled' : 'active'),
-                  scheduledFor: message.callScheduledFor ?? null,
-                  endsAt: message.callEndsAt ?? null,
-                  reminderMinutesBefore: message.callReminderMinutesBefore ?? null,
-                  title:
-                    message.callTitle ??
-                    (message.kind === 'scheduled_call'
-                      ? `Scheduled ${formatCallMode(message.callMode ?? 'voice')}`
-                      : `${formatCallMode(message.callMode ?? 'voice')} started`),
-                  description: message.callDescription ?? null,
                 }
               : null,
         };
@@ -2556,6 +2447,236 @@ export const actOnFriendCandidate = mutation({
   },
 });
 
+export const markFriendChatRead = mutation({
+  args: {
+    circleId: v.id('circles'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const access = await requireActiveCircleMember(ctx, args.circleId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    const now = Date.now();
+    const existing = await ctx.db
+      .query('reads')
+      .withIndex('by_circleId_and_travelerSlug', (q) =>
+        q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastReadAt: now });
+    } else {
+      await ctx.db.insert('reads', {
+        circleId: args.circleId,
+        travelerSlug,
+        lastReadAt: now,
+      });
+    }
+
+    return true;
+  },
+});
+
+export const deleteFriendMessage = mutation({
+  args: {
+    messageId: v.id('messages'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const message = await ctx.db.get(args.messageId);
+    if (!message || message.senderSlug !== travelerSlug) {
+      return false;
+    }
+
+    const access = await requireActiveCircleMember(ctx, message.circleId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    await ctx.db.delete(args.messageId);
+    return true;
+  },
+});
+
+export const shareTripRouteInFriendChat = mutation({
+  args: {
+    circleId: v.id('circles'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const access = await requireActiveCircleMember(ctx, args.circleId, travelerSlug);
+    if (!access) {
+      return null;
+    }
+
+    const route = await buildRouteShare(ctx, travelerSlug);
+    const now = Date.now();
+    const messageId = await ctx.db.insert('messages', {
+      circleId: args.circleId,
+      senderSlug: travelerSlug,
+      kind: 'route',
+      body: route.routeSummary,
+      routeTitle: route.routeTitle,
+      routeSummary: route.routeSummary,
+      routeDistanceLabel: route.routeDistanceLabel,
+      routeStopCount: route.routeStopCount,
+      routeStopsPreview: route.routeStopsPreview,
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.circleId, { updatedAt: now });
+
+    const [circle, sender, members] = await Promise.all([
+      ctx.db.get(args.circleId),
+      getAppUser(ctx, travelerSlug),
+      getCircleMembers(ctx, args.circleId),
+    ]);
+    const recipientSlugs = members
+      .filter((member) => member.status === 'active' && member.travelerSlug !== travelerSlug)
+      .map((member) => member.travelerSlug);
+    if (circle && recipientSlugs.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendChatPush, {
+        recipientSlugs,
+        senderName: sender?.name ?? travelerSlug,
+        title: circle.name,
+        body: `${sender?.name ?? travelerSlug} shared a route: ${route.routeTitle}`,
+        href: `/friends/group/${args.circleId}`,
+        threadKind: 'group',
+        entityId: args.circleId,
+      });
+    }
+
+    return messageId;
+  },
+});
+
+export const markDirectChatRead = mutation({
+  args: {
+    threadId: v.id('threads'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const access = await requireDirectThreadParticipant(ctx, args.threadId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    const now = Date.now();
+    const existing = await ctx.db
+      .query('receipts')
+      .withIndex('by_threadId_and_travelerSlug', (q) =>
+        q.eq('threadId', args.threadId).eq('travelerSlug', travelerSlug)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastReadAt: now });
+    } else {
+      await ctx.db.insert('receipts', {
+        threadId: args.threadId,
+        travelerSlug,
+        lastReadAt: now,
+      });
+    }
+
+    return true;
+  },
+});
+
+export const renameDirectFriendThread = mutation({
+  args: {
+    threadId: v.id('threads'),
+    travelerSlug: v.string(),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const access = await requireDirectThreadParticipant(ctx, args.threadId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    const nextTitle = args.title.trim().slice(0, 80);
+    await ctx.db.patch(args.threadId, {
+      title: nextTitle || undefined,
+      updatedAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+export const deleteDirectFriendThread = mutation({
+  args: {
+    threadId: v.id('threads'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const access = await requireDirectThreadParticipant(ctx, args.threadId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    const [messages, receipts] = await Promise.all([
+      ctx.db
+        .query('dms')
+        .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', args.threadId))
+        .take(500),
+      ctx.db
+        .query('receipts')
+        .withIndex('by_threadId', (q) => q.eq('threadId', args.threadId))
+        .take(100),
+    ]);
+
+    for (const message of messages) {
+      await ctx.db.delete(message._id);
+    }
+    for (const receipt of receipts) {
+      await ctx.db.delete(receipt._id);
+    }
+
+    await ctx.db.delete(args.threadId);
+    return true;
+  },
+});
+
+export const deleteDirectFriendMessage = mutation({
+  args: {
+    messageId: v.id('dms'),
+    travelerSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
+
+    const message = await ctx.db.get(args.messageId);
+    if (!message || message.senderSlug !== travelerSlug) {
+      return false;
+    }
+
+    const access = await requireDirectThreadParticipant(ctx, message.threadId, travelerSlug);
+    if (!access) {
+      return false;
+    }
+
+    await ctx.db.delete(args.messageId);
+    return true;
+  },
+});
+
 export const sendFriendMessage = mutation({
   args: {
     circleId: v.id('circles'),
@@ -2660,755 +2781,5 @@ export const sendDirectFriendMessage = mutation({
     });
 
     return messageId;
-  },
-});
-
-export const startDirectFriendCall = mutation({
-  args: {
-    threadId: v.id('threads'),
-    travelerSlug: v.string(),
-    mode: v.union(v.literal('voice'), v.literal('video')),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const access = await requireDirectThreadParticipant(ctx, args.threadId, travelerSlug);
-    if (!access) {
-      return null;
-    }
-
-    const now = Date.now();
-    const callLabel = formatCallMode(args.mode);
-    const [actor, otherUser] = await Promise.all([
-      getAppUser(ctx, travelerSlug),
-      getAppUser(ctx, access.otherSlug),
-    ]);
-    const title = `${actor?.name ?? travelerSlug} ${callLabel}`;
-    const callId = await ctx.db.insert('calls', {
-      directThreadId: args.threadId,
-      roomName: buildCallRoomName(args.threadId, now),
-      createdBySlug: travelerSlug,
-      mode: args.mode,
-      status: 'active',
-      startedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert('dms', {
-      threadId: args.threadId,
-      senderSlug: travelerSlug,
-      kind: 'call',
-      body: `Started a ${callLabel}.`,
-      callId,
-      callMode: args.mode,
-      callStatus: 'active',
-      callTitle: `${otherUser?.name ?? access.otherSlug} ${callLabel}`,
-      createdAt: now,
-    });
-
-    await ctx.db.patch(args.threadId, { updatedAt: now });
-    await notifyDirectParticipantAboutCall(ctx, {
-      thread: access.thread,
-      actorSlug: travelerSlug,
-      callId,
-      kind: 'friend_call',
-      title,
-      body: `Join the ${callLabel} now.`,
-      mode: args.mode,
-    });
-
-    return await ctx.db.get(callId);
-  },
-});
-
-export const renameDirectFriendThread = mutation({
-  args: {
-    travelerSlug: v.string(),
-    threadId: v.id('threads'),
-    title: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const nextTitle = args.title.trim().slice(0, 80);
-    if (!nextTitle) {
-      return false;
-    }
-
-    const thread = await ctx.db.get(args.threadId);
-    if (!thread || (thread.participantA !== travelerSlug && thread.participantB !== travelerSlug)) {
-      return false;
-    }
-
-    await ctx.db.patch(args.threadId, {
-      title: nextTitle,
-      updatedAt: Date.now(),
-    });
-
-    return true;
-  },
-});
-
-export const deleteDirectFriendThread = mutation({
-  args: {
-    travelerSlug: v.string(),
-    threadId: v.id('threads'),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const thread = await ctx.db.get(args.threadId);
-    if (!thread || (thread.participantA !== travelerSlug && thread.participantB !== travelerSlug)) {
-      return false;
-    }
-
-    await deleteDirectThreadDocuments(ctx, args.threadId);
-    return true;
-  },
-});
-
-export const deleteFriendMessage = mutation({
-  args: {
-    messageId: v.id('messages'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const message = await ctx.db.get(args.messageId);
-    if (!message || message.senderSlug !== travelerSlug || message.kind === 'system') {
-      return false;
-    }
-
-    await ctx.db.delete(args.messageId);
-    await ctx.db.patch(message.circleId, {
-      updatedAt: Date.now(),
-    });
-
-    return true;
-  },
-});
-
-export const deleteDirectFriendMessage = mutation({
-  args: {
-    messageId: v.id('dms'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const message = await ctx.db.get(args.messageId);
-    if (!message || message.senderSlug !== travelerSlug) {
-      return false;
-    }
-
-    await ctx.db.delete(args.messageId);
-
-    const thread = await ctx.db.get(message.threadId);
-    if (thread) {
-      await ctx.db.patch(thread._id, {
-        updatedAt: Date.now(),
-      });
-    }
-
-    return true;
-  },
-});
-
-export const markFriendChatRead = mutation({
-  args: {
-    circleId: v.id('circles'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const membership = await ctx.db
-      .query('members')
-      .withIndex('by_circleId_and_travelerSlug', (q) =>
-        q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
-      )
-      .unique();
-
-    if (!membership || membership.status !== 'active') {
-      return false;
-    }
-
-    const latestMessage = await ctx.db
-      .query('messages')
-      .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', args.circleId))
-      .order('desc')
-      .take(1);
-
-    const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
-    const existing = await ctx.db
-      .query('reads')
-      .withIndex('by_circleId_and_travelerSlug', (q) =>
-        q.eq('circleId', args.circleId).eq('travelerSlug', travelerSlug)
-      )
-      .unique();
-
-    if (existing) {
-      if (existing.lastReadAt >= lastReadAt) {
-        return true;
-      }
-      await ctx.db.patch(existing._id, { lastReadAt });
-      return true;
-    }
-
-    await ctx.db.insert('reads', {
-      circleId: args.circleId,
-      travelerSlug: travelerSlug,
-      lastReadAt,
-    });
-
-    return true;
-  },
-});
-
-export const markDirectChatRead = mutation({
-  args: {
-    threadId: v.id('threads'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const thread = await ctx.db.get(args.threadId);
-    if (!thread) {
-      return false;
-    }
-
-    if (thread.participantA !== travelerSlug && thread.participantB !== travelerSlug) {
-      return false;
-    }
-
-    const latestMessage = await ctx.db
-      .query('dms')
-      .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', args.threadId))
-      .order('desc')
-      .take(1);
-
-    const lastReadAt = Math.max(Date.now(), latestMessage[0]?.createdAt ?? 0);
-    const existing = await ctx.db
-      .query('receipts')
-      .withIndex('by_threadId_and_travelerSlug', (q) =>
-        q.eq('threadId', args.threadId).eq('travelerSlug', travelerSlug)
-      )
-      .unique();
-
-    if (existing) {
-      if (existing.lastReadAt >= lastReadAt) {
-        return true;
-      }
-      await ctx.db.patch(existing._id, { lastReadAt });
-      return true;
-    }
-
-    await ctx.db.insert('receipts', {
-      threadId: args.threadId,
-      travelerSlug: travelerSlug,
-      lastReadAt,
-    });
-
-    return true;
-  },
-});
-
-export const shareTripRouteInFriendChat = mutation({
-  args: {
-    circleId: v.id('circles'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const access = await requireActiveCircleMember(ctx, args.circleId, travelerSlug);
-    if (!access) {
-      return null;
-    }
-
-    const routeShare = await buildRouteShare(ctx, travelerSlug);
-    const messageId = await ctx.db.insert('messages', {
-      circleId: args.circleId,
-      senderSlug: travelerSlug,
-      kind: 'route',
-      body: 'Shared the latest route draft.',
-      routeTitle: routeShare.routeTitle,
-      routeSummary: routeShare.routeSummary,
-      routeDistanceLabel: routeShare.routeDistanceLabel,
-      routeStopCount: routeShare.routeStopCount,
-      routeStopsPreview: routeShare.routeStopsPreview,
-      createdAt: Date.now(),
-    });
-
-    await ctx.db.patch(args.circleId, {
-      updatedAt: Date.now(),
-    });
-
-    return messageId;
-  },
-});
-
-export const startFriendCall = mutation({
-  args: {
-    circleId: v.id('circles'),
-    travelerSlug: v.string(),
-    mode: v.union(v.literal('voice'), v.literal('video')),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const access = await requireActiveCircleMember(ctx, args.circleId, travelerSlug);
-    if (!access) {
-      return null;
-    }
-
-    const now = Date.now();
-    const callId = await ctx.db.insert('calls', {
-      circleId: args.circleId,
-      roomName: buildCallRoomName(args.circleId, now),
-      createdBySlug: travelerSlug,
-      mode: args.mode,
-      status: 'active',
-      startedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const callLabel = formatCallMode(args.mode);
-    await ctx.db.insert('messages', {
-      circleId: args.circleId,
-      senderSlug: travelerSlug,
-      kind: 'call',
-      body: `Started a ${callLabel}.`,
-      callId,
-      callMode: args.mode,
-      callStatus: 'active',
-      callTitle: `${access.circle.name} ${callLabel}`,
-      createdAt: now,
-    });
-
-    await ctx.db.patch(args.circleId, { updatedAt: now });
-    await notifyCircleMembersAboutCall(ctx, {
-      circleId: args.circleId,
-      actorSlug: travelerSlug,
-      callId,
-      kind: 'friend_call',
-      title: `${access.circle.name} ${callLabel}`,
-      body: `Join the ${callLabel} now.`,
-      mode: args.mode,
-    });
-
-    const call = await ctx.db.get(callId);
-    return call;
-  },
-});
-
-export const scheduleFriendCall = mutation({
-  args: {
-    circleId: v.id('circles'),
-    travelerSlug: v.string(),
-    mode: v.union(v.literal('voice'), v.literal('video')),
-    scheduledFor: v.number(),
-    endsAt: v.optional(v.number()),
-    reminderMinutesBefore: v.optional(v.number()),
-    title: v.optional(v.string()),
-    description: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const access = await requireActiveCircleMember(ctx, args.circleId, travelerSlug);
-    if (!access) {
-      return null;
-    }
-
-    const now = Date.now();
-    const scheduledFor = Math.max(args.scheduledFor, now + 60_000);
-    const endsAt = args.endsAt && args.endsAt > scheduledFor ? args.endsAt : undefined;
-    const reminderMinutesBefore = args.reminderMinutesBefore ?? 15;
-    const callLabel = formatCallMode(args.mode);
-    const title = args.title?.trim() || `${access.circle.name} ${callLabel}`;
-    const description = args.description?.trim() || undefined;
-    const callId = await ctx.db.insert('calls', {
-      circleId: args.circleId,
-      roomName: buildCallRoomName(args.circleId, now),
-      createdBySlug: travelerSlug,
-      mode: args.mode,
-      status: 'scheduled',
-      title,
-      description,
-      scheduledFor,
-      endsAt,
-      reminderMinutesBefore,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert('messages', {
-      circleId: args.circleId,
-      senderSlug: travelerSlug,
-      kind: 'scheduled_call',
-      body: `Scheduled a ${callLabel}.`,
-      callId,
-      callMode: args.mode,
-      callStatus: 'scheduled',
-      callScheduledFor: scheduledFor,
-      callEndsAt: endsAt,
-      callReminderMinutesBefore: reminderMinutesBefore,
-      callTitle: title,
-      callDescription: description,
-      createdAt: now,
-    });
-
-    await ctx.db.patch(args.circleId, { updatedAt: now });
-    await notifyCircleMembersAboutCall(ctx, {
-      circleId: args.circleId,
-      actorSlug: travelerSlug,
-      callId,
-      kind: 'friend_call',
-      title,
-      body: `A ${callLabel} was scheduled for this group.`,
-    });
-
-    if (reminderMinutesBefore > 0) {
-      await ctx.scheduler.runAt(
-        Math.max(now + 1_000, scheduledFor - reminderMinutesBefore * 60_000),
-        internal.friends.sendScheduledCallReminder,
-        {
-          callId,
-        }
-      );
-    }
-
-    const call = await ctx.db.get(callId);
-    return call;
-  },
-});
-
-export const joinScheduledFriendCall = mutation({
-  args: {
-    callId: v.id('calls'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const call = await ctx.db.get(args.callId);
-    if (!call) {
-      return null;
-    }
-
-    const circleAccess = call.circleId
-      ? await requireActiveCircleMember(ctx, call.circleId, travelerSlug)
-      : null;
-    const directAccess = call.directThreadId
-      ? await requireDirectThreadParticipant(ctx, call.directThreadId, travelerSlug)
-      : null;
-    if (!circleAccess && !directAccess) {
-      return null;
-    }
-
-    if (call.status === 'scheduled') {
-      const now = Date.now();
-      await ctx.db.patch(call._id, {
-        status: 'active',
-        startedAt: now,
-        updatedAt: now,
-      });
-      if (call.circleId) {
-        await ctx.db.patch(call.circleId, { updatedAt: now });
-      }
-      if (call.directThreadId) {
-        await ctx.db.patch(call.directThreadId, { updatedAt: now });
-      }
-    }
-
-    return await ctx.db.get(call._id);
-  },
-});
-
-export const endFriendCall = mutation({
-  args: {
-    callId: v.id('calls'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const call = await ctx.db.get(args.callId);
-    if (!call) {
-      return null;
-    }
-
-    const circleAccess = call.circleId
-      ? await requireActiveCircleMember(ctx, call.circleId, travelerSlug)
-      : null;
-    const directAccess = call.directThreadId
-      ? await requireDirectThreadParticipant(ctx, call.directThreadId, travelerSlug)
-      : null;
-    if (!circleAccess && !directAccess) {
-      return null;
-    }
-
-    const now = Date.now();
-    await ctx.db.patch(call._id, {
-      status: 'ended',
-      endedAt: now,
-      updatedAt: now,
-    });
-
-    if (call.circleId) {
-      const callMessages = await ctx.db
-        .query('messages')
-        .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', call.circleId!))
-        .order('desc')
-        .take(50);
-
-      await Promise.all(
-        callMessages
-          .filter((message) => message.callId === call._id && message.callStatus !== 'ended')
-          .map((message) => ctx.db.patch(message._id, { callStatus: 'ended' }))
-      );
-      await ctx.db.patch(call.circleId, { updatedAt: now });
-    }
-
-    if (call.directThreadId) {
-      const callMessages = await ctx.db
-        .query('dms')
-        .withIndex('by_threadId_and_createdAt', (q) => q.eq('threadId', call.directThreadId!))
-        .order('desc')
-        .take(50);
-
-      await Promise.all(
-        callMessages
-          .filter((message) => message.callId === call._id && message.callStatus !== 'ended')
-          .map((message) => ctx.db.patch(message._id, { callStatus: 'ended' }))
-      );
-      await ctx.db.patch(call.directThreadId, { updatedAt: now });
-    }
-
-    return await ctx.db.get(call._id);
-  },
-});
-
-export const getFriendCall = query({
-  args: {
-    callId: v.id('calls'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const call = await ctx.db.get(args.callId);
-    if (!call || call.status === 'ended' || call.status === 'cancelled') {
-      return null;
-    }
-
-    const circleAccess = call.circleId
-      ? await requireActiveCircleMember(ctx, call.circleId, travelerSlug)
-      : null;
-    const directAccess = call.directThreadId
-      ? await requireDirectThreadParticipant(ctx, call.directThreadId, travelerSlug)
-      : null;
-    if (!circleAccess && !directAccess) {
-      return null;
-    }
-
-    const [creator, members] = await Promise.all([
-      getAppUser(ctx, call.createdBySlug),
-      call.circleId ? getCircleMembers(ctx, call.circleId) : Promise.resolve([]),
-    ]);
-    const memberViews = call.circleId
-      ? await Promise.all(members.map((member) => buildMemberView(ctx, member)))
-      : directAccess
-        ? await buildDirectCallMemberViews(ctx, directAccess.thread)
-        : [];
-    const directOther = directAccess ? await getAppUser(ctx, directAccess.otherSlug) : null;
-    const callName = circleAccess?.circle.name ?? directOther?.name ?? directAccess?.otherSlug ?? 'Wandr';
-
-    return {
-      _id: call._id,
-      circleId: call.circleId ?? null,
-      directThreadId: call.directThreadId ?? null,
-      circleName: callName,
-      roomName: call.roomName,
-      createdBySlug: call.createdBySlug,
-      createdByName: creator?.name ?? call.createdBySlug,
-      mode: call.mode,
-      status: call.status,
-      title: call.title ?? `${callName} ${formatCallMode(call.mode)}`,
-      description: call.description ?? null,
-      scheduledFor: call.scheduledFor ?? null,
-      endsAt: call.endsAt ?? null,
-      reminderMinutesBefore: call.reminderMinutesBefore ?? null,
-      startedAt: call.startedAt ?? null,
-      members: memberViews,
-    };
-  },
-});
-
-export const listIncomingFriendCalls = query({
-  args: {
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const [memberships, directThreads] = await Promise.all([
-      getActiveCircleMemberships(ctx, travelerSlug),
-      getDirectThreadsForTraveler(ctx, travelerSlug),
-    ]);
-    const now = Date.now();
-    const incomingCalls = [];
-
-    for (const membership of memberships) {
-      const calls = await ctx.db
-        .query('calls')
-        .withIndex('by_circleId_and_createdAt', (q) => q.eq('circleId', membership.circleId))
-        .order('desc')
-        .take(6);
-
-      for (const call of calls) {
-        if (
-          call.status !== 'active' ||
-          call.createdBySlug === travelerSlug ||
-          now - (call.startedAt ?? call.createdAt) > INCOMING_CALL_WINDOW_MS
-        ) {
-          continue;
-        }
-
-        const [circle, creator, creatorProfile] = await Promise.all([
-          ctx.db.get(membership.circleId),
-          getAppUser(ctx, call.createdBySlug),
-          getTravelerProfile(ctx, call.createdBySlug),
-        ]);
-
-        if (!circle) {
-          continue;
-        }
-
-        incomingCalls.push({
-          _id: call._id,
-          circleId: membership.circleId,
-          directThreadId: call.directThreadId ?? null,
-          circleName: circle.name,
-          createdBySlug: call.createdBySlug,
-          createdByName: creator?.name ?? call.createdBySlug,
-          createdByAvatarUri: creatorProfile?.avatarUri ?? null,
-          mode: call.mode,
-          title: call.title ?? `${circle.name} ${formatCallMode(call.mode)}`,
-          startedAt: call.startedAt ?? call.createdAt,
-        });
-      }
-    }
-
-    for (const thread of directThreads) {
-      const calls = await ctx.db
-        .query('calls')
-        .withIndex('by_directThreadId_and_createdAt', (q) => q.eq('directThreadId', thread._id))
-        .order('desc')
-        .take(6);
-
-      for (const call of calls) {
-        if (
-          call.status !== 'active' ||
-          call.createdBySlug === travelerSlug ||
-          now - (call.startedAt ?? call.createdAt) > INCOMING_CALL_WINDOW_MS
-        ) {
-          continue;
-        }
-
-        const [creator, creatorProfile] = await Promise.all([
-          getAppUser(ctx, call.createdBySlug),
-          getTravelerProfile(ctx, call.createdBySlug),
-        ]);
-
-        incomingCalls.push({
-          _id: call._id,
-          circleId: call.circleId ?? null,
-          directThreadId: thread._id,
-          circleName: creator?.name ?? call.createdBySlug,
-          createdBySlug: call.createdBySlug,
-          createdByName: creator?.name ?? call.createdBySlug,
-          createdByAvatarUri: creatorProfile?.avatarUri ?? null,
-          mode: call.mode,
-          title: call.title ?? `${creator?.name ?? call.createdBySlug} ${formatCallMode(call.mode)}`,
-          startedAt: call.startedAt ?? call.createdAt,
-        });
-      }
-    }
-
-    return incomingCalls.sort((a, b) => b.startedAt - a.startedAt);
-  },
-});
-
-export const getFriendCallTokenContext = internalQuery({
-  args: {
-    callId: v.id('calls'),
-    travelerSlug: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const travelerSlug = await assertCurrentTravelerSlug(ctx, args.travelerSlug);
-    const call = await ctx.db.get(args.callId);
-    if (!call) {
-      return null;
-    }
-
-    const circleAccess = call.circleId
-      ? await requireActiveCircleMember(ctx, call.circleId, travelerSlug)
-      : null;
-    const directAccess = call.directThreadId
-      ? await requireDirectThreadParticipant(ctx, call.directThreadId, travelerSlug)
-      : null;
-    if (!circleAccess && !directAccess) {
-      return null;
-    }
-
-    const user = await getAppUser(ctx, travelerSlug);
-    return {
-      roomName: call.roomName,
-      identity: travelerSlug,
-      name: user?.name ?? travelerSlug,
-      canPublishSources: call.mode === 'voice' ? ['microphone'] : ['camera', 'microphone'],
-    };
-  },
-});
-
-export const sendScheduledCallReminder = internalMutation({
-  args: {
-    callId: v.id('calls'),
-  },
-  handler: async (ctx, args) => {
-    const call = await ctx.db.get(args.callId);
-    if (!call || call.status !== 'scheduled') {
-      return false;
-    }
-
-    if (call.circleId) {
-      const circle = await ctx.db.get(call.circleId);
-      if (!circle) {
-        return false;
-      }
-
-      const title = call.title ?? `${circle.name} ${formatCallMode(call.mode)}`;
-      await notifyCircleMembersAboutCall(ctx, {
-        circleId: call.circleId,
-        actorSlug: call.createdBySlug,
-        callId: call._id,
-        kind: 'friend_call_reminder',
-        title,
-        body: `Reminder: ${formatCallMode(call.mode)} starts soon.`,
-      });
-      return true;
-    }
-
-    if (call.directThreadId) {
-      const access = await requireDirectThreadParticipant(ctx, call.directThreadId, call.createdBySlug);
-      if (!access) {
-        return false;
-      }
-      const actor = await getAppUser(ctx, call.createdBySlug);
-      const title = call.title ?? `${actor?.name ?? call.createdBySlug} ${formatCallMode(call.mode)}`;
-      await notifyDirectParticipantAboutCall(ctx, {
-        thread: access.thread,
-        actorSlug: call.createdBySlug,
-        callId: call._id,
-        kind: 'friend_call_reminder',
-        title,
-        body: `Reminder: ${formatCallMode(call.mode)} starts soon.`,
-      });
-      return true;
-    }
-
-    return false;
   },
 });

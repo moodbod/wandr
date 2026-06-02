@@ -102,35 +102,6 @@ export type FriendChatMessage = {
       status?: 'completed' | 'active' | 'upcoming';
     }[];
   } | null;
-  callCard: {
-    callId: Id<'calls'> | null;
-    mode: 'voice' | 'video';
-    status: 'active' | 'scheduled' | 'ended' | 'cancelled';
-    scheduledFor: number | null;
-    endsAt: number | null;
-    reminderMinutesBefore: number | null;
-    title: string;
-    description: string | null;
-  } | null;
-};
-
-export type FriendCallDetail = {
-  _id: Id<'calls'>;
-  circleId: Id<'circles'> | null;
-  directThreadId?: Id<'threads'> | null;
-  circleName: string;
-  roomName: string;
-  createdBySlug: string;
-  createdByName: string;
-  mode: 'voice' | 'video';
-  status: 'active' | 'scheduled' | 'ended' | 'cancelled';
-  title: string;
-  description: string | null;
-  scheduledFor: number | null;
-  endsAt: number | null;
-  reminderMinutesBefore: number | null;
-  startedAt: number | null;
-  members: FriendCircleMember[];
 };
 
 export type FriendRouteShare = {
@@ -188,16 +159,6 @@ export type DirectChatMessage = {
     preview: string;
     kind: string;
   } | null;
-  callCard: {
-    callId: Id<'calls'> | null;
-    mode: 'voice' | 'video';
-    status: 'active' | 'scheduled' | 'ended' | 'cancelled';
-    scheduledFor: number | null;
-    endsAt: number | null;
-    reminderMinutesBefore: number | null;
-    title: string;
-    description: string | null;
-  } | null;
 };
 
 export type SupportChatMessage = {
@@ -244,6 +205,7 @@ export type FriendChatListItem = {
   travelerSlug?: string;
   avatarUri?: string | null;
   avatarUris?: string[];
+  members?: FriendCircleMember[];
   memberCount?: number;
   href: string;
 };
@@ -256,6 +218,7 @@ export type JoinableFriendGroup = {
   preview: string | null;
   updatedAt: number;
   avatarUris: string[];
+  members: FriendCircleMember[];
   memberCount: number;
   href: string;
 };

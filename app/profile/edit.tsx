@@ -20,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { generateAvatarUploadUrlRef, updateTravelerProfileRef } from '@/lib/convex';
+import { uploadAvatarAsset } from '@/lib/upload-avatar';
 import { useAuthSession } from '@/providers/auth-session';
 
 type TravelStyle = 'solo' | 'couple' | 'friends' | 'family';
@@ -150,14 +151,7 @@ export default function EditProfileScreen() {
     try {
       const asset = result.assets[0];
       const uploadUrl = await generateAvatarUploadUrl({});
-      const photoResponse = await fetch(asset.uri);
-      const blob = await photoResponse.blob();
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': asset.mimeType ?? blob.type ?? 'image/jpeg' },
-        body: blob,
-      });
-      const { storageId } = (await uploadResponse.json()) as { storageId: Id<'_storage'> };
+      const storageId = await uploadAvatarAsset(uploadUrl, asset);
 
       setAvatarUri(asset.uri);
       setAvatarStorageId(storageId);

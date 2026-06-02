@@ -125,19 +125,17 @@ export const styles = StyleSheet.create({
     height: 220,
     borderRadius: 28,
   },
-  sheetContainer: {
-    flex: 1,
-    padding: 24,
-  },
   sheetHeader: {
-    marginBottom: 20,
+    paddingTop: 4,
   },
   sheetTitle: {
     fontSize: 22,
     fontWeight: '600',
   },
   sheetContent: {
-    gap: 12,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    gap: 18,
   },
   tripRow: {
     padding: 16,

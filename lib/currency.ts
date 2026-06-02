@@ -1,7 +1,7 @@
 import currency from 'currency.js';
 
 const LIVE_RATE_SOURCE = 'fxapi.app';
-const RATE_UNAVAILABLE_LABEL = 'Live rate unavailable';
+const USD_FALLBACK_RATE_LABEL = 'Showing USD until live rate loads';
 
 export const supportedCurrencies = [
   { code: 'USD', label: 'US dollar' },
@@ -60,6 +60,10 @@ function getCurrency(currencyCode: string) {
 
 function getRateFromUsd(currencyCode: string) {
   const selectedCurrency = getCurrency(currencyCode);
+  if (selectedCurrency.code === 'USD') {
+    return 1;
+  }
+
   const liveRate = liveUsdRates?.[selectedCurrency.code];
   return Number.isFinite(liveRate) && typeof liveRate === 'number' ? liveRate : null;
 }
@@ -94,13 +98,21 @@ export function convertUsdToCurrency(amountUsd: number, currencyCode = 'USD') {
 export function formatUsdAsCurrency(amountUsd: number, currencyCode = 'USD') {
   const selectedCurrency = getCurrency(currencyCode);
   const convertedAmount = convertUsdToCurrency(amountUsd, selectedCurrency.code);
-  return convertedAmount === null ? RATE_UNAVAILABLE_LABEL : formatCurrencyAmount(convertedAmount, selectedCurrency.code);
+  return convertedAmount === null
+    ? formatCurrencyAmount(amountUsd, 'USD')
+    : formatCurrencyAmount(convertedAmount, selectedCurrency.code);
 }
 
 export function formatUsdRate(currencyCode = 'USD') {
   const selectedCurrency = getCurrency(currencyCode);
   const rate = getRateFromUsd(selectedCurrency.code);
-  return rate === null ? RATE_UNAVAILABLE_LABEL : `1 USD = ${formatCurrencyAmount(rate, selectedCurrency.code)} ${selectedCurrency.code}`;
+  if (selectedCurrency.code === 'USD') {
+    return 'USD';
+  }
+
+  return rate === null
+    ? USD_FALLBACK_RATE_LABEL
+    : `1 USD = ${formatCurrencyAmount(rate, selectedCurrency.code)} ${selectedCurrency.code}`;
 }
 
 export function formatUsdConversion(amountUsd: number, currencyCode = 'USD') {

@@ -376,7 +376,6 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
         itemKind: 'experience' as const,
         imageUri: experience.imageUri,
         label: experience.title,
-        priceLabel: experience.price,
         tone: index % 2 === 0 ? ('accent' as const) : ('dark' as const),
       })),
     ...stays
@@ -388,7 +387,6 @@ export async function getLiveCatalogPayload(ctx: QueryCtx) {
         itemKind: 'stay' as const,
         imageUri: stay.imageUri,
         label: stay.name,
-        priceLabel: stay.priceLabel,
         tone: index % 2 === 0 ? ('accent' as const) : ('dark' as const),
       })),
   ];

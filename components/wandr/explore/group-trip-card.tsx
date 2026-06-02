@@ -82,7 +82,15 @@ export function ExploreGroupTripCard({
           </ThemedText>
           <View style={styles.footer}>
             <TravelerAvatarStack
-              avatars={card.avatarUris}
+              avatars={
+                card.avatars
+                  ? card.avatars.map((avatar) => ({
+                      name: avatar.name,
+                      paletteKey: avatar.travelerSlug,
+                      uri: avatar.avatarUri,
+                    }))
+                  : card.avatarUris
+              }
               fallbackName={card.hostName || card.groupName}
               fallbackPaletteKey={card.circleId}
               totalCount={card.memberCount}
@@ -133,7 +141,7 @@ const styles = StyleSheet.create({
     minHeight: 304,
   },
   backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
   },
   gradient: {
     position: 'absolute',

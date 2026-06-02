@@ -1,10 +1,10 @@
 import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView, isLiquidGlassAvailable } from '@/lib/glass-effect';
 import { DotsThree, PaperPlaneTilt } from 'phosphor-react-native';
 import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInLeft, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
 
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -47,20 +47,19 @@ export function FriendChatComposer({
     <View style={styles.wrap}>
       <Animated.View
         layout={LinearTransition.duration(180)}
-        style={[styles.composerShell, !isAndroid ? styles.composerFloat : null, { borderRadius: composerRadius }]}>
+        style={[styles.composerShell, { borderRadius: composerRadius }]}>
         <View style={[styles.composerGlassClip, { borderRadius: composerRadius }]}>
           {shouldUseNativeGlass ? (
             <GlassView
-              style={[StyleSheet.absoluteFillObject, { borderRadius: composerRadius }]}
+              style={[({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }), { borderRadius: composerRadius }]}
               glassEffectStyle="clear"
-              tintColor={designSystem.colors.transparentWhite}
               isInteractive
             />
           ) : Platform.OS === 'ios' ? (
             <BlurView
               intensity={76}
               tint={isDark ? 'dark' : 'light'}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: composerRadius }]}
+              style={[({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }), { borderRadius: composerRadius }]}
             />
           ) : null}
 
@@ -99,14 +98,14 @@ export function FriendChatComposer({
             ) : null}
 
             <Animated.View layout={LinearTransition.duration(180)} style={styles.inputSlot}>
-              <GlassInput
+              <Input
                 accessibilityLabel={placeholder}
                 autoCapitalize="sentences"
                 autoCorrect
                 containerStyle={[styles.inputContainer, isMultilineDraft ? styles.inputContainerMultiline : null]}
+                frameless
                 leftIcon={null}
                 multiline
-                plain
                 value={value}
                 onChangeText={onChangeText}
                 placeholder=""
@@ -144,16 +143,13 @@ const styles = StyleSheet.create({
     minHeight: 52,
     maxHeight: 144,
   },
-  composerFloat: {
-    boxShadow: '0 12px 26px rgba(14,15,12,0.18)',
-  },
   composerGlassClip: {
     minHeight: 52,
     maxHeight: 144,
     overflow: 'hidden',
   },
   composerTint: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     borderWidth: StyleSheet.hairlineWidth,
   },
   composerContent: {
@@ -182,8 +178,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   inputContainer: {
+    backgroundColor: 'transparent',
     height: 22,
     minHeight: 22,
+    paddingHorizontal: 0,
   },
   inputContainerMultiline: {
     height: 66,
@@ -192,7 +190,6 @@ const styles = StyleSheet.create({
     minHeight: 22,
     maxHeight: 104,
     fontSize: 17,
-    lineHeight: 22,
     fontWeight: '500',
     paddingTop: 0,
     paddingBottom: 0,

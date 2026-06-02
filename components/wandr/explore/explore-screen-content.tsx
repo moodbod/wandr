@@ -1,11 +1,10 @@
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Link, useRouter } from 'expo-router';
 import React, { memo, useCallback, useMemo } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { Sheet, SheetScrollView, SheetRef } from '@/components/ui/sheet';
 import { GlassButton } from '@/components/ui/glass-button';
 import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardList } from '@/components/wandr/explore/activity-card-list';
@@ -20,6 +19,7 @@ import {
   getPlanningLocationCopy,
   toHiddenGemDiscoveryItem,
 } from '@/lib/explore-screen-model';
+import { GlassView } from '@/lib/glass-effect';
 import type { ExploreJoinableTripCard, ExplorePageContent } from '@/types/explore';
 import type { TripListItem } from '@/types/trip';
 import { MagnifyingGlass, Plus } from 'phosphor-react-native';
@@ -137,7 +137,7 @@ export const ExploreContent = memo(function ExploreContent({
     [hiddenGemItems, searchedActivities]
   );
   const { isLargeScreen } = useResponsive();
-  const ScrollComponent = isLargeScreen ? ScrollView : BottomSheetScrollView;
+  const ScrollComponent = isLargeScreen ? ScrollView : SheetScrollView;
 
   return (
     <ScrollComponent contentContainerStyle={[styles.sheetContent, scrollContainerStyle]} showsVerticalScrollIndicator={false}>
@@ -191,6 +191,7 @@ export const ExploreContent = memo(function ExploreContent({
           <TripFilterTabs
             trips={locationTrips}
             selectedTripId={selectedTripId}
+            selectFirstByDefault={false}
             onSelectTrip={onSelectTrip}
           />
         ) : (
@@ -272,7 +273,9 @@ export const ExploreContent = memo(function ExploreContent({
 
 export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   animatedIndex,
+  bottomInset = 0,
   headerAnimatedStyle,
+  isOpen = true,
   isCardLoading,
   isDark,
   locationActivities,
@@ -287,7 +290,9 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   onSelectTrip,
 }: {
   animatedIndex?: ReturnType<typeof useSharedValue<number>>;
+  bottomInset?: number;
   headerAnimatedStyle?: object;
+  isOpen?: boolean;
   isCardLoading: boolean;
   isDark: boolean;
   locationActivities: ExplorePageContent['home']['activities'];
@@ -297,7 +302,7 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   locationTrips: readonly TripListItem[];
   planningCopy: ReturnType<typeof getPlanningLocationCopy>;
   selectedTripId?: string;
-  sheetRef?: React.RefObject<BottomSheet | null>;
+  sheetRef?: React.RefObject<SheetRef | null>;
   snapPoints?: (string | number)[];
   onSelectTrip: (tripId: string) => void;
 }) {
@@ -325,35 +330,66 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
   );
 
   return (
-    <GlassBottomSheet
-      index={0}
+    <Sheet
+      animatedIndex={animatedIndex}
+      backgroundInteraction="enabled"
+      bottomInset={bottomInset}
+      enablePanDownToClose={false}
+      index={isOpen ? 0 : -1}
+      isOpen={isOpen}
+      presentation="inline"
       ref={sheetRef}
-      snapPoints={snapPoints ?? ['34%', '64%', '100%']}
-      animatedIndex={animatedIndex}>
-      <BottomSheetScrollView contentContainerStyle={styles.mobileSheetContent} showsVerticalScrollIndicator={false}>
-        <Animated.View style={headerAnimatedStyle ? [styles.mobileSectionHeader, headerAnimatedStyle] : styles.mobileSectionHeader}>
+      showDragIndicator={false}
+      snapPoints={snapPoints ?? [390, '78%']}
+      style={[styles.mobileSheetPanel, Platform.OS !== 'ios' ? styles.mobileSheetPanelFallback : null]}>
+      {Platform.OS === 'ios' ? (
+        <GlassView glassEffectStyle="regular" style={[StyleSheet.absoluteFill, styles.mobileSheetGlass]} />
+      ) : null}
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.mobileStickySearchButton,
+          Platform.OS === 'ios' ? styles.nativeMobileStickySearchButton : null,
+        ]}>
+        <Link href="/explore/search" asChild>
+          <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
+            <MagnifyingGlass color={isDark ? designSystem.colors.white : designSystem.colors.warmDark} size={20} weight="bold" />
+          </GlassButton>
+        </Link>
+      </View>
+      <SheetScrollView
+        contentContainerStyle={[
+          styles.mobileSheetContent,
+          Platform.OS === 'ios' ? styles.nativeMobileSheetContent : null,
+        ]}
+        showsVerticalScrollIndicator={false}>
+        <Animated.View
+          style={[
+            styles.mobileSectionHeader,
+            Platform.OS === 'ios' ? styles.nativeMobileSectionHeader : null,
+            headerAnimatedStyle,
+          ]}>
           <View style={styles.sectionCopy}>
             <ThemedText
               darkColor={designSystem.colors.darkText}
               lightColor={designSystem.colors.ink}
-              style={styles.mobileSectionTitle}
+              style={[
+                styles.mobileSectionTitle,
+                Platform.OS === 'ios' ? styles.nativeMobileSectionTitle : null,
+              ]}
             >
-              {planningCopy.exploreTitle}
+              {Platform.OS === 'ios' ? locationLabel : planningCopy.exploreTitle}
             </ThemedText>
             <ThemedText
               style={[
                 styles.mobileSectionSubtitle,
+                Platform.OS === 'ios' ? styles.nativeMobileSectionSubtitle : null,
                 { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
               ]}
             >
-              Nearby plans, open groups, and places worth saving.
+              {Platform.OS === 'ios' ? 'Places, groups, and trips nearby.' : 'Nearby plans, open groups, and places worth saving.'}
             </ThemedText>
           </View>
-          <Link href="/explore/search" asChild>
-            <GlassButton accessibilityLabel="Search experiences" width={48} height={48}>
-              <MagnifyingGlass color={isDark ? designSystem.colors.white : designSystem.colors.warmDark} size={20} weight="bold" />
-            </GlassButton>
-          </Link>
         </Animated.View>
 
         <View style={styles.mobileTripFilterRail}>
@@ -361,6 +397,7 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
             <TripFilterTabs
               trips={locationTrips}
               selectedTripId={selectedTripId}
+              selectFirstByDefault={false}
               onSelectTrip={onSelectTrip}
             />
           ) : (
@@ -384,7 +421,6 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
             </Link>
           )}
         </View>
-
         <View style={styles.mobileCardList}>
           {locationJoinableTripCards.length > 0 ? (
             <View style={styles.openTripsSection}>
@@ -440,23 +476,26 @@ export const ExploreLoadedSheet = memo(function ExploreLoadedSheet({
             <View
               style={[
                 styles.emptyLocationCard,
+                Platform.OS === 'ios' ? styles.mobileEmptyLocationCard : null,
                 { borderColor: isDark ? designSystem.colors.darkBorderSoft : designSystem.colors.borderSoft },
               ]}
             >
-              <ThemedText style={styles.emptyLocationTitle}>No {locationLabel} picks yet</ThemedText>
+              <ThemedText style={[styles.emptyLocationTitle, Platform.OS === 'ios' ? styles.mobileEmptyLocationTitle : null]}>
+                No picks yet
+              </ThemedText>
               <ThemedText
                 style={[
                   styles.emptyLocationText,
+                  Platform.OS === 'ios' ? styles.mobileEmptyLocationText : null,
                   { color: isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText },
                 ]}
               >
-                Keep this location selected while you plan ahead. New stays and experiences will appear here when they are added.
+                New stays and experiences will appear here when they are added.
               </ThemedText>
             </View>
           ) : null}
         </View>
-      </BottomSheetScrollView>
-    </GlassBottomSheet>
+      </SheetScrollView>
+    </Sheet>
   );
 });
-

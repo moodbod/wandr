@@ -55,9 +55,6 @@ export function FriendMatchCard({
           <ThemedText style={styles.contextText} numberOfLines={1}>
             {candidate.baseLabel}
           </ThemedText>
-          <ThemedText style={[styles.matchText, { color: isDark ? designSystem.colors.lime : designSystem.colors.darkGreen }]}>
-            {candidate.matchScore}% match
-          </ThemedText>
         </View>
       </View>
 
@@ -90,7 +87,6 @@ export function FriendMatchCardSkeleton() {
         <SkeletonBlock style={styles.nameSkeleton} />
         <View style={styles.metaRow}>
           <SkeletonBlock style={styles.contextSkeleton} />
-          <SkeletonBlock style={styles.matchSkeleton} />
         </View>
       </View>
       <View style={styles.actions}>
@@ -140,12 +136,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: designSystem.colors.ink,
   },
-  matchText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '600',
-    color: designSystem.colors.darkGreen,
-  },
   contextText: {
     maxWidth: '100%',
     fontSize: 14,
@@ -155,11 +145,6 @@ const styles = StyleSheet.create({
   nameSkeleton: {
     width: 108,
     height: 20,
-    borderRadius: 8,
-  },
-  matchSkeleton: {
-    width: 62,
-    height: 15,
     borderRadius: 8,
   },
   contextSkeleton: {

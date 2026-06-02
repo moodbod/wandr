@@ -1,12 +1,11 @@
 import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WandrActionCard } from '@/components/wandr/action-card';
 import { WandrBulletRow } from '@/components/wandr/bullet-row';
-import { WandrContentPanel } from '@/components/wandr/content-panel';
 import { WandrHeader } from '@/components/wandr/header';
-import { WandrScreenHero } from '@/components/wandr/screen-hero';
 import { WandrSection } from '@/components/wandr/section';
 import { appContent, type WandrScreenContent, type WandrScreenKey } from '@/constants/app-content';
 import { designSystem } from '@/constants/design-system';
@@ -24,7 +23,17 @@ export function WandrScreen({ screen }: WandrScreenProps) {
     <ThemedView style={styles.root}>
       <WandrHeader config={header} />
       <ScrollView contentContainerStyle={styles.content}>
-        <WandrScreenHero eyebrow={eyebrow} title={title} description={description} />
+        <ThemedView
+          lightColor={designSystem.colors.surfaceMuted}
+          darkColor={designSystem.colors.darkSurface}
+          style={styles.hero}
+        >
+          <ThemedText style={styles.eyebrow}>{eyebrow}</ThemedText>
+          <View style={styles.heroCopy}>
+            <ThemedText type="title" style={styles.heroTitle}>{title}</ThemedText>
+            <ThemedText>{description}</ThemedText>
+          </View>
+        </ThemedView>
 
         {actions.length > 0 ? (
           <WandrSection title={actionsTitle}>
@@ -40,11 +49,15 @@ export function WandrScreen({ screen }: WandrScreenProps) {
 
         {sections.map((section) => (
           <WandrSection title={section.title} key={section.title}>
-            <WandrContentPanel>
+            <ThemedView
+              lightColor={designSystem.colors.surface}
+              darkColor={designSystem.colors.darkSurface}
+              style={styles.panel}
+            >
               {section.items.map((item) => (
                 <WandrBulletRow key={item}>{item}</WandrBulletRow>
               ))}
-            </WandrContentPanel>
+            </ThemedView>
           </WandrSection>
         ))}
       </ScrollView>
@@ -63,5 +76,23 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: designSystem.layout.cardGap,
+  },
+  hero: {
+    padding: designSystem.spacing.xl,
+    borderRadius: designSystem.radii.hero,
+    gap: designSystem.spacing.sm,
+  },
+  eyebrow: {
+    ...designSystem.type.eyebrow,
+    color: designSystem.colors.darkGreen,
+  },
+  heroCopy: {
+    gap: designSystem.spacing.sm,
+  },
+  heroTitle: designSystem.type.title,
+  panel: {
+    borderRadius: designSystem.radii.panel,
+    padding: designSystem.layout.cardPadding,
+    gap: designSystem.spacing.sm,
   },
 });

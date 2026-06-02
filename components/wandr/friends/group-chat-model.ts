@@ -20,10 +20,7 @@ export function getReplyPreview(message: FriendChatMessage) {
   if (message.routeCard) {
     return message.routeCard.title;
   }
-  if (message.callCard) {
-    return message.callCard.title;
-  }
-  if (message.body?.startsWith('wandr:sticker:')) {
+if (message.body?.startsWith('wandr:sticker:')) {
     return 'Sticker';
   }
   if (message.body?.startsWith('wandr:gif:')) {

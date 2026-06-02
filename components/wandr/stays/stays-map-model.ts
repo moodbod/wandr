@@ -24,7 +24,7 @@ export function filterStaysByDiscoveryMode(
   const hasUsableDistance = stays.some((stay) => Number.isFinite(getDistance(stay)));
 
   if (!hasUsableDistance) {
-    return [];
+    return [...stays];
   }
 
   const rankedByDistance = [...stays].sort((a, b) => {

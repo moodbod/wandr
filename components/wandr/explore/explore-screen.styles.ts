@@ -27,7 +27,7 @@ export const styles = StyleSheet.create({
     overflow: 'visible',
   },
   mapLayerLarge: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
   },
   contentColumn: {
     flexShrink: 0,
@@ -76,7 +76,7 @@ export const styles = StyleSheet.create({
     position: 'relative',
   },
   mapColumnLarge: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     backgroundColor: designSystem.colors.mapFallback,
     zIndex: 0,
   },
@@ -121,11 +121,45 @@ export const styles = StyleSheet.create({
   sheetContent: {
     paddingBottom: 32,
   },
+  mobileSheetPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 8,
+  },
+  mobileSheetGlass: {
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+  },
+  mobileSheetPanelFallback: {
+    backgroundColor: 'rgba(28, 28, 30, 0.72)',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    overflow: 'hidden',
+  },
+  mobileStickySearchButton: {
+    position: 'absolute',
+    top: designSystem.spacing.lg,
+    right: designSystem.spacing.lg,
+    zIndex: 4,
+  },
+  nativeMobileStickySearchButton: {
+    top: 24,
+    right: 16,
+  },
   mobileSheetContent: {
     paddingTop: designSystem.spacing.lg,
     paddingHorizontal: designSystem.spacing.lg,
-    paddingBottom: 132,
+    paddingBottom: 124,
     gap: 20,
+  },
+  nativeMobileSheetContent: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 132,
+    gap: 18,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -138,6 +172,8 @@ export const styles = StyleSheet.create({
   },
   sectionCopy: {
     flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-start',
     gap: 4,
   },
   sectionTitle: {
@@ -153,18 +189,33 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 16,
   },
+  nativeMobileSectionHeader: {
+    alignItems: 'flex-start',
+    paddingBottom: 0,
+  },
   mobileSectionTitle: {
     alignSelf: 'stretch',
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '600',
-    textAlign: 'center',
+    textAlign: 'left',
+  },
+  nativeMobileSectionTitle: {
+    fontSize: 28,
+    lineHeight: 33,
+    fontWeight: '700',
   },
   mobileSectionSubtitle: {
     fontSize: 14,
     lineHeight: 19,
     fontWeight: '500',
+    textAlign: 'left',
     maxWidth: 260,
+  },
+  nativeMobileSectionSubtitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    maxWidth: 270,
   },
   createTripButtonContent: {
     flexDirection: 'row',
@@ -208,18 +259,18 @@ export const styles = StyleSheet.create({
   },
   tripFilterEmptyAction: {
     alignSelf: 'flex-start',
-    minHeight: 42,
+    minHeight: 44,
     justifyContent: 'center',
     borderRadius: designSystem.radii.pill,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 18,
   },
   cardList: {
     paddingHorizontal: 16,
     gap: 18,
   },
   mobileCardList: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     gap: 16,
   },
   groupTripSection: {
@@ -258,13 +309,30 @@ export const styles = StyleSheet.create({
     gap: 12,
     marginTop: 12,
   },
+  mobileEmptyLocationCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderRadius: 22,
+    gap: 8,
+    marginTop: 2,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
   emptyLocationTitle: {
     fontSize: 18,
     fontWeight: '600',
   },
+  mobileEmptyLocationTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+  },
   emptyLocationText: {
     fontSize: 15,
     lineHeight: 22,
+  },
+  mobileEmptyLocationText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   noticeText: {
     fontSize: 14,
@@ -273,4 +341,3 @@ export const styles = StyleSheet.create({
     color: designSystem.colors.warmDark,
   },
 });
-

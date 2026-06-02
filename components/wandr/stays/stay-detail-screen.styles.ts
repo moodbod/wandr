@@ -418,7 +418,7 @@ export const styles = StyleSheet.create({
     backgroundColor: designSystem.colors.darkGlassHeader,
   },
   bottomBarHighlight: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     borderRadius: 40,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: designSystem.colors.whiteBorder,
@@ -770,24 +770,28 @@ export const styles = StyleSheet.create({
     color: darkSheetPalette.text,
   },
   notesInput: {
+    alignItems: 'stretch',
     minHeight: 110,
     borderRadius: 22,
-    backgroundColor: designSystem.colors.whiteWashSubtle,
     borderWidth: 1,
     borderColor: designSystem.colors.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 14,
+  },
+  notesInputText: {
     fontSize: 14,
-    lineHeight: 21,
     fontWeight: '500',
+    height: '100%',
+    minHeight: 82,
     color: designSystem.colors.ink,
     textAlignVertical: 'top',
   },
   notesInputDark: {
-    backgroundColor: darkSheetPalette.surface,
-    color: darkSheetPalette.text,
     borderWidth: 1,
     borderColor: darkSheetPalette.border,
+  },
+  notesInputTextDark: {
+    color: darkSheetPalette.text,
   },
   reviewNoteInput: {
     minHeight: 100,

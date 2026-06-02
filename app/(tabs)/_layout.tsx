@@ -1,224 +1,163 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs, VectorIcon } from 'expo-router/unstable-native-tabs';
-import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Bed, Compass, MapTrifold, UserCircle, UsersThree } from 'phosphor-react-native';
+import { useMemo } from 'react';
+import { DynamicColorIOS, Platform, StyleSheet, View, type ColorValue, type ImageSourcePropType } from 'react-native';
 
 import { designSystem } from '@/constants/design-system';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsive } from '@/hooks/use-responsive';
 
 export const unstable_settings = {
   initialRouteName: 'explore',
 };
 
+const JS_TAB_ICON_SIZE = 21;
+const NATIVE_TAB_ICON_SIZE = 21;
+
+type MaterialCommunityIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+type NativeTabIconSources = Record<'explore' | 'trip' | 'stays' | 'friends' | 'profile', ImageSourcePropType>;
+
+type PhosphorTabIcon = React.ComponentType<{
+  color?: string;
+  size?: number;
+  weight?: 'regular' | 'fill';
+}>;
+
+function makeTabIcon(Icon: PhosphorTabIcon) {
+  return function TabIcon({ color, focused, size }: { color: ColorValue; focused: boolean; size: number }) {
+    return (
+      <Icon
+        color={String(color)}
+        size={Math.min(size ?? JS_TAB_ICON_SIZE, JS_TAB_ICON_SIZE)}
+        weight={focused ? 'fill' : 'regular'}
+      />
+    );
+  };
+}
+
+function makeNativeTabIconSource(name: MaterialCommunityIconName) {
+  return MaterialCommunityIcons.getImageSource(name, NATIVE_TAB_ICON_SIZE, 'white') as unknown as ImageSourcePropType;
+}
+
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
   const { isLargeScreen } = useResponsive();
-  const activeColor = designSystem.colors.lime;
-  const inactiveColor = designSystem.colors.darkTextSoft;
-  const tabSurfaceColor = designSystem.colors.darkGlassHeader;
-  const selectedTabTint = designSystem.colors.whiteOverlayBarely;
-  const tabIconSize = 22;
-  const getTabIcon = (
-    name: React.ComponentProps<typeof MaterialCommunityIcons>['name']
-  ) => (
-    <VectorIcon family={MaterialCommunityIcons} name={name} />
-  );
+  const colorScheme = useColorScheme();
+  const nativeTabIcons = useMemo<NativeTabIconSources | null>(() => {
+    if (Platform.OS !== 'ios') {
+      return null;
+    }
 
-  const getExpoTabIcon =
-    (
-      outlineName: React.ComponentProps<typeof MaterialCommunityIcons>['name'],
-      filledName: React.ComponentProps<typeof MaterialCommunityIcons>['name']
-    ) => {
-      function TabIcon({ color, focused }: { color: string; focused: boolean; size: number }) {
-        return (
-          <MaterialCommunityIcons color={color} name={focused ? filledName : outlineName} size={tabIconSize} />
-        );
-      }
-
-      return TabIcon;
+    return {
+      explore: makeNativeTabIconSource('compass'),
+      friends: makeNativeTabIconSource('account-group'),
+      profile: makeNativeTabIconSource('account-circle'),
+      stays: makeNativeTabIconSource('bed'),
+      trip: makeNativeTabIconSource('map'),
     };
+  }, []);
+  const isDark = colorScheme === 'dark';
+  const tint = isDark ? designSystem.colors.lime : designSystem.semantic.light.text;
+  const inactiveTint = isDark
+    ? designSystem.semantic.dark.textSubtle
+    : designSystem.semantic.light.textMuted;
+  const nativeTint =
+    Platform.OS === 'ios'
+      ? DynamicColorIOS({
+          light: designSystem.semantic.light.text,
+          dark: designSystem.colors.lime,
+        })
+      : tint;
+  const nativeInactiveTint =
+    Platform.OS === 'ios'
+      ? DynamicColorIOS({
+          light: designSystem.semantic.light.textMuted,
+          dark: designSystem.semantic.dark.textSubtle,
+        })
+      : inactiveTint;
 
   const tabsContent = (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: inactiveColor,
-        tabBarLabelPosition: 'below-icon',
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          lineHeight: 13,
-          marginTop: 0,
-          paddingBottom: 0,
-        },
-        tabBarIconStyle: {
-          height: 24,
-          marginBottom: 0,
-          marginTop: 0,
-        },
-        tabBarItemStyle: {
-          height: 54,
-          paddingTop: 4,
-          paddingBottom: 4,
-        },
-        tabBarShowLabel: true,
-        tabBarStyle: isLargeScreen ? { display: 'none' } : {
-          position: 'absolute',
-          left: 14,
-          right: 14,
-          bottom: Platform.OS === 'web' ? 14 : Math.max(insets.bottom, 10) - 2,
-          height: 72,
-          paddingBottom: 8,
-          paddingTop: 8,
-          paddingHorizontal: 8,
-          borderTopWidth: 0,
-          borderRadius: 32,
-          borderWidth: 1,
-          backgroundColor: designSystem.colors.darkGlassStrong,
-          borderColor: designSystem.colors.darkSurfaceBorder,
-          elevation: 16,
-        },
+        tabBarActiveTintColor: tint,
+        tabBarInactiveTintColor: inactiveTint,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
+        tabBarStyle: isLargeScreen
+          ? { display: 'none' }
+          : {
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: isDark
+                ? designSystem.semantic.dark.border
+                : designSystem.semantic.light.border,
+              backgroundColor: isDark
+                ? designSystem.semantic.dark.surface
+                : designSystem.semantic.light.surface,
+            },
       }}
     >
       <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: getExpoTabIcon('compass', 'compass'),
-        }}
-      />
-      <Tabs.Screen
-        name="trip"
-        options={{
-          title: 'Trip',
-          tabBarIcon: getExpoTabIcon('map', 'map'),
-        }}
-      />
-      <Tabs.Screen
-        name="stays"
-        options={{
-          title: 'Stays',
-          tabBarIcon: getExpoTabIcon('bed', 'bed'),
-        }}
-      />
-      <Tabs.Screen
-        name="friends"
-        options={{
-          title: 'Friends',
-          tabBarIcon: getExpoTabIcon('account-group', 'account-group'),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: getExpoTabIcon('account-circle', 'account-circle'),
-        }}
-      />
+      <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarIcon: makeTabIcon(Compass) }} />
+      <Tabs.Screen name="trip" options={{ title: 'Trip', tabBarIcon: makeTabIcon(MapTrifold) }} />
+      <Tabs.Screen name="stays" options={{ title: 'Stays', tabBarIcon: makeTabIcon(Bed) }} />
+      <Tabs.Screen name="friends" options={{ title: 'Friends', tabBarIcon: makeTabIcon(UsersThree) }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: makeTabIcon(UserCircle) }} />
     </Tabs>
   );
 
   if (isLargeScreen) {
     return (
-        <View style={styles.largeContainer}>
-            <View style={styles.tabContentColumn}>
-                {tabsContent}
-            </View>
-        </View>
+      <View style={styles.largeContainer}>
+        <View style={{ flex: 1 }}>{tabsContent}</View>
+      </View>
     );
   }
 
-  if (Platform.OS === 'android' || Platform.OS === 'web') {
+  if (Platform.OS !== 'ios' || !nativeTabIcons) {
     return tabsContent;
   }
 
   return (
     <NativeTabs
-      backgroundColor={tabSurfaceColor}
-      blurEffect="systemChromeMaterialDark"
+      blurEffect="systemMaterial"
       disableTransparentOnScrollEdge
-      iconColor={inactiveColor}
-      labelStyle={{ color: inactiveColor }}
-      shadowColor={designSystem.colors.whiteOverlayBarely}
-      tintColor={selectedTabTint}
-    >
+      iconColor={{ default: nativeInactiveTint, selected: nativeTint }}
+      labelStyle={{
+        default: { color: nativeInactiveTint, fontSize: 11, fontWeight: '500' },
+        selected: { color: nativeTint, fontSize: 11, fontWeight: '600' },
+      }}
+      minimizeBehavior="onScrollDown"
+      sidebarAdaptable
+      tintColor={nativeTint}>
       <NativeTabs.Trigger name="index" hidden />
-
       <NativeTabs.Trigger name="explore">
-        <Label>Explore</Label>
-        <Icon
-          src={{
-            default: getTabIcon('compass'),
-            selected: getTabIcon('compass'),
-          }}
-          selectedColor={activeColor}
-        />
+        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={nativeTabIcons.explore} />
       </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="trip">
-        <Label>Trip</Label>
-        <Icon
-          src={{
-            default: getTabIcon('map'),
-            selected: getTabIcon('map'),
-          }}
-          selectedColor={activeColor}
-        />
+        <NativeTabs.Trigger.Label>Trip</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={nativeTabIcons.trip} />
       </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="stays">
-        <Label>Stays</Label>
-        <Icon
-          src={{
-            default: getTabIcon('bed'),
-            selected: getTabIcon('bed'),
-          }}
-          selectedColor={activeColor}
-        />
+        <NativeTabs.Trigger.Label>Stays</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={nativeTabIcons.stays} />
       </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="friends">
-        <Label>Friends</Label>
-        <Icon
-          src={{
-            default: getTabIcon('account-group'),
-            selected: getTabIcon('account-group'),
-          }}
-          selectedColor={activeColor}
-        />
+        <NativeTabs.Trigger.Label>Friends</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={nativeTabIcons.friends} />
       </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="profile">
-        <Label>Profile</Label>
-        <Icon
-          src={{
-            default: getTabIcon('account-circle'),
-            selected: getTabIcon('account-circle'),
-          }}
-          selectedColor={activeColor}
-        />
+        <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={nativeTabIcons.profile} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
 const styles = StyleSheet.create({
-  largeLayout: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  content: {
-    flex: 1,
-  },
   largeContainer: {
     flex: 1,
     flexDirection: 'row',
-  },
-  tabContentColumn: {
-    flex: 1,
   },
 });

@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView, isLiquidGlassAvailable } from '@/lib/glass-effect';
 import { type ReactNode } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -35,16 +35,15 @@ export function ChatWidgetGlassCard({
     <View style={[styles.shell, { borderRadius: radius }, style]}>
       {shouldUseNativeGlass ? (
         <GlassView
-          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+          style={[({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }), { borderRadius: radius }]}
           glassEffectStyle="clear"
-          tintColor={designSystem.colors.transparentWhite}
           isInteractive
         />
       ) : Platform.OS === 'ios' ? (
         <BlurView
           intensity={72}
           tint={isDark ? 'dark' : 'light'}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+          style={[({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }), { borderRadius: radius }]}
         />
       ) : null}
 
@@ -70,7 +69,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tint: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     borderWidth: StyleSheet.hairlineWidth,
   },
   content: {

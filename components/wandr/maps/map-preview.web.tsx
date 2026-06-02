@@ -10,8 +10,6 @@ import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
 import { designSystem } from '@/constants/design-system';
 import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
-import { registerPmtilesProtocol } from '@/lib/pmtiles-protocol.web';
 import { fetchRoutePath } from '@/lib/routing';
 
 import type { MapMarker, MapPreviewProps, SharedMapUserLocation } from './mapbox/types';
@@ -130,8 +128,7 @@ function MapPreviewWebComponent({
   const resolvedCenterCoordinate =
     centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? normalizedSharedUserLocations[0]?.coordinate ?? null;
   const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
-  const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
-  const mapStyleURL = offlineMapState.styleUrl ?? MAPBOX_STREET_STYLE_URL;
+  const mapStyleURL = MAPBOX_STREET_STYLE_URL;
   const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
   const followZoomLevel = Math.max(zoomLevel, 17);
   const normalizedUserHeading = normalizeHeading(userHeading);
@@ -205,8 +202,6 @@ function MapPreviewWebComponent({
     if (!mapbox || !containerRef.current || mapRef.current) {
       return;
     }
-
-    registerPmtilesProtocol(mapbox);
 
     const isReusingPersistentMap = Boolean(persistentState?.map);
     const mapHost = persistentState?.host ?? document.createElement('div');
@@ -679,17 +674,6 @@ function MapPreviewWebComponent({
           ref={containerRef}
           style={webMapStyle}
         />
-        {offlineMapState.isOffline ? (
-          <View pointerEvents="none" style={styles.offlineBanner}>
-            <ThemedText style={styles.offlineBannerText}>
-              {offlineMapState.styleUrl
-                ? `Offline map: ${offlineMapState.region?.label ?? 'downloaded area'}`
-                : offlineMapState.hasDownloadedRegion
-                  ? 'Offline map needs an update'
-                  : 'No downloaded map here'}
-            </ThemedText>
-          </View>
-        ) : null}
     </View>
   );
 }
@@ -1120,7 +1104,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fallback: {
-    ...StyleSheet.absoluteFillObject,
+    ...({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

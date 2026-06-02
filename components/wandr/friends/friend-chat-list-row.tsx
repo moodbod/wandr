@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { WandrAvatar } from '@/components/wandr/avatar';
-import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
+import { TravelerAvatarStack, type TravelerAvatarStackItem } from '@/components/wandr/traveler-avatar-stack';
 import { designSystem } from '@/constants/design-system';
 import type { FriendChatListItem } from '@/types/friends';
 
@@ -34,6 +34,14 @@ export function FriendChatListRow({
   onAvatarPress?: () => void;
 }) {
   const groupAvatarUris = item.avatarUris ?? [];
+  const groupAvatars: readonly (string | TravelerAvatarStackItem)[] =
+    item.members
+      ?.filter((member) => member.status === 'active')
+      .map((member) => ({
+        name: member.name,
+        paletteKey: member.travelerSlug,
+        uri: member.avatarUri,
+      })) ?? groupAvatarUris;
 
   return (
     <Pressable onPress={onPress} style={[styles.row, item.kind === 'group' ? styles.groupRow : null]}>
@@ -41,7 +49,7 @@ export function FriendChatListRow({
         {item.kind === 'group' ? (
           <View style={styles.groupAvatarWrap}>
             <TravelerAvatarStack
-              avatars={groupAvatarUris}
+              avatars={groupAvatars}
               fallbackName={item.title}
               fallbackPaletteKey={item.id}
               maxVisible={3}

@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
@@ -107,18 +107,37 @@ export function TripNotificationCenter() {
       setRating(0);
     };
 
+    // Handles a tap on a notification: trip arrival/rating opens the in-app prompt,
+    // everything else (chat, bookings, friend requests, …) carries an `href` in its
+    // payload and deep-links there. Without this, tapping a chat push did nothing.
+    const handleNotificationTap = (
+      notification: Notifications.Notification,
+      userText?: string | null
+    ) => {
+      if (parseTripNotificationPayload(notification.request.content.data)) {
+        showPromptFromNotification(notification, userText);
+        return;
+      }
+
+      const data = notification.request.content.data;
+      const href = data && typeof data.href === 'string' ? data.href : null;
+      if (href && href.startsWith('/')) {
+        router.push(href as Href);
+      }
+    };
+
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       showPromptFromNotification(notification);
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      showPromptFromNotification(response.notification, response.userText);
+      handleNotificationTap(response.notification, response.userText);
       Notifications.clearLastNotificationResponse();
     });
 
     const lastResponse = Notifications.getLastNotificationResponse();
     if (lastResponse?.notification) {
-      showPromptFromNotification(lastResponse.notification, lastResponse.userText);
+      handleNotificationTap(lastResponse.notification, lastResponse.userText);
       Notifications.clearLastNotificationResponse();
     }
 
@@ -126,7 +145,7 @@ export function TripNotificationCenter() {
       receivedSubscription.remove();
       responseSubscription.remove();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const activeItem = trip?.activeItem;

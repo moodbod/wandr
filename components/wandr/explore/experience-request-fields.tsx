@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { SheetTextInput } from '@/components/ui/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { designSystem } from '@/constants/design-system';
 
@@ -96,15 +97,15 @@ export function ExperienceRequestFields({
 
       <View style={styles.fieldBlock}>
         <ThemedText style={[styles.label, isDark ? styles.labelDark : null]}>Note</ThemedText>
-        <TextInput
+        <SheetTextInput
           multiline
-          onChangeText={onChangeNote}
-          placeholder="Anything the host should know"
-          placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
           style={[
             styles.noteInput,
             isDark ? styles.noteInputDark : null,
           ]}
+          onChangeText={onChangeNote}
+          placeholder="Anything the host should know"
+          placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
           textAlignVertical="top"
           value={note}
         />
@@ -200,20 +201,15 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   noteInput: {
-    backgroundColor: designSystem.colors.surface,
+    alignItems: 'stretch',
     borderColor: designSystem.colors.borderSoft,
     borderRadius: 8,
     borderWidth: 1,
-    color: designSystem.colors.ink,
-    fontSize: 14,
-    lineHeight: 19,
     minHeight: 76,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   noteInputDark: {
-    backgroundColor: designSystem.colors.darkSurface,
     borderColor: designSystem.colors.darkBorderSoft,
-    color: designSystem.colors.darkText,
   },
 });

@@ -1,5 +1,4 @@
-import CountryFlag from 'react-native-country-flag';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 type CountryFlagAvatarProps = {
   countryCode: string;
@@ -8,6 +7,8 @@ type CountryFlagAvatarProps = {
 };
 
 export function CountryFlagAvatar({ countryCode, size, style }: CountryFlagAvatarProps) {
+  const flag = getCountryFlagEmoji(countryCode);
+
   return (
     <View
       accessibilityElementsHidden
@@ -22,8 +23,24 @@ export function CountryFlagAvatar({ countryCode, size, style }: CountryFlagAvata
         style,
       ]}
     >
-      <CountryFlag isoCode={countryCode} size={size} style={styles.flag} />
+      <Text allowFontScaling={false} style={[styles.flag, { fontSize: Math.round(size * 0.82), lineHeight: size }]}>
+        {flag}
+      </Text>
     </View>
+  );
+}
+
+function getCountryFlagEmoji(countryCode: string) {
+  const normalizedCode = countryCode.trim().toUpperCase();
+
+  if (!/^[A-Z]{2}$/.test(normalizedCode)) {
+    return normalizedCode;
+  }
+
+  const regionalIndicatorOffset = 0x1f1e6 - 65;
+  return String.fromCodePoint(
+    normalizedCode.charCodeAt(0) + regionalIndicatorOffset,
+    normalizedCode.charCodeAt(1) + regionalIndicatorOffset
   );
 }
 
@@ -34,6 +51,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   flag: {
-    resizeMode: 'cover',
+    includeFontPadding: false,
+    textAlign: 'center',
   },
 });

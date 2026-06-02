@@ -1,9 +1,9 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { SheetScrollView } from '@/components/ui/sheet';
 import { designSystem } from '@/constants/design-system';
 import { useResponsive } from '@/hooks/use-responsive';
 import { type AuthPalette } from './auth-palette';
@@ -32,7 +32,7 @@ export function AuthFormShell({
 }: AuthFormShellProps) {
   const { isLargeScreen } = useResponsive();
   const useDesktopScroll = scrollMode === 'bottomSheet' && Platform.OS === 'web' && isLargeScreen;
-  const ScrollContainer = scrollMode === 'bottomSheet' && !useDesktopScroll ? BottomSheetScrollView : ScrollView;
+  const ScrollContainer = scrollMode === 'bottomSheet' && !useDesktopScroll ? SheetScrollView : ScrollView;
   const showHeader = !!onBack || !!onClose;
 
   return (
@@ -145,4 +145,3 @@ const styles = StyleSheet.create({
     padding: designSystem.spacing.md,
   },
 });
-

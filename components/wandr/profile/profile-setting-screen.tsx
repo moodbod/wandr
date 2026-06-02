@@ -1,10 +1,10 @@
 import type React from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Input } from '@/components/ui/input';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -15,31 +15,29 @@ type ProfileSettingScreenProps = {
   children: React.ReactNode;
 };
 
-export function ProfileSettingScreen({ bottomNote, children, description, title }: ProfileSettingScreenProps) {
+export function ProfileSettingScreen({ bottomNote, children, description }: ProfileSettingScreenProps) {
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
 
   return (
     <ThemedView style={styles.root}>
-      <WandrHeader config={{ overlay: true, leadingAction: { kind: 'back', accessibilityLabel: 'Go back' } }} />
-
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 88,
+            paddingTop: 16,
             paddingBottom: insets.bottom + 64,
           },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.title}>{title}</ThemedText>
-          {description ? (
-            <ThemedText style={styles.description}>{description}</ThemedText>
-          ) : null}
-        </View>
+        {description ? (
+          <ThemedText style={[styles.description, { color: colors.textSubtle }]}>{description}</ThemedText>
+        ) : null}
 
         <View style={styles.section}>{children}</View>
-        {bottomNote ? <ThemedText style={styles.bottomNote}>{bottomNote}</ThemedText> : null}
+        {bottomNote ? <ThemedText style={[styles.bottomNote, { color: colors.textSubtle }]}>{bottomNote}</ThemedText> : null}
       </ScrollView>
     </ThemedView>
   );
@@ -56,8 +54,8 @@ export function SettingField({ label, value }: SettingFieldProps) {
 
   return (
     <View style={[styles.field, { borderBottomColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <ThemedText style={styles.fieldValue}>{value || 'Not set'}</ThemedText>
+      <ThemedText style={[styles.fieldLabel, { color: colors.textSubtle }]}>{label}</ThemedText>
+      <ThemedText style={[styles.fieldValue, { color: colors.text }]}>{value || 'Not set'}</ThemedText>
     </View>
   );
 }
@@ -75,12 +73,11 @@ export function SettingTextInput({ label, onChangeText, placeholder, value }: Se
 
   return (
     <View style={[styles.inputWrap, { borderBottomColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
-      <TextInput
+      <ThemedText style={[styles.fieldLabel, { color: colors.textSubtle }]}>{label}</ThemedText>
+      <Input
         autoCapitalize="words"
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.placeholder}
         style={[styles.input, { color: colors.text }]}
         value={value}
       />
@@ -107,7 +104,7 @@ export function SettingOptionGroup<T extends string>({ disabled = false, label, 
 
   return (
     <View style={[styles.optionGroup, { borderBottomColor: colors.borderSoft }]}>
-      <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
+      <ThemedText style={[styles.fieldLabel, { color: colors.textSubtle }]}>{label}</ThemedText>
       <View style={styles.optionGrid}>
         {options.map((option) => {
           const isSelected = option.value === value;
@@ -127,7 +124,11 @@ export function SettingOptionGroup<T extends string>({ disabled = false, label, 
                 },
                 disabled ? styles.optionPillDisabled : null,
               ]}>
-              <ThemedText style={[styles.optionLabel, isSelected && styles.optionLabelActive]}>
+              <ThemedText
+                style={[
+                  styles.optionLabel,
+                  { color: isSelected ? designSystem.colors.darkGreen : colors.textMuted },
+                ]}>
                 {option.label}
               </ThemedText>
             </Pressable>
@@ -180,14 +181,15 @@ type SettingRowProps = {
 export function SettingRow({ description, label, value }: SettingRowProps) {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
+  const valueColor = colorScheme === 'dark' ? designSystem.colors.lime : designSystem.colors.darkGreen;
 
   return (
     <View style={[styles.row, { borderBottomColor: colors.borderSoft }]}>
       <View style={styles.rowCopy}>
-        <ThemedText style={styles.rowLabel}>{label}</ThemedText>
-        {description ? <ThemedText style={styles.rowDescription}>{description}</ThemedText> : null}
+        <ThemedText style={[styles.rowLabel, { color: colors.text }]}>{label}</ThemedText>
+        {description ? <ThemedText style={[styles.rowDescription, { color: colors.textSubtle }]}>{description}</ThemedText> : null}
       </View>
-      {value ? <ThemedText style={styles.rowValue}>{value}</ThemedText> : null}
+      {value ? <ThemedText style={[styles.rowValue, { color: valueColor }]}>{value}</ThemedText> : null}
     </View>
   );
 }
@@ -207,8 +209,8 @@ export function SettingSwitchRow({ description, disabled = false, label, onValue
   return (
     <View style={[styles.row, { borderBottomColor: colors.borderSoft }, disabled && styles.rowDisabled]}>
       <View style={styles.rowCopy}>
-        <ThemedText style={styles.rowLabel}>{label}</ThemedText>
-        {description ? <ThemedText style={styles.rowDescription}>{description}</ThemedText> : null}
+        <ThemedText style={[styles.rowLabel, { color: colors.text }]}>{label}</ThemedText>
+        {description ? <ThemedText style={[styles.rowDescription, { color: colors.textSubtle }]}>{description}</ThemedText> : null}
       </View>
       <Switch
         accessibilityLabel={label}
@@ -228,22 +230,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: 24,
+    gap: 18,
     paddingHorizontal: designSystem.spacing.lg,
-  },
-  hero: {
-    gap: 8,
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 32,
-    fontWeight: '600',
-    color: designSystem.colors.ink,
   },
   description: {
     fontSize: 15,
     lineHeight: 22,
-    color: designSystem.colors.warmDark,
   },
   section: {
     gap: 0,
@@ -257,13 +249,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
-    color: designSystem.colors.gray,
   },
   fieldValue: {
     fontSize: 17,
     lineHeight: 22,
     fontWeight: '600',
-    color: designSystem.colors.ink,
   },
   inputWrap: {
     gap: 8,
@@ -301,10 +291,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    color: designSystem.colors.warmDark,
-  },
-  optionLabelActive: {
-    color: designSystem.colors.darkGreen,
   },
   row: {
     minHeight: 76,
@@ -339,24 +325,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '600',
-    color: designSystem.colors.ink,
   },
   rowDescription: {
     fontSize: 13,
     lineHeight: 18,
-    color: designSystem.colors.warmDark,
   },
   rowValue: {
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    color: designSystem.colors.darkGreen,
   },
   bottomNote: {
     marginTop: 4,
     paddingBottom: 12,
     fontSize: 12,
     lineHeight: 18,
-    color: designSystem.colors.subtleText,
   },
 });

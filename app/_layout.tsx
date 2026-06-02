@@ -1,4 +1,4 @@
-import { ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider } from "expo-router/react-navigation";
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';

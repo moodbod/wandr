@@ -1,11 +1,11 @@
-import { GlobeHemisphereWest, NavigationArrow } from 'phosphor-react-native';
+import { CaretDown, GlobeHemisphereWest, MagnifyingGlass, NavigationArrow } from 'phosphor-react-native';
 import type React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassInput } from '@/components/ui/glass-input';
+import { Input } from '@/components/ui/input';
 import { CountryFlagAvatar } from '@/components/wandr/country-flag-avatar';
 import { TripFilterTabs } from '@/components/wandr/trip/trip-filter-tabs';
 import { designSystem } from '@/constants/design-system';
@@ -57,10 +57,38 @@ export function StaysDiscoveryControls({
   const iconColor = isDark ? designSystem.colors.darkText : designSystem.colors.ink;
   const isDesktopMap = variant === 'desktopMap';
   const desktopBorderColor = isDark ? designSystem.colors.whiteOverlayBarely : designSystem.colors.borderSoft;
-  const desktopInputSurfaceColor = isDark ? designSystem.colors.darkGlassStrong : designSystem.colors.whiteGlassMax;
   const desktopDockSurfaceColor = isDark ? 'rgba(8, 11, 8, 0.38)' : designSystem.colors.whiteGlassMedium;
   const desktopInactivePillColor = isDark ? 'rgba(255, 255, 255, 0.06)' : designSystem.colors.surface;
   const desktopInactiveTextColor = isDark ? designSystem.colors.darkTextWarm : designSystem.colors.ink;
+  const shouldShowFilterRail = !isDesktopMap || Boolean(onSelectTrip && trips.length > 0);
+  const proximityFilterPills = (
+    <>
+      <FilterPill
+        active={discoveryMode === 'route'}
+        label="Near route"
+        inactiveBackgroundColor={desktopInactivePillColor}
+        inactiveTextColor={desktopInactiveTextColor}
+        variant={variant}
+        onPress={() => onChangeDiscoveryMode('route')}
+      />
+      <FilterPill
+        active={discoveryMode === 'nearby'}
+        label="Near me"
+        inactiveBackgroundColor={desktopInactivePillColor}
+        inactiveTextColor={desktopInactiveTextColor}
+        variant={variant}
+        onPress={() => onChangeDiscoveryMode('nearby')}
+      />
+      <FilterPill
+        active={sortMode === 'price'}
+        label="Lowest price"
+        inactiveBackgroundColor={desktopInactivePillColor}
+        inactiveTextColor={desktopInactiveTextColor}
+        variant={variant}
+        onPress={onTogglePriceSort}
+      />
+    </>
+  );
 
   return (
     <View
@@ -80,41 +108,44 @@ export function StaysDiscoveryControls({
             height={52}
             onPress={onOpenLocationSheet}
             style={styles.locationButton}
-            width={52}
+            width={66}
             radius={designSystem.radii.pill}
           >
-            {planningLocation?.countryCode ? (
-              <CountryFlagAvatar countryCode={planningLocation.countryCode} size={28} />
-            ) : (
-              <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
-            )}
+            <View style={styles.locationButtonContent}>
+              {planningLocation?.countryCode ? (
+                <CountryFlagAvatar countryCode={planningLocation.countryCode} size={28} />
+              ) : (
+                <GlobeHemisphereWest color={iconColor} size={20} weight="bold" />
+              )}
+              <CaretDown color={iconColor} size={13} weight="bold" />
+            </View>
           </GlassButton>
         ) : null}
-        <GlassInput
-          containerStyle={[styles.searchGlass, isDesktopMap && styles.desktopSearchGlass]}
-          contentStyle={
-            isDesktopMap
-              ? [
-                  styles.searchContent,
-                  styles.desktopSearchContent,
-                  {
-                    backgroundColor: desktopInputSurfaceColor,
-                    borderColor: desktopBorderColor,
-                  },
-                ]
-              : styles.searchContent
-          }
+        <Input
+          containerStyle={[
+            styles.searchGlass,
+            isDesktopMap && styles.desktopSearchGlass,
+            styles.searchContent,
+            isDesktopMap && styles.desktopSearchContent,
+          ]}
           value={searchQuery}
           onChangeText={onChangeSearchQuery}
-          placeholder="Search hotels or towns"
-          placeholderTextColor={
-            isDesktopMap
-              ? isDark
-                ? designSystem.colors.darkPlaceholderTextSoft
-                : designSystem.colors.placeholderTextSoft
-              : undefined
+          leftIcon={
+            <MagnifyingGlass
+              color={
+                isDesktopMap
+                  ? isDark
+                    ? designSystem.colors.darkTextWarm
+                    : designSystem.colors.ink
+                  : isDark
+                    ? designSystem.colors.darkPlaceholderText
+                    : designSystem.colors.placeholderText
+              }
+              size={18}
+              weight="regular"
+            />
           }
-          intensity={70}
+          placeholder="Search hotels or towns"
           style={isDesktopMap ? [styles.desktopSearchText, { color: desktopInactiveTextColor }] : undefined}
         />
         {trailingSearchAccessory ? (
@@ -135,7 +166,7 @@ export function StaysDiscoveryControls({
         ) : null}
       </View>
 
-      {onSelectTrip && trips.length > 0 ? (
+      {shouldShowFilterRail ? (
         <View
           style={
             isDesktopMap
@@ -150,33 +181,21 @@ export function StaysDiscoveryControls({
           }
         >
           <TripFilterTabs
-            trips={trips}
+            trips={onSelectTrip ? trips : []}
+            leadingChildren={isDesktopMap ? undefined : proximityFilterPills}
             selectedTripId={selectedTripId}
             variant={isDesktopMap ? 'desktopMap' : 'default'}
-            onSelectTrip={onSelectTrip}
+            onSelectTrip={onSelectTrip ?? noopSelectTrip}
           >
-            <FilterPill
-              active={discoveryMode === 'nearby'}
-              label="Near me"
-              inactiveBackgroundColor={desktopInactivePillColor}
-              inactiveTextColor={desktopInactiveTextColor}
-              variant={variant}
-              onPress={() => onChangeDiscoveryMode('nearby')}
-            />
-            <FilterPill
-              active={sortMode === 'price'}
-              label="Lowest price"
-              inactiveBackgroundColor={desktopInactivePillColor}
-              inactiveTextColor={desktopInactiveTextColor}
-              variant={variant}
-              onPress={onTogglePriceSort}
-            />
+            {isDesktopMap ? proximityFilterPills : null}
           </TripFilterTabs>
         </View>
       ) : null}
     </View>
   );
 }
+
+function noopSelectTrip() {}
 
 function FilterPill({
   active,
@@ -285,6 +304,12 @@ const styles = StyleSheet.create({
   },
   locationButton: {
     flexShrink: 0,
+  },
+  locationButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
   },
   resetButton: {
     flexShrink: 0,

@@ -1,11 +1,10 @@
-import BottomSheet, { BottomSheetBackdrop, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Star, MapPin } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { Sheet, SheetTextInput, SheetView, SheetRef } from '@/components/ui/sheet';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { TripNotificationPayload } from '@/lib/notifications';
@@ -33,7 +32,7 @@ export function TripNotificationSheet({
   onSecondaryPress,
   isSubmitting = false,
 }: TripNotificationSheetProps) {
-  const sheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<SheetRef>(null);
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
 
@@ -80,23 +79,14 @@ export function TripNotificationSheet({
   }
 
   return (
-    <GlassBottomSheet
+    <Sheet
       ref={sheetRef}
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
       topInset={insets.top}
-      onClose={onDismiss}
-      backdropComponent={(props) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={0.2}
-          pressBehavior="close"
-        />
-      )}>
-      <BottomSheetView style={[styles.content, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      onClose={onDismiss}>
+      <SheetView style={[styles.content, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.header}>
           <ThemedText style={styles.title}>{copy.title}</ThemedText>
           <ThemedText style={[styles.placeTitle, isDark && styles.placeTitleDark]}>
@@ -147,7 +137,7 @@ export function TripNotificationSheet({
               })}
             </View>
 
-            <BottomSheetTextInput
+            <SheetTextInput
               multiline
               numberOfLines={4}
               onChangeText={onNoteChange}
@@ -178,8 +168,8 @@ export function TripNotificationSheet({
             </ThemedText>
           </Pressable>
         </View>
-      </BottomSheetView>
-    </GlassBottomSheet>
+      </SheetView>
+    </Sheet>
   );
 }
 

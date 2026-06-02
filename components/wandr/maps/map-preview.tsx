@@ -1,590 +1,470 @@
-import type { Camera, MapView as MapboxMapView } from '@rnmapbox/maps';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource, StyleURL } from '@rnmapbox/maps';
 
 import { ThemedText } from '@/components/themed-text';
+import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
 import { designSystem } from '@/constants/design-system';
-import { defaultPlanningLocation, getPlanningLocationCenterCoordinate } from '@/constants/planning-countries';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useOfflineMapStyleUrl } from '@/hooks/use-offline-map-downloads';
 import { fetchRoutePath } from '@/lib/routing';
 
-import { MapboxPlaceMarker, MapboxUserMarker } from './mapbox/mapbox-marker';
-import { getMapboxModule } from './mapbox/mapbox-module';
-import { MapRouteOverlays } from './mapbox/mapbox-routes';
 import type { MapMarker, MapPreviewProps, SharedMapUserLocation } from './mapbox/types';
 
-const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
-const DEFAULT_MAP_CENTER: readonly [number, number] =
-  getPlanningLocationCenterCoordinate(defaultPlanningLocation) ?? [17.0832, -22.5597];
-const FOLLOW_CAMERA_ANIMATION_MS = 1200;
-const RECENTER_CAMERA_ANIMATION_MS = 850;
-const HIDDEN_MAPBOX_SOURCE_LAYER_IDS = [
-  'poi_label',
-  'transit_stop_label',
-  'airport_label',
-  'housenum_label',
-  'building',
-  'landmark_label',
-];
+export type { MapMarker, MapPreviewProps, SharedMapUserLocation };
+
+// The public access token (pk.…) is read at runtime; the native SDK download is
+// authorized at build time via the config plugin's RNMapboxMapsDownloadToken.
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null);
+
+const DEFAULT_MAP_CENTER: readonly [number, number] = [17.0832, -22.5597];
+const USER_FOCUS_ZOOM_LEVEL = 17;
+const CAMERA_ANIMATION_MS = 650;
+type NativeRoutePoint = { latitude: number; longitude: number };
 
 function MapPreviewComponent({
   centerCoordinate,
-  userCoordinate = null,
-  userAccuracy = null,
-  userAvatarPaletteKey,
-  userAvatarUri,
-  userHeading = null,
-  userIsStale = false,
-  userName,
-  userPuckVariant = 'navigation',
-  userSpeed = null,
-  viewportPadding,
-  markers = [],
-  routeCoordinates,
-  zoomLevel = 14,
-  showRoutes = true,
-  recenterToUserSignal = 0,
-  followUserLocation = false,
   colorSchemeMode = 'system',
+  followUserLocation = false,
+  interactionEnabled = true,
   markerVariant = 'default',
-  sharedUserLocations = [],
+  markers = [],
   onInteract,
   onMapPress,
   onMarkerPress,
+  recenterToUserSignal = 0,
+  routeCoordinates,
+  sharedUserLocations = [],
+  showRoutes = true,
   style,
+  userAvatarPaletteKey = null,
+  userAvatarUri = null,
+  userCoordinate = null,
+  userHeading = null,
+  userIsStale = false,
+  userName = null,
+  userPuckVariant = 'navigation',
+  userSpeed = null,
+  viewportPadding,
+  zoomLevel = 14,
 }: MapPreviewProps) {
-  const mapRef = useRef<MapboxMapView | null>(null);
   const cameraRef = useRef<Camera | null>(null);
-  const hasCenteredOnResolvedDataRef = useRef(false);
-  const hasUserInteractedRef = useRef(false);
-  const isFollowingUserRef = useRef(followUserLocation);
-  const lastCameraTargetKeyRef = useRef<string | null>(null);
-  const [upcomingRouteCoords, setUpcomingRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
-  const [stayBranchCoords, setStayBranchCoords] = useState<Record<string, { latitude: number; longitude: number }[]>>({});
-  const isWeb = Platform.OS === 'web';
-  const MapboxGL = getMapboxModule();
   const colorScheme = useColorScheme();
   const isDark = colorSchemeMode === 'dark' || (colorSchemeMode === 'system' && colorScheme === 'dark');
-  const fallbackBackgroundColor = isDark ? designSystem.colors.darkBackground : designSystem.colors.mapFallback;
-  const fallbackTextColor = isDark ? designSystem.colors.darkMutedText : designSystem.colors.warmDark;
-  const defaultStyleURL = MapboxGL
-    ? isDark
-      ? MapboxGL.StyleURL.Dark
-      : MapboxGL.StyleURL.Street
-    : null;
-  const cameraPadding = useMemo(() => normalizeCameraPadding(viewportPadding), [viewportPadding]);
   const normalizedMarkers = useMemo(() => normalizeMarkers(markers), [markers]);
   const normalizedSharedUserLocations = useMemo(
     () => normalizeSharedUserLocations(sharedUserLocations),
     [sharedUserLocations]
   );
+  const routeInputCoordinates = useMemo(
+    () =>
+      getRouteInputCoordinates({
+        markers: normalizedMarkers,
+        routeCoordinates,
+        userCoordinate,
+      }),
+    [normalizedMarkers, routeCoordinates, userCoordinate]
+  );
+  const routeRequestKey = useMemo(() => getRouteRequestKey(routeInputCoordinates), [routeInputCoordinates]);
+  const directRouteLineCoordinates = useMemo(
+    () => routeInputCoordinates.map(toLatLng).filter(isValidLatLng),
+    [routeInputCoordinates]
+  );
+  const [resolvedRoute, setResolvedRoute] = useState<{ coordinates: NativeRoutePoint[]; key: string }>({
+    coordinates: [],
+    key: '',
+  });
   const resolvedCenterCoordinate =
-    centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? normalizedSharedUserLocations[0]?.coordinate ?? null;
-  const mapCenterCoordinate = resolvedCenterCoordinate ?? DEFAULT_MAP_CENTER;
-  const offlineMapState = useOfflineMapStyleUrl(mapCenterCoordinate);
-  const styleURL = offlineMapState.styleUrl ?? defaultStyleURL;
-  const initialCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : mapCenterCoordinate;
-  const followZoomLevel = Math.max(zoomLevel, 17);
-  const normalizedUserHeading = normalizeHeading(userHeading);
-  const followCameraBearing = normalizedUserHeading ?? 0;
-  const stayMarkers = useMemo(
-    () => normalizedMarkers.filter((marker) => marker.itemKind === 'stay' || !!marker.priceLabel),
-    [normalizedMarkers]
+    centerCoordinate ?? userCoordinate ?? normalizedMarkers[0]?.coordinate ?? normalizedSharedUserLocations[0]?.coordinate ?? DEFAULT_MAP_CENTER;
+  const followZoomLevel = Math.max(zoomLevel, USER_FOCUS_ZOOM_LEVEL);
+  const activeCenterCoordinate = followUserLocation && userCoordinate ? userCoordinate : resolvedCenterCoordinate;
+  const effectiveZoomLevel = followUserLocation && userCoordinate ? followZoomLevel : zoomLevel;
+  const routeLineCoordinates =
+    resolvedRoute.key === routeRequestKey && resolvedRoute.coordinates.length > 1
+      ? resolvedRoute.coordinates
+      : directRouteLineCoordinates;
+  const cameraPadding = useMemo(
+    () => ({
+      paddingTop: viewportPadding?.paddingTop ?? 0,
+      paddingBottom: viewportPadding?.paddingBottom ?? 0,
+      paddingLeft: viewportPadding?.paddingLeft ?? 0,
+      paddingRight: viewportPadding?.paddingRight ?? 0,
+    }),
+    [viewportPadding]
   );
-  const routeMarkerCoordinates = useMemo(
-    () => routeCoordinates ?? normalizedMarkers.filter((m) => !m.priceLabel).map((marker) => marker.coordinate),
-    [normalizedMarkers, routeCoordinates]
-  );
-  const routeMarkersKey = useMemo(
-    () => routeMarkerCoordinates.map((coord) => `${coord[0]},${coord[1]}`).join('|'),
-    [routeMarkerCoordinates]
-  );
-  const shouldHideMainRouteForStayFocus = useMemo(
-    () => stayMarkers.length === 1 && stayMarkers[0].status === 'active',
-    [stayMarkers]
-  );
-  const handleUserInteract = useCallback(() => {
-    hasUserInteractedRef.current = true;
-    isFollowingUserRef.current = false;
-    onInteract?.();
-  }, [onInteract]);
+
+  const routeShape = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(() => {
+    if (!showRoutes || routeLineCoordinates.length < 2) {
+      return null;
+    }
+
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: routeLineCoordinates.map((point) => [point.longitude, point.latitude]),
+      },
+    };
+  }, [routeLineCoordinates, showRoutes]);
 
   useEffect(() => {
-    if (!followUserLocation) {
-      isFollowingUserRef.current = false;
-      return;
-    }
-
-    if (!hasUserInteractedRef.current) {
-      isFollowingUserRef.current = true;
-    }
-  }, [followUserLocation]);
-
-  useEffect(() => {
-    if (isWeb || !showRoutes || routeMarkerCoordinates.length === 0) {
-      setUpcomingRouteCoords([]);
-      return;
-    }
-
-    if (shouldHideMainRouteForStayFocus) {
-      setUpcomingRouteCoords([]);
-      return;
-    }
-
     let isCancelled = false;
-    async function loadRoutes() {
-      if (routeCoordinates) {
-        if (routeMarkerCoordinates.length > 1) {
-          const coords = await fetchRoutePath(routeMarkerCoordinates);
-          if (!isCancelled) {
-            setUpcomingRouteCoords(coords);
-          }
-        } else if (!isCancelled) {
-          setUpcomingRouteCoords([]);
-        }
-      } else if (userCoordinate) {
-        const upcomingPathInput = [userCoordinate, ...routeMarkerCoordinates];
-        if (upcomingPathInput.length > 1) {
-          const coords = await fetchRoutePath(upcomingPathInput);
-          if (!isCancelled) {
-            setUpcomingRouteCoords(coords);
-          }
-        } else if (!isCancelled) {
-          setUpcomingRouteCoords([]);
-        }
-      } else if (routeMarkerCoordinates.length > 1) {
-        const coords = await fetchRoutePath(routeMarkerCoordinates);
+
+    async function loadRoute() {
+      await Promise.resolve();
+
+      if (!showRoutes || routeInputCoordinates.length < 2) {
         if (!isCancelled) {
-          setUpcomingRouteCoords(coords);
+          setResolvedRoute({ coordinates: [], key: routeRequestKey });
         }
-      } else if (!isCancelled) {
-        setUpcomingRouteCoords([]);
+        return;
       }
-    }
 
-    void loadRoutes();
-    return () => {
-      isCancelled = true;
-    };
-  }, [isWeb, routeCoordinates, routeMarkerCoordinates, routeMarkersKey, shouldHideMainRouteForStayFocus, showRoutes, userCoordinate]);
-
-  useEffect(() => {
-    if (isWeb || !showRoutes || stayMarkers.length === 0 || !userCoordinate) {
-      setStayBranchCoords({});
-      return;
-    }
-
-    let isCancelled = false;
-
-    async function loadStayBranches() {
-      const branches: Record<string, { latitude: number; longitude: number }[]> = {};
-
-      for (const stay of stayMarkers) {
-        if (stay.status === 'active' || stay.status === 'upcoming') {
-          const branchPath = await fetchRoutePath([userCoordinate as readonly [number, number], stay.coordinate]);
-          if (branchPath.length > 1) {
-            branches[stay.id] = branchPath;
-          }
-        }
-      }
+      const coordinates = (await fetchRoutePath(routeInputCoordinates)).filter(isValidLatLng);
       if (!isCancelled) {
-        setStayBranchCoords(branches);
+        setResolvedRoute({ coordinates, key: routeRequestKey });
       }
     }
 
-    void loadStayBranches();
+    void loadRoute();
+
     return () => {
       isCancelled = true;
     };
-  }, [isWeb, stayMarkers, showRoutes, userCoordinate]);
+  }, [routeInputCoordinates, routeRequestKey, showRoutes]);
 
   useEffect(() => {
-    if (isWeb || !MapboxGL || !cameraRef.current) return;
-
-    if (followUserLocation && userCoordinate && isFollowingUserRef.current) {
+    if (!userCoordinate || recenterToUserSignal === 0) {
       return;
     }
 
-    const cameraTargetKey = getCameraTargetKey(mapCenterCoordinate, zoomLevel);
-    if (cameraTargetKey === lastCameraTargetKeyRef.current) {
-      return;
-    }
-
-    if (hasUserInteractedRef.current && !centerCoordinate) {
-      return;
-    }
-
-    lastCameraTargetKeyRef.current = cameraTargetKey;
-    hasUserInteractedRef.current = false;
-    cameraRef.current.setCamera({
-      centerCoordinate: toMapboxPosition(mapCenterCoordinate),
-      padding: cameraPadding,
-      zoomLevel,
-      animationDuration: 1000,
-      animationMode: 'easeTo',
-    });
-    if (resolvedCenterCoordinate) {
-      hasCenteredOnResolvedDataRef.current = true;
-    }
-  }, [MapboxGL, cameraPadding, centerCoordinate, followUserLocation, isWeb, mapCenterCoordinate, resolvedCenterCoordinate, userCoordinate, zoomLevel]);
-
-  useEffect(() => {
-    if (isWeb || !MapboxGL || !cameraRef.current || !followUserLocation || !userCoordinate || !isFollowingUserRef.current) return;
-
-    const cameraTargetKey = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
-    if (cameraTargetKey === lastCameraTargetKeyRef.current) {
-      return;
-    }
-
-    hasUserInteractedRef.current = false;
-    lastCameraTargetKeyRef.current = cameraTargetKey;
-    cameraRef.current.setCamera({
-      centerCoordinate: toMapboxPosition(userCoordinate),
-      heading: followCameraBearing,
-      padding: cameraPadding,
-      pitch: 0,
+    cameraRef.current?.setCamera({
+      centerCoordinate: [userCoordinate[0], userCoordinate[1]],
       zoomLevel: followZoomLevel,
-      animationDuration: FOLLOW_CAMERA_ANIMATION_MS,
-      animationMode: 'linearTo',
+      animationDuration: CAMERA_ANIMATION_MS,
     });
-    hasCenteredOnResolvedDataRef.current = true;
-  }, [MapboxGL, cameraPadding, followCameraBearing, followUserLocation, followZoomLevel, isWeb, normalizedUserHeading, userCoordinate]);
-
-  useEffect(() => {
-    if (isWeb || !MapboxGL || !cameraRef.current || !userCoordinate || recenterToUserSignal === 0) return;
-
-    isFollowingUserRef.current = true;
-    hasUserInteractedRef.current = false;
-    lastCameraTargetKeyRef.current = getCameraTargetKey(userCoordinate, followZoomLevel, normalizedUserHeading);
-    cameraRef.current.setCamera({
-      centerCoordinate: toMapboxPosition(userCoordinate),
-      heading: followCameraBearing,
-      padding: cameraPadding,
-      pitch: 0,
-      zoomLevel: followZoomLevel,
-      animationDuration: RECENTER_CAMERA_ANIMATION_MS,
-      animationMode: 'easeTo',
-    });
-    hasCenteredOnResolvedDataRef.current = true;
-  }, [MapboxGL, cameraPadding, followCameraBearing, followZoomLevel, isWeb, normalizedUserHeading, recenterToUserSignal, userCoordinate]);
-
-  useEffect(() => {
-    if (!MapboxGL || !MAPBOX_ACCESS_TOKEN) return;
-
-    void MapboxGL.setAccessToken(MAPBOX_ACCESS_TOKEN);
-  }, [MapboxGL]);
-
-  if (isWeb) {
-    if (!MAPBOX_ACCESS_TOKEN) {
-      return (
-        <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-          <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
-        </View>
-      );
-    }
-
-    const MapboxMap = MapboxGL?.MapView;
-
-    if (!MapboxMap) {
-      return (
-        <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-          <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map preview is still loading...</ThemedText>
-        </View>
-      );
-    }
-
-    return (
-      <View style={[styles.mapRoot, style]}>
-        <MapboxMap
-          style={StyleSheet.absoluteFill}
-          styleURL={styleURL ?? undefined}
-        >
-          <MapboxGL.Camera
-            centerCoordinate={toMapboxPosition(mapCenterCoordinate)}
-            padding={cameraPadding}
-            zoomLevel={zoomLevel}
-          />
-          <MapRouteOverlays
-            upcomingRouteCoords={upcomingRouteCoords}
-            stayBranchCoords={stayBranchCoords}
-          />
-          {normalizedMarkers.map((marker) => {
-            return (
-              <MapboxPlaceMarker
-                isDark={isDark}
-                marker={marker}
-                key={marker.id}
-                onPress={onMarkerPress}
-                variant={markerVariant}
-              />
-            );
-          })}
-          {normalizedSharedUserLocations.map((location) => (
-            <MapboxUserMarker
-              key={`shared-user-${location.travelerSlug}`}
-              avatarPaletteKey={location.travelerSlug}
-              avatarUri={location.avatarUri}
-              coordinate={location.coordinate}
-              heading={location.heading}
-              name={location.name}
-              speed={location.speed}
-            />
-          ))}
-        </MapboxMap>
-      </View>
-    );
-  }
-
-  if (!MAPBOX_ACCESS_TOKEN) {
-    return (
-      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Mapbox needs an access token to render maps.</ThemedText>
-      </View>
-    );
-  }
-
-  if (!MapboxGL) {
-    return (
-      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>
-          Mapbox maps need a custom development build. Rebuild Wandr to enable native maps.
-        </ThemedText>
-      </View>
-    );
-  }
-
-  if (!styleURL) {
-    return (
-      <View style={[styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-        <ThemedText style={[styles.fallbackTitle, { color: fallbackTextColor }]}>Map style is still loading.</ThemedText>
-      </View>
-    );
-  }
+  }, [followZoomLevel, recenterToUserSignal, userCoordinate]);
 
   return (
-    <View
-      style={[styles.mapRoot, style]}
-      onTouchStart={handleUserInteract}>
-      <MapboxGL.MapView
-        key="map-preview"
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        styleURL={styleURL}
-        onDidFinishLoadingStyle={() => {
-          hideNativeBaseMapDetails(mapRef.current);
-        }}
+    <View style={[styles.root, style]}>
+      <MapView
+        style={styles.map}
+        styleURL={isDark ? StyleURL.Dark : StyleURL.Light}
+        compassEnabled={false}
+        scaleBarEnabled={false}
+        scrollEnabled={interactionEnabled}
+        zoomEnabled={interactionEnabled}
+        rotateEnabled={false}
+        pitchEnabled={false}
         onPress={(feature) => {
           const coordinate = feature.geometry?.coordinates;
           if (Array.isArray(coordinate) && coordinate.length >= 2) {
-            onMapPress?.([Number(coordinate[0]), Number(coordinate[1])]);
+            onMapPress?.([coordinate[0], coordinate[1]]);
           }
-          handleUserInteract();
-        }}
-        onCameraChanged={(state) => {
-          if (state.gestures.isGestureActive) {
-            handleUserInteract();
+          if (interactionEnabled) {
+            onInteract?.();
           }
         }}
-        onMapIdle={(state) => {
-          if (state.gestures.isGestureActive) {
-            handleUserInteract();
+        onRegionDidChange={(event) => {
+          if (interactionEnabled && (event?.properties as { isUserInteraction?: boolean })?.isUserInteraction) {
+            onInteract?.();
           }
-        }}
-        compassEnabled={false}
-        logoEnabled={false}
-        attributionEnabled={false}
-        scaleBarEnabled={false}
-        rotateEnabled
-        pitchEnabled
-        scrollEnabled
-        zoomEnabled
-      >
-        <MapboxGL.Camera
+        }}>
+        <Camera
           ref={cameraRef}
-          defaultSettings={{
-            centerCoordinate: toMapboxPosition(initialCenterCoordinate),
-            heading: followUserLocation ? followCameraBearing : 0,
-            padding: cameraPadding,
-            zoomLevel,
-          }}
+          centerCoordinate={[activeCenterCoordinate[0], activeCenterCoordinate[1]]}
+          zoomLevel={effectiveZoomLevel}
+          animationDuration={CAMERA_ANIMATION_MS}
+          padding={cameraPadding}
         />
-        {userCoordinate ? (
-          <MapboxGL.CustomLocationProvider
-            coordinate={toMapboxPosition(userCoordinate)}
-            heading={normalizedUserHeading ?? undefined}
-          />
-        ) : null}
-        {userCoordinate ? (
-          <MapboxUserMarker
-            accuracy={userAccuracy}
-            avatarPaletteKey={userAvatarPaletteKey}
-            avatarUri={userAvatarUri}
-            coordinate={userCoordinate}
-            heading={normalizedUserHeading}
-            isStale={userIsStale}
-            name={userName}
-            speed={userSpeed}
-            variant={userPuckVariant}
-          />
+
+        {routeShape ? (
+          <ShapeSource id="wandr-route" shape={routeShape}>
+            <LineLayer
+              id="wandr-route-line"
+              style={{
+                lineColor: isDark ? 'rgba(198,239,174,0.9)' : designSystem.colors.darkGreen,
+                lineWidth: 4,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </ShapeSource>
         ) : null}
 
-        {normalizedMarkers.map((marker) => {
-          return (
-            <MapboxPlaceMarker
-              key={`marker-${[
-                marker.id,
-                marker.coordinate[0],
-                marker.coordinate[1],
-                marker.priceLabel ?? '',
-                marker.status ?? '',
-              ].join('-')}`}
-              isDark={isDark}
-              marker={marker}
-              variant={markerVariant}
-              onPress={onMarkerPress}
-            />
-          );
-        })}
-        {normalizedSharedUserLocations.map((location) => (
-          <MapboxUserMarker
-            key={`shared-user-${location.travelerSlug}`}
-            avatarPaletteKey={location.travelerSlug}
-            avatarUri={location.avatarUri}
-            coordinate={location.coordinate}
-            heading={location.heading}
-            name={location.name}
-            speed={location.speed}
-          />
+        {normalizedMarkers.map((marker) => (
+          <MarkerView
+            key={`${marker.id}:${marker.coordinate[0]}:${marker.coordinate[1]}:${marker.priceLabel ?? ''}`}
+            coordinate={[marker.coordinate[0], marker.coordinate[1]]}
+            anchor={marker.priceLabel ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
+            allowOverlap>
+            <Pressable
+              accessibilityLabel={marker.label ?? marker.priceLabel ?? 'Map marker'}
+              accessibilityRole="button"
+              onPress={() => onMarkerPress?.(marker)}>
+              <NativeMapMarker isDark={isDark} marker={marker} variant={markerVariant} />
+            </Pressable>
+          </MarkerView>
         ))}
 
-        <MapRouteOverlays upcomingRouteCoords={upcomingRouteCoords} stayBranchCoords={stayBranchCoords} />
-      </MapboxGL.MapView>
-      {offlineMapState.isOffline ? (
-        <View pointerEvents="none" style={styles.offlineBanner}>
-          <ThemedText style={styles.offlineBannerText}>
-            {offlineMapState.styleUrl
-              ? `Offline map: ${offlineMapState.region?.label ?? 'downloaded area'}`
-              : offlineMapState.hasDownloadedRegion
-                ? 'Offline map needs an update'
-                : 'No downloaded map here'}
-          </ThemedText>
-        </View>
-      ) : null}
+        {userCoordinate ? (
+          <MarkerView coordinate={[userCoordinate[0], userCoordinate[1]]} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
+            <UserLocationPuck
+              avatarPaletteKey={userAvatarPaletteKey}
+              avatarUri={userAvatarUri}
+              heading={userHeading}
+              isStale={userIsStale}
+              name={userName}
+              speed={userSpeed}
+              variant={userPuckVariant}
+            />
+          </MarkerView>
+        ) : null}
+
+        {normalizedSharedUserLocations.map((location) => (
+          <MarkerView
+            key={`${location.travelerSlug}:${location.coordinate[0]}:${location.coordinate[1]}`}
+            coordinate={[location.coordinate[0], location.coordinate[1]]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap>
+            <UserLocationPuck
+              avatarPaletteKey={location.travelerSlug}
+              avatarUri={location.avatarUri}
+              heading={location.heading}
+              name={location.name}
+              speed={location.speed}
+              variant="avatar"
+            />
+          </MarkerView>
+        ))}
+      </MapView>
     </View>
   );
 }
 
 export const MapPreview = memo(MapPreviewComponent);
-export type { MapMarker, MapPreviewProps, SharedMapUserLocation };
 
-function hideNativeBaseMapDetails(map: MapboxMapView | null) {
-  if (!map) return;
+function NativeMapMarker({
+  isDark,
+  marker,
+  variant,
+}: {
+  isDark: boolean;
+  marker: MapMarker;
+  variant: MapPreviewProps['markerVariant'];
+}) {
+  if (marker.priceLabel) {
+    return (
+      <View style={[styles.priceMarker, isDark && styles.priceMarkerDark]}>
+        <View style={styles.priceMarkerDot} />
+        <View style={styles.priceMarkerPill}>
+          <View style={[styles.priceMarkerPillFill, isDark && styles.priceMarkerPillFillDark]}>
+            <ThemedText
+              darkColor={isDark ? designSystem.colors.darkText : designSystem.colors.ink}
+              lightColor={designSystem.colors.ink}
+              style={styles.priceMarkerText}
+            >
+              {marker.priceLabel}
+            </ThemedText>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
-  HIDDEN_MAPBOX_SOURCE_LAYER_IDS.forEach((sourceLayerId) => {
-    try {
-      map.setSourceVisibility(false, 'composite', sourceLayerId);
-    } catch {
-      // Some Mapbox styles omit specific source layers; the rest should still be hidden.
-    }
-  });
+  const isRouteWidget = variant === 'routeWidget';
+  const isAccent = marker.tone === 'accent' || marker.status === 'active';
+  const imageUri = getMarkerImageUri(marker);
+
+  return (
+    <View
+      style={[
+        styles.placeMarker,
+        isRouteWidget && styles.placeMarkerRouteWidget,
+        isAccent ? styles.placeMarkerAccent : null,
+        marker.status === 'completed' ? styles.placeMarkerCompleted : null,
+        isDark && styles.placeMarkerDark,
+      ]}
+    >
+      {imageUri ? (
+        <Image contentFit="cover" source={{ uri: imageUri }} style={styles.placeMarkerImage} />
+      ) : (
+        <View style={[styles.placeMarkerCore, isAccent ? styles.placeMarkerCoreAccent : null]} />
+      )}
+    </View>
+  );
 }
 
-function normalizeMarkers(markers: readonly MapMarker[]) {
-  const seen = new Set<string>();
-
-  return markers.filter((marker) => {
-    const [longitude, latitude] = marker.coordinate;
-    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-      return false;
-    }
-
-    const dedupeKey = `${marker.id}:${longitude}:${latitude}:${marker.priceLabel ?? ''}:${marker.status ?? ''}`;
-    if (seen.has(dedupeKey)) {
-      return false;
-    }
-
-    seen.add(dedupeKey);
-    return true;
-  });
-}
-
-function normalizeSharedUserLocations(locations: readonly SharedMapUserLocation[]) {
-  const seen = new Set<string>();
-
-  return locations.filter((location) => {
-    const [longitude, latitude] = location.coordinate;
-    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-      return false;
-    }
-
-    if (seen.has(location.travelerSlug)) {
-      return false;
-    }
-
-    seen.add(location.travelerSlug);
-    return true;
-  });
-}
-
-function toMapboxPosition(coordinate: readonly [number, number]): [number, number] {
-  return [coordinate[0], coordinate[1]];
-}
-
-function normalizeCameraPadding(viewportPadding: MapPreviewProps['viewportPadding']) {
-  return {
-    paddingBottom: viewportPadding?.paddingBottom ?? 0,
-    paddingLeft: viewportPadding?.paddingLeft ?? 0,
-    paddingRight: viewportPadding?.paddingRight ?? 0,
-    paddingTop: viewportPadding?.paddingTop ?? 0,
-  };
-}
-
-function getCameraTargetKey(coordinate: readonly [number, number], zoomLevel: number, heading?: number | null) {
-  const headingKey = typeof heading === 'number' && Number.isFinite(heading) ? `:${heading.toFixed(0)}` : '';
-  return `${coordinate[0].toFixed(6)},${coordinate[1].toFixed(6)}:${zoomLevel}${headingKey}`;
-}
-
-function normalizeHeading(heading?: number | null) {
-  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0) {
+function getMarkerImageUri(marker: MapMarker) {
+  if (typeof marker.imageUri !== 'string') {
     return null;
   }
 
-  return ((heading % 360) + 360) % 360;
+  const imageUri = marker.imageUri.trim();
+  return imageUri.length > 0 ? imageUri : null;
+}
+
+function normalizeMarkers(markers: readonly MapMarker[]) {
+  return markers.filter((marker) => isValidCoordinate(marker.coordinate));
+}
+
+function normalizeSharedUserLocations(locations: readonly SharedMapUserLocation[]) {
+  return locations.filter((location) => isValidCoordinate(location.coordinate));
+}
+
+function getRouteInputCoordinates({
+  markers,
+  routeCoordinates,
+  userCoordinate,
+}: {
+  markers: readonly MapMarker[];
+  routeCoordinates?: readonly (readonly [number, number])[];
+  userCoordinate?: readonly [number, number] | null;
+}) {
+  const baseCoordinates =
+    routeCoordinates ??
+    markers
+      .filter((marker) => !marker.priceLabel)
+      .map((marker) => marker.coordinate);
+  const coordinates =
+    routeCoordinates || !userCoordinate || baseCoordinates.length === 0
+      ? baseCoordinates
+      : [userCoordinate, ...baseCoordinates];
+
+  return dedupeConsecutiveCoordinates(
+    coordinates.filter((coordinate): coordinate is readonly [number, number] => isValidCoordinate(coordinate))
+  );
+}
+
+function dedupeConsecutiveCoordinates(coordinates: readonly (readonly [number, number])[]) {
+  return coordinates.filter((coordinate, index, all) => {
+    const previous = all[index - 1];
+
+    return !previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1];
+  });
+}
+
+function getRouteRequestKey(coordinates: readonly (readonly [number, number])[]) {
+  return coordinates.map((coordinate) => `${coordinate[0]},${coordinate[1]}`).join(';');
+}
+
+function isValidCoordinate(coordinate?: readonly [number, number] | null) {
+  if (!coordinate || coordinate.length !== 2) {
+    return false;
+  }
+
+  const [longitude, latitude] = coordinate;
+  return (
+    Number.isFinite(longitude) &&
+    Number.isFinite(latitude) &&
+    Math.abs(longitude) <= 180 &&
+    Math.abs(latitude) <= 90
+  );
+}
+
+function toLatLng(coordinate: readonly [number, number]) {
+  return {
+    latitude: coordinate[1],
+    longitude: coordinate[0],
+  };
+}
+
+function isValidLatLng(coordinate: { latitude: number; longitude: number }) {
+  return (
+    Number.isFinite(coordinate.longitude) &&
+    Number.isFinite(coordinate.latitude) &&
+    Math.abs(coordinate.longitude) <= 180 &&
+    Math.abs(coordinate.latitude) <= 90
+  );
 }
 
 const styles = StyleSheet.create({
-  mapRoot: {
+  root: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  map: {
     flex: 1,
   },
-  fallback: {
-    ...StyleSheet.absoluteFillObject,
+  placeMarker: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    backgroundColor: designSystem.colors.copper,
+    borderWidth: 3,
+    borderColor: designSystem.colors.white,
+    overflow: 'hidden',
+    boxShadow: '0 8px 14px rgba(0,0,0,0.18)',
   },
-  fallbackTitle: {
-    textAlign: 'center',
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
+  placeMarkerRouteWidget: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
   },
-  offlineBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 18,
+  placeMarkerAccent: {
+    backgroundColor: designSystem.colors.darkGreen,
+    borderColor: designSystem.colors.darkGreen,
+  },
+  placeMarkerCompleted: {
+    opacity: 0.55,
+  },
+  placeMarkerDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.whiteOverlayBorder,
+  },
+  placeMarkerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  placeMarkerCore: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: designSystem.colors.white,
+  },
+  placeMarkerCoreAccent: {
+    backgroundColor: designSystem.colors.lime,
+  },
+  priceMarker: {
     alignItems: 'center',
   },
-  offlineBannerText: {
-    overflow: 'hidden',
-    borderRadius: 999,
+  priceMarkerDark: {
+    opacity: 0.96,
+  },
+  priceMarkerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: designSystem.colors.darkGreen,
-    color: designSystem.colors.lime,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    marginBottom: -2,
+  },
+  priceMarkerPill: {
+    minWidth: 58,
+    height: 30,
+    borderRadius: designSystem.radii.pill,
+    backgroundColor: designSystem.colors.white,
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+    padding: 4,
+  },
+  priceMarkerPillFill: {
+    flex: 1,
+    borderRadius: designSystem.radii.pill,
+    backgroundColor: designSystem.colors.limeMist,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7,
+  },
+  priceMarkerPillFillDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+  },
+  priceMarkerText: {
     fontSize: 12,
     fontWeight: '700',
-    lineHeight: 16,
+    lineHeight: 14,
   },
 });

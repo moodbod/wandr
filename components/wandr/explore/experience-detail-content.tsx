@@ -1,13 +1,13 @@
 import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { Sheet, SheetScrollView, SheetRef } from '@/components/ui/sheet';
 import { ThemedView } from '@/components/themed-view';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
@@ -22,6 +22,7 @@ import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/expl
 import { WandrHeader } from '@/components/wandr/header';
 import { largeScreenWorkspace } from '@/components/wandr/large-screen-workspace';
 import { TravelerAvatarStack } from '@/components/wandr/traveler-avatar-stack';
+import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { designSystem } from '@/constants/design-system';
 import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -44,7 +45,6 @@ import {
   toggleLocationLikeRef,
 } from '@/lib/convex';
 import type { ExploreJoinableTrip } from '@/types/explore';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 
 export type ExperienceDetailContentProps = {
   slug: string;
@@ -95,21 +95,17 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     travelerSlug ? { travelerSlug, locationKind: 'experience', locationSlug: slug } : 'skip'
   );
   const [bookingAction, setBookingAction] = useState<'primary' | 'secondary' | null>(null);
+  const [bookingTripId, setBookingTripId] = useState<string | null>(null);
   const [requestingCircleId, setRequestingCircleId] = useState<string | null>(null);
   const [requestedCircleIds, setRequestedCircleIds] = useState<string[]>([]);
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
-  const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
+  const [optimisticLiked, setOptimisticLiked] = useState<{ slug: string; liked: boolean } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [requestDayOffset, setRequestDayOffset] = useState(1);
   const [requestPartySize, setRequestPartySize] = useState(2);
   const [requestNote, setRequestNote] = useState('');
 
-  const tripSheetRef = useRef<BottomSheet>(null);
-
-  useEffect(() => {
-    setOptimisticBookedSlug(null);
-    setOptimisticLiked(null);
-  }, [slug]);
+  const tripSheetRef = useRef<SheetRef>(null);
 
   if (page === undefined || (travelerSlug && (trips === undefined || itinerary === undefined || trip === undefined))) {
     return (
@@ -156,7 +152,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   const isAlreadyBooked = bookedTrips.length > 0 || optimisticBookedSlug === slug;
   const hasExistingTrips = (trips?.length ?? 0) > 0;
 
-  const isLiked = optimisticLiked ?? likeState?.liked ?? false;
+  const isLiked = optimisticLiked?.slug === slug ? optimisticLiked.liked : likeState?.liked ?? false;
   const hostGalleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
   const galleryImages: GalleryImageItem[] = [
     ...hostGalleryImages.map((uri) => ({ uri, source: 'host' as const })),
@@ -233,8 +229,21 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   };
 
   const handleSelectTripForBooking = async (tripId: Id<'trips'>) => {
-    tripSheetRef.current?.close();
-    await saveExperienceToTrip('primary', tripId);
+    if (bookingAction || bookingTripId) {
+      return;
+    }
+
+    setBookingTripId(tripId);
+    try {
+      const didBook = await saveExperienceToTrip('primary', tripId);
+      if (didBook) {
+        tripSheetRef.current?.close();
+      }
+    } catch {
+      Alert.alert('Could not add to trip', 'Please try again.');
+    } finally {
+      setBookingTripId(null);
+    }
   };
 
   const handleRequestJoinTrip = async (joinableTrip: ExploreJoinableTrip) => {
@@ -292,7 +301,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     }
 
     const nextLiked = !isLiked;
-    setOptimisticLiked(nextLiked);
+    setOptimisticLiked({ slug, liked: nextLiked });
 
     try {
       const result = await toggleLocationLike({
@@ -300,7 +309,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         locationKind: 'experience',
         locationSlug: experience.slug,
       });
-      setOptimisticLiked(result.liked);
+      setOptimisticLiked({ slug, liked: result.liked });
     } catch {
       setOptimisticLiked(null);
     }
@@ -495,7 +504,15 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
                         </ThemedText>
                       </View>
                       <TravelerAvatarStack
-                        avatars={joinable.avatarUris}
+                        avatars={
+                          joinable.avatars
+                            ? joinable.avatars.map((avatar) => ({
+                                name: avatar.name,
+                                paletteKey: avatar.travelerSlug,
+                                uri: avatar.avatarUri,
+                              }))
+                            : joinable.avatarUris
+                        }
                         fallbackName={joinable.groupName}
                         fallbackPaletteKey={joinable.circleId}
                         totalCount={joinable.memberCount}
@@ -514,48 +531,53 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
         </View>
       </ScrollView>
 
-      <GlassBottomSheet
+      <Sheet
         ref={tripSheetRef}
         index={-1}
-        snapPoints={['60%', '90%']}>
-        <BottomSheetView style={styles.sheetContainer}>
+        snapPoints={[520, 'full']}
+        enablePanDownToClose>
+        <SheetScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 36) },
+          ]}>
           <View style={styles.sheetHeader}>
             <ThemedText style={styles.sheetTitle}>Request experience</ThemedText>
           </View>
-          <ScrollView contentContainerStyle={styles.sheetContent}>
-            <ExperienceRequestFields
-              dayOffset={requestDayOffset}
-              isDark={isDark}
-              note={requestNote}
-              onChangeDayOffset={setRequestDayOffset}
-              onChangeNote={setRequestNote}
-              onChangePartySize={setRequestPartySize}
-              partySize={requestPartySize}
-            />
-            {(trips?.length ?? 0) === 0 ? (
-              <Pressable
-                onPress={() => {
+          <ExperienceRequestFields
+            dayOffset={requestDayOffset}
+            isDark={isDark}
+            note={requestNote}
+            onChangeDayOffset={setRequestDayOffset}
+            onChangeNote={setRequestNote}
+            onChangePartySize={setRequestPartySize}
+            partySize={requestPartySize}
+          />
+          <View style={styles.tripPickerSection}>
+            <TripSwitcher
+              trips={trips ?? []}
+              selectedTripId={bookingTripId ?? undefined}
+              onDeleteTrip={() => {}}
+              onNewTrip={() => {
+                if (!bookingAction && !bookingTripId) {
                   void handleStartJourney('primary');
-                }}
-                style={[styles.tripRow, isDark && styles.tripRowDark]}
-              >
-                <ThemedText style={styles.tripName}>Start new journey</ThemedText>
-                <ThemedText style={styles.tripMeta}>Create trip</ThemedText>
-              </Pressable>
+                }
+              }}
+              onSelectTrip={(tripId) => {
+                void handleSelectTripForBooking(tripId as Id<'trips'>);
+              }}
+              showDeleteActions={false}
+            />
+            {bookingTripId ? (
+              <ThemedText style={[styles.tripPickerStatus, isDark ? styles.tripPickerStatusDark : null]}>
+                Adding to trip...
+              </ThemedText>
             ) : null}
-            {trips?.map((t) => (
-              <Pressable
-                key={t._id}
-                onPress={() => void handleSelectTripForBooking(t._id as Id<'trips'>)}
-                style={[styles.tripRow, isDark && styles.tripRowDark]}
-              >
-                <ThemedText style={styles.tripName}>{t.name}</ThemedText>
-                <ThemedText style={styles.tripMeta}>{t.dayCount} days</ThemedText>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </BottomSheetView>
-      </GlassBottomSheet>
+          </View>
+        </SheetScrollView>
+      </Sheet>
     </ThemedView>
   );
 }
@@ -745,19 +767,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: designSystem.colors.darkGreen,
   },
-  sheetContainer: {
-    flex: 1,
-    padding: 24,
-  },
   sheetHeader: {
-    marginBottom: 20,
+    paddingTop: 4,
   },
   sheetTitle: {
     fontSize: 22,
     fontWeight: '600',
   },
   sheetContent: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    gap: 18,
+  },
+  tripPickerSection: {
     gap: 12,
+    paddingTop: 4,
+  },
+  tripPickerStatus: {
+    color: designSystem.colors.warmDark,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    paddingHorizontal: 2,
+  },
+  tripPickerStatusDark: {
+    color: designSystem.colors.darkMutedText,
   },
   tripRow: {
     padding: 16,

@@ -2,7 +2,6 @@ import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,7 +9,6 @@ import { ExploreActivityCard } from '@/components/wandr/explore/activity-card';
 import { ExploreActivityCardSkeleton } from '@/components/wandr/explore/card-skeletons';
 import { DiscoveryFilters } from '@/components/wandr/explore/discovery-filters';
 import { ExploreGroupTripCard } from '@/components/wandr/explore/group-trip-card';
-import { WandrHeader } from '@/components/wandr/header';
 import {
   coordinateIsInPlanningLocation,
   destinationMatchesPlanningLocation,
@@ -58,7 +56,6 @@ export default function ExploreSearchScreen() {
 
 function ConnectedExploreSearchScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isLargeScreen } = useResponsive();
   const traveler = useCurrentTraveler();
   const page = useQuery(getExplorePageContentRef, { slug: 'default', travelerSlug: traveler?.slug });
@@ -229,7 +226,6 @@ function ConnectedExploreSearchScreen() {
       activeIntentOptions={activeIntentOptions}
       activeRegion={resolvedActiveRegion}
       filteredHiddenGems={filteredHiddenGems}
-      insetsTop={insets.top}
       isLoading={isLoading}
       notice={null}
       onIntentChange={setActiveIntent}
@@ -250,7 +246,6 @@ function ExploreSearchScreenView({
   activeIntentOptions,
   activeRegion,
   filteredHiddenGems,
-  insetsTop,
   isLoading,
   notice,
   onIntentChange,
@@ -267,7 +262,6 @@ function ExploreSearchScreenView({
   activeIntentOptions: readonly DiscoveryOption[];
   activeRegion: string;
   filteredHiddenGems: readonly ExploreHiddenGem[];
-  insetsTop: number;
   isLoading: boolean;
   notice: string | null;
   onIntentChange: (value: string) => void;
@@ -294,16 +288,11 @@ function ExploreSearchScreenView({
 
   return (
     <ThemedView style={styles.root}>
-      <WandrHeader
-        config={{
-          overlay: true,
-          leadingAction: { kind: 'back', accessibilityLabel: 'Go back' },
-        }}
-      />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insetsTop + 72, paddingBottom: designSystem.spacing.xxxl * 2 },
+          { paddingTop: designSystem.spacing.lg, paddingBottom: designSystem.spacing.xxxl * 2 },
         ]}
       >
         <DiscoveryFilters

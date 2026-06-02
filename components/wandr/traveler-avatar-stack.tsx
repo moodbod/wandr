@@ -4,8 +4,14 @@ import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+export type TravelerAvatarStackItem = {
+  name?: string | null;
+  paletteKey?: string | null;
+  uri?: string | null;
+};
+
 type TravelerAvatarStackProps = {
-  avatars: readonly string[];
+  avatars: readonly (string | TravelerAvatarStackItem)[];
   totalCount: number;
   fallbackName?: string;
   fallbackPaletteKey?: string | null;
@@ -22,10 +28,16 @@ export function TravelerAvatarStack({
   size = 'default',
 }: TravelerAvatarStackProps) {
   const isDark = useColorScheme() === 'dark';
-  const visibleAvatars = avatars.filter(Boolean).slice(0, maxVisible);
+  const visibleAvatars = avatars
+    .map((avatar) => normalizeAvatar(avatar))
+    .filter((avatar) => Boolean(avatar.uri || avatar.name))
+    .slice(0, maxVisible);
   const avatarSize = size === 'compact' ? 28 : 32;
   const borderRadius = avatarSize / 2;
   const overlap = size === 'compact' ? 12 : 12;
+  const ringWidth = 2;
+  const innerAvatarSize = avatarSize - ringWidth * 2;
+  const ringColor = isDark ? designSystem.colors.darkSurface : designSystem.colors.white;
   const showFallbackAvatar = visibleAvatars.length === 0 && totalCount > 0;
   const shownAvatarCount = visibleAvatars.length + (showFallbackAvatar ? 1 : 0);
   const hiddenCount = Math.max(totalCount - shownAvatarCount, 0);
@@ -36,9 +48,9 @@ export function TravelerAvatarStack({
 
   return (
     <View style={styles.stack}>
-      {visibleAvatars.map((avatarUri, index) => (
+      {visibleAvatars.map((avatar, index) => (
         <View
-          key={`traveler-avatar-${index}`}
+          key={`traveler-avatar-${avatar.paletteKey ?? avatar.uri ?? avatar.name ?? index}`}
           style={[
             styles.avatarWrapper,
             {
@@ -47,10 +59,16 @@ export function TravelerAvatarStack({
               borderRadius,
               marginLeft: index === 0 ? 0 : -overlap,
               zIndex: 10 - index,
-              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
+              backgroundColor: ringColor,
+              padding: ringWidth,
             },
           ]}>
-          <WandrAvatar name="Traveler" size={avatarSize} uri={avatarUri} />
+          <WandrAvatar
+            name={avatar.name ?? fallbackName}
+            paletteKey={avatar.paletteKey ?? avatar.uri ?? avatar.name ?? fallbackPaletteKey ?? fallbackName}
+            size={innerAvatarSize}
+            uri={avatar.uri}
+          />
         </View>
       ))}
       {showFallbackAvatar ? (
@@ -61,10 +79,11 @@ export function TravelerAvatarStack({
               width: avatarSize,
               height: avatarSize,
               borderRadius,
-              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
+              backgroundColor: ringColor,
+              padding: ringWidth,
             },
           ]}>
-          <WandrAvatar name={fallbackName} paletteKey={fallbackPaletteKey ?? fallbackName} size={avatarSize} uri={null} />
+          <WandrAvatar name={fallbackName} paletteKey={fallbackPaletteKey ?? fallbackName} size={innerAvatarSize} uri={null} />
         </View>
       ) : null}
       {hiddenCount > 0 ? (
@@ -77,16 +96,41 @@ export function TravelerAvatarStack({
               height: avatarSize,
               borderRadius,
               marginLeft: shownAvatarCount === 0 ? 0 : -overlap,
-              borderColor: isDark ? designSystem.colors.darkSurface : designSystem.colors.white,
+              backgroundColor: ringColor,
+              padding: ringWidth,
             },
           ]}>
-          <Text allowFontScaling={false} numberOfLines={1} style={styles.countText}>
-            +{hiddenCount}
-          </Text>
+          <View
+            style={[
+              styles.countBubble,
+              {
+                width: innerAvatarSize,
+                height: innerAvatarSize,
+                borderRadius: innerAvatarSize / 2,
+              },
+            ]}>
+            <Text allowFontScaling={false} numberOfLines={1} style={styles.countText}>
+              +{hiddenCount}
+            </Text>
+          </View>
         </View>
       ) : null}
     </View>
   );
+}
+
+function normalizeAvatar(avatar: string | TravelerAvatarStackItem): TravelerAvatarStackItem {
+  if (typeof avatar === 'string') {
+    const uri = avatar.trim();
+    return uri ? { uri } : {};
+  }
+
+  const uri = typeof avatar.uri === 'string' && avatar.uri.trim().length > 0 ? avatar.uri.trim() : null;
+  const name = typeof avatar.name === 'string' && avatar.name.trim().length > 0 ? avatar.name.trim() : null;
+  const paletteKey =
+    typeof avatar.paletteKey === 'string' && avatar.paletteKey.trim().length > 0 ? avatar.paletteKey.trim() : null;
+
+  return { name, paletteKey, uri };
 }
 
 const styles = StyleSheet.create({
@@ -95,9 +139,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarWrapper: {
-    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: designSystem.colors.surface,
   },
   countBubble: {
     alignItems: 'center',
@@ -109,8 +153,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     includeFontPadding: false,
-    lineHeight: 14,
     textAlign: 'center',
-    textAlignVertical: 'center',
   },
 });

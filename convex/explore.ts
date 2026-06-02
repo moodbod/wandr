@@ -254,7 +254,6 @@ function toExperienceMapMarker(
     imageUri: experience.imageUri,
     itemKind: experience.itemKind ?? 'experience',
     label: experience.title,
-    priceLabel: experience.price,
     popularityScore: getExperiencePopularityCount(experience),
     tone: index % 2 === 0 ? 'accent' : 'dark',
   };
@@ -475,15 +474,26 @@ async function getActiveCircleMembers(ctx: QueryCtx, circleId: Id<'circles'>): P
   return members.filter((member) => member.status === 'active');
 }
 
-async function getCircleAvatarUris(ctx: QueryCtx, members: MemberDoc[]) {
+async function getCircleAvatarItems(ctx: QueryCtx, members: MemberDoc[]) {
   const profiles = await Promise.all(
     members.map((member) => getPublicTravelerProfile(ctx, member.travelerSlug))
   );
 
   return profiles
-    .map((profile) => profile?.avatarUri)
-    .filter((avatarUri): avatarUri is string => Boolean(avatarUri))
+    .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile))
+    .map((profile) => ({
+      travelerSlug: profile.travelerSlug,
+      name: profile.name,
+      avatarUri: profile.avatarUri,
+    }))
     .slice(0, 5);
+}
+
+async function getCircleAvatarUris(ctx: QueryCtx, members: MemberDoc[]) {
+  const avatars = await getCircleAvatarItems(ctx, members);
+  return avatars
+    .map((avatar) => avatar.avatarUri)
+    .filter((avatarUri): avatarUri is string => Boolean(avatarUri));
 }
 
 async function getCurrentCircleMembership(
@@ -559,8 +569,11 @@ async function buildJoinableTripCard(
     return null;
   }
 
+  const avatars = await getCircleAvatarItems(ctx, members);
+
   return {
-    avatarUris: await getCircleAvatarUris(ctx, members),
+    avatarUris: avatars.map((avatar) => avatar.avatarUri).filter((avatarUri): avatarUri is string => Boolean(avatarUri)),
+    avatars,
     circleId: circle._id,
     countryCode: place.countryCode,
     countryLabel: place.countryLabel,
@@ -651,7 +664,6 @@ export const getPageContent = query({
           imageUri: stay.imageUri,
           itemKind: 'stay' as const,
           label: stay.name,
-          priceLabel: stay.priceLabel,
           tone: index % 2 === 0 ? ('accent' as const) : ('dark' as const),
         })),
     ].filter((marker): marker is ExploreMapMarker => Boolean(marker));
@@ -836,6 +848,7 @@ export const getExploreJoinableTrips = query({
         destinationLabel: card.destinationLabel,
         memberCount: card.memberCount,
         avatarUris: card.avatarUris,
+        avatars: card.avatars,
       }));
   },
 });
@@ -884,7 +897,10 @@ export const getExploreGroupTripDetail = query({
     );
     const itinerary = resolvedItinerary.filter((item): item is NonNullable<typeof item> => Boolean(item));
     const primaryStop = itinerary[0] ?? null;
-    const avatarUris = await getCircleAvatarUris(ctx, members);
+    const avatars = await getCircleAvatarItems(ctx, members);
+    const avatarUris = avatars
+      .map((avatar) => avatar.avatarUri)
+      .filter((avatarUri): avatarUri is string => Boolean(avatarUri));
 
     return {
       circleId: circle._id,
@@ -894,6 +910,7 @@ export const getExploreGroupTripDetail = query({
       destinationLabel: circle.destinationLabel,
       memberCount: members.length,
       avatarUris,
+      avatars,
       heroImageUri: primaryStop?.imageUri ?? host?.avatarUri ?? '',
       locationLabel: primaryStop?.locationLabel ?? circle.destinationLabel,
       summary:

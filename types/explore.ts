@@ -54,6 +54,12 @@ export type ExplorePageContent = {
   updatedAt: number;
 };
 
+export type ExploreTripAvatar = {
+  travelerSlug: string;
+  name: string;
+  avatarUri: string | null;
+};
+
 export type ExploreJoinableTrip = {
   circleId: string;
   tripId: string;
@@ -63,6 +69,7 @@ export type ExploreJoinableTrip = {
   destinationLabel: string;
   memberCount: number;
   avatarUris: string[];
+  avatars: ExploreTripAvatar[];
 };
 
 export type ExploreJoinableTripCard = {
@@ -80,6 +87,7 @@ export type ExploreJoinableTripCard = {
   destinationLabel: string;
   memberCount: number;
   avatarUris: string[];
+  avatars: ExploreTripAvatar[];
 };
 
 export type ExploreGroupTripDetail = {
@@ -90,6 +98,7 @@ export type ExploreGroupTripDetail = {
   destinationLabel: string;
   memberCount: number;
   avatarUris: string[];
+  avatars: ExploreTripAvatar[];
   heroImageUri: string;
   locationLabel: string;
   summary: string;

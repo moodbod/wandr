@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from 'convex/react';
-import { GlassView } from 'expo-glass-effect';
+import { GlassView } from '@/lib/glass-effect';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -10,7 +10,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
   type StyleProp,
   type ViewStyle,
@@ -21,7 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { GlassBottomSheet } from '@/components/ui/glass-bottom-sheet';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetScrollView, SheetView, SheetRef } from '@/components/ui/sheet';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
 import { WandrHeader } from '@/components/wandr/header';
@@ -72,7 +72,6 @@ import type {
   StayBookingDetails,
   StayBookingProfile,
 } from '@/types/stays';
-import BottomSheet, { BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet';
 
 export function StayDetailScreen({
   onClose,
@@ -125,10 +124,10 @@ export function StayDetailScreen({
   const [specialRequest, setSpecialRequest] = useState('');
   const [bookingDateOverride, setBookingDateOverride] = useState<{ checkIn: number; checkOut: number } | null>(null);
   const [bookingTotalOverride, setBookingTotalOverride] = useState<number | null>(null);
-  const bookingSheetRef = useRef<BottomSheet>(null);
+  const bookingSheetRef = useRef<SheetRef>(null);
   const bookingSheetSnapPoints = useMemo(() => ['50%', '100%'], []);
   const bookingSheetAnimatedIndex = useSharedValue(-1);
-  const reviewSheetRef = useRef<BottomSheet>(null);
+  const reviewSheetRef = useRef<SheetRef>(null);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewNote, setReviewNote] = useState('');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -614,14 +613,14 @@ export function StayDetailScreen({
         totalPriceRateLabel={bookingBarTotalPrice.rateLabel}
       />
 
-      <GlassBottomSheet
+      <Sheet
         index={-1}
         ref={bookingSheetRef}
         snapPoints={bookingSheetSnapPoints}
         animatedIndex={bookingSheetAnimatedIndex}
         containerStyle={styles.sheetLayer}
         enablePanDownToClose>
-        <BottomSheetScrollView
+        <SheetScrollView
           style={styles.sheetRoot}
           contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 96 }]}
           showsVerticalScrollIndicator={false}
@@ -756,11 +755,12 @@ export function StayDetailScreen({
                 />
               ))}
             </View>
-            <TextInput
+            <Input
               multiline
+              containerStyle={[styles.notesInput, isDark && styles.notesInputDark]}
               placeholder="Special request, late check-in note, twin-bed request, quiet room..."
               placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
-              style={[styles.notesInput, isDark && styles.notesInputDark]}
+              style={[styles.notesInputText, isDark && styles.notesInputTextDark]}
               value={specialRequest}
               onChangeText={(value) => {
                 clearBookingSnapshot();
@@ -812,16 +812,16 @@ export function StayDetailScreen({
               </ThemedText>
             )}
           </Pressable>
-        </BottomSheetScrollView>
-      </GlassBottomSheet>
+        </SheetScrollView>
+      </Sheet>
 
-      <GlassBottomSheet
+      <Sheet
         containerStyle={styles.sheetLayer}
         ref={reviewSheetRef}
         index={-1}
         snapPoints={['48%']}
         enablePanDownToClose>
-        <BottomSheetView style={[styles.reviewSheetContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <SheetView style={[styles.reviewSheetContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <ThemedText style={styles.sheetTitle}>Write a review</ThemedText>
           <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
             Leave a quick rating and an optional note.
@@ -851,12 +851,13 @@ export function StayDetailScreen({
             })}
           </View>
 
-          <TextInput
+          <Input
             multiline
             numberOfLines={4}
+            containerStyle={[styles.notesInput, isDark && styles.notesInputDark, styles.reviewNoteInput]}
             placeholder="Add a note"
             placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
-            style={[styles.notesInput, isDark && styles.notesInputDark, styles.reviewNoteInput]}
+            style={[styles.notesInputText, isDark && styles.notesInputTextDark]}
             value={reviewNote}
             onChangeText={setReviewNote}
             textAlignVertical="top"
@@ -878,8 +879,8 @@ export function StayDetailScreen({
               </ThemedText>
             )}
           </Pressable>
-        </BottomSheetView>
-      </GlassBottomSheet>
+        </SheetView>
+      </Sheet>
     </ThemedView>
   );
 }
@@ -925,7 +926,7 @@ function BookingGlassBar({
           {...glassEffectProps}
           pointerEvents="none"
           style={[
-            StyleSheet.absoluteFillObject,
+            ({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }),
             styles.bottomBarGlassView,
             shouldUseFallbackGlassFill
               ? (isDark ? styles.bottomBarFallbackGlassFillDark : styles.bottomBarFallbackGlassFill)

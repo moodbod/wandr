@@ -8,7 +8,6 @@ import { experiencesTable } from './tables/experiences';
 import { membersTable } from './tables/members';
 import { readsTable } from './tables/reads';
 import { connectionsTable } from './tables/connections';
-import { callsTable } from './tables/calls';
 import { circlesTable } from './tables/circles';
 import { dmsTable } from './tables/dms';
 import { receiptsTable } from './tables/receipts';
@@ -128,7 +127,6 @@ export default defineSchema({
   dms: dmsTable,
   matches: matchesTable,
   connections: connectionsTable,
-  calls: callsTable,
   sharedLocations: sharedLocationsTable,
   supportThreads: supportThreadsTable,
   supportMessages: supportMessagesTable,
