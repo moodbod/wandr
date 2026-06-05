@@ -13,7 +13,7 @@ module.exports = () => {
 
     ios: {
       supportsTablet: false,
-      bundleIdentifier: 'com.moodbod.wandr',
+      bundleIdentifier: 'agency.moodbod.wandr',
       bitcode: false,
       config: {
         usesNonExemptEncryption: false,
