@@ -180,13 +180,11 @@ const styles = StyleSheet.create({
     borderColor: designSystem.colors.darkBorderSoft,
   },
   metaRow: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start',
     gap: designSystem.spacing.xs,
   },
   metaPill: {
+    alignSelf: 'flex-start',
     maxWidth: '100%',
     minHeight: 30,
     flexDirection: 'row',

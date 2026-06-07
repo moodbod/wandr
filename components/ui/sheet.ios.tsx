@@ -2,10 +2,9 @@ import { BottomSheet, type SnapPoint } from '@expo/ui';
 import { RNHostView } from '@expo/ui/swift-ui';
 import {
   interactiveDismissDisabled,
-  presentationBackgroundInteraction,
   type PresentationBackgroundInteractionType,
 } from '@expo/ui/swift-ui/modifiers';
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -63,10 +62,17 @@ export type SheetProps = {
   topInset?: number;
 };
 
-export const Sheet = forwardRef<SheetRef, SheetProps>(function Sheet(
+export const Sheet = forwardRef<SheetRef, SheetProps>(function Sheet(props, ref) {
+  if (props.presentation === 'inline') {
+    return <InlineSheet {...props} ref={ref} />;
+  }
+
+  return <NativeSheet {...props} ref={ref} />;
+});
+
+const InlineSheet = forwardRef<SheetRef, SheetProps>(function InlineSheet(
   {
     animatedIndex,
-    backgroundInteraction,
     bottomInset,
     children,
     enablePanDownToClose = true,
@@ -74,7 +80,6 @@ export const Sheet = forwardRef<SheetRef, SheetProps>(function Sheet(
     isOpen,
     onChange,
     onClose,
-    presentation = 'modal',
     showDragIndicator = true,
     snapPoints,
     style,
@@ -83,47 +88,59 @@ export const Sheet = forwardRef<SheetRef, SheetProps>(function Sheet(
   },
   ref
 ) {
-  if (presentation === 'inline') {
-    return (
-      <GorhomInlineSheet
-        animatedIndex={animatedIndex}
-        bottomInset={bottomInset}
-        enablePanDownToClose={enablePanDownToClose}
-        index={index}
-        isOpen={isOpen}
-        onChange={onChange}
-        onClose={onClose}
-        ref={ref}
-        showDragIndicator={showDragIndicator}
-        snapPoints={snapPoints as readonly (string | number)[] | undefined}
-        style={style}
-        testID={testID}
-        topInset={topInset}>
-        {children}
-      </GorhomInlineSheet>
-    );
-  }
+  return (
+    <GorhomInlineSheet
+      animatedIndex={animatedIndex}
+      bottomInset={bottomInset}
+      enablePanDownToClose={enablePanDownToClose}
+      index={index}
+      isOpen={isOpen}
+      onChange={onChange}
+      onClose={onClose}
+      ref={ref}
+      showDragIndicator={showDragIndicator}
+      snapPoints={snapPoints as readonly (string | number)[] | undefined}
+      style={style}
+      testID={testID}
+      topInset={topInset}>
+      {children}
+    </GorhomInlineSheet>
+  );
+});
 
+const NativeSheet = forwardRef<SheetRef, SheetProps>(function NativeSheet(
+  {
+    children,
+    enablePanDownToClose = true,
+    index,
+    isOpen,
+    onChange,
+    onClose,
+    showDragIndicator = true,
+    snapPoints,
+    testID,
+  },
+  ref
+) {
   const [isPresented, setIsPresented] = useState(() => getPresentedState(isOpen, index));
   const normalizedSnapPoints = useMemo(() => normalizeSnapPoints(snapPoints), [snapPoints]);
   const modifiers = useMemo(
-    () => [
-      ...(backgroundInteraction ? [presentationBackgroundInteraction(backgroundInteraction)] : []),
-      interactiveDismissDisabled(!enablePanDownToClose),
-    ],
-    [backgroundInteraction, enablePanDownToClose]
+    () => [interactiveDismissDisabled(!enablePanDownToClose)],
+    [enablePanDownToClose]
   );
 
   useEffect(() => {
     if (isOpen !== undefined || index !== undefined) {
-      setIsPresented(getPresentedState(isOpen, index));
+      return deferStateSync(() => setIsPresented(getPresentedState(isOpen, index)));
     }
+
+    return undefined;
   }, [index, isOpen]);
 
-  const dismiss = () => {
+  const dismiss = useCallback(() => {
     setIsPresented(false);
     onClose?.();
-  };
+  }, [onClose]);
 
   useImperativeHandle(
     ref,
@@ -221,6 +238,20 @@ function getPresentedState(isOpen?: boolean, index?: number) {
   }
 
   return false;
+}
+
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+
+  return () => {
+    isCancelled = true;
+  };
 }
 
 function normalizeSnapPoints(snapPoints?: readonly LegacySnapPoint[]): SnapPoint[] | undefined {

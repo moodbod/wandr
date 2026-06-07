@@ -11,12 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { AverageSpendSection } from '@/components/wandr/explore/average-spend-section';
 import { ExperienceGalleryCarousel, type GalleryImageItem } from '@/components/wandr/explore/experience-gallery-carousel';
-import {
-  ExperienceRequestFields,
-  getExperienceRequestScheduledFor,
-  parseExperiencePriceSnapshot,
-} from '@/components/wandr/explore/experience-request-fields';
-import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
+import { TripMapActionCard } from '@/components/wandr/explore/trip-map-action-card';
 import { TravelerMomentum } from '@/components/wandr/explore/traveler-momentum';
 import { TripFitSummary, type TripFitSummaryItem } from '@/components/wandr/explore/trip-fit-summary';
 import { WandrHeader } from '@/components/wandr/header';
@@ -44,6 +39,8 @@ import {
   submitLocationPhotoRef,
   toggleLocationLikeRef,
 } from '@/lib/convex';
+import { parseExperiencePriceSnapshot } from '@/lib/experience-booking';
+import { getTripActionState } from '@/lib/trip-action-state';
 import type { ExploreJoinableTrip } from '@/types/explore';
 
 export type ExperienceDetailContentProps = {
@@ -101,9 +98,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
   const [optimisticBookedSlug, setOptimisticBookedSlug] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<{ slug: string; liked: boolean } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [requestDayOffset, setRequestDayOffset] = useState(1);
-  const [requestPartySize, setRequestPartySize] = useState(2);
-  const [requestNote, setRequestNote] = useState('');
+  const [suggestedTripId, setSuggestedTripId] = useState<string | null>(null);
 
   const tripSheetRef = useRef<SheetRef>(null);
 
@@ -150,7 +145,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
 
   const bookedTrips = (itinerary || []).filter((item) => item.experienceSlug === slug);
   const isAlreadyBooked = bookedTrips.length > 0 || optimisticBookedSlug === slug;
-  const hasExistingTrips = (trips?.length ?? 0) > 0;
+  const userTrips = trips ?? [];
 
   const isLiked = optimisticLiked?.slug === slug ? optimisticLiked.liked : likeState?.liked ?? false;
   const hostGalleryImages = experience.galleryImages?.length ? experience.galleryImages : [experience.imageUri];
@@ -187,15 +182,30 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
               }
             : null,
         ].filter((item): item is NonNullable<typeof item> => Boolean(item)) as TripFitSummaryItem[];
+  const tripActionState = getTripActionState({
+    destination: {
+      coordinate: experience.coordinate,
+      countryCode: experience.countryCode,
+      countryLabel: experience.countryLabel,
+      labels: [
+        experience.subtitle,
+        experience.geography?.region,
+        experience.geography?.town,
+      ],
+      locationLabel: experience.locationLabel,
+      planningLocationId: experience.planningLocationId,
+      title: experience.title,
+    },
+    isAlreadyAdded: isAlreadyBooked,
+    kind: 'experienceRequest',
+    trips: userTrips,
+  });
 
   const bookSelectedExperience = async (tripId?: Id<'trips'>) => {
     await bookExperience({
       experienceSlug: experience.slug,
       travelerSlug,
       tripId,
-      scheduledFor: getExperienceRequestScheduledFor(requestDayOffset),
-      partySize: requestPartySize,
-      travelerNote: requestNote,
       currencyCode: 'USD',
       priceSnapshot: parseExperiencePriceSnapshot(experience.price),
     });
@@ -225,6 +235,12 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
       return;
     }
 
+    if (tripActionState.primaryAction === 'createTrip') {
+      void handleStartTrip('primary');
+      return;
+    }
+
+    setSuggestedTripId(tripActionState.preferredTrip?._id ?? null);
     tripSheetRef.current?.snapToIndex(0);
   };
 
@@ -267,7 +283,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
     }
   };
 
-  const handleStartJourney = async (action: 'primary' | 'secondary' = 'secondary') => {
+  const handleStartTrip = async (action: 'primary' | 'secondary' = 'secondary') => {
     if (!requireAuthAction() || !travelerSlug) {
       return;
     }
@@ -276,15 +292,11 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
       return;
     }
 
-    const tripTitle = experience.locationLabel
-      ? `${experience.locationLabel.split(',')[0]?.trim() ?? experience.title} Trip`
-      : `${experience.title} Trip`;
-
     setBookingAction(action);
     try {
       tripSheetRef.current?.close();
       const tripId = await createTrip({
-        name: tripTitle,
+        name: tripActionState.newTripName,
         travelerSlug,
       });
 
@@ -463,20 +475,22 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             </View>
           ) : null}
 
-          <JourneyMapCta
+          <TripMapActionCard
             centerCoordinate={experience.coordinate ?? bookingMapCenter}
+            title={tripActionState.cardTitle}
+            subtitle={tripActionState.cardSubtitle}
             loadingAction={bookingAction}
             markers={bookingMapMarkers}
             onPrimaryPress={handleAddToTripPress}
             onSecondaryPress={
-              hasExistingTrips
+              tripActionState.secondaryLabel
                 ? () => {
-                    void handleStartJourney('secondary');
+                    void handleStartTrip('secondary');
                   }
                 : undefined
             }
-            primaryLabel={hasExistingTrips ? (isAlreadyBooked ? 'Request another' : 'Request') : 'Start journey'}
-            secondaryLabel={hasExistingTrips ? 'Start new journey' : undefined}
+            primaryLabel={tripActionState.primaryLabel}
+            secondaryLabel={tripActionState.secondaryLabel}
             variant={useWebActivityCardFrame ? 'webDetail' : 'default'}
           />
 
@@ -534,7 +548,7 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
       <Sheet
         ref={tripSheetRef}
         index={-1}
-        snapPoints={[520, 'full']}
+        snapPoints={[420, '70%']}
         enablePanDownToClose>
         <SheetScrollView
           keyboardShouldPersistTaps="handled"
@@ -544,31 +558,30 @@ export function ExperienceDetailContent({ slug, onClose, hideHeader = false }: E
             { paddingBottom: Math.max(insets.bottom + 24, 36) },
           ]}>
           <View style={styles.sheetHeader}>
-            <ThemedText style={styles.sheetTitle}>Request experience</ThemedText>
+            <ThemedText style={styles.sheetTitle}>{tripActionState.sheetTitle}</ThemedText>
+            {tripActionState.sheetSubtitle ? (
+              <ThemedText style={[styles.sheetSubtitle, isDark ? styles.sheetSubtitleDark : null]}>
+                {tripActionState.sheetSubtitle}
+              </ThemedText>
+            ) : null}
           </View>
-          <ExperienceRequestFields
-            dayOffset={requestDayOffset}
-            isDark={isDark}
-            note={requestNote}
-            onChangeDayOffset={setRequestDayOffset}
-            onChangeNote={setRequestNote}
-            onChangePartySize={setRequestPartySize}
-            partySize={requestPartySize}
-          />
           <View style={styles.tripPickerSection}>
             <TripSwitcher
-              trips={trips ?? []}
-              selectedTripId={bookingTripId ?? undefined}
+              trips={userTrips}
+              selectedTripId={bookingTripId ?? suggestedTripId ?? undefined}
               onDeleteTrip={() => {}}
               onNewTrip={() => {
                 if (!bookingAction && !bookingTripId) {
-                  void handleStartJourney('primary');
+                  void handleStartTrip('primary');
                 }
               }}
               onSelectTrip={(tripId) => {
                 void handleSelectTripForBooking(tripId as Id<'trips'>);
               }}
+              newTripHint="Create a trip from this experience"
+              newTripLabel="Start new trip"
               showDeleteActions={false}
+              variant="compact"
             />
             {bookingTripId ? (
               <ThemedText style={[styles.tripPickerStatus, isDark ? styles.tripPickerStatusDark : null]}>
@@ -768,11 +781,21 @@ const styles = StyleSheet.create({
     color: designSystem.colors.darkGreen,
   },
   sheetHeader: {
+    gap: 6,
     paddingTop: 4,
   },
   sheetTitle: {
     fontSize: 22,
     fontWeight: '600',
+  },
+  sheetSubtitle: {
+    color: designSystem.colors.mutedText,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  sheetSubtitleDark: {
+    color: designSystem.colors.darkTextSoft,
   },
   sheetContent: {
     paddingTop: 12,

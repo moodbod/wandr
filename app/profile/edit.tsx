@@ -1,23 +1,20 @@
 import { useMutation } from 'convex/react';
 import { type Href, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, ShieldCheck, Storefront, Trash } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { ActionSheetIOS, Alert, Platform } from 'react-native';
 import { type Country } from 'react-native-country-picker-modal';
 
 import type { Id } from '@/convex/_generated/dataModel';
-import { CountryPickerField } from '@/components/wandr/country-picker-field';
+import { CountryPickerSheet } from '@/components/wandr/country-picker-field';
 import {
   ProfileSettingScreen,
-  SettingActionButton,
+  SettingActionRow,
+  SettingFormSection,
   SettingOptionGroup,
   SettingRow,
   SettingTextInput,
 } from '@/components/wandr/profile/profile-setting-screen';
-import { WandrAvatar } from '@/components/wandr/avatar';
-import { ThemedText } from '@/components/themed-text';
-import { designSystem } from '@/constants/design-system';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { generateAvatarUploadUrlRef, updateTravelerProfileRef } from '@/lib/convex';
 import { uploadAvatarAsset } from '@/lib/upload-avatar';
@@ -31,6 +28,21 @@ const travelStyleOptions = [
   { label: 'Friends', value: 'friends' },
   { label: 'Family', value: 'family' },
 ] as const;
+
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+
+  return () => {
+    isCancelled = true;
+  };
+}
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -50,6 +62,7 @@ export default function EditProfileScreen() {
   const [clearAvatar, setClearAvatar] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
   const hasLoadedTravelerRef = useRef(false);
 
   useEffect(() => {
@@ -57,15 +70,17 @@ export default function EditProfileScreen() {
       return;
     }
 
-    setName(traveler.name ?? '');
-    setHomeCity(traveler.homeCity ?? '');
-    setCountryCode(traveler.countryCode ?? '');
-    setCountryLabel(traveler.countryLabel ?? '');
-    setTravelStyle(traveler.travelStyle ?? 'solo');
-    setAvatarUri(traveler.avatarUri ?? null);
-    setAvatarStorageId(undefined);
-    setClearAvatar(false);
-    hasLoadedTravelerRef.current = true;
+    return deferStateSync(() => {
+      setName(traveler.name ?? '');
+      setHomeCity(traveler.homeCity ?? '');
+      setCountryCode(traveler.countryCode ?? '');
+      setCountryLabel(traveler.countryLabel ?? '');
+      setTravelStyle(traveler.travelStyle ?? 'solo');
+      setAvatarUri(traveler.avatarUri ?? null);
+      setAvatarStorageId(undefined);
+      setClearAvatar(false);
+      hasLoadedTravelerRef.current = true;
+    });
   }, [traveler]);
 
   useEffect(() => {
@@ -164,6 +179,50 @@ export default function EditProfileScreen() {
     }
   };
 
+  const clearProfilePhoto = () => {
+    setAvatarUri(null);
+    setAvatarStorageId(undefined);
+    setClearAvatar(true);
+  };
+
+  const handleProfilePhotoPress = () => {
+    if (isUploading) {
+      return;
+    }
+
+    if (!avatarUri) {
+      void handleChooseAvatar();
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex: 2,
+          destructiveButtonIndex: 1,
+          options: ['Change Photo', 'Remove Photo', 'Cancel'],
+          title: 'Profile photo',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            void handleChooseAvatar();
+          }
+
+          if (buttonIndex === 1) {
+            clearProfilePhoto();
+          }
+        }
+      );
+      return;
+    }
+
+    Alert.alert('Profile photo', undefined, [
+      { text: 'Change Photo', onPress: () => void handleChooseAvatar() },
+      { text: 'Remove Photo', style: 'destructive', onPress: clearProfilePhoto },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleSelectCountry = (country: Country) => {
     setCountryCode(country.cca2);
     setCountryLabel(typeof country.name === 'string' ? country.name : country.name.common);
@@ -179,125 +238,40 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <ProfileSettingScreen title="Account">
-      <View style={styles.avatarPanel}>
-        <WandrAvatar name={name || 'Traveler'} paletteKey={traveler?.slug} size={96} uri={avatarUri} />
-        <View style={styles.avatarActions}>
-          <Pressable accessibilityRole="button" onPress={handleChooseAvatar} style={styles.avatarButton}>
-            <Camera color={designSystem.colors.darkGreen} size={18} weight="bold" />
-            <ThemedText style={styles.avatarButtonText}>{isUploading ? 'Uploading...' : 'Change photo'}</ThemedText>
-          </Pressable>
-          {avatarUri ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setAvatarUri(null);
-                setAvatarStorageId(undefined);
-                setClearAvatar(true);
-              }}
-              style={styles.avatarButton}>
-              <Trash color={designSystem.colors.darkGreen} size={18} weight="bold" />
-              <ThemedText style={styles.avatarButtonText}>Remove</ThemedText>
-            </Pressable>
+    <>
+      <ProfileSettingScreen title="Account" wrapInSection={false}>
+        <SettingFormSection title="Details">
+          <SettingActionRow
+            disabled={isUploading}
+            label="Profile photo"
+            onPress={handleProfilePhotoPress}
+            value={isUploading ? 'Uploading...' : avatarUri ? 'Edit' : 'Add'}
+          />
+          <SettingTextInput label="Display name" value={name} onChangeText={setName} placeholder="Your name" />
+          <SettingActionRow label="Country" value={countryLabel || 'Select'} onPress={() => setIsCountryPickerOpen(true)} />
+          <SettingTextInput label="Home base" value={homeCity} onChangeText={setHomeCity} placeholder="Home city" />
+          <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
+        </SettingFormSection>
+        <SettingFormSection title="Account">
+          <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
+          {isAdmin ? (
+            <SettingActionRow label="Admin dashboard" value="Open" onPress={() => router.push('/admin' as Href)} />
           ) : null}
-        </View>
-      </View>
-
-      <SettingTextInput label="Display name" value={name} onChangeText={setName} placeholder="Your name" />
-      <CountryPickerField
-        accessibilityLabel="Select country"
+          {canManageBusiness ? (
+            <SettingActionRow label="My business" value="Open" onPress={() => router.push('/profile/business' as Href)} />
+          ) : null}
+          {isSaving || isUploading ? (
+            <SettingRow label="Status" value={isUploading ? 'Uploading...' : 'Saving changes...'} />
+          ) : null}
+          <SettingActionRow destructive label="Sign out" onPress={handleSignOut} />
+        </SettingFormSection>
+      </ProfileSettingScreen>
+      <CountryPickerSheet
         countryCode={countryCode}
-        label="Country"
-        value={countryLabel}
+        isOpen={isCountryPickerOpen}
+        onClose={() => setIsCountryPickerOpen(false)}
         onSelect={handleSelectCountry}
       />
-      <SettingTextInput label="Home city or base" value={homeCity} onChangeText={setHomeCity} placeholder="Home city" />
-      <SettingOptionGroup label="Travel style" options={travelStyleOptions} value={travelStyle} onChange={setTravelStyle} />
-      <SettingRow label="Email" value={traveler?.email ?? 'Signed in'} />
-      {isAdmin ? (
-        <View style={styles.managerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open admin dashboard"
-            onPress={() => router.push('/admin' as Href)}
-            style={styles.managerActionButton}>
-            <ShieldCheck color={designSystem.colors.darkGreen} size={18} weight="bold" />
-            <ThemedText style={styles.managerActionText}>Admin dashboard</ThemedText>
-          </Pressable>
-        </View>
-      ) : null}
-      {canManageBusiness ? (
-        <View style={styles.managerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open business dashboard"
-            onPress={() => router.push('/profile/business' as Href)}
-            style={styles.managerActionButton}>
-            <Storefront color={designSystem.colors.darkGreen} size={18} weight="bold" />
-            <ThemedText style={styles.managerActionText}>My business</ThemedText>
-          </Pressable>
-        </View>
-      ) : null}
-      {isSaving || isUploading ? (
-        <ThemedText style={styles.autosaveText}>{isUploading ? 'Uploading...' : 'Saving changes...'}</ThemedText>
-      ) : null}
-      <SettingActionButton label="Sign out" variant="secondary" onPress={handleSignOut} />
-    </ProfileSettingScreen>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  avatarPanel: {
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 8,
-  },
-  avatarActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  avatarButton: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: designSystem.colors.lime,
-  },
-  avatarButtonText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-    color: designSystem.colors.darkGreen,
-  },
-  managerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  managerActionButton: {
-    minHeight: 48,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 24,
-    backgroundColor: designSystem.colors.lime,
-  },
-  managerActionText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '800',
-    color: designSystem.colors.darkGreen,
-  },
-  autosaveText: {
-    alignSelf: 'center',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-    color: designSystem.colors.gray,
-  },
-});

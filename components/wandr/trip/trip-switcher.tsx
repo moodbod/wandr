@@ -1,5 +1,5 @@
 import { Image as ExpoImage } from 'expo-image';
-import { Plus, UsersThree, X } from 'phosphor-react-native';
+import { CheckCircle, MapPin, Plus, UsersThree, X } from 'phosphor-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,6 +18,9 @@ type TripSwitcherProps = {
   onNewTrip: () => void;
   onRenameTrip?: (id: string, name: string) => void;
   showDeleteActions?: boolean;
+  newTripHint?: string;
+  newTripLabel?: string;
+  variant?: 'cards' | 'compact';
 };
 
 export function TripSwitcher({
@@ -30,11 +33,123 @@ export function TripSwitcher({
   onNewTrip,
   onRenameTrip,
   showDeleteActions = true,
+  newTripHint = 'Start from this place',
+  newTripLabel = 'New trip',
+  variant = 'cards',
 }: TripSwitcherProps) {
   const isDark = useColorScheme() === 'dark';
 
   if (isLoading) {
     return <TripSwitcherSkeleton />;
+  }
+
+  if (variant === 'compact') {
+    return (
+      <View style={styles.compactContainer}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onNewTrip}
+          style={({ pressed }) => [
+            styles.compactRow,
+            isDark ? styles.compactRowDark : null,
+            pressed ? styles.compactRowPressed : null,
+          ]}
+        >
+          <View style={[styles.compactIconFrame, styles.newTripFrame, isDark && styles.compactIconFrameDark]}>
+            <Plus size={20} color={isDark ? designSystem.colors.darkText : designSystem.colors.ink} weight="bold" />
+          </View>
+          <View style={styles.compactCopy}>
+            <ThemedText
+              darkColor={designSystem.colors.darkText}
+              lightColor={designSystem.colors.ink}
+              numberOfLines={1}
+              style={styles.compactName}
+            >
+              {newTripLabel}
+            </ThemedText>
+            <ThemedText
+              darkColor={designSystem.colors.darkTextSoft}
+              lightColor={designSystem.colors.mutedText}
+              numberOfLines={1}
+              style={styles.compactMeta}
+            >
+              {newTripHint}
+            </ThemedText>
+          </View>
+        </Pressable>
+
+        {trips.map((t) => {
+          const isSelected = selectedTripId === t._id;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              key={t._id}
+              onPress={() => {
+                if (isEditing && onRenameTrip) {
+                  onRenameTrip?.(t._id, t.name);
+                  return;
+                }
+
+                onSelectTrip(t._id);
+              }}
+              style={({ pressed }) => [
+                styles.compactRow,
+                isDark ? styles.compactRowDark : null,
+                isSelected ? styles.compactRowActive : null,
+                pressed ? styles.compactRowPressed : null,
+              ]}
+            >
+              <View style={[styles.compactIconFrame, isDark && styles.compactIconFrameDark]}>
+                {t.previewImage ? (
+                  <ExpoImage
+                    source={t.previewImage}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <MapPin
+                    color={isDark ? designSystem.colors.darkTextSoft : designSystem.colors.warmDark}
+                    size={20}
+                    weight="fill"
+                  />
+                )}
+              </View>
+              <View style={styles.compactCopy}>
+                <ThemedText
+                  darkColor={designSystem.colors.darkText}
+                  lightColor={designSystem.colors.ink}
+                  numberOfLines={1}
+                  style={styles.compactName}
+                >
+                  {t.name}
+                </ThemedText>
+                <View style={styles.compactMetaRow}>
+                  {t.isGroupTrip ? (
+                    <UsersThree
+                      color={isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText}
+                      size={13}
+                      weight="bold"
+                    />
+                  ) : null}
+                  <ThemedText
+                    darkColor={designSystem.colors.darkTextSoft}
+                    lightColor={designSystem.colors.mutedText}
+                    numberOfLines={1}
+                    style={styles.compactMeta}
+                  >
+                    {t.isGroupTrip ? 'Group trip' : t.visibility === 'public' ? 'Public trip' : 'Private trip'}
+                  </ThemedText>
+                </View>
+              </View>
+              {isSelected ? (
+                <CheckCircle color={designSystem.colors.lime} size={22} weight="fill" />
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    );
   }
 
   return (
@@ -132,6 +247,63 @@ export function TripSwitcherSkeleton() {
 }
 
 const styles = StyleSheet.create({
+  compactContainer: {
+    gap: 10,
+  },
+  compactRow: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.surfaceRaised,
+    borderColor: designSystem.colors.borderSoft,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 68,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  compactRowDark: {
+    backgroundColor: designSystem.colors.darkSurface,
+    borderColor: designSystem.colors.darkBorderSoft,
+  },
+  compactRowActive: {
+    borderColor: designSystem.colors.lime,
+  },
+  compactRowPressed: {
+    opacity: 0.82,
+  },
+  compactIconFrame: {
+    alignItems: 'center',
+    backgroundColor: designSystem.colors.surface,
+    borderRadius: 14,
+    height: 48,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 48,
+  },
+  compactIconFrameDark: {
+    backgroundColor: designSystem.colors.charcoalSoft,
+  },
+  compactCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  compactName: {
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  compactMeta: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+  compactMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 5,
+  },
   switcherContainer: {
     marginTop: 12,
     marginHorizontal: -designSystem.spacing.lg,

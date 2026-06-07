@@ -42,10 +42,10 @@ export default function PreferencesScreen() {
   const currencyOptions = useMemo(
     () =>
       orderCurrenciesForCountry(traveler?.countryCode).map((currency) => ({
-        label: currency.code === defaultCurrency ? `${currency.code} · ${currency.label} · default` : `${currency.code} · ${currency.label}`,
+        label: currency.code,
         value: currency.code,
       })),
-    [defaultCurrency, traveler?.countryCode]
+    [traveler?.countryCode]
   );
 
   useEffect(() => {

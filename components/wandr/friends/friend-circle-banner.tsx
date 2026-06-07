@@ -117,9 +117,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
   },
   metaRow: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: designSystem.spacing.xs,
   },
   memberMetaSkeleton: {

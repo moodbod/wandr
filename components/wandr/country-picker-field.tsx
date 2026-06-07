@@ -37,6 +37,13 @@ type CountryPickerFieldProps = {
   variant?: 'card' | 'compact';
 };
 
+type CountryPickerSheetProps = {
+  countryCode: CountryCode | string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (country: Country) => void;
+};
+
 export function CountryPickerField({
   accessibilityLabel,
   countryCode,
@@ -46,40 +53,7 @@ export function CountryPickerField({
   variant = 'card',
 }: CountryPickerFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const sheetRef = useRef<SheetRef>(null);
-  const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { isLargeScreen } = useResponsive();
-  const isDesktop = Platform.OS === 'web' && isLargeScreen;
-  const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
-  const snapPoints = useMemo(() => [isDesktop ? '100%' : '84%'], [isDesktop]);
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredCountryOptions = useMemo(() => {
-    if (!normalizedQuery) {
-      return countryPickerOptions;
-    }
-
-    return countryPickerOptions.filter((country) => country.searchText.includes(normalizedQuery));
-  }, [normalizedQuery]);
-
-  function resetSheetState() {
-    setIsOpen(false);
-    setQuery('');
-  }
-
-  function closeSheet() {
-    resetSheetState();
-    sheetRef.current?.close();
-  }
-
-  function handleSelectCountry(country: { code: CountryCode; label: string }) {
-    onSelect({
-      cca2: country.code,
-      name: country.label,
-    } as Country);
-    closeSheet();
-  }
 
   const themeBackgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
   const themeBorderColor = 'transparent';
@@ -151,79 +125,125 @@ export function CountryPickerField({
           </>
         )}
       </Pressable>
-      <Sheet
-        ref={sheetRef}
-        index={isOpen ? 0 : -1}
-        renderInModal
-        snapPoints={snapPoints}
-        enableDynamicSizing={false}
-        enablePanDownToClose
-        backgroundStyle={{ backgroundColor: isDark ? 'rgba(20, 20, 20, 0.65)' : 'rgba(255, 255, 255, 0.85)' }}
-        desktopModalHostStyle={isDesktop ? { alignItems: 'center', justifyContent: 'center', paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } : undefined}
-        desktopPopupHostStyle={isDesktop ? { width: 520, maxWidth: '90%', height: 640, maxHeight: '85%', borderRadius: 24, overflow: 'hidden' } : undefined}
-        onClose={resetSheetState}>
-        <SheetFlatList
-          data={filteredCountryOptions}
-          extraData={`${countryCode}-${query}`}
-          initialNumToRender={14}
-          keyExtractor={(country) => country.code}
-          keyboardShouldPersistTaps="handled"
-          maxToRenderPerBatch={12}
-          removeClippedSubviews
-          stickyHeaderIndices={[0]}
-          showsVerticalScrollIndicator={false}
-          windowSize={7}
-          contentContainerStyle={[styles.sheetListContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
-          ListHeaderComponent={
-            <View style={styles.sheetHeader}>
-              <Input
-                autoCapitalize="words"
-                leftIcon={<MagnifyingGlass color={mutedColor} size={20} weight="bold" />}
-                placeholder="Search countries"
-                returnKeyType="done"
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={() => {
-                  const firstCountry = filteredCountryOptions[0];
-                  if (firstCountry) {
-                    handleSelectCountry(firstCountry);
-                  }
-                }}
-                containerStyle={styles.countrySearchInput}
-              />
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.statusRow}>
-              <ThemedText style={[styles.statusText, { color: mutedColor }]}>No countries found.</ThemedText>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const selected = item.code === countryCode;
-
-            return (
-              <View style={styles.optionFrame}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => handleSelectCountry(item)}
-                  style={[
-                    styles.option,
-                    isDesktop ? styles.desktopOption : null,
-                    selected ? { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)', borderRadius: 12 } : null
-                  ]}>
-                  <CountryFlagAvatar countryCode={item.code} size={isDesktop ? 24 : 32} />
-                  <ThemedText style={[styles.optionTitle, isDesktop ? styles.desktopOptionTitle : null, selected ? styles.selectedText : null]}>
-                    {item.label}
-                  </ThemedText>
-                  {selected ? <Check color={designSystem.colors.lime} size={20} weight="bold" /> : null}
-                </Pressable>
-              </View>
-            );
-          }}
-        />
-      </Sheet>
+      <CountryPickerSheet
+        countryCode={countryCode}
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onSelect={onSelect}
+      />
     </>
+  );
+}
+
+export function CountryPickerSheet({ countryCode, isOpen, onClose, onSelect }: CountryPickerSheetProps) {
+  const [query, setQuery] = useState('');
+  const sheetRef = useRef<SheetRef>(null);
+  const insets = useSafeAreaInsets();
+  const isDark = useColorScheme() === 'dark';
+  const { isLargeScreen } = useResponsive();
+  const isDesktop = Platform.OS === 'web' && isLargeScreen;
+  const mutedColor = isDark ? designSystem.colors.darkTextSoft : designSystem.colors.mutedText;
+  const snapPoints = useMemo(() => [isDesktop ? '100%' : '84%'], [isDesktop]);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredCountryOptions = useMemo(() => {
+    if (!normalizedQuery) {
+      return countryPickerOptions;
+    }
+
+    return countryPickerOptions.filter((country) => country.searchText.includes(normalizedQuery));
+  }, [normalizedQuery]);
+
+  function resetSheetState() {
+    setQuery('');
+    onClose();
+  }
+
+  function closeSheet() {
+    resetSheetState();
+    sheetRef.current?.close();
+  }
+
+  function handleSelectCountry(country: { code: CountryCode; label: string }) {
+    onSelect({
+      cca2: country.code,
+      name: country.label,
+    } as Country);
+    closeSheet();
+  }
+
+  return (
+    <Sheet
+      ref={sheetRef}
+      index={isOpen ? 0 : -1}
+      renderInModal
+      snapPoints={snapPoints}
+      enableDynamicSizing={false}
+      enablePanDownToClose
+      backgroundStyle={{ backgroundColor: isDark ? 'rgba(20, 20, 20, 0.65)' : 'rgba(255, 255, 255, 0.85)' }}
+      desktopModalHostStyle={isDesktop ? { alignItems: 'center', justifyContent: 'center', paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } : undefined}
+      desktopPopupHostStyle={isDesktop ? { width: 520, maxWidth: '90%', height: 640, maxHeight: '85%', borderRadius: 24, overflow: 'hidden' } : undefined}
+      onClose={resetSheetState}>
+      <SheetFlatList
+        data={filteredCountryOptions}
+        extraData={`${countryCode}-${query}`}
+        initialNumToRender={14}
+        keyExtractor={(country) => country.code}
+        keyboardShouldPersistTaps="handled"
+        maxToRenderPerBatch={12}
+        removeClippedSubviews
+        stickyHeaderIndices={[0]}
+        showsVerticalScrollIndicator={false}
+        windowSize={7}
+        contentContainerStyle={[styles.sheetListContent, { paddingBottom: Math.max(insets.bottom, designSystem.spacing.lg) }]}
+        ListHeaderComponent={
+          <View style={styles.sheetHeader}>
+            <Input
+              autoCapitalize="words"
+              leftIcon={<MagnifyingGlass color={mutedColor} size={20} weight="bold" />}
+              placeholder="Search countries"
+              returnKeyType="done"
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={() => {
+                const firstCountry = filteredCountryOptions[0];
+                if (firstCountry) {
+                  handleSelectCountry(firstCountry);
+                }
+              }}
+              containerStyle={styles.countrySearchInput}
+            />
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.statusRow}>
+            <ThemedText style={[styles.statusText, { color: mutedColor }]}>No countries found.</ThemedText>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const selected = item.code === countryCode;
+
+          return (
+            <View style={styles.optionFrame}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => handleSelectCountry(item)}
+                style={[
+                  styles.option,
+                  isDesktop ? styles.desktopOption : null,
+                  selected ? { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)', borderRadius: 12 } : null
+                ]}>
+                <CountryFlagAvatar countryCode={item.code} size={isDesktop ? 24 : 32} />
+                <ThemedText style={[styles.optionTitle, isDesktop ? styles.desktopOptionTitle : null, selected ? styles.selectedText : null]}>
+                  {item.label}
+                </ThemedText>
+                {selected ? <Check color={designSystem.colors.lime} size={20} weight="bold" /> : null}
+              </Pressable>
+            </View>
+          );
+        }}
+      />
+    </Sheet>
   );
 }
 

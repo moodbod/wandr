@@ -37,6 +37,14 @@ export default function ProfileLayout() {
     headerBackVisible: false,
     unstable_headerLeftItems: headerLeftItems,
   };
+  const nativeFormHeaderOptions = (title: string) => ({
+    title,
+    headerTitle: title,
+    headerLargeTitle: false,
+    headerLargeTitleEnabled: false,
+    headerBackVisible: true,
+    headerTransparent: false,
+  });
 
   return (
     <Stack
@@ -51,12 +59,12 @@ export default function ProfileLayout() {
       }}>
       <Stack.Screen name="overview" options={{ title: 'Profile', ...childHeaderOptions }} />
       <Stack.Screen name="settings" options={{ title: 'Settings', ...childHeaderOptions }} />
-      <Stack.Screen name="edit" options={{ title: 'Account', ...childHeaderOptions }} />
-      <Stack.Screen name="preferences" options={{ title: 'Preferences', ...childHeaderOptions }} />
-      <Stack.Screen name="notifications" options={{ title: 'Notifications', ...childHeaderOptions }} />
+      <Stack.Screen name="edit" options={nativeFormHeaderOptions('Account')} />
+      <Stack.Screen name="preferences" options={nativeFormHeaderOptions('Preferences')} />
+      <Stack.Screen name="notifications" options={nativeFormHeaderOptions('Notifications')} />
       <Stack.Screen name="business" options={{ title: 'My business', ...childHeaderOptions }} />
-      <Stack.Screen name="privacy" options={{ title: 'Privacy', ...childHeaderOptions }} />
-      <Stack.Screen name="account" options={{ title: 'Account', ...childHeaderOptions }} />
+      <Stack.Screen name="privacy" options={nativeFormHeaderOptions('Privacy')} />
+      <Stack.Screen name="account" options={nativeFormHeaderOptions('Account')} />
     </Stack>
   );
 }

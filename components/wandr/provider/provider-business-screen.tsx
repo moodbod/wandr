@@ -617,7 +617,7 @@ export function ProviderBusinessScreen() {
 
   if (!session || !canOpenBusiness) {
     return (
-      <ProfileSettingScreen title="My business">
+      <ProfileSettingScreen title="My business" presentation="plain">
         <PanelState icon="lock-outline" title="Invite required" body="An admin needs to invite this account first." />
       </ProfileSettingScreen>
     );
@@ -629,7 +629,7 @@ export function ProviderBusinessScreen() {
 
   if (!profile) {
     return (
-      <ProfileSettingScreen title="My business">
+      <ProfileSettingScreen title="My business" presentation="plain">
         <PanelState icon="storefront-outline" title="No business yet" body="Ask an admin to invite this account as a provider." />
       </ProfileSettingScreen>
     );
@@ -639,7 +639,7 @@ export function ProviderBusinessScreen() {
   const suspended = profile.status === 'suspended';
 
   return (
-    <ProfileSettingScreen title="My business">
+    <ProfileSettingScreen title="My business" presentation="plain">
       <View style={styles.stack}>
         <BusinessHeader profile={profile} />
         {setupPending ? (
@@ -706,7 +706,7 @@ export function ProviderBusinessScreen() {
 
 function LoadingBusinessScreen() {
   return (
-    <ProfileSettingScreen title="My business">
+    <ProfileSettingScreen title="My business" presentation="plain">
       <View style={styles.loadingPanel}>
         <ActivityIndicator color={designSystem.colors.lime} />
       </View>

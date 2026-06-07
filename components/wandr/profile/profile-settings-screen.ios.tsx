@@ -7,16 +7,15 @@ import {
   CaretRight,
   CurrencyDollar,
   LockSimple,
+  PencilSimple,
   SignOut,
   Storefront,
 } from 'phosphor-react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { getAppMetadata } from '@/lib/app-metadata';
 import { useAuthSession } from '@/providers/auth-session';
 
@@ -26,14 +25,11 @@ const ROW_LEADING_INSET = 16 + 30 + 14; // padding + icon box + gap — aligns s
 
 export function ProfileSettingsScreen() {
   const router = useRouter();
-  const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
   const metadata = getAppMetadata();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const name = traveler?.name?.trim() || session?.name?.trim() || 'Traveler';
-  const baseLabel = traveler?.countryLabel ?? traveler?.regionName ?? 'Wandr traveler';
 
   const navigateTo = (href: Href) => {
     router.push(href);
@@ -63,28 +59,14 @@ export function ProfileSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => navigateTo('/profile/edit')}
-          style={({ pressed }) => [
-            styles.section,
-            styles.bannerRow,
-            { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft },
-            pressed ? { opacity: 0.7 } : null,
-          ]}>
-          <WandrAvatar name={name} paletteKey={traveler?.slug} size={60} uri={traveler?.avatarUri ?? null} />
-          <View style={styles.bannerCopy}>
-            <ThemedText numberOfLines={1} style={[styles.bannerName, { color: colors.text }]}>
-              {name}
-            </ThemedText>
-            <ThemedText numberOfLines={1} style={[styles.bannerMeta, { color: colors.textSubtle }]}>
-              {baseLabel}
-            </ThemedText>
-          </View>
-          <CaretRight color={colors.textSubtle} size={18} weight="bold" />
-        </Pressable>
-
         <View style={[styles.section, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft }]}>
+          <NavRow
+            colors={colors}
+            icon={<PencilSimple color={colors.text} size={19} weight="regular" />}
+            label="Account"
+            onPress={() => navigateTo('/profile/edit')}
+          />
+          <Separator colors={colors} />
           <NavRow
             colors={colors}
             icon={<CurrencyDollar color={colors.text} size={19} weight="regular" />}
@@ -188,29 +170,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-  },
-  bannerRow: {
-    minHeight: 84,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  bannerCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  bannerName: {
-    fontSize: 19,
-    lineHeight: 24,
-    fontWeight: '700',
-  },
-  bannerMeta: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '500',
   },
   navRow: {
     minHeight: 52,

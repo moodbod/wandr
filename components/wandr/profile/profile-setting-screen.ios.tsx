@@ -1,17 +1,29 @@
 import { useEffect, useRef } from 'react';
 import type React from 'react';
 import {
-  FieldGroup,
+  Button,
+  Form,
+  HStack,
   Host,
-  ListItem,
+  LabeledContent,
   Picker,
-  Row,
+  Section,
   Spacer,
-  Switch as FormSwitch,
-  Text as FormText,
-  TextInput as FormTextInput,
+  Text as SwiftText,
+  TextField,
+  Toggle,
   useNativeState,
-} from '@expo/ui';
+  VStack,
+} from '@expo/ui/swift-ui';
+import {
+  buttonStyle,
+  disabled as swiftDisabled,
+  foregroundStyle,
+  listStyle,
+  multilineTextAlignment,
+  tag,
+  textFieldStyle,
+} from '@expo/ui/swift-ui/modifiers';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,7 +51,8 @@ export function ProfileSettingScreen({
 }: ProfileSettingScreenProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
+  const formColorScheme = colorScheme === 'dark' ? 'dark' : 'light';
+  const colors = formColorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
 
   if (presentation === 'plain') {
     return (
@@ -69,8 +82,8 @@ export function ProfileSettingScreen({
 
   return (
     <ThemedView style={[styles.root, { backgroundColor: colors.background }]}>
-      <Host colorScheme={colorScheme} style={styles.host} useViewportSizeMeasurement>
-        <FieldGroup style={{ backgroundColor: colors.background }}>
+      <Host colorScheme={formColorScheme} style={styles.host} useViewportSizeMeasurement>
+        <Form modifiers={[listStyle('insetGrouped')]}>
           {wrapInSection ? (
             <SettingFormSection bottomNote={bottomNote} description={description} title={title}>
               {children}
@@ -78,7 +91,7 @@ export function ProfileSettingScreen({
           ) : (
             children
           )}
-        </FieldGroup>
+        </Form>
       </Host>
     </ThemedView>
   );
@@ -92,25 +105,31 @@ type SettingFormSectionProps = {
 };
 
 export function SettingFormSection({ bottomNote, children, description, title }: SettingFormSectionProps) {
-  const colorScheme = useColorScheme();
-  const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
+  return (
+    <Section title={title} footer={<SectionFooter bottomNote={bottomNote} description={description} />}>
+      {children}
+    </Section>
+  );
+}
+
+function SectionFooter({ bottomNote, description }: { bottomNote?: string; description?: string }) {
+  if (!description && !bottomNote) {
+    return null;
+  }
 
   return (
-    <FieldGroup.Section title={title}>
-      {children}
-      {description || bottomNote ? (
-        <FieldGroup.SectionFooter>
-          <View style={styles.footerCopy}>
-            {description ? (
-              <ThemedText style={[styles.description, { color: colors.textSubtle }]}>{description}</ThemedText>
-            ) : null}
-            {bottomNote ? (
-              <ThemedText style={[styles.bottomNote, { color: colors.textSubtle }]}>{bottomNote}</ThemedText>
-            ) : null}
-          </View>
-        </FieldGroup.SectionFooter>
+    <VStack spacing={4}>
+      {description ? (
+        <SwiftText modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
+          {description}
+        </SwiftText>
       ) : null}
-    </FieldGroup.Section>
+      {bottomNote ? (
+        <SwiftText modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
+          {bottomNote}
+        </SwiftText>
+      ) : null}
+    </VStack>
   );
 }
 
@@ -131,8 +150,6 @@ type SettingTextInputProps = {
 };
 
 export function SettingTextInput({ label, onChangeText, placeholder, value }: SettingTextInputProps) {
-  const colorScheme = useColorScheme();
-  const colors = colorScheme === 'dark' ? designSystem.semantic.dark : designSystem.semantic.light;
   const textState = useNativeState(value);
   const lastValueRef = useRef(value);
 
@@ -151,27 +168,14 @@ export function SettingTextInput({ label, onChangeText, placeholder, value }: Se
   };
 
   return (
-    <Row alignment="center" spacing={12} style={styles.formInputRow}>
-      <FormText textStyle={{ color: colors.text, fontSize: 17, lineHeight: 22 }}>{label}</FormText>
-      <Spacer flexible />
-      <FormTextInput
-        autoCapitalize="words"
-        onChangeText={handleChangeText}
+    <LabeledContent label={label}>
+      <TextField
+        modifiers={[textFieldStyle('plain'), multilineTextAlignment('trailing')]}
+        onTextChange={handleChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textSubtle}
-        returnKeyType="done"
-        style={styles.formTextInput}
-        textAlign="right"
-        textStyle={{
-          color: colors.text,
-          fontSize: 16,
-          fontWeight: '600',
-          lineHeight: 22,
-          textAlign: 'right',
-        }}
-        value={textState}
+        text={textState}
       />
-    </Row>
+    </LabeledContent>
   );
 }
 
@@ -188,18 +192,27 @@ type SettingOptionGroupProps<T extends string> = {
   value: T;
 };
 
-export function SettingOptionGroup<T extends string>({ disabled = false, label, onChange, options, value }: SettingOptionGroupProps<T>) {
+export function SettingOptionGroup<T extends string>({
+  disabled = false,
+  label,
+  onChange,
+  options,
+  value,
+}: SettingOptionGroupProps<T>) {
   return (
-    <ListItem
-      trailing={
-        <Picker selectedValue={value} onValueChange={onChange} enabled={!disabled}>
-          {options.map((option) => (
-            <Picker.Item key={option.value} label={option.label} value={option.value} />
-          ))}
-        </Picker>
-      }>
-      {label}
-    </ListItem>
+    <Picker
+      label={label}
+      modifiers={[swiftDisabled(disabled)]}
+      onSelectionChange={(nextValue) => {
+        onChange(nextValue);
+      }}
+      selection={value}>
+      {options.map((option) => (
+        <SwiftText key={option.value} modifiers={[tag(option.value)]}>
+          {option.label}
+        </SwiftText>
+      ))}
+    </Picker>
   );
 }
 
@@ -246,13 +259,22 @@ type SettingActionRowProps = {
 
 export function SettingActionRow({ disabled = false, destructive = false, label, onPress, value }: SettingActionRowProps) {
   return (
-    <ListItem onPress={disabled ? undefined : onPress} trailing={value}>
-      {destructive ? (
-        <FormText textStyle={{ color: designSystem.colors.liked, fontSize: 17, lineHeight: 22 }}>{label}</FormText>
-      ) : (
-        label
-      )}
-    </ListItem>
+    <Button
+      modifiers={[buttonStyle('plain'), swiftDisabled(disabled)]}
+      onPress={disabled ? undefined : onPress}
+      role={destructive ? 'destructive' : 'default'}>
+      <HStack alignment="center" spacing={12}>
+        <SwiftText modifiers={destructive ? [foregroundStyle('red')] : undefined}>{label}</SwiftText>
+        {value ? (
+          <>
+            <Spacer />
+            <SwiftText modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
+              {value}
+            </SwiftText>
+          </>
+        ) : null}
+      </HStack>
+    </Button>
   );
 }
 
@@ -264,9 +286,11 @@ type SettingRowProps = {
 
 export function SettingRow({ description, label, value }: SettingRowProps) {
   return (
-    <ListItem supportingText={description} trailing={value}>
-      {label}
-    </ListItem>
+    <LabeledContent label={label}>
+      <SwiftText modifiers={[foregroundStyle({ type: 'hierarchical', style: 'secondary' })]}>
+        {value || description || ''}
+      </SwiftText>
+    </LabeledContent>
   );
 }
 
@@ -278,19 +302,14 @@ type SettingSwitchRowProps = {
   value: boolean;
 };
 
-export function SettingSwitchRow({ description, disabled = false, label, onValueChange, value }: SettingSwitchRowProps) {
+export function SettingSwitchRow({ disabled = false, label, onValueChange, value }: SettingSwitchRowProps) {
   return (
-    <ListItem
-      supportingText={description}
-      trailing={
-        <FormSwitch
-          disabled={disabled}
-          onValueChange={onValueChange}
-          value={value}
-        />
-      }>
-      {label}
-    </ListItem>
+    <Toggle
+      isOn={value}
+      label={label}
+      modifiers={[swiftDisabled(disabled)]}
+      onIsOnChange={onValueChange}
+    />
   );
 }
 
@@ -305,23 +324,12 @@ const styles = StyleSheet.create({
   host: {
     flex: 1,
   },
-  footerCopy: {
-    gap: 6,
-  },
   description: {
     fontSize: 15,
     lineHeight: 22,
   },
   section: {
     gap: 0,
-  },
-  formTextInput: {
-    height: 30,
-    width: 172,
-  },
-  formInputRow: {
-    height: 44,
-    width: '100%',
   },
   actionButton: {
     minHeight: 52,

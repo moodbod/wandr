@@ -100,9 +100,8 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingSwitchRow
-        description="Let other travelers see places you have saved."
         disabled={!canEdit}
-        label="Show saved places"
+        label="Saved places"
         value={showSavedPlaces}
         onValueChange={(nextShowSavedPlaces) => {
           setShowSavedPlaces(nextShowSavedPlaces);
@@ -110,9 +109,8 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingSwitchRow
-        description="Let other travelers see recent trip activity when supported."
         disabled={!canEdit}
-        label="Show trip activity"
+        label="Trip activity"
         value={showTripActivity}
         onValueChange={(nextShowTripActivity) => {
           setShowTripActivity(nextShowTripActivity);
@@ -130,9 +128,8 @@ export default function PrivacyScreen() {
         }}
       />
       <SettingSwitchRow
-        description="Show live pucks from travelers who are sharing with you."
         disabled={!canEdit}
-        label="Show other users live location"
+        label="Live locations"
         value={showOtherUsersLiveLocation}
         onValueChange={(nextShowOtherUsersLiveLocation) => {
           setShowOtherUsersLiveLocation(nextShowOtherUsersLiveLocation);

@@ -15,9 +15,7 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WandrAvatar } from '@/components/wandr/avatar';
 import { designSystem } from '@/constants/design-system';
-import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getAppMetadata } from '@/lib/app-metadata';
 import { useAuthSession } from '@/providers/auth-session';
@@ -27,15 +25,12 @@ type ProfileSemanticColors = (typeof designSystem.semantic)[keyof typeof designS
 export function ProfileSettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const traveler = useCurrentTraveler();
   const { session, signOut } = useAuthSession();
   const metadata = getAppMetadata();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? designSystem.semantic.dark : designSystem.semantic.light;
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const name = traveler?.name?.trim() || session?.name?.trim() || 'Traveler';
-  const baseLabel = traveler?.countryLabel ?? traveler?.regionName ?? '';
 
   const navigateTo = (href: Href) => {
     router.push(href);
@@ -67,24 +62,6 @@ export function ProfileSettingsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}>
         <ThemedText style={[styles.subtitle, { color: colors.textSubtle }]}>Manage your Wandr profile</ThemedText>
-
-        <View style={[styles.identity, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft }]}>
-          <WandrAvatar
-            name={name}
-            paletteKey={traveler?.slug}
-            size={54}
-            style={[styles.avatar, { backgroundColor: colors.text }]}
-            uri={traveler?.avatarUri ?? null}
-          />
-          <View style={styles.identityCopy}>
-            <ThemedText numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
-              {name}
-            </ThemedText>
-            <ThemedText numberOfLines={1} style={[styles.identityMeta, { color: colors.textSubtle }]}>
-              {baseLabel || 'Wandr traveler'}
-            </ThemedText>
-          </View>
-        </View>
 
         <SettingsSection colors={colors}>
           <SettingsAction
@@ -200,35 +177,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     lineHeight: 19,
-    fontWeight: '500',
-  },
-  identity: {
-    minHeight: 78,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
-  },
-  avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-  },
-  identityCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  identityName: {
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: '700',
-  },
-  identityMeta: {
-    marginTop: 2,
-    fontSize: 13,
-    lineHeight: 18,
     fontWeight: '500',
   },
   section: {

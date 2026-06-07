@@ -126,11 +126,21 @@ export const styles = StyleSheet.create({
     borderRadius: 28,
   },
   sheetHeader: {
+    gap: 6,
     paddingTop: 4,
   },
   sheetTitle: {
     fontSize: 22,
     fontWeight: '600',
+  },
+  sheetSubtitle: {
+    color: designSystem.colors.mutedText,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  sheetSubtitleDark: {
+    color: designSystem.colors.darkTextSoft,
   },
   sheetContent: {
     paddingTop: 12,

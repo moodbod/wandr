@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,8 +10,9 @@ import { ThemedView } from '@/components/themed-view';
 import { SkeletonBlock } from '@/components/ui/skeleton-block';
 import { ExperienceGalleryCarousel } from '@/components/wandr/explore/experience-gallery-carousel';
 import { styles } from '@/components/wandr/explore/hidden-gem-detail-screen.styles';
-import { JourneyMapCta } from '@/components/wandr/explore/journey-map-cta';
+import { TripMapActionCard } from '@/components/wandr/explore/trip-map-action-card';
 import { TripFitSummary } from '@/components/wandr/explore/trip-fit-summary';
+import { TripSwitcher } from '@/components/wandr/trip/trip-switcher';
 import { WandrHeader } from '@/components/wandr/header';
 import { designSystem } from '@/constants/design-system';
 import type { ExploreHiddenGem } from '@/constants/explore-content';
@@ -20,7 +21,8 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCurrentTraveler } from '@/hooks/use-current-traveler';
 import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
-import { bookExperienceRef, getExplorePageContentRef, getLocationLikeStateRef, listUserTripsRef, toggleLocationLikeRef } from '@/lib/convex';
+import { bookExperienceRef, createTripRef, getExplorePageContentRef, getLocationLikeStateRef, listUserTripsRef, toggleLocationLikeRef } from '@/lib/convex';
+import { getTripActionState } from '@/lib/trip-action-state';
 
 export default function HiddenGemDetailScreen({
   onClose,
@@ -33,6 +35,7 @@ export default function HiddenGemDetailScreen({
 }
 
 function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?: () => void; slug?: string }) {
+  const router = useRouter();
   const { slug: routeSlug } = useLocalSearchParams<{ slug: string }>();
   const slug = slugProp ?? routeSlug;
   const insets = useSafeAreaInsets();
@@ -49,9 +52,11 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
       : 'skip'
   );
   const bookExperience = useMutation(bookExperienceRef);
+  const createTrip = useMutation(createTripRef);
   const toggleLocationLike = useMutation(toggleLocationLikeRef);
   const tripSheetRef = useRef<SheetRef>(null);
   const [bookingAction, setBookingAction] = useState<'primary' | null>(null);
+  const [bookingTripId, setBookingTripId] = useState<string | null>(null);
   const [optimisticLiked, setOptimisticLiked] = useState<{ slug: string; liked: boolean } | null>(null);
 
   if (!slug || page === undefined || page === null) {
@@ -78,6 +83,24 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
         },
       ]
     : [];
+  const userTrips = trips ?? [];
+  const tripActionState = getTripActionState({
+    destination: {
+      coordinate: card.coordinate,
+      countryCode: card.countryCode,
+      countryLabel: card.countryLabel,
+      labels: [
+        card.description,
+        card.geography?.region,
+        card.geography?.town,
+      ],
+      locationLabel: detail.locationLabel,
+      planningLocationId: card.planningLocationId,
+      title: detail.title,
+    },
+    kind: 'placeSave',
+    trips: userTrips,
+  });
 
   const handleToggleLike = async () => {
     if (!requireAuthAction() || !travelerSlug) {
@@ -99,19 +122,44 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
     }
   };
 
+  const saveHiddenGemToTrip = async (tripId?: Id<'trips'>) => {
+    await bookExperience({
+      experienceSlug: slug,
+      travelerSlug,
+      tripId,
+    });
+  };
+
   const addHiddenGemToTrip = async (tripId?: Id<'trips'>) => {
+    if (bookingAction || !requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
+    setBookingTripId(tripId ?? null);
+    setBookingAction('primary');
+    try {
+      await saveHiddenGemToTrip(tripId);
+      tripSheetRef.current?.close();
+    } finally {
+      setBookingTripId(null);
+      setBookingAction(null);
+    }
+  };
+
+  const startTripWithHiddenGem = async () => {
     if (bookingAction || !requireAuthAction() || !travelerSlug) {
       return;
     }
 
     setBookingAction('primary');
     try {
-      await bookExperience({
-        experienceSlug: slug,
-        travelerSlug,
-        tripId,
-      });
       tripSheetRef.current?.close();
+      const tripId = await createTrip({
+        name: tripActionState.newTripName,
+        travelerSlug,
+      });
+      await saveHiddenGemToTrip(tripId);
+      router.push('/trip');
     } finally {
       setBookingAction(null);
     }
@@ -122,8 +170,13 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
       return;
     }
 
-    if (trips && trips.length === 0) {
-      void addHiddenGemToTrip();
+    if (tripActionState.primaryAction === 'createTrip') {
+      void startTripWithHiddenGem();
+      return;
+    }
+
+    if (tripActionState.primaryAction === 'usePreferredTrip' && tripActionState.preferredTrip) {
+      void addHiddenGemToTrip(tripActionState.preferredTrip._id as Id<'trips'>);
       return;
     }
 
@@ -207,12 +260,16 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
             </View>
           ) : null}
 
-          <JourneyMapCta
+          <TripMapActionCard
             centerCoordinate={mapCenterCoordinate}
             loadingAction={bookingAction}
             markers={mapMarkers}
-            primaryLabel={detail.primaryLabel ?? 'Add to trip'}
+            primaryLabel={tripActionState.primaryLabel}
+            secondaryLabel={tripActionState.secondaryLabel}
+            onSecondaryPress={tripActionState.secondaryLabel ? () => tripSheetRef.current?.snapToIndex(0) : undefined}
             onPrimaryPress={handleAddToTripPress}
+            subtitle={tripActionState.cardSubtitle}
+            title={tripActionState.cardTitle}
           />
         </View>
       </ScrollView>
@@ -230,17 +287,28 @@ function ConnectedHiddenGemDetailScreen({ onClose, slug: slugProp }: { onClose?:
             { paddingBottom: Math.max(insets.bottom + 24, 36) },
           ]}>
           <View style={styles.sheetHeader}>
-            <ThemedText style={styles.sheetTitle}>Add to trip</ThemedText>
+            <ThemedText style={styles.sheetTitle}>{tripActionState.sheetTitle}</ThemedText>
+            {tripActionState.sheetSubtitle ? (
+              <ThemedText style={[styles.sheetSubtitle, isDark ? styles.sheetSubtitleDark : null]}>
+                {tripActionState.sheetSubtitle}
+              </ThemedText>
+            ) : null}
           </View>
-          {trips?.map((trip) => (
-            <Pressable
-              key={trip._id}
-              onPress={() => void addHiddenGemToTrip(trip._id as Id<'trips'>)}
-              style={[styles.tripRow, isDark && styles.tripRowDark]}
-            >
-              <ThemedText style={styles.tripName}>{trip.name}</ThemedText>
-            </Pressable>
-          ))}
+          <TripSwitcher
+            trips={userTrips}
+            selectedTripId={bookingTripId ?? tripActionState.preferredTrip?._id}
+            onDeleteTrip={() => {}}
+            onNewTrip={() => {
+              void startTripWithHiddenGem();
+            }}
+            onSelectTrip={(tripId) => {
+              void addHiddenGemToTrip(tripId as Id<'trips'>);
+            }}
+            newTripHint="Create a trip from this place"
+            newTripLabel="Start new trip"
+            showDeleteActions={false}
+            variant="compact"
+          />
         </SheetScrollView>
       </Sheet>
     </ThemedView>
