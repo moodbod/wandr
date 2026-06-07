@@ -46,6 +46,8 @@ export type StayBookingDetails = {
 export type StayProperty = {
   id: string;
   slug: string;
+  source?: 'local' | 'bookingCom';
+  bookingComAccommodationId?: number;
   name: string;
   bookingPhone?: string;
   locationLabel: string;
@@ -59,6 +61,7 @@ export type StayProperty = {
   galleryImages: readonly string[];
   pricePerNight: number;
   priceLabel: string;
+  priceDisplayLabel?: string;
   currencyCode?: string;
   rating: number;
   reviewCount: number;

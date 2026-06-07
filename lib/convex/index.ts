@@ -14,3 +14,4 @@ export * from './photos';
 export * from './catalog';
 export * from './admin';
 export * from './provider';
+export * from './booking-com';

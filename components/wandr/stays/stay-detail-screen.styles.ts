@@ -581,6 +581,15 @@ export const styles = StyleSheet.create({
   sheetSectionTitleDark: {
     color: darkSheetPalette.text,
   },
+  sheetSectionTitleSmall: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  sheetSectionTitleSmallDark: {
+    color: darkSheetPalette.text,
+  },
   sheetSectionBody: {
     fontSize: 14,
     lineHeight: 21,
@@ -597,6 +606,55 @@ export const styles = StyleSheet.create({
   },
   verticalOptionList: {
     gap: 10,
+  },
+  sheetInlineAction: {
+    minHeight: 48,
+    borderRadius: designSystem.radii.pill,
+    backgroundColor: designSystem.colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  sheetInlineActionDark: {
+    backgroundColor: darkSheetPalette.accent,
+  },
+  sheetInlineActionDisabled: {
+    opacity: 0.72,
+  },
+  sheetInlineActionText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: designSystem.colors.darkGreen,
+  },
+  sheetInlineActionTextDark: {
+    color: darkSheetPalette.accentText,
+  },
+  sheetFieldGrid: {
+    gap: 10,
+  },
+  sheetFieldRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sheetFieldColumn: {
+    flex: 1,
+  },
+  sheetInput: {
+    borderWidth: 1,
+    borderColor: designSystem.colors.borderSoft,
+  },
+  sheetInputDark: {
+    borderWidth: 1,
+    borderColor: darkSheetPalette.border,
+  },
+  sheetInputText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: designSystem.colors.ink,
+  },
+  sheetInputTextDark: {
+    color: darkSheetPalette.text,
   },
   selectionPill: {
     borderRadius: designSystem.radii.pill,

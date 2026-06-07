@@ -24,6 +24,7 @@ import { tripsTable } from './tables/trips';
 import { sharedLocationsTable } from './tables/sharedLocations';
 import { supportMessagesTable, supportReadsTable, supportThreadsTable } from './tables/support';
 import { businessProfilesTable } from './tables/businessProfiles';
+import { bookingComAccommodationsTable, bookingComOrdersTable, bookingComSyncStateTable } from './tables/bookingCom';
 
 const { users: _authUsersTable, ...authTablesWithoutUsers } = authTables;
 
@@ -92,6 +93,9 @@ export default defineSchema({
   trips: tripsTable,
   invites: invitesTable,
   experiences: experiencesTable,
+  bookingComAccommodations: bookingComAccommodationsTable,
+  bookingComSyncState: bookingComSyncStateTable,
+  bookingComOrders: bookingComOrdersTable,
 
   ratings: defineTable({
     experienceSlug: v.string(),
@@ -212,6 +216,11 @@ export default defineSchema({
     providerReceivableAmount: v.optional(v.number()),
     externalCheckoutId: v.optional(v.string()),
     externalPaymentProvider: v.optional(v.string()),
+    externalSource: v.optional(v.union(v.literal('bookingCom'))),
+    externalOrderId: v.optional(v.string()),
+    externalReservationId: v.optional(v.string()),
+    externalAccommodationId: v.optional(v.number()),
+    externalSyncedAt: v.optional(v.number()),
     paymentCapturedAt: v.optional(v.number()),
     totalPrice: v.number(),
     bookedAt: v.number(),

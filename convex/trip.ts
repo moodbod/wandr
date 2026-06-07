@@ -6,6 +6,7 @@ import type { ExploreExperience, ExploreHiddenGem } from '../constants/explore-c
 import { recordAdminAuditEvent } from './adminAudit';
 import { assertCurrentTravelerSlug, requireAdmin } from './authHelpers';
 import { getPublicTravelerProfile } from './appProfiles';
+import { toPublicBookingComStay } from './bookingComMapping';
 
 type TripItineraryItem = {
   _id: Id<'bookings'>;
@@ -605,18 +606,22 @@ async function getResolvedItinerary(
     .withIndex('by_tripId', (q) => q.eq('tripId', trip._id))
     .take(200);
 
-  const [allLocations, allExperiences, allHiddenGems, allStays, reservations] = await Promise.all([
+  const [allLocations, allExperiences, allHiddenGems, allStays, bookingComStays, reservations] = await Promise.all([
     ctx.db.query('locations').take(500),
     ctx.db.query('experiences').take(500),
     ctx.db.query('gems').take(500),
     ctx.db.query('stays').take(500),
+    ctx.db
+      .query('bookingComAccommodations')
+      .withIndex('by_status', (q) => q.eq('status', 'live'))
+      .take(500),
     ctx.db
       .query('reservations')
       .withIndex('by_travelerSlug', (q) => q.eq('travelerSlug', trip.travelerSlug))
       .take(100),
   ]);
 
-  if (allLocations.length === 0 && allExperiences.length === 0 && allStays.length === 0) {
+  if (allLocations.length === 0 && allExperiences.length === 0 && allStays.length === 0 && bookingComStays.length === 0) {
     return [];
   }
 
@@ -670,15 +675,14 @@ async function getResolvedItinerary(
 
       if (contentKind === 'stay') {
         const stay = allStays.find((item) => item.slug === contentSlug);
-        if (!stay) {
-          return null;
-        }
-
-        const normalizedStay = normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay));
-        if (!normalizedStay) {
-          return null;
-        }
-        const stayBooking = getStayReservation(booking, stay.slug);
+        const bookingComStay = !stay ? bookingComStays.find((item) => item.slug === contentSlug) : null;
+        const normalizedStay = stay
+          ? normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay))
+          : bookingComStay
+            ? toPublicBookingComStay(bookingComStay) as unknown as NonNullable<ReturnType<typeof normalizeStayForTrip>>
+            : null;
+        if (!normalizedStay) return null;
+        const stayBooking = getStayReservation(booking, normalizedStay.slug);
 
         return {
           ...booking,
@@ -735,16 +739,16 @@ async function getResolvedItinerary(
       }
 
       const stay = allStays.find((item) => item.slug === contentSlug);
-
-      if (!stay) {
-        return null;
-      }
-
-      const normalizedStay = normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay));
+      const bookingComStay = !stay ? bookingComStays.find((item) => item.slug === contentSlug) : null;
+      const normalizedStay = stay
+        ? normalizeStayForTrip(stay, await resolveStayDisplayImages(ctx, stay))
+        : bookingComStay
+          ? toPublicBookingComStay(bookingComStay) as unknown as NonNullable<ReturnType<typeof normalizeStayForTrip>>
+          : null;
       if (!normalizedStay) {
         return null;
       }
-      const stayBooking = getStayReservation(booking, stay.slug);
+      const stayBooking = getStayReservation(booking, normalizedStay.slug);
 
       return {
         ...booking,
@@ -1069,15 +1073,22 @@ export const listTravelerBookings = query({
           .query('stays')
           .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
           .unique();
+        const bookingComStay = !stay
+          ? await ctx.db
+              .query('bookingComAccommodations')
+              .withIndex('by_slug', (q) => q.eq('slug', booking.staySlug))
+              .unique()
+          : null;
         const stayImages = stay ? await resolveStayDisplayImages(ctx, stay) : null;
+        const publicBookingComStay = bookingComStay ? toPublicBookingComStay(bookingComStay) : null;
 
         return {
           _id: booking._id,
           source: 'stayBooking' as const,
           slug: booking.staySlug,
-          title: stay?.name ?? booking.staySlug,
-          subtitle: stay?.locationLabel ?? 'Stay booking',
-          imageUri: stayImages?.imageUri ?? stay?.imageUri ?? null,
+          title: stay?.name ?? publicBookingComStay?.name ?? booking.staySlug,
+          subtitle: stay?.locationLabel ?? publicBookingComStay?.locationLabel ?? 'Stay booking',
+          imageUri: stayImages?.imageUri ?? stay?.imageUri ?? publicBookingComStay?.imageUri ?? null,
           bookedAt: booking.bookedAt,
           kind: 'stay' as const,
           status: booking.status,
@@ -1180,6 +1191,10 @@ export const listManagedBookings = query({
 
     const stays = await Promise.all(
       reservations.map(async (booking) => {
+        if (booking.externalSource === 'bookingCom') {
+          return null;
+        }
+
         const [stay, trip] = await Promise.all([
           ctx.db
             .query('stays')
@@ -2083,21 +2098,29 @@ export const createStayBooking = mutation({
 export const listAllStays = query({
   args: {},
   handler: async (ctx) => {
-    const stays = await ctx.db.query('stays').take(200);
+    const [stays, bookingComStays] = await Promise.all([
+      ctx.db.query('stays').take(200),
+      ctx.db
+        .query('bookingComAccommodations')
+        .withIndex('by_status', (q) => q.eq('status', 'live'))
+        .take(200),
+    ]);
     const publicStays = stays.filter((stay) => isLiveContent(stay.status) && isPublicProviderContent(stay));
-    return await Promise.all(
+    const localStays = await Promise.all(
       publicStays.map(async (stay) => {
         const images = await resolveStayDisplayImages(ctx, stay);
         const { imageStorageId: _imageStorageId, galleryStorageIds: _galleryStorageIds, ...publicStay } = stay;
         return {
         ...publicStay,
         id: stay.slug,
+        source: 'local' as const,
         imageUri: images.imageUri,
         galleryImages: images.galleryImages,
         priceLabel: `$${stay.pricePerNight}`,
         };
       })
     );
+    return [...localStays, ...bookingComStays.map(toPublicBookingComStay)];
   },
 });
 
@@ -2253,7 +2276,11 @@ export const getStayBySlug = query({
       .unique();
 
     if (!stay || !isLiveContent(stay.status) || !isPublicProviderContent(stay)) {
-      return null;
+      const bookingComStay = await ctx.db
+        .query('bookingComAccommodations')
+        .withIndex('by_slug', (q) => q.eq('slug', args.slug))
+        .unique();
+      return bookingComStay && bookingComStay.status === 'live' ? toPublicBookingComStay(bookingComStay) : null;
     }
 
     const images = await resolveStayDisplayImages(ctx, stay);
@@ -2261,6 +2288,7 @@ export const getStayBySlug = query({
     return {
       ...publicStay,
       id: stay.slug,
+      source: 'local' as const,
       imageUri: images.imageUri,
       galleryImages: images.galleryImages,
       priceLabel: `$${stay.pricePerNight}`,

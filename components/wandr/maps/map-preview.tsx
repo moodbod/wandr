@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource, StyleURL } from '@rnmapbox/maps';
+import Mapbox, { Camera, LineLayer, LocationPuck, MapView, MarkerView, ShapeSource, StyleURL } from '@rnmapbox/maps';
 
 import { ThemedText } from '@/components/themed-text';
 import { UserLocationPuck } from '@/components/wandr/maps/user-location-puck';
@@ -37,14 +37,7 @@ function MapPreviewComponent({
   sharedUserLocations = [],
   showRoutes = true,
   style,
-  userAvatarPaletteKey = null,
-  userAvatarUri = null,
   userCoordinate = null,
-  userHeading = null,
-  userIsStale = false,
-  userName = null,
-  userPuckVariant = 'navigation',
-  userSpeed = null,
   viewportPadding,
   zoomLevel = 14,
 }: MapPreviewProps) {
@@ -208,19 +201,7 @@ function MapPreviewComponent({
           </MarkerView>
         ))}
 
-        {userCoordinate ? (
-          <MarkerView coordinate={[userCoordinate[0], userCoordinate[1]]} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
-            <UserLocationPuck
-              avatarPaletteKey={userAvatarPaletteKey}
-              avatarUri={userAvatarUri}
-              heading={userHeading}
-              isStale={userIsStale}
-              name={userName}
-              speed={userSpeed}
-              variant={userPuckVariant}
-            />
-          </MarkerView>
-        ) : null}
+        <LocationPuck visible={Boolean(userCoordinate)} />
 
         {normalizedSharedUserLocations.map((location) => (
           <MarkerView

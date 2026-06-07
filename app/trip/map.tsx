@@ -256,7 +256,6 @@ function TripMapScreenView({
         ) : null}
 
         <Sheet
-          backgroundInteraction="enabled"
           enablePanDownToClose={false}
           index={0}
           ref={sheetRef}

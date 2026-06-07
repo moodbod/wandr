@@ -93,6 +93,14 @@ function hasPlanningLocationSpatialFilter(location: PlanningLocation) {
   return Boolean(location.bounds || (location.centerCoordinate && location.radiusKm));
 }
 
+function getStayPriceDisplay(stay: any, preferredCurrency: string) {
+  if (stay.source === 'bookingCom' && stay.priceDisplayLabel) {
+    return { amountLabel: stay.priceDisplayLabel, rateLabel: 'Live rates at checkout' };
+  }
+
+  return formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
+}
+
 export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -501,7 +509,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
                 {filteredStays.map((stay, index) => {
                   const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
                   const isSelected = stay.slug === selectedStaySlug || index === selectedIndex;
-                  const price = formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
+                  const price = getStayPriceDisplay(stay, preferredCurrency);
 
                   return (
                     <Pressable
@@ -632,7 +640,7 @@ export function StaysMapScreen({ showBack = false }: { showBack?: boolean }) {
         >
           {filteredStays.map((stay, index) => {
             const stayKey = (stay as any).id ?? (stay as any)._id ?? `${stay.slug}-${index}`;
-            const price = formatUsdPriceParts(stay.pricePerNight, preferredCurrency);
+            const price = getStayPriceDisplay(stay, preferredCurrency);
             const inputRange = [
               (index - 1) * snapInterval,
               index * snapInterval,

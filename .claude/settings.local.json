@@ -8,7 +8,10 @@
       "Bash(/tmp/search.sh)",
       "Read(//Users/tuyoleni/.profiles/moodbod/home/Library/**)",
       "Bash(mkdir -p /Users/tuyoleni/.profiles/moodbod/home/Library/Developer)",
-      "Bash(ln -s /Users/tuyoleni/Library/Developer/CoreSimulator /Users/tuyoleni/.profiles/moodbod/home/Library/Developer/CoreSimulator)"
+      "Bash(ln -s /Users/tuyoleni/Library/Developer/CoreSimulator /Users/tuyoleni/.profiles/moodbod/home/Library/Developer/CoreSimulator)",
+      "Bash('\\\\\"{ ]*/\\(explore|trip|stays|friends|profile|notifications|admin\\)[A-Za-z0-9/\\\\[\\\\]._-]*\" --include=*.tsx --include=*.ts components app hooks providers lib 2>/dev/null | sort | uniq -c | sort -rn | head -60)",
+      "Bash(grep -rohE \"\\(push|replace|navigate|href=\\)\\\\s*[:=]?\\\\s*[\\(`'\\\\\"{ ]*/\\(explore|trip|stays|friends|profile|notifications|admin\\)[A-Za-z0-9/\\\\[\\\\]._-]*\" --include=*.tsx --include=*.ts components app hooks providers lib 2>/dev/null | sort | uniq -c | sort -rn | head -60)",
+      "WebFetch(domain:docs.expo.dev)"
     ]
   }
 }

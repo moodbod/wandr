@@ -133,10 +133,7 @@ export function PlanningLocationSheet({
   useEffect(() => {
     if (visible) {
       sheetRef.current?.snapToIndex(0);
-      return;
     }
-
-    sheetRef.current?.close();
   }, [visible]);
 
   function expandSearch() {
@@ -147,6 +144,11 @@ export function PlanningLocationSheet({
   function resetSearchState() {
     setQuery('');
     setIsSearchExpanded(false);
+  }
+
+  function handleSheetClose() {
+    resetSearchState();
+    onClose();
   }
 
   function handleSelectLocation(location: PlanningLocation) {
@@ -162,15 +164,11 @@ export function PlanningLocationSheet({
       snapPoints={snapPoints}
       enableDynamicSizing={false}
       enablePanDownToClose
+      onClose={handleSheetClose}
       onChange={(index) => {
         if (index === 0) {
           setIsSearchExpanded(false);
           setQuery('');
-        }
-
-        if (index === -1 && visible) {
-          resetSearchState();
-          onClose();
         }
       }}>
       <SheetFlatList

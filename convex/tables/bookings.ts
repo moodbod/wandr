@@ -34,6 +34,11 @@ export const bookingsTable = defineTable({
   providerReceivableAmount: v.optional(v.number()),
   externalCheckoutId: v.optional(v.string()),
   externalPaymentProvider: v.optional(v.string()),
+  externalSource: v.optional(v.union(v.literal('bookingCom'))),
+  externalOrderId: v.optional(v.string()),
+  externalReservationId: v.optional(v.string()),
+  externalAccommodationId: v.optional(v.number()),
+  externalSyncedAt: v.optional(v.number()),
   paymentCapturedAt: v.optional(v.number()),
   roomTypeId: v.optional(v.string()),
   stayBookingDetails: v.optional(

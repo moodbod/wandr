@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { GlassView } from '@/lib/glass-effect';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,7 +9,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   View,
   type StyleProp,
   type ViewStyle,
@@ -56,6 +55,7 @@ import { useCurrentUserSettings } from '@/hooks/use-current-user-settings';
 import { useRequireAuthAction } from '@/hooks/use-require-auth-action';
 import {
   createStayBookingRef,
+  createBookingComOrderRef,
   generateLocationPhotoUploadUrlRef,
   getStayAvailabilityRef,
   getStayBySlugRef,
@@ -63,6 +63,8 @@ import {
   listLocationPhotosRef,
   listStayRatingsRef,
   listUserTripsRef,
+  previewBookingComOrderRef,
+  searchBookingComAvailabilityRef,
   submitLocationPhotoRef,
   submitStayRatingRef,
 } from '@/lib/convex';
@@ -72,6 +74,126 @@ import type {
   StayBookingDetails,
   StayBookingProfile,
 } from '@/types/stays';
+
+type BookingComProduct = {
+  id: string;
+  label: string;
+  allocation?: unknown;
+  currencyCode: string;
+  priceTotal: number;
+  policies?: unknown;
+  roomId?: string;
+};
+
+type BookingComPaymentOption = {
+  method: string;
+  timing: string;
+};
+
+type BookingComPreview = {
+  orderToken: string;
+  currencyCode: string;
+  totalPrice: number;
+  paymentOptions: BookingComPaymentOption[];
+  products: BookingComProduct[];
+  policies?: unknown;
+};
+
+function formatBookingComApiDate(value: number) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatDirectCurrencyParts(amount: number, currencyCode = 'USD') {
+  return {
+    amountLabel: new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      maximumFractionDigits: amount >= 100 ? 0 : 2,
+    }).format(amount),
+    rateLabel: currencyCode.toUpperCase(),
+  };
+}
+
+function splitDisplayName(value?: string | null) {
+  const parts = value?.trim().split(/\s+/).filter(Boolean) ?? [];
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' ') || parts[0] || '',
+  };
+}
+
+function getBookingComPaymentKey(option: BookingComPaymentOption) {
+  return `${option.method}:${option.timing}`;
+}
+
+function formatBookingComPaymentLabel(option: BookingComPaymentOption) {
+  const method = option.method.replace(/_/g, ' ');
+  const timing = option.timing.replace(/_/g, ' ');
+  return `${method} · ${timing}`;
+}
+
+function formatPolicySummary(value: unknown): string {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map(formatPolicySummary)
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(' · ');
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return (
+      formatPolicySummary(record.description) ||
+      formatPolicySummary(record.type) ||
+      formatPolicySummary(record.name)
+    );
+  }
+  return '';
+}
+
+function normalizeCardExpiryDate(value: string) {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const match = trimmed.match(/^(0?[1-9]|1[0-2])\s*\/?\s*(\d{2}|\d{4})$/);
+  if (!match) {
+    return trimmed;
+  }
+
+  const month = match[1].padStart(2, '0');
+  const year = match[2].length === 2 ? `20${match[2]}` : match[2];
+  return `${year}-${month}`;
+}
+
+function bookingComPaymentNeedsCard(option: BookingComPaymentOption | null) {
+  if (!option) {
+    return true;
+  }
+  const method = option.method.toLowerCase();
+  const timing = option.timing.toLowerCase();
+  return method.includes('card') || timing.includes('online') || timing.includes('now');
+}
+
+function deferStateSync(update: () => void) {
+  let isCancelled = false;
+  const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (callback: () => void) => setTimeout(callback, 0);
+  schedule(() => {
+    if (!isCancelled) {
+      update();
+    }
+  });
+  return () => {
+    isCancelled = true;
+  };
+}
 
 export function StayDetailScreen({
   onClose,
@@ -93,6 +215,9 @@ export function StayDetailScreen({
 
   const currentLocation = useCurrentLocation();
   const createBooking = useMutation(createStayBookingRef);
+  const searchBookingComAvailability = useAction(searchBookingComAvailabilityRef);
+  const previewBookingComOrder = useAction(previewBookingComOrderRef);
+  const createBookingComOrder = useAction(createBookingComOrderRef);
   const generatePhotoUploadUrl = useMutation(generateLocationPhotoUploadUrlRef);
   const submitLocationPhoto = useMutation(submitLocationPhotoRef);
   const submitStayRating = useMutation(submitStayRatingRef);
@@ -112,6 +237,22 @@ export function StayDetailScreen({
   const reviews = useQuery(listStayRatingsRef, slug ? { staySlug: slug } : 'skip');
 
   const [isBooking, setIsBooking] = useState(false);
+  const [isCheckingBookingComAvailability, setIsCheckingBookingComAvailability] = useState(false);
+  const [bookingComProducts, setBookingComProducts] = useState<BookingComProduct[]>([]);
+  const [selectedBookingComProductId, setSelectedBookingComProductId] = useState('');
+  const [bookingComPreview, setBookingComPreview] = useState<BookingComPreview | null>(null);
+  const [selectedPaymentKey, setSelectedPaymentKey] = useState('');
+  const [bookerFirstName, setBookerFirstName] = useState('');
+  const [bookerLastName, setBookerLastName] = useState('');
+  const [bookerEmail, setBookerEmail] = useState('');
+  const [bookerPhone, setBookerPhone] = useState('');
+  const [bookerAddressLine, setBookerAddressLine] = useState('');
+  const [bookerCity, setBookerCity] = useState('');
+  const [bookerPostCode, setBookerPostCode] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiryDate, setCardExpiryDate] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [dayOffset, setDayOffset] = useState<number>(dayOffsets[0]);
   const [nightCount, setNightCount] = useState<number>(nightOptions[2]);
@@ -124,6 +265,7 @@ export function StayDetailScreen({
   const [specialRequest, setSpecialRequest] = useState('');
   const [bookingDateOverride, setBookingDateOverride] = useState<{ checkIn: number; checkOut: number } | null>(null);
   const [bookingTotalOverride, setBookingTotalOverride] = useState<number | null>(null);
+  const [bookingBaseTime] = useState(() => Date.now());
   const bookingSheetRef = useRef<SheetRef>(null);
   const bookingSheetSnapPoints = useMemo(() => ['50%', '100%'], []);
   const bookingSheetAnimatedIndex = useSharedValue(-1);
@@ -133,6 +275,7 @@ export function StayDetailScreen({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const explicitBookingProfile = stay?.bookingProfile;
+  const isBookingComStay = stay?.source === 'bookingCom';
   const bookingProfile: StayBookingProfile | null = useMemo(
     () => explicitBookingProfile ?? null,
     [explicitBookingProfile]
@@ -146,9 +289,9 @@ export function StayDetailScreen({
   const arrivalOptions = bookingProfile?.arrivalOptions ?? [];
   const selectedArrivalOption =
     arrivalOptions.find((option) => option.id === selectedArrivalWindowId);
-  const maxAdults = selectedRoomOption?.maxAdults ?? 0;
-  const maxChildren = selectedRoomOption?.maxChildren ?? 0;
-  const maxRooms = selectedRoomOption?.maxRooms ?? 0;
+  const maxAdults = isBookingComStay ? 8 : selectedRoomOption?.maxAdults ?? 0;
+  const maxChildren = isBookingComStay ? 6 : selectedRoomOption?.maxChildren ?? 0;
+  const maxRooms = isBookingComStay ? 8 : selectedRoomOption?.maxRooms ?? 0;
   const bookingSheetHeaderAnimatedStyle = useAnimatedStyle(() => {
     return {
       paddingTop: interpolate(bookingSheetAnimatedIndex.value, [0, 1], [0, insets.top], 'clamp'),
@@ -172,12 +315,14 @@ export function StayDetailScreen({
       return;
     }
 
-    setSelectedRoomTypeId(initialRoomOption.id);
-    setSelectedBedOptionId(initialBedOption.id);
-    setSelectedArrivalWindowId(initialArrivalOption.id);
-    setRoomCount(1);
-    setAdults(Math.min(adults, initialRoomOption.maxAdults));
-    setChildren(0);
+    return deferStateSync(() => {
+      setSelectedRoomTypeId(initialRoomOption.id);
+      setSelectedBedOptionId(initialBedOption.id);
+      setSelectedArrivalWindowId(initialArrivalOption.id);
+      setRoomCount(1);
+      setAdults(Math.min(adults, initialRoomOption.maxAdults));
+      setChildren(0);
+    });
   }, [adults, bookingProfile, existingStayBooking]);
 
   useEffect(() => {
@@ -185,20 +330,33 @@ export function StayDetailScreen({
       return;
     }
 
-    if (!selectedRoomOption.bedOptions.some((option) => option.id === selectedBedOptionId)) {
-      setSelectedBedOptionId('');
-    }
+    return deferStateSync(() => {
+      if (!selectedRoomOption.bedOptions.some((option) => option.id === selectedBedOptionId)) {
+        setSelectedBedOptionId('');
+      }
 
-    if (roomCount > selectedRoomOption.maxRooms) {
-      setRoomCount(selectedRoomOption.maxRooms);
-    }
-    if (adults > selectedRoomOption.maxAdults) {
-      setAdults(selectedRoomOption.maxAdults);
-    }
-    if (children > selectedRoomOption.maxChildren) {
-      setChildren(selectedRoomOption.maxChildren);
-    }
+      if (roomCount > selectedRoomOption.maxRooms) {
+        setRoomCount(selectedRoomOption.maxRooms);
+      }
+      if (adults > selectedRoomOption.maxAdults) {
+        setAdults(selectedRoomOption.maxAdults);
+      }
+      if (children > selectedRoomOption.maxChildren) {
+        setChildren(selectedRoomOption.maxChildren);
+      }
+    });
   }, [selectedRoomOption, selectedBedOptionId, roomCount, adults, children]);
+
+  useEffect(() => {
+    const splitName = splitDisplayName(traveler?.name);
+    return deferStateSync(() => {
+      if (!bookerFirstName && splitName.firstName) setBookerFirstName(splitName.firstName);
+      if (!bookerLastName && splitName.lastName) setBookerLastName(splitName.lastName);
+      if (!cardholderName && traveler?.name) setCardholderName(traveler.name);
+      if (!bookerEmail && traveler?.email) setBookerEmail(traveler.email);
+      if (!bookerCity && traveler?.homeCity) setBookerCity(traveler.homeCity);
+    });
+  }, [bookerCity, bookerEmail, bookerFirstName, bookerLastName, cardholderName, traveler?.email, traveler?.homeCity, traveler?.name]);
 
   if (stay === undefined) {
     return <StayDetailLoadingScreen insetsTop={insets.top} insetsBottom={insets.bottom} isDark={isDark} />;
@@ -215,7 +373,7 @@ export function StayDetailScreen({
       .filter((photo) => !hostGalleryImages.includes(photo.imageUri))
       .map((photo) => ({ uri: photo.imageUri, source: 'visitor' as const })),
   ];
-  const computedCheckIn = Date.now() + dayOffset * 86_400_000;
+  const computedCheckIn = bookingBaseTime + dayOffset * 86_400_000;
   const computedCheckOut = computedCheckIn + nightCount * 86_400_000;
   const checkIn = bookingDateOverride?.checkIn ?? computedCheckIn;
   const checkOut = bookingDateOverride?.checkOut ?? computedCheckOut;
@@ -226,12 +384,43 @@ export function StayDetailScreen({
     selectedRoomOption && selectedBedOption
       ? buildRoomSummary(roomCount, selectedRoomOption, selectedBedOption)
       : `${roomCount} room`;
+  const selectedBookingComProduct =
+    bookingComProducts.find((product) => product.id === selectedBookingComProductId) ??
+    bookingComProducts[0] ??
+    null;
+  const bookingComPaymentOptions = bookingComPreview?.paymentOptions ?? [];
+  const selectedBookingComPaymentOption =
+    bookingComPaymentOptions.find((option) => getBookingComPaymentKey(option) === selectedPaymentKey) ??
+    bookingComPaymentOptions[0] ??
+    (bookingComPreview ? { method: 'card', timing: 'pay_online_now' } : null);
+  const bookingComCurrencyCode =
+    bookingComPreview?.currencyCode ??
+    selectedBookingComProduct?.currencyCode ??
+    stay.currencyCode ??
+    preferredCurrency;
+  const bookingComBookerCountry = (stay.countryCode ?? 'US').toLowerCase();
+  const bookingComTotalPrice =
+    bookingComPreview?.totalPrice ??
+    selectedBookingComProduct?.priceTotal ??
+    0;
+  const bookingComTotalPriceDisplay =
+    bookingComTotalPrice > 0
+      ? formatDirectCurrencyParts(bookingComTotalPrice, bookingComCurrencyCode)
+      : { amountLabel: 'Check availability', rateLabel: 'Live rates at checkout' };
   const totalPrice = bookingTotalOverride ?? stay.pricePerNight * nights * roomCount;
   const hasExistingStayBooking = !!existingStayBooking;
   const bookingBarTotalAmount = existingStayBooking?.totalPrice ?? totalPrice;
-  const nightlyPrice = formatUsdConversionParts(stay.pricePerNight, preferredCurrency);
-  const totalPriceDisplay = formatUsdConversionParts(totalPrice, preferredCurrency);
-  const bookingBarTotalPrice = formatUsdConversionParts(bookingBarTotalAmount, preferredCurrency);
+  const nightlyPrice = isBookingComStay
+    ? { amountLabel: bookingComProducts.length > 0 ? 'Live rate' : 'Check availability', rateLabel: 'Booking.com' }
+    : formatUsdConversionParts(stay.pricePerNight, preferredCurrency);
+  const totalPriceDisplay = isBookingComStay
+    ? bookingComTotalPriceDisplay
+    : formatUsdConversionParts(totalPrice, preferredCurrency);
+  const bookingBarTotalPrice = hasExistingStayBooking
+    ? formatUsdConversionParts(bookingBarTotalAmount, preferredCurrency)
+    : isBookingComStay
+      ? bookingComTotalPriceDisplay
+      : formatUsdConversionParts(bookingBarTotalAmount, preferredCurrency);
   const bookingBarNights = existingStayBooking
     ? getNightsBetween(existingStayBooking.checkIn, existingStayBooking.checkOut)
     : nights;
@@ -266,14 +455,36 @@ export function StayDetailScreen({
     guestSummary,
     roomSummary,
   };
+  const bookingComConfirmLabel =
+    bookingComProducts.length === 0
+      ? 'Check availability'
+      : !bookingComPreview
+        ? 'Preview booking'
+        : 'Create Booking.com order';
+  const confirmButtonLabel = isBookingComStay
+    ? bookingComConfirmLabel
+    : hasExistingStayBooking
+      ? 'Update stay request'
+      : 'Request this stay';
+  const confirmButtonIsBusy = isBooking || isCheckingBookingComAvailability;
 
   const clearBookingSnapshot = () => {
     setBookingDateOverride(null);
     setBookingTotalOverride(null);
+    setBookingComProducts([]);
+    setSelectedBookingComProductId('');
+    setBookingComPreview(null);
+    setSelectedPaymentKey('');
   };
 
   const handleBookPress = () => {
     if (!requireAuthAction()) {
+      return;
+    }
+
+    if (isBookingComStay) {
+      clearBookingSnapshot();
+      bookingSheetRef.current?.snapToIndex(0);
       return;
     }
 
@@ -396,8 +607,214 @@ export function StayDetailScreen({
     }
   };
 
+  const loadBookingComAvailability = async () => {
+    if (!stay.bookingComAccommodationId) {
+      Alert.alert('Availability unavailable', 'This Booking.com stay is missing its accommodation ID.');
+      return [];
+    }
+
+    setIsCheckingBookingComAvailability(true);
+    setBookingComPreview(null);
+    setSelectedPaymentKey('');
+    try {
+      const products = await searchBookingComAvailability({
+        accommodationId: stay.bookingComAccommodationId,
+        checkIn: formatBookingComApiDate(checkIn),
+        checkOut: formatBookingComApiDate(checkOut),
+        guests: {
+          number_of_adults: adults,
+          children: children > 0 ? Array.from({ length: children }, () => 12) : undefined,
+          number_of_rooms: roomCount,
+        },
+        currency: preferredCurrency,
+        bookerCountry: bookingComBookerCountry,
+      }) as BookingComProduct[];
+
+      setBookingComProducts(products);
+      setSelectedBookingComProductId(products[0]?.id ?? '');
+      if (products.length === 0) {
+        Alert.alert('No rooms found', 'Booking.com did not return live rooms for those dates.');
+      }
+      return products;
+    } catch (error: any) {
+      Alert.alert('Availability failed', error.message || 'Could not check Booking.com availability.');
+      return [];
+    } finally {
+      setIsCheckingBookingComAvailability(false);
+    }
+  };
+
+  const previewBookingComSelection = async () => {
+    const product = selectedBookingComProduct ?? bookingComProducts[0];
+    if (!stay.bookingComAccommodationId || !product) {
+      Alert.alert('Choose a room', 'Check availability and choose a live Booking.com room first.');
+      return null;
+    }
+
+    setIsCheckingBookingComAvailability(true);
+    try {
+      const preview = await previewBookingComOrder({
+        accommodationId: stay.bookingComAccommodationId,
+        checkIn: formatBookingComApiDate(checkIn),
+        checkOut: formatBookingComApiDate(checkOut),
+        products: [
+          {
+            id: product.id,
+            allocation: product.allocation,
+          },
+        ],
+        booker: {
+          country: bookingComBookerCountry,
+          platform: 'mobile',
+          travel_purpose: 'leisure',
+        },
+        currency: preferredCurrency,
+      }) as BookingComPreview;
+
+      setBookingComPreview(preview);
+      setSelectedPaymentKey(preview.paymentOptions[0] ? getBookingComPaymentKey(preview.paymentOptions[0]) : '');
+      return preview;
+    } catch (error: any) {
+      Alert.alert('Preview failed', error.message || 'Could not preview this Booking.com order.');
+      return null;
+    } finally {
+      setIsCheckingBookingComAvailability(false);
+    }
+  };
+
+  const validateBookingComCheckout = () => {
+    const missingFields: string[] = [];
+    if (!bookerFirstName.trim()) missingFields.push('first name');
+    if (!bookerLastName.trim()) missingFields.push('last name');
+    if (!bookerEmail.trim()) missingFields.push('email');
+    if (!bookerPhone.trim()) missingFields.push('phone');
+    if (!bookerAddressLine.trim()) missingFields.push('address');
+    if (!bookerCity.trim()) missingFields.push('city');
+    if (!bookerPostCode.trim()) missingFields.push('post code');
+
+    const needsCard = bookingComPaymentNeedsCard(selectedBookingComPaymentOption);
+    const cardDigits = cardNumber.replace(/\D/g, '');
+    const normalizedExpiry = normalizeCardExpiryDate(cardExpiryDate);
+    if (needsCard) {
+      if (!cardholderName.trim()) missingFields.push('cardholder name');
+      if (cardDigits.length < 12) missingFields.push('card number');
+      if (!/^\d{4}-\d{2}$/.test(normalizedExpiry)) missingFields.push('card expiry');
+      if (cardCvc.trim().length < 3) missingFields.push('CVC');
+    }
+
+    if (missingFields.length > 0) {
+      Alert.alert('Missing details', `Add ${missingFields.join(', ')} before creating the order.`);
+      return false;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(bookerEmail.trim())) {
+      Alert.alert('Check email', 'Enter a valid email address for the Booking.com confirmation.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const confirmBookingComBooking = async () => {
+    const product = selectedBookingComProduct ?? bookingComProducts[0];
+    const paymentOption = selectedBookingComPaymentOption;
+    if (!stay.bookingComAccommodationId || !bookingComPreview || !product || !paymentOption) {
+      Alert.alert('Preview required', 'Preview the Booking.com order before creating it.');
+      return;
+    }
+    if (!validateBookingComCheckout()) {
+      return;
+    }
+
+    const cardDigits = cardNumber.replace(/\D/g, '');
+    const paymentNeedsCard = bookingComPaymentNeedsCard(paymentOption);
+    setIsBooking(true);
+    try {
+      await createBookingComOrder({
+        travelerSlug,
+        tripId: selectedTripId,
+        orderToken: bookingComPreview.orderToken,
+        accommodation: {
+          accommodationId: stay.bookingComAccommodationId,
+          accommodationSlug: stay.slug,
+          checkIn: formatBookingComApiDate(checkIn),
+          checkOut: formatBookingComApiDate(checkOut),
+          products: [
+            {
+              id: product.id,
+              label: product.label,
+              allocation: product.allocation,
+              priceTotal: bookingComPreview.totalPrice || product.priceTotal,
+              currencyCode: bookingComPreview.currencyCode || product.currencyCode,
+            },
+          ],
+          remarks: specialRequest.trim()
+            ? {
+                special_requests: specialRequest.trim(),
+              }
+            : undefined,
+        },
+        booker: {
+          address: {
+            address_line: bookerAddressLine.trim(),
+            city: bookerCity.trim(),
+            country: bookingComBookerCountry,
+            post_code: bookerPostCode.trim(),
+          },
+          email: bookerEmail.trim(),
+          language: 'en-gb',
+          name: {
+            first_name: bookerFirstName.trim(),
+            last_name: bookerLastName.trim(),
+          },
+          telephone: bookerPhone.trim(),
+        },
+        payment: {
+          method: paymentOption.method,
+          timing: paymentOption.timing,
+          include_receipt: true,
+          card: paymentNeedsCard
+            ? {
+                cardholder: cardholderName.trim(),
+                cvc: cardCvc.trim(),
+                expiry_date: normalizeCardExpiryDate(cardExpiryDate),
+                number: cardDigits,
+              }
+            : undefined,
+        },
+      });
+      bookingSheetRef.current?.close();
+      Alert.alert(
+        'Booking.com order created',
+        `${guestSummary} booked ${product.label.toLowerCase()} from ${formatDateLabel(checkIn)} to ${formatDateLabel(checkOut)}.`
+      );
+      router.push('/trip');
+    } catch (error: any) {
+      Alert.alert('Booking Failed', error.message || 'Could not create the Booking.com order.');
+    } finally {
+      setIsBooking(false);
+    }
+  };
+
   const confirmBooking = async () => {
-    if (!requireAuthAction() || !travelerSlug || !selectedRoomOption || !selectedBedOption || !selectedArrivalOption) {
+    if (!requireAuthAction() || !travelerSlug) {
+      return;
+    }
+
+    if (isBookingComStay) {
+      if (bookingComProducts.length === 0) {
+        await loadBookingComAvailability();
+        return;
+      }
+      if (!bookingComPreview) {
+        await previewBookingComSelection();
+        return;
+      }
+      await confirmBookingComBooking();
+      return;
+    }
+
+    if (!selectedRoomOption || !selectedBedOption || !selectedArrivalOption) {
       return;
     }
 
@@ -628,12 +1045,18 @@ export function StayDetailScreen({
           keyboardShouldPersistTaps="handled">
           <Animated.View style={[styles.sheetPaddedBlock, bookingSheetHeaderAnimatedStyle]}>
             <ThemedText style={styles.sheetTitle}>
-              {hasExistingStayBooking ? 'Your stay request' : 'Build the stay request'}
+              {hasExistingStayBooking
+                ? 'Your stay request'
+                : isBookingComStay
+                  ? 'Book with Booking.com'
+                  : 'Build the stay request'}
             </ThemedText>
             <ThemedText style={[styles.sheetSubtitle, isDark && styles.sheetSubtitleDark]}>
               {hasExistingStayBooking
                 ? 'Review the dates, guests, room setup, and host note you booked.'
-                : 'Pick dates, guests, room setup, and any note for the host.'}
+                : isBookingComStay
+                  ? 'Live rooms, policies, and payment options are confirmed before the order is created.'
+                  : 'Pick dates, guests, room setup, and any note for the host.'}
             </ThemedText>
           </Animated.View>
 
@@ -697,64 +1120,156 @@ export function StayDetailScreen({
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
             <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Room setup</ThemedText>
-            <View style={styles.verticalOptionList}>
-              {roomOptions.map((option) => (
-                <SelectionRow
-                  key={option.id}
+            {isBookingComStay ? (
+              <>
+                <CounterField
                   isDark={isDark}
-                  active={selectedRoomOption?.id === option.id}
-                  label={option.label}
-                  detail={option.detail}
-                  onPress={() => {
+                  label="Rooms"
+                  value={roomCount}
+                  min={1}
+                  max={maxRooms}
+                  onChange={(value) => {
                     clearBookingSnapshot();
-                    setSelectedRoomTypeId(option.id);
+                    setRoomCount(value);
                   }}
                 />
-              ))}
-            </View>
-            <CounterField
-              isDark={isDark}
-              label="Rooms"
-              value={roomCount}
-              min={1}
-              max={maxRooms}
-              onChange={(value) => {
-                clearBookingSnapshot();
-                setRoomCount(value);
-              }}
-            />
-            <View style={styles.optionRow}>
-              {bedOptions.map((option) => (
-                <SelectionPill
-                  key={option.id}
-                  isDark={isDark}
-                  active={selectedBedOption?.id === option.id}
-                  label={option.label}
+                <Pressable
+                  style={[
+                    styles.sheetInlineAction,
+                    isDark && styles.sheetInlineActionDark,
+                    isCheckingBookingComAvailability && styles.sheetInlineActionDisabled,
+                  ]}
                   onPress={() => {
+                    void loadBookingComAvailability();
+                  }}
+                  disabled={isCheckingBookingComAvailability}>
+                  {isCheckingBookingComAvailability && bookingComProducts.length === 0 ? (
+                    <ActivityIndicator size="small" color={designSystem.colors.darkGreen} />
+                  ) : (
+                    <ThemedText style={[styles.sheetInlineActionText, isDark && styles.sheetInlineActionTextDark]}>
+                      Check live availability
+                    </ThemedText>
+                  )}
+                </Pressable>
+                {bookingComProducts.length > 0 ? (
+                  <View style={styles.verticalOptionList}>
+                    {bookingComProducts.map((option) => {
+                      const price = formatDirectCurrencyParts(option.priceTotal, option.currencyCode);
+                      const policySummary = formatPolicySummary(option.policies);
+                      return (
+                        <SelectionRow
+                          key={option.id}
+                          isDark={isDark}
+                          active={selectedBookingComProduct?.id === option.id}
+                          label={option.label}
+                          detail={`${price.amountLabel} total${policySummary ? ` · ${policySummary}` : ''}`}
+                          onPress={() => {
+                            setSelectedBookingComProductId(option.id);
+                            setBookingComPreview(null);
+                            setSelectedPaymentKey('');
+                          }}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <ThemedText style={[styles.sheetSectionBody, isDark && styles.sheetSectionBodyDark]}>
+                    No live rooms loaded for these dates.
+                  </ThemedText>
+                )}
+                {bookingComPreview ? (
+                  <View style={styles.verticalOptionList}>
+                    <ThemedText style={[styles.sheetSectionTitleSmall, isDark && styles.sheetSectionTitleSmallDark]}>
+                      Payment option
+                    </ThemedText>
+                    <View style={styles.optionRow}>
+                      {(bookingComPaymentOptions.length > 0
+                        ? bookingComPaymentOptions
+                        : [{ method: 'card', timing: 'pay_online_now' }]
+                      ).map((option) => (
+                        <SelectionPill
+                          key={getBookingComPaymentKey(option)}
+                          isDark={isDark}
+                          active={getBookingComPaymentKey(selectedBookingComPaymentOption ?? option) === getBookingComPaymentKey(option)}
+                          label={formatBookingComPaymentLabel(option)}
+                          onPress={() => setSelectedPaymentKey(getBookingComPaymentKey(option))}
+                        />
+                      ))}
+                    </View>
+                    {bookingComPreview.policies ? (
+                      <ThemedText style={[styles.sheetSectionBody, isDark && styles.sheetSectionBodyDark]}>
+                        {formatPolicySummary(bookingComPreview.policies)}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <View style={styles.verticalOptionList}>
+                  {roomOptions.map((option) => (
+                    <SelectionRow
+                      key={option.id}
+                      isDark={isDark}
+                      active={selectedRoomOption?.id === option.id}
+                      label={option.label}
+                      detail={option.detail}
+                      onPress={() => {
+                        clearBookingSnapshot();
+                        setSelectedRoomTypeId(option.id);
+                      }}
+                    />
+                  ))}
+                </View>
+                <CounterField
+                  isDark={isDark}
+                  label="Rooms"
+                  value={roomCount}
+                  min={1}
+                  max={maxRooms}
+                  onChange={(value) => {
                     clearBookingSnapshot();
-                    setSelectedBedOptionId(option.id);
+                    setRoomCount(value);
                   }}
                 />
-              ))}
-            </View>
+                <View style={styles.optionRow}>
+                  {bedOptions.map((option) => (
+                    <SelectionPill
+                      key={option.id}
+                      isDark={isDark}
+                      active={selectedBedOption?.id === option.id}
+                      label={option.label}
+                      onPress={() => {
+                        clearBookingSnapshot();
+                        setSelectedBedOptionId(option.id);
+                      }}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
           </View>
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
-            <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Arrival and notes</ThemedText>
-            <View style={styles.optionRow}>
-              {arrivalOptions.map((option: StayArrivalOption) => (
-                <SelectionPill
-                  key={option.id}
-                  isDark={isDark}
-                  active={selectedArrivalOption?.id === option.id}
-                  label={option.label}
-                  onPress={() => {
-                    clearBookingSnapshot();
-                    setSelectedArrivalWindowId(option.id);
-                  }}
-                />
-              ))}
-            </View>
+            <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>
+              {isBookingComStay ? 'Notes' : 'Arrival and notes'}
+            </ThemedText>
+            {isBookingComStay ? null : (
+              <View style={styles.optionRow}>
+                {arrivalOptions.map((option: StayArrivalOption) => (
+                  <SelectionPill
+                    key={option.id}
+                    isDark={isDark}
+                    active={selectedArrivalOption?.id === option.id}
+                    label={option.label}
+                    onPress={() => {
+                      clearBookingSnapshot();
+                      setSelectedArrivalWindowId(option.id);
+                    }}
+                  />
+                ))}
+              </View>
+            )}
             <Input
               multiline
               containerStyle={[styles.notesInput, isDark && styles.notesInputDark]}
@@ -768,6 +1283,134 @@ export function StayDetailScreen({
               }}
             />
           </View>
+
+          {isBookingComStay ? (
+            <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
+              <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Booker details</ThemedText>
+              <View style={styles.sheetFieldGrid}>
+                <Input
+                  autoCapitalize="words"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="First name"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  value={bookerFirstName}
+                  onChangeText={setBookerFirstName}
+                />
+                <Input
+                  autoCapitalize="words"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="Last name"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  value={bookerLastName}
+                  onChangeText={setBookerLastName}
+                />
+                <Input
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  keyboardType="email-address"
+                  placeholder="Email"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  textContentType="emailAddress"
+                  value={bookerEmail}
+                  onChangeText={setBookerEmail}
+                />
+                <Input
+                  autoComplete="tel"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  keyboardType="phone-pad"
+                  placeholder="Phone"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  textContentType="telephoneNumber"
+                  value={bookerPhone}
+                  onChangeText={setBookerPhone}
+                />
+                <Input
+                  autoCapitalize="words"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="Address"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  value={bookerAddressLine}
+                  onChangeText={setBookerAddressLine}
+                />
+                <Input
+                  autoCapitalize="words"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="City"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  value={bookerCity}
+                  onChangeText={setBookerCity}
+                />
+                <Input
+                  autoCapitalize="characters"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="Post code"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  value={bookerPostCode}
+                  onChangeText={setBookerPostCode}
+                />
+              </View>
+            </View>
+          ) : null}
+
+          {isBookingComStay ? (
+            <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
+              <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Payment</ThemedText>
+              <View style={styles.sheetFieldGrid}>
+                <Input
+                  autoCapitalize="words"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  placeholder="Cardholder name"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  textContentType="name"
+                  value={cardholderName}
+                  onChangeText={setCardholderName}
+                />
+                <Input
+                  autoComplete="cc-number"
+                  containerStyle={[styles.sheetInput, isDark && styles.sheetInputDark]}
+                  keyboardType="number-pad"
+                  placeholder="Card number"
+                  placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                  style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                  textContentType="creditCardNumber"
+                  value={cardNumber}
+                  onChangeText={setCardNumber}
+                />
+                <View style={styles.sheetFieldRow}>
+                  <Input
+                    autoComplete="cc-exp"
+                    containerStyle={[styles.sheetInput, styles.sheetFieldColumn, isDark && styles.sheetInputDark]}
+                    keyboardType="numbers-and-punctuation"
+                    placeholder="MM/YY"
+                    placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                    style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                    value={cardExpiryDate}
+                    onChangeText={setCardExpiryDate}
+                  />
+                  <Input
+                    autoComplete="cc-csc"
+                    containerStyle={[styles.sheetInput, styles.sheetFieldColumn, isDark && styles.sheetInputDark]}
+                    keyboardType="number-pad"
+                    placeholder="CVC"
+                    placeholderTextColor={isDark ? designSystem.colors.darkMutedText : designSystem.colors.gray}
+                    secureTextEntry
+                    style={[styles.sheetInputText, isDark && styles.sheetInputTextDark]}
+                    value={cardCvc}
+                    onChangeText={setCardCvc}
+                  />
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           <View style={[styles.sheetSection, isDark && styles.sheetSectionDark]}>
             <ThemedText style={[styles.sheetSectionTitle, isDark && styles.sheetSectionTitleDark]}>Price summary</ThemedText>
@@ -800,15 +1443,15 @@ export function StayDetailScreen({
               styles.confirmButton,
               Platform.OS === 'android' ? styles.confirmButtonAndroid : null,
               isDark && styles.confirmButtonDark,
-              isBooking ? (Platform.OS === 'android' ? styles.confirmButtonDisabledAndroid : styles.confirmButtonDisabled) : null,
+              confirmButtonIsBusy ? (Platform.OS === 'android' ? styles.confirmButtonDisabledAndroid : styles.confirmButtonDisabled) : null,
             ]}
             onPress={confirmBooking}
-            disabled={isBooking}>
-            {isBooking ? (
+            disabled={confirmButtonIsBusy}>
+            {confirmButtonIsBusy ? (
               <ActivityIndicator color={designSystem.colors.white} />
             ) : (
               <ThemedText style={[styles.confirmButtonText, isDark && styles.confirmButtonTextDark]}>
-                {hasExistingStayBooking ? 'Update stay request' : 'Request this stay'}
+                {confirmButtonLabel}
               </ThemedText>
             )}
           </Pressable>

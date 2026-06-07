@@ -62,14 +62,7 @@ module.exports = () => {
       './plugins/with-ios-react-native-dependencies-embed',
       'expo-router',
       'expo-notifications',
-      [
-        '@rnmapbox/maps',
-        {
-          // Secret token (sk.…) with the DOWNLOADS:READ scope, used only at build time.
-          RNMapboxMapsDownloadToken:
-            process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN ?? process.env.MAPBOX_DOWNLOAD_TOKEN,
-        },
-      ],
+      '@rnmapbox/maps',
       'expo-location',
       'expo-font',
       'expo-image',

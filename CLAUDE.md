@@ -68,6 +68,17 @@ Backend domain modules:
 - `support.ts` — traveler support chat
 - `admin.ts` / `adminAudit.ts` — admin dashboard and audit log
 - `provider.ts` — service-provider self-management
+- `bookingCom.ts` / `bookingComApi.ts` / `bookingComMapping.ts` — Booking.com Demand API integration (see below)
+- `crons.ts` — scheduled jobs (currently a daily Booking.com accommodation-changes refresh)
+
+### Booking.com Integration
+
+External stays come from the Booking.com Demand API and are cached locally so the app reads from Convex, not the live API:
+- `bookingComApi.ts` — pure HTTP/normalization helpers (no Convex ctx): request building and response shaping.
+- `bookingCom.ts` — Convex actions/mutations/queries: sync accommodations into `bookingComAccommodations`, track progress in `bookingComSyncState`, live availability/preview/order-create, and admin-gated sync ops (`requireAdmin`).
+- `bookingComMapping.ts` — `toPublicBookingComStay` maps cached docs to the public stay shape (`source: 'bookingCom'`); merged with curated stays in the stays UI.
+- `lib/convex/booking-com.ts` — client-side function refs for cached listings, availability, preview, and order creation.
+- A daily cron (`crons.ts`) refreshes changed accommodations. Gated by env vars set in the **Convex deployment** (not `.env`): `BOOKING_COM_API_TOKEN`, `BOOKING_COM_AFFILIATE_ID`, `BOOKING_COM_API_BASE`, `BOOKING_COM_SYNC_ENABLED`, `BOOKING_COM_SYNC_COUNTRIES`.
 
 ### Convex Client (`lib/convex/`)
 
@@ -89,6 +100,7 @@ lib/convex/
   photos.ts         ← photo upload refs
   support.ts        ← support chat refs
   shared-locations.ts ← location sharing refs + SharedUserLocation type
+  booking-com.ts    ← Booking.com cached-listing, availability, preview, order refs
 ```
 
 All Convex function refs use `makeFunctionReference`. **Use these refs** — never construct string references inline. Users are identified by `travelerSlug` (not document ID) throughout.
